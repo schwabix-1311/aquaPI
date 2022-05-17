@@ -1,0 +1,19 @@
+<!-- this is a include file for routes with sse updates -->
+
+<!-- Target pages must contain elments with ID 'sse_'+key.toLowerCase()
+     These elements will be updated if the values hash sent
+     with the event contains an entry with this key.
+     -->
+<script>
+if (!!window.EventSource) {
+  var source = new EventSource(document.URL);
+  source.onmessage = function(e) {
+    console.debug(e.data);
+    var obj = JSON.parse(e.data);
+    for (var k in obj) {
+      e = document.getElementById("sse_" + k.toLowerCase());
+      if (e !== null) { e.textContent = obj[k]; }
+    }
+  }
+}
+</script>

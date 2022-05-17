@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>aquaPI</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/pure-min.css">
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/grids-responsive-min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body id="home">
+{% include "menu_inc.html" %}
+{% include "sse_event_inc.html" %}
+
+<div class="main">
+    <h1>Pure Menu Eval</h1>
+
+    <p>This example shows how you can build upon Pure Menu and Grid classes. At wide
+    window-widths we display a horizontal menu.
+    At smaller window-widths,
+    we switch to a vertical menu with a toggle control. Grids are used to
+    arrange the menus.
+    Code reproduced below:</p>
+
+    BLABLA ...
+    <h2>System state</h2>
+    <div class="pure-g">
+    {% for k in update.keys() %}
+      <div class="pure-u-1-3">'{{k}}':</div>
+      <div class="pure-u-2-3" id={{"sse_" ~ k|lower}}>{{update[k]}}</div>
+    {% endfor %}
+    </div>
+</div>
+
+</body>
+</html>

@@ -35,9 +35,9 @@ class Driver:
         return 1.0
 
 
-class SensorTemperature(BusMember):
+class SensorTemperature(BusNode):
     def __init__(self, name, driver):
-        BusMember.__init__(self, name) #, 'sensor.temperature')
+        BusNode.__init__(self, name) #, 'sensor.temperature')
         self.role = BusRole.IN_ENDP
         self.driver = driver
         self.data = self.driver.read()
@@ -143,22 +143,22 @@ class BusBroker(BusListener):
 
     def get_nodes(self):
         nodes = {}  # dict of node.name: [input(s)]
-        #for node in self.bus.members:
+        #for node in self.bus.nodes:
         #    if node.__getattribute__('filter'):
         #        nodes[node.name] = node.filter.sender_lst
         #    else:
         #        nodes[node.name] = []
         #return nodes
-        for node in self.bus.members:
+        for node in self.bus.nodes:
             try:
                 nodes[node.name] = node.filter.sender_lst
             except AttributeError:
                 nodes[node.name] = []
         return nodes
-        #return { n:[n.filter.sender_lst] for n in self.bus.members }
+        #return { n:[n.filter.sender_lst] for n in self.bus.nodes }
 
-    def members_by_role(self, roles):
-        return [m for m in self.bus.members if m.role in roles]
+    def nodes_by_role(self, roles):
+        return [m for m in self.bus.nodes if m.role in roles]
 
     def values_by_role(self, roles):
-        return {k:self.values[k] for k in self.values if self.bus.get_member(k).role in roles}
+        return {k:self.values[k] for k in self.values if self.bus.get_node(k).role in roles}

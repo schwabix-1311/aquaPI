@@ -24,7 +24,7 @@ class Msg:
 # payload messages
 
 class MsgPayload(Msg):
-    ''' Base class for custom BusMember communication,
+    ''' Base class for custom BusNode communication,
         e.g. sensor data, output control, message transformers.
         Payloads may have any data, it is the receiver's task to interpret it.
     '''
@@ -54,16 +54,16 @@ class MsgInfra(Msg):
     pass
 
 class MsgBorn(MsgInfra, MsgPayload):
-    ''' Announces a new member plugged into the bus and
+    ''' Announces a new node plugged into the bus and
         make initial value known to others.
-        Members return a MsgReplyHello to show their presence.
+        All nodes return a MsgReplyHello to show their presence.
         Can be used to adjust MsgFilter.
     '''
     pass
 
 class MsgBye(MsgInfra):
-    ''' Announces removal of a bus member.
-        Dependant members can adjust their behavior.
+    ''' Announces removal of a bus node.
+        Dependant nodes can adjust their behavior.
     '''
     pass
 
@@ -80,8 +80,8 @@ class MsgReply(Msg):
         return Msg.__str__(self) + '->' + self.send_to
 
 class MsgReplyHello(MsgReply, MsgInfra):
-    ''' Reply from plugged-in members to MsgBorn.
-        Used to let new members see who's present.
+    ''' Reply from plugged-in nodes to MsgBorn.
+        Used to let new nodes see who's present.
     '''
     pass
 
@@ -102,7 +102,7 @@ class BusRole(Flag):
 
 class MsgBus:
     ''' Communication channel between all registered
-        BusMembers.
+        BusNodes.
         Supports public and 1:1 messaging, plugin/pullout
         notification and message filtering for each listener.
         Msg dispatcher can run as blocking loop of post()
@@ -110,7 +110,7 @@ class MsgBus:
         and easier to debug, thus the default.
     '''
     def __init__(self, threaded=False):
-        self.members = []
+        self.nodes = []
         self._m_cnt = 0
         self._queue = None
         if threaded:
@@ -119,38 +119,38 @@ class MsgBus:
 
     def __str__(self):
         if not self._queue:
-            return '{}({} members)'.format(type(self).__name__, len(self.members))
-        return '{}({} members, {} queue\'d, {} members)'.format(type(self).__name__, len(self.members), self._queue.qsize())
+            return '{}({} nodes)'.format(type(self).__name__, len(self.nodes))
+        return '{}({} nodes, {} queue\'d)'.format(type(self).__name__, len(self.nodes), self._queue.qsize())
 
-    def get_member(self, name):
-        ''' Find BusMember by its name.
+    def get_node(self, name):
+        ''' Find BusNode by its name.
         '''
-        lst = [m for m in self.members if m.name == name]
+        lst = [m for m in self.nodes if m.name == name]
         return lst[0] if lst else None
 
-    def _register(self, member):
-        ''' Add a BusMember to the bus.
+    def _register(self, node):
+        ''' Add a BusNode to the bus.
             Return False if duplicate name.
         '''
-        lst = self.get_member(member.name)
+        lst = self.get_node(node.name)
         if lst:
             return False
 
         if self._queue:
-            # empty the queue before members change
+            # empty the queue before nodes change
             self._queue.join()
-        self.members.append(member)
+        self.nodes.append(node)
         return True
 
     def _unregister(self, name):
-        ''' Remove BusMember from bus.
+        ''' Remove BusNode from bus.
         '''
-        member = self.get_member(name)
-        if member:
+        node = self.get_node(name)
+        if node:
             if self._queue:
-                # empty the queue before members change
+                # empty the queue before nodess change
                 self._queue.join()
-            self.members.remove(member)
+            self.nodes.remove(node)
 
     def post(self, msg):
         ''' Put message into the queue or dispatch in a
@@ -181,10 +181,10 @@ class MsgBus:
         log.debug('%s ->', str(msg))
         if isinstance(msg, MsgReply):
             # directed message sender -> receiver
-            lst = [l for l in self.members if l.name == msg.send_to]
+            lst = [l for l in self.nodes if l.name == msg.send_to]
         else:
             # broadcast message, exclude sender
-            lst = [l for l in self.members if l.name != msg.sender]
+            lst = [l for l in self.nodes if l.name != msg.sender]
         if not isinstance(msg, MsgInfra):
             lst = [l for l in lst if isinstance(l, BusListener)]
             lst = [l for l in lst if not l.filter or l.filter.apply(msg)]
@@ -195,19 +195,19 @@ class MsgBus:
     def teardown(self):
         ''' Prepare for shutdown, e.g. unplug all.
         '''
-        for lst in [l for l in self.members]:
+        for lst in [l for l in self.nodes]:
             log.debug('teardown %s', str(lst))
             lst.pullout()
 
 #############################
 
-class BusMember:
-    ''' BusMember is a minimal bus participant
+class BusNode:
+    ''' BusNode is a minimal bus participant
         It has little overhead, can only post messages.
         Methods plugin/pullout can be redirected to a callback to
         let you know when to start or finish your task.
         Bus callback:
-          bus_cbk(self: BusMember, bus|None: MsgBus) : None
+          bus_cbk(self: BusNode, bus|None: MsgBus) : None
         The bus protocol (MsgBorn/MsgBye/MsgReplyHello)
         is handled internally.
         The filter should always be None!
@@ -264,8 +264,8 @@ class BusMember:
         return False
 
 
-class BusListener(BusMember):
-    ''' BusListener is an extension to BusMember.
+class BusListener(BusNode):
+    ''' BusListener is an extension to BusNode.
         Listeners usually filter the messages they listen to.
         Bus protocol is handled internally.
         All (!) messages can be redirected to message callback,
@@ -277,7 +277,7 @@ class BusListener(BusMember):
         protocol intact!
     '''
     def __init__(self, name, filter=None, msg_cbk=None, bus_cbk=None):
-        BusMember.__init__(self, name, bus_cbk)
+        BusNode.__init__(self, name, bus_cbk)
         if filter and not isinstance(filter, MsgFilter):
             filter = MsgFilter(filter)
         self.filter = filter
@@ -290,7 +290,7 @@ class BusListener(BusMember):
             ret = self._msg_cbk(self, msg)
         if not ret:
             log.debug('%s.listen got %s', str(self), str(msg))
-            ret = BusMember.listen(self, msg)
+            ret = BusNode.listen(self, msg)
         return ret
 
 #############################
@@ -367,11 +367,11 @@ if __name__ == "__main__":
     mb = MsgBus()
     #mb = MsgBus(threaded=True)
 
-    # this are primitive BusMembers, they don't play well with MsgBroker, they are implemented as message callbacks of the basic types
+    # this are primitive BusNodes, they don't play well with MsgBroker, they are implemented as message callbacks of the basic types
 
-    sensor1 = BusMember('TempSensor1', 'sensor.temp')
+    sensor1 = BusNode('TempSensor1', 'sensor.temp')
     sensor1.plugin(mb)
-    sensor2 = BusMember('TempSensor2', 'sensor.temp')
+    sensor2 = BusNode('TempSensor2', 'sensor.temp')
     sensor2.plugin(mb)
 
     avg = BusListener('TempSensor', 'sensor.aggregate.temp', msg_cbk=temp_avg)

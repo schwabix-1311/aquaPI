@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block header %}
+  <h1>{% block title %}Configuration{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<body id="config">
+
+{% include "sse_event_inc.html" %}
+
+<div class="main">
+    Große Baustelle!<p>
+    Will be a page with tabs for different aspects of configuration.<br>
+    ... and a link to REST API documentation.<br>
+    Some of it should be protected by authentication.<p>
+
+{% for g in update.keys() %}
+    <h2>{{g}}</h2>
+      <div class="pure-g">
+{%   for k in update[g].keys() %}
+        <div class="pure-u-1-3">{{k}}:</div>
+        <div class="pure-u-2-3" id="{{"sse_" ~ g|lower ~ "-" ~ k|lower}}">{{update[g][k]}}</div>
+{%   endfor %}
+      </div>
+{% endfor %}
+</div>
+
+</body>
+{% endblock %}

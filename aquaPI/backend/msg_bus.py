@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
-import time
-from queue import Queue, Empty
+import logging
+from queue import Queue
+from enum import Flag, auto
 import threading
-import random
 #TODO: import typing and use it for parameters; only useful for linters!!
+
+
+log = logging.getLogger('MsgBus')
+log.setLevel(logging.INFO)
 
 
 class Msg:
@@ -83,6 +87,19 @@ class MsgReplyHello(MsgReply, MsgInfra):
 
 #############################
 
+class BusRole(Flag):
+    IN_ENDP = auto()    # data sources: sensor, switch, schedule
+    OUT_ENDP = auto()   # output: relais, logs, mails
+    CONTROLLER = auto() # the core of a controller: process IN -> OUT
+    AUXILIARY = auto()  # aggregation, helper func: 2:1, avg, delay
+    BROKER = auto()     # listens to everything to provide current state
+
+#class DataType
+    #TUPEL = auto()      # operates on data tupels, e.g. RGB light
+    #BINARY = auto()     # interprets MsgData in a binary way (on/off)
+
+#############################
+
 class MsgBus:
     ''' Communication channel between all registered
         BusMembers.
@@ -93,7 +110,7 @@ class MsgBus:
         and easier to debug, thus the default.
     '''
     def __init__(self, threaded=False):
-        self.listeners = []
+        self.members = []
         self._m_cnt = 0
         self._queue = None
         if threaded:
@@ -102,38 +119,38 @@ class MsgBus:
 
     def __str__(self):
         if not self._queue:
-            return '{}({} lst)'.format(type(self).__name__, len(self.listeners))
-        return '{}({} q''d, {} lst)'.format(type(self).__name__, self._queue.qsize(), len(self.listeners))
+            return '{}({} members)'.format(type(self).__name__, len(self.members))
+        return '{}({} members, {} queue\'d, {} members)'.format(type(self).__name__, len(self.members), self._queue.qsize())
 
     def get_member(self, name):
         ''' Find BusMember by its name.
         '''
-        lst = [l for l in self.listeners if l.name == name]
+        lst = [m for m in self.members if m.name == name]
         return lst[0] if lst else None
 
-    def _register(self, listener):
+    def _register(self, member):
         ''' Add a BusMember to the bus.
             Return False if duplicate name.
         '''
-        lst = self.get_member(listener.name)
+        lst = self.get_member(member.name)
         if lst:
             return False
 
         if self._queue:
-            # empty the queue before listeners change
+            # empty the queue before members change
             self._queue.join()
-        self.listeners.append(listener)
+        self.members.append(member)
         return True
 
     def _unregister(self, name):
         ''' Remove BusMember from bus.
         '''
-        listener = self.get_member(name)
-        if listener:
+        member = self.get_member(name)
+        if member:
             if self._queue:
-                # empty the queue before listeners change
+                # empty the queue before members change
                 self._queue.join()
-            self.listeners.remove(listener)
+            self.members.remove(member)
 
     def post(self, msg):
         ''' Put message into the queue or dispatch in a
@@ -144,7 +161,7 @@ class MsgBus:
         '''
         self._m_cnt += 1
         msg._m_cnt = self._m_cnt
-        print(str(self) + '   + ' + str(msg))
+        log.debug('%s   + %s', str(self), str(msg))
         if self._queue:
             self._queue.put(msg, block=True, timeout=5)
         else:
@@ -161,25 +178,25 @@ class MsgBus:
     def _dispatch_one(self, msg):
         ''' Dispatch one message to all listeners in a blocking loop.
         '''
-        #print(str(msg) + ' ->')
+        log.debug('%s ->', str(msg))
         if isinstance(msg, MsgReply):
             # directed message sender -> receiver
-            lst = [l for l in self.listeners if l.name == msg.send_to]
+            lst = [l for l in self.members if l.name == msg.send_to]
         else:
             # broadcast message, exclude sender
-            lst = [l for l in self.listeners if l.name != msg.sender]
+            lst = [l for l in self.members if l.name != msg.sender]
         if not isinstance(msg, MsgInfra):
             lst = [l for l in lst if isinstance(l, BusListener)]
             lst = [l for l in lst if not l.filter or l.filter.apply(msg)]
         for l in lst:
-            #print('  -> ' + str(l))
+            log.debug('  -> %s', str(l))
             l.listen(msg)
 
     def teardown(self):
         ''' Prepare for shutdown, e.g. unplug all.
         '''
-        for lst in [l for l in self.listeners]:
-            #print('teardown ' + str(lst))
+        for lst in [l for l in self.members]:
+            log.debug('teardown %s', str(lst))
             lst.pullout()
 
 #############################
@@ -193,10 +210,12 @@ class BusMember:
           bus_cbk(self: BusMember, bus|None: MsgBus) : None
         The bus protocol (MsgBorn/MsgBye/MsgReplyHello)
         is handled internally.
+        The filter should always be None!
     '''
-    def __init__(self, name, func=None, bus_cbk=None):
+    def __init__(self, name, bus_cbk=None):
         self.name = name
-        self.func = func
+        self.filter = None
+        self.role = None
         self.bus = None
         self.data = None
         self._bus_cbk = bus_cbk
@@ -214,10 +233,11 @@ class BusMember:
             if self._bus_cbk:
                 self._bus_cbk(self, self.bus)
             self.post(MsgBorn(self.name, self.data))
-            #print(str(self) + ' plugged')
+            log.info('%s plugged', str(self))
         else:
             pass
-            #print(str(self) + ' not plugged (name dupe?')
+            log.warning('%s not plugged (name dupe?', str(self))
+        log.warning('%s role %s', str(self), self.role)
         return self.bus
 
     def pullout(self):
@@ -228,7 +248,7 @@ class BusMember:
         self.post(MsgBye(self.name))
         self.bus._unregister(self.name)
         self.bus = None
-        #print(str(self) + ' pulled')
+        log.info('%s pulled', str(self))
         return True
 
     def post(self, msg):
@@ -237,7 +257,7 @@ class BusMember:
 
     def listen(self, msg):
         # standard reactions for unhandled messages
-        #print('{}.listen {}\n'.format(str(self), str(msg)))
+        log.debug('%s.listen %s', str(self), str(msg))
         if isinstance(msg, MsgBorn):
             self.post(MsgReplyHello(self.name, msg.sender))
             return True
@@ -246,6 +266,7 @@ class BusMember:
 
 class BusListener(BusMember):
     ''' BusListener is an extension to BusMember.
+        Listeners usually filter the messages they listen to.
         Bus protocol is handled internally.
         All (!) messages can be redirected to message callback,
         which returns True, for handled messages, False otherwise.
@@ -255,8 +276,8 @@ class BusListener(BusMember):
         A derived class must call MsgBus.listen() to keep
         protocol intact!
     '''
-    def __init__(self, name, func=None, filter=None, msg_cbk=None, bus_cbk=None):
-        BusMember.__init__(self, name, func, bus_cbk)
+    def __init__(self, name, filter=None, msg_cbk=None, bus_cbk=None):
+        BusMember.__init__(self, name, bus_cbk)
         if filter and not isinstance(filter, MsgFilter):
             filter = MsgFilter(filter)
         self.filter = filter
@@ -265,10 +286,10 @@ class BusListener(BusMember):
     def listen(self, msg):
         ret = False
         if self._msg_cbk:
-            #print('{}._msg_cbk got {}\n'.format(str(self), str(msg)))
+            log.debug('%s._msg_cbk got %s', str(self), str(msg))
             ret = self._msg_cbk(self, msg)
         if not ret:
-            #print('{}.listen got {}\n'.format(str(self), str(msg)))
+            log.debug('%s.listen got %s', str(self), str(msg))
             ret = BusMember.listen(self, msg)
         return ret
 
@@ -280,7 +301,7 @@ class MsgFilter():
         Empty list (actually an array) means no filtering.
         sender_list may be None=all, a string or a list of strings.
     '''
-    #TODO add filtering by other attributes (group, category, sender type)
+    #TODO add filtering by other attributes (group, category, sender role/type)
     def __init__(self, sender_lst):
         if (isinstance(sender_lst, str)):
             self.sender_lst = [sender_lst]
@@ -291,6 +312,7 @@ class MsgFilter():
         return '{}({})'.format(type(self).__name__, ','.join(self.sender_lst))
 
     def apply(self, msg):
+        #TODO: rethink interaction of BusRole and MsgFilter, might be simplified
         if not self.sender_lst or msg.sender in self.sender_lst:
             #TODO add categories and/or groups
             return True
@@ -338,6 +360,10 @@ def relais(self, msg):
 #############################
 
 if __name__ == "__main__":
+
+    import time
+    import random
+
     mb = MsgBus()
     #mb = MsgBus(threaded=True)
 

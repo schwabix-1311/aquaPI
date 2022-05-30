@@ -1,0 +1,17 @@
+<!doctype html>
+<title>{% block title %}{% endblock %} - aquaPI</title>
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/pure-min.css">
+<link rel="stylesheet" href="https://unpkg.com/purecss@2.1.0/build/grids-responsive-min.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+{% include "menu_inc.html" %}
+<section class="content">
+  <header>
+    {% block header %}{% endblock %}
+  </header>
+  {% for message in get_flashed_messages() %}
+    <div class="flash">{{ message }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</section>

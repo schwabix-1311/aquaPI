@@ -12,20 +12,17 @@ bp = Blueprint('config', __name__)
 
 
 @bp.route('/config')
-def dash():
+def config():
     broker = current_app.broker
-    # we can also add other data
     values = {}
-    values["Controller"] = broker.values_by_role(msg_bus.BusRole.CONTROLLER)
-    values["Inputs"] = broker.values_by_role(msg_bus.BusRole.IN_ENDP)
-    values["Outputs"] = broker.values_by_role(msg_bus.BusRole.OUT_ENDP)
-    values["Helpers"] = broker.values_by_role(msg_bus.BusRole.AUXILIARY)
-    def sse_update():
-        broker.changed.wait()
-        values["Controller"] = broker.values_by_role(msg_bus.BusRole.CONTROLLER)
-        values["Inputs"] = broker.values_by_role(msg_bus.BusRole.IN_ENDP)
-        values["Outputs"] = broker.values_by_role(msg_bus.BusRole.OUT_ENDP)
-        values["Helpers"] = broker.values_by_role(msg_bus.BusRole.AUXILIARY)
-        broker.changed.clear()
-        return json.dumps(values)
-    return render_sse_template('config/index.html', sse_update, values)
+
+#  ctrl.node
+#  in.node
+#  out.node
+#  aux.node
+    values["ctrl"] = broker.get_nodes(msg_bus.BusRole.CTRL)
+    values["aux"] = broker.get_nodes(msg_bus.BusRole.AUX)
+    values["in"] = broker.get_nodes(msg_bus.BusRole.IN_ENDP)
+    values["out"] = broker.get_nodes(msg_bus.BusRole.OUT_ENDP)
+
+    return render_template('config/index.html', update=values)

@@ -1,0 +1,62 @@
+aquaPI ToDo list
+================
+
+- explore Flask.flash() - for input validation message?
+
+- user authentication: use Flask.redirect() & session
+
+- add 'click' cmdline options, e.g. --resetfactory --list ...
+
+- add a route for log & errors - backend implemented as BusListeners
+
+- three access levels: viewer / operator (e.g. temperature setpoints) / admin (full config)
+
+- simple UI & advanced API, to allow an easy start; simple = no AUX nodes!?
+
+- WebUI snippets
+  ref: https://codemyui.com/
+
+- use Flask-Babel for i18n & l10
+  ref: https://github.com/python-babel/flask-babel
+  ref: https://flask-babel.tkte.ch/
+
+- use a library for IO? create my own?
+
+- REST API. What's the benefit of using flask-restful?
+  Related: data exchange front-back via POST or REST API?
+
+- more references - collection of extensions I might need
+  ref: https://github.com/humiaozuzu/awesome-flask
+
+- packaging and deployment ... long way to there!
+
+
+THOUGHTS
+========
+
+- python & Flask are closer to my skills and work style, than NodeJS and its huge library of tiny modules (introduces too many dependencies requiring permanent updates). Same might be the case with Django.
+
+- Task Queues like huey could be used instead of my own MsgBus, but it requires exploration until I know where its limits are. For MsgBus I know them and can hopefully solve them.
+
+
+DONE
+====
+
+- init
+        python -m venv venv
+        . ./venv/bin/activate
+        pip install Flask sseclient
+        ? pip install pylint
+- run
+        export FLASK_APP=aquaPI
+        export FLASK_ENV=development
+        flask run
+- WebUI styling - small and clean std css
+  ref:  https://purecss.io/
+- front-end update - push data from backend to UI, Reload/Ajax/websocket/SSE?
+  -> so far SSE seems appropriate
+  ref: https://stackoverflow.com/questions/13386681/streaming-data-with-python-and-flask
+  ref: https://javascript.info/server-sent-events
+- sample with interaction of MsgListener with SSE-consuming page
+- put the project on github. Or somewhere else? Unlikely
+- use Jinja template inheritance, so far just plain templates are used

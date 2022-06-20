@@ -8,7 +8,7 @@ import threading
 
 
 log = logging.getLogger('MsgBus')
-log.setLevel(logging.INFO)
+log.setLevel(logging.WARNING)  # INFO)
 
 
 class Msg:
@@ -90,8 +90,8 @@ class MsgReplyHello(MsgReply, MsgInfra):
 class BusRole(Flag):
     IN_ENDP = auto()    # data sources: sensor, switch, schedule
     OUT_ENDP = auto()   # output: relais, logs, mails
-    CONTROLLER = auto() # the core of a controller: process IN -> OUT
-    AUXILIARY = auto()  # aggregation, helper func: 2:1, avg, delay
+    CTRL = auto() # the core of a controller: process IN -> OUT
+    AUX = auto()        # helper func: 2:1/n:1, e.g. avg, delay, or
     BROKER = auto()     # listens to everything to provide current state
 
 #class DataType
@@ -186,8 +186,8 @@ class MsgBus:
             # broadcast message, exclude sender
             lst = [l for l in self.nodes if l.name != msg.sender]
         if not isinstance(msg, MsgInfra):
-            lst = [l for l in lst if isinstance(l, BusListener)]
-            lst = [l for l in lst if not l.filter or l.filter.apply(msg)]
+            #lst = [l for l in lst if isinstance(l, BusListener)]
+            lst = [l for l in lst if l.filter and l.filter.apply(msg)]
         for l in lst:
             log.debug('  -> %s', str(l))
             l.listen(msg)
@@ -212,17 +212,46 @@ class BusNode:
         is handled internally.
         The filter should always be None!
     '''
+    ROLE = None
+
     def __init__(self, name, bus_cbk=None):
         self.name = name
         self.filter = None
-        self.role = None
         self.bus = None
         self.data = None
         self._bus_cbk = bus_cbk
         self._msg_cbk = None
 
+    #def store(self):
+    #    return json.dumps({'name':self.name, 'filter':self.filter, 'ROLE':self.ROLE })
+
     def __str__(self):
-        return '{}({})'.format(type(self).__name__, self.name)
+        return '{}({})'.format(type(self).__name__, ','.join(self.get_inputs()))
+
+    def get_inputs(self, recurse=False):
+        inputs = []
+        if self.filter:
+            inputs = [snd for snd in self.filter.sender]
+        if recurse and self.filter:
+            for snd in self.filter.sender:
+                s_node = self.bus.get_node(snd)
+                if s_node:
+                    #inputs.insert(0, s_node.get_inputs(recurse)) 
+                    inputs = s_node.get_inputs(recurse) + inputs 
+        return inputs # if self.filter else ['-']
+
+    def get_outputs(self, recursive=False):
+        outputs = []
+        if self.bus:
+            for n in self.bus.nodes:
+                if n.filter and self.name in n.filter.sender:
+                    outputs.append(n.name)
+                    if recursive:
+                        s_node = self.bus.get_node(n.name)
+                        if s_node:
+                            #outputs.append(s_node.get_outputs(recursive))
+                            outputs += s_node.get_outputs(recursive)
+        return outputs  # if outputs else ['-']
 
     def plugin(self, bus):
         if self.bus:
@@ -233,11 +262,9 @@ class BusNode:
             if self._bus_cbk:
                 self._bus_cbk(self, self.bus)
             self.post(MsgBorn(self.name, self.data))
-            log.info('%s plugged', str(self))
+            log.info('%s plugged, role %s', str(self), str(self.ROLE))
         else:
-            pass
             log.warning('%s not plugged (name dupe?', str(self))
-        log.warning('%s role %s', str(self), self.role)
         return self.bus
 
     def pullout(self):
@@ -278,8 +305,11 @@ class BusListener(BusNode):
     '''
     def __init__(self, name, filter=None, msg_cbk=None, bus_cbk=None):
         BusNode.__init__(self, name, bus_cbk)
-        if filter and not isinstance(filter, MsgFilter):
-            filter = MsgFilter(filter)
+        if filter:
+            if not isinstance(filter, MsgFilter):
+                filter = MsgFilter(filter)
+        else:
+            filter = MsgFilter('*')
         self.filter = filter
         self._msg_cbk = msg_cbk
 
@@ -302,18 +332,19 @@ class MsgFilter():
         sender_list may be None=all, a string or a list of strings.
     '''
     #TODO add filtering by other attributes (group, category, sender role/type)
-    def __init__(self, sender_lst):
-        if (isinstance(sender_lst, str)):
-            self.sender_lst = [sender_lst]
+    def __init__(self, sender):
+        if (isinstance(sender, str)):
+            self.sender= [sender]
         else:
-            self.sender_lst = sender_lst
+            self.sender= sender
 
     def __str__(self):
-        return '{}({})'.format(type(self).__name__, ','.join(self.sender_lst))
+        return '{}({})'.format(type(self).__name__, ','.join(self.sender))
 
     def apply(self, msg):
-        #TODO: rethink interaction of BusRole and MsgFilter, might be simplified
-        if not self.sender_lst or msg.sender in self.sender_lst:
+        if not self.sender:
+            log.warning('%s has empty sender list, msg %s', str(), str(msg))
+        if (self.sender== ['*']) or (msg.sender in self.sender):
             #TODO add categories and/or groups
             return True
         return False
@@ -369,18 +400,18 @@ if __name__ == "__main__":
 
     # this are primitive BusNodes, they don't play well with MsgBroker, they are implemented as message callbacks of the basic types
 
-    sensor1 = BusNode('TempSensor1', 'sensor.temp')
+    sensor1 = BusNode('TempSensor1')
     sensor1.plugin(mb)
-    sensor2 = BusNode('TempSensor2', 'sensor.temp')
+    sensor2 = BusNode('TempSensor2')
     sensor2.plugin(mb)
 
-    avg = BusListener('TempSensor', 'sensor.aggregate.temp', msg_cbk=temp_avg)
+    avg = BusListener('TempSensor', msg_cbk=temp_avg)
     avg.plugin(mb)
 
-    temp_ctrl = BusListener('TempController', 'controller.temp', msg_cbk=minThreshold, filter=MsgFilter(['TempSensor']))
+    temp_ctrl = BusListener('TempController', msg_cbk=minThreshold, filter=MsgFilter(['TempSensor']))
     temp_ctrl.plugin(mb)
 
-    relais = BusListener('TempRelais', 'device.temp.heat', msg_cbk=relais, filter=[temp_ctrl.name])
+    relais = BusListener('TempRelais', msg_cbk=relais, filter=[temp_ctrl.name])
     relais.plugin(mb)
 
     #mb.register(BusListener('BL3'))

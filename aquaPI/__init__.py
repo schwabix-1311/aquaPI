@@ -8,8 +8,8 @@ import logging
 
 
 def create_app(test_config=None):
-    logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s', datefmt='%I:%M:%S', stream=sys.stdout)
-    if False:
+    logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s', datefmt='%I:%M:%S', stream=sys.stdout, level=logging.WARNING)
+    if False:    #FIXME: using app.debug before assignment
         mail_handler = SMTPHandler(
             mailhost='127.0.0.1',
             fromaddr='server-error@example.com',

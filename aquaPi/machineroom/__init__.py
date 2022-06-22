@@ -5,11 +5,11 @@ from . import msg_bus
 from . import msg_nodes
 
 
-log = logging.getLogger('BackEnd')
+log = logging.getLogger('MachineRoom')
 log.setLevel(logging.INFO)
 
 
-class BackEnd():
+class MachineRoom():
     ''' The Machine Room
         The core is a message bus, on which different sensors,
         controllers, devices and auxiliary nodes communicate.
@@ -23,6 +23,7 @@ class BackEnd():
         self.broker = msg_nodes.BusBroker()
         self.broker.plugin(self.bus)
 
+        #TODO  temporary, until construction from config data works
         if True:
             # this are 2 hard-wired temperature controllers with
             # two sensors (averaged) as input and shared output. Simulated nodes!

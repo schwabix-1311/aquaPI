@@ -1,4 +1,4 @@
-aquaPI ToDo list
+aquaPi ToDo list
 ================
 
 - explore Flask.flash() - for input validation message?
@@ -48,7 +48,7 @@ DONE
         pip install Flask sseclient
         ? pip install pylint
 - run
-        export FLASK_APP=aquaPI
+        export FLASK_APP=aquaPi
         export FLASK_ENV=development
         flask run
 - WebUI styling - small and clean std css
@@ -60,3 +60,5 @@ DONE
 - sample with interaction of MsgListener with SSE-consuming page
 - put the project on github. Or somewhere else? Unlikely
 - use Jinja template inheritance, so far just plain templates are used
+- cleanup the project name: 'aquaPi' (lowercase i), but home directory is 
+  auquPI (upper!) to distinguish it from the app directory

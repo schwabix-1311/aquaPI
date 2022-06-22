@@ -9,7 +9,7 @@ import logging
 
 def create_app(test_config=None):
     logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s', datefmt='%I:%M:%S', stream=sys.stdout, level=logging.WARNING)
-    if False:    #FIXME: using app.debug before assignment
+    if False:    #FIXME: this would use app.debug before assignment
         mail_handler = SMTPHandler(
             mailhost='127.0.0.1',
             fromaddr='server-error@example.com',
@@ -26,7 +26,7 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY='ToDo during installation',   #TODO !!
-        DATABASE=os.path.join(app.instance_path, 'aquaPI.sqlite'),
+        DATABASE=os.path.join(app.instance_path, 'aquaPi.sqlite'),
     )
     if test_config:
         app.config.from_mapping(test_config)
@@ -41,9 +41,12 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
 
-    from . import backend
-    be = backend.BackEnd(app.config)
-    app.broker = be.broker
+    from . import machineroom
+    mr = machineroom.MachineRoom(app.config)
+    app.broker = mr.broker
+
+    from . import index
+    app.register_blueprint(index.bp)
 
     from . import dash
     app.register_blueprint(dash.bp)

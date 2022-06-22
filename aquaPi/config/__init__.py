@@ -4,8 +4,8 @@ from flask import (
     Flask, Blueprint, current_app, render_template, json
 )
 from ..sse_util import render_sse_template
-from ..backend import msg_bus
-from ..backend import msg_nodes
+from ..machineroom import msg_bus
+from ..machineroom import msg_nodes
 
 
 bp = Blueprint('config', __name__)

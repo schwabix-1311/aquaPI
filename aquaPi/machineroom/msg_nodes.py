@@ -370,7 +370,7 @@ class DeviceSwitch(Device):
     def __init__(self, name, filter):
         super().__init__(name, filter)
         self.data = False
-for
+
     def listen(self, msg):
         if isinstance(msg, MsgData):
             if self.data != bool(msg.data):

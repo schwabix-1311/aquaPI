@@ -1,6 +1,29 @@
 aquaPi ToDo list
 ================
 
+- milestones for UUI:
+  a) change temperature threshold via web UI
+  b) change light schedule via web UI
+
+- milestone for backend:
+  save configuration and restore during startup (instead of hard-coded topology!)
+
+- register a cleanup method with atexit() to save config, and get along with
+  werkzeug's neat auto-reload
+
+- Navigation:
+  /          Home, a configurable dashboard
+  /control   Controllers, with foldable groups containing Controllers & their in/out
+             Group is a new property of each Controller, set by user
+             This page views and allows to edit operation parameters (Temp, Schedule)
+             Edit needs auth.??
+  /config    Configuration, show all bus nodes, their relations
+             Allow authenticated users to add/change/remove topology
+  /system    Global configuration, users, email, logging, start/stop, update ...
+             Authenticated, at least some actions.
+  /log       View logs with errors, warnings and configured events.
+  /about     some system information, help pointers
+  
 - explore Flask.flash() - for input validation message?
 
 - user authentication: use Flask.redirect() & session
@@ -11,7 +34,7 @@ aquaPi ToDo list
 
 - three access levels: viewer / operator (e.g. temperature setpoints) / admin (full config)
 
-- simple UI & advanced API, to allow an easy start; simple = no AUX nodes!?
+- simple UI & advanced UI, to allow easy start; simple = no AUX nodes!?
 
 - WebUI snippets
   ref: https://codemyui.com/
@@ -29,6 +52,16 @@ aquaPi ToDo list
   ref: https://github.com/humiaozuzu/awesome-flask
 
 - packaging and deployment ... long way to there!
+
+- not so common features:
+  multiple sensors can feed one control unit (redundancy=safety),
+  several control units can drive one output in a predictible manner,
+  logging/email alerts for virtually anything,
+  over-temperature could dim the light (aux nodes to limit light level
+  from inverted|scaled temp)
+
+- unique feature would be a driver interface to a TC420 light controller,
+  wallneradam/tc420 on github is a Linux shell tool to interact with TC429
 
 
 THOUGHTS
@@ -53,7 +86,8 @@ DONE
         flask run
 - WebUI styling - small and clean std css
   ref:  https://purecss.io/
-- front-end update - push data from backend to UI, Reload/Ajax/websocket/SSE?
+- proof of concept for front-end updates:
+  push data from backend to UI, use page reload/Ajax/websocket/SSE?
   -> so far SSE seems appropriate
   ref: https://stackoverflow.com/questions/13386681/streaming-data-with-python-and-flask
   ref: https://javascript.info/server-sent-events
@@ -62,3 +96,9 @@ DONE
 - use Jinja template inheritance, so far just plain templates are used
 - cleanup the project name: 'aquaPi' (lowercase i), but home directory is 
   auquPI (upper!) to distinguish it from the app directory
+- Flask in debug mode reloaded everything without cleanup, duplicating worker threads, etc.,
+  at least the 1st reload is now handled correctly, still no atexit-cleanup
+- milestones for machine room:
+  a) simple sensor-temperature-relais controller
+  b) 2 temperature controllers with redundant sensors and overlapping outputs
+  c) scheduled light controller

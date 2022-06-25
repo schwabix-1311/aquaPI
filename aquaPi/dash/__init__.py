@@ -5,7 +5,6 @@ from flask import (
 )
 from ..sse_util import render_sse_template
 from ..machineroom import msg_bus
-from ..machineroom import msg_nodes
 
 
 bp = Blueprint('dash', __name__)

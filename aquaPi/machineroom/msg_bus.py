@@ -3,89 +3,14 @@
 import logging
 from queue import Queue
 from enum import Flag, auto
-import threading
-#TODO: import typing and use it for parameters; only useful for linters!!
+from threading import Thread, Event
+
+from .msg_types import *
 
 
 log = logging.getLogger('MsgBus')
-log.setLevel(logging.WARNING)  # INFO)
+log.setLevel(logging.INFO) #WARNING)  # INFO)
 
-
-class Msg:
-    ''' The base of all message classes, unusable by itself.
-    '''
-    def __init__(self, sender):
-        self.sender = sender
-        self._m_cnt = 0
-
-    def __str__(self):
-        return '{}({})#{}'.format(type(self).__name__, self.sender,self._m_cnt)
-
-# payload messages
-
-class MsgPayload(Msg):
-    ''' Base class for custom BusNode communication,
-        e.g. sensor data, output control, message transformers.
-        Payloads may have any data, it is the receiver's task to interpret it.
-    '''
-    def __init__(self, sender, data):
-        Msg.__init__(self, sender)
-        self.data = data
-
-    def __str__(self):
-        return '{}({})#{}:{}'.format(type(self).__name__, self.sender,self._m_cnt,self.data)
-
-class MsgValue(MsgPayload):
-    ''' Transport for data items
-        Output of sensors and input for relais.
-        All using same type allows to chain BusListeners
-        Value can have any type, receiver must interpret it in
-        an expectable way, close to Python truthness,
-        Caveat: data='off' -> True
-        Non-binary outputs should use 0=off, 100=full on (%)
-    '''
-    pass
-
-# infrastructure messages
-
-class MsgInfra(Msg):
-    ''' Base for basic protocol msgs, may not be filtered
-    '''
-    pass
-
-class MsgBorn(MsgInfra, MsgPayload):
-    ''' Announces a new node plugged into the bus and
-        make initial value known to others.
-        All nodes return a MsgReplyHello to show their presence.
-        Can be used to adjust MsgFilter.
-    '''
-    pass
-
-class MsgBye(MsgInfra):
-    ''' Announces removal of a bus node.
-        Dependant nodes can adjust their behavior.
-    '''
-    pass
-
-# reply messages
-
-class MsgReply(Msg):
-    ''' Base class for all reply messages, usually 1:1.
-    '''
-    def __init__(self, sender, send_to):
-        Msg.__init__(self, sender)
-        self.send_to = send_to
-
-    def __str__(self):
-        return Msg.__str__(self) + '->' + self.send_to
-
-class MsgReplyHello(MsgReply, MsgInfra):
-    ''' Reply from plugged-in nodes to MsgBorn.
-        Used to let new nodes see who's present.
-    '''
-    pass
-
-#############################
 
 class BusRole(Flag):
     IN_ENDP = auto()    # data sources: sensor, switch, schedule
@@ -94,8 +19,10 @@ class BusRole(Flag):
     AUX = auto()        # helper func: 2:1/n:1, e.g. avg, delay, or
     BROKER = auto()     # listens to everything to provide current state
 
-#class DataType
+# This may help to fill selection lists/combos with the appropriate node types
+#class PayloadType
     #TUPEL = auto()      # operates on data tupels, e.g. RGB light
+    #ANALOG = auto()     # the receiver interprets MsgData according to his capabilites
     #BINARY = auto()     # interprets MsgData in a binary way (on/off)
 
 #############################
@@ -115,7 +42,7 @@ class MsgBus:
         self._queue = None
         if threaded:
             self._queue = Queue(maxsize=10)  # or collections.deque?
-            threading.Thread(target=self._dispatch, daemon=True).start()
+            Thread(target=self._dispatch, daemon=True).start()
 
     def __str__(self):
         if not self._queue:
@@ -300,11 +227,11 @@ class BusListener(BusNode):
         message callback:
           message_cbk(self: BusListener, msg: Msg) : bool
         Listening to MsgBorn/MsgBye allows to adjust MsgFilters.
-        A derived class must call MsgBus.listen() to keep
+        A derived class must call BusListener.listen() to keep
         protocol intact!
     '''
     def __init__(self, name, filter=None, msg_cbk=None, bus_cbk=None):
-        BusNode.__init__(self, name, bus_cbk)
+        super().__init__(name, bus_cbk)
         if filter:
             if not isinstance(filter, MsgFilter):
                 filter = MsgFilter(filter)
@@ -323,39 +250,55 @@ class BusListener(BusNode):
             ret = BusNode.listen(self, msg)
         return ret
 
+
+class BusBroker(BusListener):
+    ROLE = BusRole.BROKER
+
+    def __init__(self):
+        super().__init__('BusBroker')
+        self.values = {}
+        self.changed = Event()
+        self.changed.clear()
+
+    def listen(self, msg):
+        if isinstance(msg, (MsgData,MsgBorn)):
+            log.debug('broker got %s', str(msg))
+            if self.values.setdefault(msg.sender) != msg.data:
+                self.values[msg.sender] = msg.data
+                self.changed.set()
+        #TODO: MsgBye must remove nodes from self.values
+        return BusListener.listen(self, msg)
+
+    def get_nodes(self, roles=None):
+        ''' return dict with current nodes: { name:BusNode, ... }
+            filtered by set of roles, or all
+        '''
+        return { n.name:n  for n in self.bus.nodes if not roles or n.ROLE in roles }
+
+    def get_node_names(self, roles=None):
+        ''' return arr with current node names: [ name, ... ]
+            filtered by set of roles, or all
+        '''
+        return [ n.name  for n in self.bus.nodes if not roles or n.ROLE in roles ]
+
+    def values_by_names(self, names):
+        return {n:self.values[n] for n in self.values if n in names}
+
+    def values_by_role(self, roles):
+        return {k:self.values[k] for k in self.values if self.bus.get_node(k).ROLE in roles}
+
 #############################
 
-class MsgFilter():
-    ''' MsgFilter is used to select messages received
-        by BusListener via a list of sender names.
-        Empty list (actually an array) means no filtering.
-        sender_list may be None=all, a string or a list of strings.
-    '''
-    #TODO add filtering by other attributes (group, category, sender role/type)
-    def __init__(self, sender):
-        if (isinstance(sender, str)):
-            self.sender= [sender]
-        else:
-            self.sender= sender
-
-    def __str__(self):
-        return '{}({})'.format(type(self).__name__, ','.join(self.sender))
-
-    def apply(self, msg):
-        if not self.sender:
-            log.warning('%s has empty sender list, msg %s', str(), str(msg))
-        if (self.sender== ['*']) or (msg.sender in self.sender):
-            #TODO add categories and/or groups
-            return True
-        return False
-
-#############################
+''' samples of low-level nodes using callbacks
+    TODO: unclear whether callbacks are used finally, for now keep 'em
+          currently all higher level nodes derive from BusNodes
+'''
 
 t_avg = None
 
 def temp_avg(self, msg):
     global t_avg
-    if isinstance(msg, MsgValue):
+    if isinstance(msg, MsgData):
         if not t_avg:
             t_avg = msg.data
         else:
@@ -364,23 +307,23 @@ def temp_avg(self, msg):
             if t_new != t_avg:
                 t_avg = t_new
                 #print(str(self) + ' = ' + str(t_avg))
-                self.post(MsgValue(self.name,t_avg))
+                self.post(MsgData(self.name,t_avg))
         return True
     return False
 
 def minThreshold(self, msg):
-    if isinstance(msg, MsgValue):
+    if isinstance(msg, MsgData):
         #print(str(self) + ' got ' + str(msg))
         if msg.data < 25:
-            self.post(MsgValue(self.name, True))
+            self.post(MsgData(self.name, True))
         else:
-            self.post(MsgValue(self.name, False))
+            self.post(MsgData(self.name, False))
 
 relais_state = False
 
 def relais(self, msg):
     global relais_state
-    if isinstance(msg, MsgValue):
+    if isinstance(msg, MsgData):
         #print('{} = {}'.format(msg.sender,msg.data))
         if msg.data != relais_state:
             #print('{} switching {}'.format(self.name,{True:'ON',False:'off'}[msg.data]))
@@ -389,6 +332,9 @@ def relais(self, msg):
     return False
 
 #############################
+
+''' kind of unit tests and sample usage
+'''
 
 if __name__ == "__main__":
 
@@ -408,7 +354,7 @@ if __name__ == "__main__":
     avg = BusListener('TempSensor', msg_cbk=temp_avg)
     avg.plugin(mb)
 
-    temp_ctrl = BusListener('TempController', msg_cbk=minThreshold, filter=MsgFilter(['TempSensor']))
+    temp_ctrl = BusListener('TempController', msg_cbk=minThreshold, filter=msg_busmsgs.MsgFilter(['TempSensor']))
     temp_ctrl.plugin(mb)
 
     relais = BusListener('TempRelais', msg_cbk=relais, filter=[temp_ctrl.name])
@@ -418,9 +364,9 @@ if __name__ == "__main__":
 
     #for d in [42, 24.83, 'LOW', [1,2,3]]:
     for d in range(100):
-        sensor1.post(MsgValue(sensor1.name, round(random.random() * 3 + 23.5, 2)))
+        sensor1.post(MsgData(sensor1.name, round(random.random() * 3 + 23.5, 2)))
         if d % 3:
-            sensor2.post(MsgValue(sensor2.name, round(random.random() * 3 + 23.5, 2)))
+            sensor2.post(MsgData(sensor2.name, round(random.random() * 3 + 23.5, 2)))
         #time.sleep(.1)
 
     mb.teardown()

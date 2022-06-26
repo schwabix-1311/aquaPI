@@ -14,7 +14,8 @@ from .msg_bus import *
 
 
 log = logging.getLogger('MsgNodes')
-log.setLevel(logging.DEBUG) #WARNING) #INFO)
+log.setLevel(logging.INFO) #WARNING) #INFO)
+#log.setLevel(logging.DEBUG)
 
 
 #TODO Driver does not belong here
@@ -95,12 +96,12 @@ class SensorTemp(Sensor):
 class Schedule(BusNode):
     ''' A scheduler supporting monthly/weekly/daily/hourly(/per minute)
         trigger output (On=100 / Off=0).
-        Internally working like cron; a sepc is 'min hour day month weekday'.
-        In contrast to cron it concatenates consecutive triggers to a longer ON phase,
+        Internally working like cron; a spec is 'min hour day month weekday'.
+        In contrast to cron we concatenate consecutive events to a long ON state,
         i,e.  '20-24 9 * * *' is a MsgData(100) at 9:20 and MsgData(0) at 9:24,
         while '20,24 9 * * *' sends two short On/Off pulses at 9:29 and 9:24.
-        The cron spec may have a sixth field appened. This is for seconds and will
-        switch the time base from minutes to seconds (hires cron)
+        The cron spec supports a sixth field appened. This is for seconds and will
+        switch the time base ("tick") from 1 minute to 1 second (hires cron).
         By concatenation the shortest time between pulses is 2min or 2sec
 
         Output: MsgData(100) at start time, MsgData)0) at end time.
@@ -134,27 +135,55 @@ class Schedule(BusNode):
         # get available zones: zoneinfo.available_timezones()
         now = datetime.now(ZoneInfo("Europe/Berlin"))
         cron = croniter(self.cronspec, now, ret_type=float)
+        tick = 1 if self.hires else 60
+
         while True:
-            #TODO: concatenate cron events to a long sleep and less messages
-            nxt = cron.get_next() - time.time()
-            if (nxt > 60) or (self.hires and nxt > 1):
+            # for 1st loop iteration find seconds since preciding cron event ...
+            cron.get_next()
+            pre = cron.get_prev() - time.time()
+            log.debug(' backwd %f =  %s', pre, str(cron.get_current(ret_type=datetime)))
+
+            # ... if more than 1 tick in the past, start with OFF, else start with ON
+            # Following iterations pre will be >1 tick in past, otherwise it would
+            # have been concatenated with current.
+            if pre < -tick:
+                nxt = cron.get_next() - time.time()
+                log.info("%s: turn off", self.name)
                 self.data = 0
                 self.post(MsgData(self.name, '%.2f' % self.data))
-                log.debug("turn off")
 #send off
-            log.debug("%d for %f s - %s" % (int(self.data), nxt, str(cron.get_current(ret_type=datetime))))
-            if self._scheduler_stop:
-                break
+                log.debug("%d for %f s - %s" % (int(self.data), nxt, str(cron.get_current(ret_type=datetime))))
+                if nxt > 0:
+                    if self._scheduler_stop:
+                        break
+                    time.sleep(nxt)
+                if self._scheduler_stop:
+                    break
+
+            nxt = cron.get_next()
+            log.debug('next is  %s', str(cron.get_current(ret_type=datetime)))
+            while True:
+                # concatenate cron events that occur every tick
+                n_nxt = cron.get_next()
+                log.debug(' ?  %s', str(cron.get_current(ret_type=datetime)))
+                if n_nxt - nxt > tick:
+                    break
+                nxt = n_nxt
+                log.debug(' + extended to %s', str(cron.get_current(ret_type=datetime)))
+            cron.get_prev()
+
+            nxt = nxt - time.time()
+            log.info("%s: turn ON", self.name)
+            self.data = 100
+            self.post(MsgData(self.name, '%.2f' % self.data))
+            log.debug("%d for %f s - %s", int(self.data), nxt, str(cron.get_current(ret_type=datetime)))
             if nxt > 0:
+                if self._scheduler_stop:
+                    break
                 time.sleep(nxt)
             if self._scheduler_stop:
                 break
-            if not self.data:
-                self.data = 100
-                self.post(MsgData(self.name, '%.2f' % self.data))
-                log.debug("turn ON")
-            else:
-                log.debug("stay On")
+
         self._scheduler_thread = None
         self._scheduler_stop = False
 
@@ -205,7 +234,7 @@ class CtrlMinimum(Controller):
             elif float(msg.data) > self.threshold + self.hysteresis:
                 val = 0
             if self.data != val:
-                log.debug('Min %d -> %d', self.data, val)
+                log.debug('CtrlMinimum: %d -> %d', self.data, val)
                 self.data = val
                 self.post(MsgData(self.name, self.data))
         return super().listen(msg)
@@ -250,10 +279,10 @@ class CtrlLight(Controller):
                     self._fader_thread = Thread(name=self.name, target=self._fader, daemon=True).start()
 
     def _fader(self):
-        INCR = 1.0  #0.1
-        log.debug("new fader %f -> %f in %r" % (self.data, self.target, self.fade_time))
+        #INCR = 1.0
+        INCR = 0.1
         step = (self.fade_time / abs(self.target - self.data) * INCR).total_seconds()
-        log.debug("fade steps %f" % step)
+        log.info("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time.total_seconds(), self.data, self.target, step)
         while abs(self.target - self.data) > INCR:
             if self.target >= self.data:
                 self.data += INCR
@@ -339,13 +368,10 @@ class Or(Auxiliary):
         if isinstance(msg, MsgData):
             if self.values.setdefault(msg.sender) != float(msg.data):
                 self.values[msg.sender] = float(msg.data)
-                log.info('Or got %g from %s', msg.data, msg.sender)
             val = -1 #0
             for k in self.values:
                 val = max(val, self.values[k])
-            log.info('Or max %g', val)
             if (self.data != val):
-                log.info('==> Or change to %g', val)
                 self.data = val
                 self.post(MsgData(self.name, round(self.data, 2)))
         return super().listen(msg)
@@ -379,7 +405,7 @@ class DeviceSwitch(Device):
 
     def switch(self, on):
         self.data = bool(on)
-        log.info('Switch %s turns %s', self.name, 'ON' if self.data else 'OFF')
+        log.info('%s turns %s', self.name, 'ON' if self.data else 'OFF')
         self.post(MsgData(self.name, self.data))   # to let MsgBroker know out state
 
 
@@ -396,5 +422,5 @@ class SinglePWM(Device):
 
     def set_percent(self, percent):
         self.data = percent
-        log.info('PWM %s set to %s %%', self.name, self.data)
+        log.info('%s set to %s %%', self.name, self.data)
         self.post(MsgData(self.name, self.data))   # to let MsgBroker know out state)

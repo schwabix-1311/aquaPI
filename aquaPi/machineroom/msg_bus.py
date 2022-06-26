@@ -10,6 +10,7 @@ from .msg_types import *
 
 log = logging.getLogger('MsgBus')
 log.setLevel(logging.INFO) #WARNING)  # INFO)
+#log.setLevel(logging.DEBUG)
 
 
 class BusRole(Flag):
@@ -191,7 +192,7 @@ class BusNode:
             self.post(MsgBorn(self.name, self.data))
             log.info('%s plugged, role %s', str(self), str(self.ROLE))
         else:
-            log.warning('%s not plugged (name dupe?', str(self))
+            log.warning('%s not plugged (name dupe?)', str(self))
         return self.bus
 
     def pullout(self):

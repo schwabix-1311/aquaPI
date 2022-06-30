@@ -15,13 +15,18 @@ then
   read -p "CR to continue / Ctrl-C" dummy
   cd ${MyHome}
   . ./venv/bin/activate
-  pip install Flask sseclient
+  echo ===== get all python modules
+  pip install -r requirements.txt
+  echo =====
   echo "Created a virtual Python environment and installed"
   echo "required modules into it."
 else
   echo "Activate aquaPi development env."
   cd ${MyHome}
   . ./venv/bin/activate
+  echo ===== get all python modules
+  pip install -r requirements.txt
+  echo =====
   echo "Activated existing virtual Py environment."
   fi
 

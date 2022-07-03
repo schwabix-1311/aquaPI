@@ -250,7 +250,7 @@ class CtrlLight(Controller):
         Output: float 0 ... 100 fade-in (or hard switch) when input goes to 100
                 float 100 ... 0 fade-out (or hard) after input goes to 0
     '''
-    #TODO: current fader is linear, for better perception it should offer exponential curve. Could also add some random variation, other profiles, and overheat reductions driven from tmeperature ...
+    #TODO: could add random variation, other profiles, and overheat reductions driven from tmeperature ...
 
 
     def __init__(self, name, filter, fade_time=None):
@@ -406,14 +406,30 @@ class DeviceSwitch(Device):
     def switch(self, on):
         self.data = bool(on)
         log.info('%s turns %s', self.name, 'ON' if self.data else 'OFF')
-        self.post(MsgData(self.name, self.data))   # to let MsgBroker know out state
+
+        # actual driver call would go here
+
+        self.post(MsgData(self.name, self.data))   # to let MsgBroker know our state
 
 
 class SinglePWM(Device):
     ''' Analog PWM output, using input data as a percentage of full range.
+          squared - perceptive brightness correction, close to linear
+                      brightness perception
+          minimum - set minimal duty cycle for input >0, fixes flicker of
+                      poorly dimming devices, and motor start
+          maximum - set maximum duty cycle, allows to limit
     '''
 #TODO: currently a logging dummy, add a driver for the actual HW.
 #TODO: this Node or the driver should have a minimum and a maximum level:  0,min...max (with proper scaling!)
+    def __init__(self, name, filter, squared, minimum=0, maximum=100):
+        super().__init__(name, filter)
+        self.squared = squared
+        self.minimum = min(max( 0, minimum), 90)
+        self.maximum = min(max( minimum + 1, maximum), 100)
+        self.data = 0
+        log.info('%s init to %r|%f|%f', self.name, squared,minimum,maximum)
+
     def listen(self, msg):
         if isinstance(msg, MsgData):
             if self.data != float(msg.data):
@@ -421,6 +437,19 @@ class SinglePWM(Device):
         return super().listen(msg)
 
     def set_percent(self, percent):
-        self.data = percent
-        log.info('%s set to %s %%', self.name, self.data)
-        self.post(MsgData(self.name, self.data))   # to let MsgBroker know out state)
+        out_val = float(percent)
+        log.info('%s set to %f %%', self.name, round(out_val, 4))
+        if out_val > 0:
+            out_range = self.maximum - self.minimum
+            out_val = out_val / 100 * out_range
+            log.debug('  scale to %f %% [%f]', out_val, out_range)
+            out_val += self.minimum
+            if self.squared:
+                out_val = (out_val ** 2) / (100 ** 2) * 100
+                log.debug('  squared to %f %%', out_val)
+        log.debug('    finally %f %%', out_val)
+        self.data = out_val
+
+        # actual driver call would go here
+
+        self.post(MsgData(self.name, round(out_val, 4)))   # to let MsgBroker know our state)

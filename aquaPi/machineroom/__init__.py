@@ -32,9 +32,9 @@ class MachineRoom():
         overlapped_temp = dual_temp and True
 
         if single_light:
-            light_schedule = Schedule('Zeitplan 1', '* 14-20 * * *')
-            light = CtrlLight('Licht 1c', light_schedule.name, fade_time=30*60)
-            light_o = SinglePWM('PWM-W', light.name)
+            light_schedule = Schedule('Zeitplan 1', '* 14-21 * * *')
+            light = CtrlLight('Licht 1c', light_schedule.name, fade_time=60) #30*60)
+            light_o = SinglePWM('PWM-W', light.name, squared=True, maximum=80)
             light.plugin(self.bus)
             light_o.plugin(self.bus)
             light_schedule.plugin(self.bus)

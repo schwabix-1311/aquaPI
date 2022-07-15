@@ -1,12 +1,9 @@
 aquaPi ToDo list
 ================
 
-- milestones for UUI:
+- milestones for UI:
   a) change temperature threshold via web UI
   b) change light schedule via web UI
-
-- milestone for backend:
-  save configuration and restore during startup (instead of hard-coded topology!)
 
 - register a cleanup method with atexit() to save config, and get along with
   werkzeug's neat auto-reload
@@ -26,9 +23,14 @@ aquaPi ToDo list
   
 - explore Flask.flash() - for input validation message?
 
+- DB or pickle file? overlap of instance/aquaPi.sqlite & aquaPi/db.py?
+  general handling of config data 
+
 - user authentication: use Flask.redirect() & session
 
 - add 'click' cmdline options, e.g. --resetfactory --list ...
+
+- OS Sleep/Resume disturbs scheduler - is this a real problem?
 
 - add a route for log & errors - backend implemented as BusListeners
 
@@ -50,6 +52,9 @@ aquaPi ToDo list
 
 - more references - collection of extensions I might need
   ref: https://github.com/humiaozuzu/awesome-flask
+
+- Telegram bot in Python:
+  https://thepythoncorner.com/posts/2021-01-16-how-create-telegram-bot-in-python/
 
 - packaging and deployment ... long way to there!
 
@@ -102,3 +107,10 @@ DONE
   a) simple sensor-temperature-relais controller
   b) 2 temperature controllers with redundant sensors and overlapping outputs
   c) scheduled light controller
+- milestone for backend:
+  save configuration and restore during startup (instead of hard-coded topology!)
+  Evaluate pickle vs. shelve vs. klepto
+  ref: https://pynative.com/make-python-class-json-serializable/  ??
+  ref: https://pynative.com/python-convert-json-data-into-custom-python-object/  #jsonpickle
+  ref: https://stackoverflow.com/questions/14668475/pickle-versus-shelve-storing-large-dictionaries-in-python/32586980#32586980
+

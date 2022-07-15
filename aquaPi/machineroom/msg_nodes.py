@@ -14,23 +14,30 @@ from .msg_bus import *
 
 
 log = logging.getLogger('MsgNodes')
-log.setLevel(logging.INFO) #WARNING) #INFO)
+log.setLevel(logging.WARNING) #INFO)
 #log.setLevel(logging.DEBUG)
 
 
 #TODO Driver does not belong here
 class Driver:
     ''' a fake/development driver!
-        once be get 'real':
+        once we get 'real':
         DS1820 family:  /sys/bus/w1/devices/28-............/temperature(25125) ../resolution(12) ../conv_time(750)
     '''
-    def __init__(self, cfg):
+    def __init__(self, name, cfg):
+        self.name = 'fake DS1820'  # name
         self.cfg = cfg
-        self.val = 25
+        self.val = 24.25
         self.dir = 1
 
-    def name(self):
-        return('fake DS1820')
+    def __getstate__(self):
+        state = {'name':self.name, 'cfg':self.cfg}
+        log.debug('Driver.getstate %r', state)
+        return state
+
+    def __setstate__(self, state):
+        log.warning('Driver.setstate %r', state)
+        self.__init__(state['name'], state['cfg'])
 
     def read(self):
         rnd = random.random()
@@ -54,8 +61,11 @@ class Sensor(BusNode):
     '''
     ROLE = BusRole.IN_ENDP
 
-    def __str__(self):
-        return '{}({})'.format(type(self).__name__, self.driver.name())
+    #def __getstate__(self):
+    #    return super().__getstate__()
+
+    #def __setstate__(self, state):
+    #    self.__init__(state)
 
 
 class SensorTemp(Sensor):
@@ -72,18 +82,37 @@ class SensorTemp(Sensor):
         self._reader_thread = None
         self._reader_stop = False
 
-    def plugin(self, name):
-        if super().plugin(name) == self.bus:
-            self._reader_thread = Thread(name=self.name, target=self._reader, daemon=True).start()
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(driver=self.driver)
+        log.debug('< SensorTemp.getstate %r', state)
+        return state
+
+    def __setstate__(self, state):
+        log.warning('SensorTemp.setstate %r', state)
+        self.__init__(state['name'], state['driver'])
+
+    def __str__(self):
+        return '{}({})'.format(type(self).__name__, self.driver.name)
+
+    def plugin(self, bus):
+        if super().plugin(bus):
+            self._reader_thread = Thread(name=self.name, target=self._reader, daemon=True)
+            self._reader_thread.start()
+        return bool(self._bus != None)
 
     def pullout(self):
-        self._reader_stop = True
-        self._reader_thread.join(timeout=5)
+        if self._reader_thread:
+            self._reader_stop = True
+            self._reader_thread.join(timeout=5)
+            self._reader_thread = None
         super().pullout()
 
     def _reader(self):
+        #log.debug('SensorTemp.reader started')
         self.data = None
         while not self._reader_stop:
+            #log.debug('SensorTemp.reader looping %r', self.data)
             val = self.driver.read()
             if self.data != val:
                 self.data = val
@@ -116,14 +145,27 @@ class Schedule(BusNode):
         self._scheduler_thread = None
         self._scheduler_stop = False
 
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(cronspec=self.cronspec)
+        log.debug('Schedule.getstate %r', state)
+        return state
+
+    def __setstate__(self, state):
+        log.warning('Schedule.setstate %r', state)
+        self.__init__(state['name'], state['cronspec'])
+
     def plugin(self, bus):
-        if super().plugin(bus) == bus:
-            self._scheduler_thread = Thread(name=self.name, target=self._scheduler, daemon=True).start()
-        return self.bus
+        if super().plugin(bus):
+            self._scheduler_thread = Thread(name=self.name, target=self._scheduler, daemon=True)
+            self._scheduler_thread.start()
+        return bool(self._bus != None)
 
     def pullout(self):
-        self._scheduler_stop = True
-        self._scheduleer_thread.join(timeout=5)
+        if self._scheduler_thread:
+            self._scheduler_stop = True
+            self._scheduler_thread.join(timeout=5)
+            self._scheduler_thread = None
         return super().pullout()
 
     def __str__(self):
@@ -148,7 +190,7 @@ class Schedule(BusNode):
             # have been concatenated with current.
             if pre < -tick:
                 nxt = cron.get_next() - time.time()
-                log.info("%s: turn off", self.name)
+                log.warning("%s: turn off for %f s (%f h)", self.name, nxt, nxt /60/60)
                 self.data = 0
                 self.post(MsgData(self.name, '%.2f' % self.data))
 #send off
@@ -173,7 +215,7 @@ class Schedule(BusNode):
             cron.get_prev()
 
             nxt = nxt - time.time()
-            log.info("%s: turn ON", self.name)
+            log.warning("%s: turn ON for %f s (%f h)", self.name, nxt, nxt /60/60)
             self.data = 100
             self.post(MsgData(self.name, '%.2f' % self.data))
             log.debug("%d for %f s - %s", int(self.data), nxt, str(cron.get_current(ret_type=datetime)))
@@ -197,17 +239,23 @@ class Controller(BusListener):
     '''
     ROLE = BusRole.CTRL
 
-    def __init__(self, name, filter):
-        super().__init__(name, filter)
+    def __init__(self, name, inputs):
+        super().__init__(name, inputs)
         self.data = 0
+
+    #def __getstate__(self):
+    #    return super().__getstate__()
+
+    #def __setstate__(self, state):
+    #    self.__init__(state)
 
     def is_advanced(self):
         for i in self.get_inputs():
-            a_node = self.bus.get_node(i)
+            a_node = self._bus.get_node(i)
             if a_node and a_node.ROLE == BusRole.AUX:
                 return True
         for i in self.get_outputs():
-            a_node = self.bus.get_node(i)
+            a_node = self._bus.get_node(i)
             if a_node and a_node.ROLE == BusRole.AUX:
                 return True
         return False
@@ -221,10 +269,20 @@ class CtrlMinimum(Controller):
         Output MsgData(100) when input falls below threshold-hyst.
                MsgData(0) when input passes threshold+hyst.
     '''
-    def __init__(self, name, filter, threshold, hysteresis=0):
-        super().__init__(name, filter)
+    def __init__(self, name, inputs, threshold, hysteresis=0):
+        super().__init__(name, inputs)
         self.threshold = threshold
         self.hysteresis = hysteresis
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(threshold=self.threshold, hysteresis=self.hysteresis)
+        log.debug('CtrlMinimum.getstate %r', state)
+        return state
+
+    def __setstate__(self, state):
+        log.warning('CtrlMinimum.setstate %r', state)
+        self.__init__(state['name'], state['inputs'], state['threshold'], state['hysteresis'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -253,13 +311,23 @@ class CtrlLight(Controller):
     #TODO: could add random variation, other profiles, and overheat reductions driven from tmeperature ...
 
 
-    def __init__(self, name, filter, fade_time=None):
-        super().__init__(name, filter)
+    def __init__(self, name, inputs, fade_time=None):
+        super().__init__(name, inputs)
         self.fade_time = fade_time
         if fade_time and not isinstance(fade_time, timedelta):
             self.fade_time = timedelta(seconds=fade_time)
         self._fader_thread = None
         self._fader_stop = False
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(fade_time=self.fade_time)
+        log.debug('CtrlLight.getstate %r', state)
+        return state
+
+    def __setstate__(self, state):
+        log.warning('CtrlLight.setstate %r', state)
+        self.__init__(state['name'], state['inputs'], state['fade_time'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -276,7 +344,8 @@ class CtrlLight(Controller):
                     if self._fader_thread:
                         self._fader_stop = True
                         self._fader_thread.join()
-                    self._fader_thread = Thread(name=self.name, target=self._fader, daemon=True).start()
+                    self._fader_thread = Thread(name=self.name, target=self._fader, daemon=True)
+                    self._fader_thread.start()
 
     def _fader(self):
         #INCR = 1.0
@@ -312,8 +381,8 @@ class Auxiliary(BusListener):
     '''
     ROLE = BusRole.AUX
 
-    def __init__(self, name, filter):
-        super().__init__(name, filter)
+    def __init__(self, name, inputs):
+        super().__init__(name, inputs)
         self.data = None
         self.values = {}
 
@@ -329,10 +398,16 @@ class Average(Auxiliary):
         Output: float arithmetic average of all sensors,
                 of moving average of all delivering inputs.
     '''
-    def __init__(self, name, filter):
-        super().__init__(name, filter)
+    def __init__(self, name, inputs):
+        super().__init__(name, inputs)
         # 0 -> 1:1 average; >=2 -> moving average, active source dominates
         self.unfair_moving = 0
+
+    #def __getstate__(self):
+    #    return super().__getstate__()
+
+    #def __setstate__(self, state):
+    #    self.__init__(state)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -364,6 +439,12 @@ class Or(Auxiliary):
 
         Output: the maximum of all listened inputs.
     '''
+    #def __getstate__(self):
+    #    return super().__getstate__()
+
+    #def __setstate__(self, state):
+    #    self.__init__(state)
+
     def listen(self, msg):
         if isinstance(msg, MsgData):
             if self.values.setdefault(msg.sender) != float(msg.data):
@@ -388,14 +469,27 @@ class Device(BusListener):
     '''
     ROLE = BusRole.OUT_ENDP
 
+    #def __getstate__(self):
+    #    return super().__getstate__()
+
+    #def __setstate__(self, state):
+    #    self.__init__(state)
+
+
 
 class DeviceSwitch(Device):
     ''' A binary output to a relais or GPIO pin.
     '''
 #TODO: currently a logging dummy, add a driver to the actual HW.
-    def __init__(self, name, filter):
-        super().__init__(name, filter)
+    def __init__(self, name, inputs):
+        super().__init__(name, inputs)
         self.data = False
+
+    #def __getstate__(self):
+    #    return super().__getstate__()
+
+    #def __setstate__(self, state):
+    #    self.__init__(state)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -409,7 +503,7 @@ class DeviceSwitch(Device):
 
         # actual driver call would go here
 
-        self.post(MsgData(self.name, self.data))   # to let MsgBroker know our state
+        self.post(MsgData(self.name, self.data))   # to make our state known
 
 
 class SinglePWM(Device):
@@ -421,14 +515,23 @@ class SinglePWM(Device):
           maximum - set maximum duty cycle, allows to limit
     '''
 #TODO: currently a logging dummy, add a driver for the actual HW.
-#TODO: this Node or the driver should have a minimum and a maximum level:  0,min...max (with proper scaling!)
-    def __init__(self, name, filter, squared, minimum=0, maximum=100):
-        super().__init__(name, filter)
+    def __init__(self, name, inputs, squared, minimum=0, maximum=100):
+        super().__init__(name, inputs)
         self.squared = squared
         self.minimum = min(max( 0, minimum), 90)
         self.maximum = min(max( minimum + 1, maximum), 100)
         self.data = 0
         log.info('%s init to %r|%f|%f', self.name, squared,minimum,maximum)
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(squared=self.squared, minimum=self.minimum, maximum=self.maximum)
+        log.debug('SinglePWM.getstate %r', state)
+        return state
+
+    def __setstate__(self, state):
+        log.warning('SinglePWM.setstate %r', state)
+        self.__init__(state['name'], state['inputs'], state['squared'], state['minimum'], state['maximum'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -438,7 +541,7 @@ class SinglePWM(Device):
 
     def set_percent(self, percent):
         out_val = float(percent)
-        log.info('%s set to %f %%', self.name, round(out_val, 4))
+        log.debug('%s set to %f %%', self.name, round(out_val, 4))
         if out_val > 0:
             out_range = self.maximum - self.minimum
             out_val = out_val / 100 * out_range
@@ -452,4 +555,5 @@ class SinglePWM(Device):
 
         # actual driver call would go here
 
-        self.post(MsgData(self.name, round(out_val, 4)))   # to let MsgBroker know our state)
+        self.post(MsgData(self.name, round(out_val, 4)))   # to make our state known
+

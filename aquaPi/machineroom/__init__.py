@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 import logging
+import os
+from os import path
+import pickle
 from .msg_bus import MsgBus
 from .msg_nodes import *
 
@@ -13,22 +16,39 @@ class MachineRoom():
     ''' The Machine Room
         The core is a message bus, on which different sensors,
         controllers, devices and auxiliary nodes communicate.
-        A BusBroker builds the interface to Flask backend.
+        The Bus also provides the interface to Flask backend.
         Some bus nodes start worker threads (e.g. sensors), the rest
         works in msg handlers and callbacks.
     '''
     def __init__(self, config):
-        self.bus = MsgBus()  #threaded=True)
+        #TODO: this might move to the DB, currently separate file is handy
+        if not path.exists('topo.pickle'):
+            # construct default controlleri(s) if there's
+            # no configuration storage (pickle stream)
 
-        self.broker = BusBroker()
-        self.broker.plugin(self.bus)
+            self.bus = MsgBus()  #threaded=True)
 
-        #TODO  temporary, until construction from config data works
-        # later this will be constructed from configuration storage
+            self.create_default_topo()
 
+            log.info("Bus & Nodes created: %s", str(self.bus))
+            # this will pickle the MsgBus, all referenced BusNodes and Drivers
+            with open('topo.pickle', 'wb') as p:
+                pickle.dump(self.bus, p, protocol=pickle.HIGHEST_PROTOCOL)
+            log.info("  ... and saved")
+
+        else:
+            # likewise this restores Bus, Nodes and Drivers
+            with open('topo.pickle', 'rb') as p:
+                self.bus = pickle.load(p)
+            log.info("Bus & Nodes loaded")
+
+        log.info("Bus & Nodes created: %s", str(self.bus))
+        log.warning(self.bus.get_nodes())
+
+    def create_default_topo(self):
         single_light = True
-        single_temp = False
-        dual_temp = False
+        single_temp = True
+        dual_temp = False #True
         overlapped_temp = dual_temp and True
 
         if single_light:
@@ -41,8 +61,8 @@ class MachineRoom():
 
         if single_temp:
             # single temp sensor -> temp ctrl -> relais
-            wasser_i = SensorTemp('Wasser', Driver('dummy'))
-            wasser = CtrlMinimum('Temperatur', wasser_i.name, 24.0)
+            wasser_i = SensorTemp('Wasser', Driver('dummy', '0x1234'))
+            wasser = CtrlMinimum('Temperatur', wasser_i.name, 24.3)
             wasser_o = DeviceSwitch('Relais', wasser.name)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
@@ -50,10 +70,10 @@ class MachineRoom():
 
         if dual_temp:
             # 2 temp sensors -> average -> temp ctrl -> relais
-            w1_temp = SensorTemp('Heiz1.IN.1', Driver('dummy'))
+            w1_temp = SensorTemp('Heiz1.IN.1', Driver('dummy', '28-0000x123'))
             w1_temp.plugin(self.bus)
 
-            w2_temp = SensorTemp('Heiz1.IN.2', Driver('dummy'))
+            w2_temp = SensorTemp('Heiz1.IN.2', Driver('dummy', '28-0000x876'))
             w2_temp.plugin(self.bus)
 
             w_temp = Average('Heiz1.AUX.1', [w1_temp.name,w2_temp.name])
@@ -75,12 +95,9 @@ class MachineRoom():
                 w_heat = DeviceSwitch('Heiz1.OUT', w_or.name)
                 w_heat.plugin(self.bus)
 
-        log.info(self.broker.get_nodes())
-        #breakpoint()
-
-        log.info("Bus created: %s", str(self.bus))
 
     #TODO: add a destructor with self.bus.teardown()
+
 
 #   class MyClass:
 #   @classmethod

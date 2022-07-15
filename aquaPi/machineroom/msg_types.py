@@ -42,6 +42,8 @@ class MsgData(MsgPayload):
     '''
     pass
 
+
+#TODO further Msg types
 #class MsgCommand(MasgPayload): # for ctrl parameters, in contrast to data values
 #class MsgLog(MasPayload):  # needed? anything should be loggable -> MsgData
 #class MsgWarning(MasPayload):
@@ -105,7 +107,7 @@ class MsgFilter():
     def __str__(self):
         return '{}({})'.format(type(self).__name__, ','.join(self.sender))
 
-    def apply(self, msg):
+    def filter(self, msg):
         if not self.sender:
             log.warning('%s has empty sender list, msg %s', str(), str(msg))
         if (self.sender== ['*']) or (msg.sender in self.sender):

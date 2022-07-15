@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+from os import path
 import sys
 from flask import Flask
 import logging
@@ -9,6 +10,11 @@ import logging
 
 def create_app(test_config=None):
     logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s', datefmt='%I:%M:%S', stream=sys.stdout, level=logging.WARNING)
+    log = logging.getLogger('aquaPi')
+    log.setLevel(logging.WARNING)
+    #log.setLevel(logging.DEBUG)
+
+
     if False:    #FIXME: this would use app.debug before assignment
         mail_handler = SMTPHandler(
             mailhost='127.0.0.1',
@@ -51,7 +57,7 @@ def create_app(test_config=None):
 
     from . import machineroom
     mr = machineroom.MachineRoom(app.config)
-    app.broker = mr.broker
+    app.bus = mr.bus
 
     from . import index
     app.register_blueprint(index.bp)

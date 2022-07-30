@@ -4,51 +4,65 @@ aquaPi ToDo list
 - milestones for UI:
   a) change temperature threshold via web UI
   b) change light schedule via web UI
+  Use html form & POST/PUT for now. Might need redesign for REST.
 
-- register a cleanup method with atexit() to save config, and get along with
-  werkzeug's neat auto-reload
+- register a cleanup method with atexit() to save config, and to get along
+  with werkzeug's neat auto-reload
 
 - Navigation:
   /          Home, a configurable dashboard
-  /control   Controllers, with foldable groups containing Controllers & their in/out
+  /control   Controllers, with foldable groups containing Controllers & their in/out, or /settings ?
              Group is a new property of each Controller, set by user
              This page views and allows to edit operation parameters (Temp, Schedule)
              Edit needs auth.??
-  /config    Configuration, show all bus nodes, their relations
+  /config    Configuration, show all bus nodes, their relations, or /modules ?
              Allow authenticated users to add/change/remove topology
   /system    Global configuration, users, email, logging, start/stop, update ...
              Authenticated, at least some actions.
   /log       View logs with errors, warnings and configured events.
   /about     some system information, help pointers
+
+- add a route for log & errors - backend implemented as BusListeners
+
+- ATM no real config other than the pickled topology. UI groups, dash and
+  global config will need a config storage -> sqlite??
   
 - explore Flask.flash() - for input validation message?
 
 - DB or pickle file? overlap of instance/aquaPi.sqlite & aquaPi/db.py?
-  general handling of config data 
+  general handling of config data
+
+- idea: initial setup could be simplified by module templates,
+  i.e. node combos (pickled?) for common functions with a wizzard
+  this postpones the need for advanced config UI
+
+- simple UI & advanced UI, to allow easy start; simple = no AUX nodes!?
+
+- controller: minimum, maximum, null (out=in), fader, delay
+
+- macros!?! = scheduled/triggered sender of msgs on the bus? wait for msgs?
+
+- input/output: common sensors (ds1820, ADC, gpio, file)
+  and outputs (gpio, pwm, file, tc420) 
+  use a library for IO? create my own?
 
 - user authentication: use Flask.redirect() & session
+  three access levels: viewer / operator (e.g. temperature setpoints) / admin (full config)
 
 - add 'click' cmdline options, e.g. --resetfactory --list ...
 
 - OS Sleep/Resume disturbs scheduler - is this a real problem?
 
-- add a route for log & errors - backend implemented as BusListeners
-
-- three access levels: viewer / operator (e.g. temperature setpoints) / admin (full config)
-
-- simple UI & advanced UI, to allow easy start; simple = no AUX nodes!?
-
-- WebUI snippets
-  ref: https://codemyui.com/
-
 - use Flask-Babel for i18n & l10
   ref: https://github.com/python-babel/flask-babel
   ref: https://flask-babel.tkte.ch/
 
-- use a library for IO? create my own?
-
 - REST API. What's the benefit of using flask-restful?
   Related: data exchange front-back via POST or REST API?
+  ref: https://restfulapi.net/rest-api-design-tutorial-with-example/
+
+- WebUI snippets
+  ref: https://codemyui.com/
 
 - more references - collection of extensions I might need
   ref: https://github.com/humiaozuzu/awesome-flask

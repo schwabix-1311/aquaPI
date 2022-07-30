@@ -15,20 +15,20 @@ def dash():
     bus = current_app.bus
     values = {}
 
-    nodes = bus.get_node_names(msg_bus.BusRole.CTRL)
-    values["Controller"] = bus.values_by_names(nodes)   #FIXME use threshold/hysteresis instead
+    names = bus.get_node_names(msg_bus.BusRole.CTRL)
+    for n in names:
+        node = bus.get_node(n)
+        if node:
+            settings = node.get_settings()
+            in_name = node.get_inputs()[0]
+            settings['>> Driven by'] = in_name
+            in_node = bus.get_node(in_name)
+            settings.update(in_node.get_settings())
+            out_name = node.get_outputs()[0]
+            settings['>> Driving'] = out_name
+            out_node = bus.get_node(out_name)
+            settings.update(out_node.get_settings())
 
-    nodes = bus.get_node_names((msg_bus.BusRole.IN_ENDP,msg_bus.BusRole.AUX))
-    values["Inputs"] = bus.values_by_names(nodes)
+            values[n] = settings
 
-    nodes = bus.get_node_names(msg_bus.BusRole.OUT_ENDP)
-    values["Outputs"] = bus.values_by_names(nodes)
-
-    def sse_update():
-        bus.changed.wait()
-        values["Controller"] = bus.values_by_names(values["Controller"])
-        values["Inputs"] = bus.values_by_names(values["Inputs"].keys())
-        values["Outputs"] = bus.values_by_names(values["Outputs"].keys())
-        bus.changed.clear()
-        return json.dumps(values)
-    return render_sse_template('dash/index.html', sse_update, values)
+    return render_template('dash/index.html', update=values)

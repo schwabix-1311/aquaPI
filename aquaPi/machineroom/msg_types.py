@@ -100,9 +100,9 @@ class MsgFilter():
     #TODO add filtering by other attributes (group, category, sender role/type)
     def __init__(self, sender):
         if (isinstance(sender, str)):
-            self.sender= [sender]
+            self.sender = [sender]
         else:
-            self.sender= sender
+            self.sender = sender
 
     def __str__(self):
         return '{}({})'.format(type(self).__name__, ','.join(self.sender))

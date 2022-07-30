@@ -48,7 +48,7 @@ class MachineRoom():
     def create_default_topo(self):
         single_light = True
         single_temp = True
-        dual_temp = False #True
+        dual_temp = True
         overlapped_temp = dual_temp and True
 
         if single_light:

@@ -16,7 +16,7 @@ aquaPi ToDo list
              This page views and allows to edit operation parameters (Temp, Schedule)
              Edit needs auth.??
   /config    Configuration, show all bus nodes, their relations, or /modules ?
-             Allow authenticated users to add/change/remove topology
+             Allow authenticated users to add/change/remove nodes on the bus
   /system    Global configuration, users, email, logging, start/stop, update ...
              Authenticated, at least some actions.
   /log       View logs with errors, warnings and configured events.
@@ -24,7 +24,7 @@ aquaPi ToDo list
 
 - add a route for log & errors - backend implemented as BusListeners
 
-- ATM no real config other than the pickled topology. UI groups, dash and
+- ATM no real config other than the pickled nodes. UI groups, dash and
   global config will need a config storage -> sqlite??
   
 - explore Flask.flash() - for input validation message?

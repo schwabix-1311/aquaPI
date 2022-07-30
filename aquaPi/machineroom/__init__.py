@@ -21,31 +21,33 @@ class MachineRoom():
         works in msg handlers and callbacks.
     '''
     def __init__(self, config):
+        breakpoint()
+
         #TODO: this might move to the DB, currently separate file is handy
-        if not path.exists('topo.pickle'):
+        if not path.exists(config['NODES']):
             # construct default controlleri(s) if there's
             # no configuration storage (pickle stream)
 
             self.bus = MsgBus()  #threaded=True)
 
-            self.create_default_topo()
+            self.create_default_nodes()
 
             log.info("Bus & Nodes created: %s", str(self.bus))
             # this will pickle the MsgBus, all referenced BusNodes and Drivers
-            with open('topo.pickle', 'wb') as p:
+            with open(config['NODES'], 'wb') as p:
                 pickle.dump(self.bus, p, protocol=pickle.HIGHEST_PROTOCOL)
             log.info("  ... and saved")
 
         else:
             # likewise this restores Bus, Nodes and Drivers
-            with open('topo.pickle', 'rb') as p:
+            with open(config['NODES'], 'rb') as p:
                 self.bus = pickle.load(p)
             log.info("Bus & Nodes loaded")
 
         log.info("Bus & Nodes created: %s", str(self.bus))
         log.warning(self.bus.get_nodes())
 
-    def create_default_topo(self):
+    def create_default_nodes(self):
         single_light = True
         single_temp = True
         dual_temp = True

@@ -21,8 +21,6 @@ class MachineRoom():
         works in msg handlers and callbacks.
     '''
     def __init__(self, config):
-        breakpoint()
-
         #TODO: this might move to the DB, currently separate file is handy
         if not path.exists(config['NODES']):
             # construct default controlleri(s) if there's

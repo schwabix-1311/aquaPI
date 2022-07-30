@@ -3,15 +3,15 @@
 from flask import (
     Flask, Blueprint, current_app, render_template, json
 )
-from .sse_util import render_sse_template
-from .machineroom import msg_bus
+from ..sse_util import render_sse_template
+from ..machineroom import msg_bus
 
 
-bp = Blueprint('index', __name__)
+bp = Blueprint('home', __name__)
 
 
 @bp.route('/')
-def index():
+def home():
     bus = current_app.bus
     values = {}
 
@@ -29,4 +29,4 @@ def index():
                 values[n] = node.get_dash()
         bus.changed.clear()
         return json.dumps(values)
-    return render_sse_template('index.html', sse_update, values)
+    return render_sse_template('home/index.html', sse_update, values)

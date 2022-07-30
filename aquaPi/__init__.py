@@ -60,11 +60,11 @@ def create_app(test_config=None):
     mr = machineroom.MachineRoom(app.config)
     app.bus = mr.bus
 
-    from . import index
-    app.register_blueprint(index.bp)
+    from . import home
+    app.register_blueprint(home.bp)
 
-    from . import dash
-    app.register_blueprint(dash.bp)
+    from . import settings
+    app.register_blueprint(settings.bp)
 
     from . import config
     app.register_blueprint(config.bp)

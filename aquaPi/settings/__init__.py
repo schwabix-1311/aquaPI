@@ -7,11 +7,11 @@ from ..sse_util import render_sse_template
 from ..machineroom import msg_bus
 
 
-bp = Blueprint('dash', __name__)
+bp = Blueprint('settings', __name__)
 
 
-@bp.route('/dash')
-def dash():
+@bp.route('/settings')
+def settings():
     bus = current_app.bus
     values = {}
 
@@ -31,4 +31,4 @@ def dash():
 
             values[n] = settings
 
-    return render_template('dash/index.html', update=values)
+    return render_template('settings/index.html', update=values)

@@ -23,7 +23,7 @@ def home():
 
     def sse_update():
         bus.changed.wait()
-        for n in values:
+        for n in values.copy():
             node = bus.get_node(n)
             if node:
                 values[n] = node.get_dash()

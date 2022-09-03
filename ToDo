@@ -60,6 +60,7 @@ aquaPi ToDo list
 - REST API. What's the benefit of using flask-restful?
   Related: data exchange front-back via POST or REST API?
   ref: https://restfulapi.net/rest-api-design-tutorial-with-example/
+       https://flask.palletsprojects.com/en/2.2.x/views/#basic-reusable-view
 
 - WebUI snippets
   ref: https://codemyui.com/

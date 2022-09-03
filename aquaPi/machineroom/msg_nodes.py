@@ -246,8 +246,10 @@ class Schedule(BusNode):
                , 'CRON hour ["]': field[1] \
                , 'CRON day of month ["]': field[2] \
                , 'CRON month ["]': field[3] \
-               , 'CRON weekday [0=Sun]': field[4] \
-               , 'CRON second [opt]': field[5] if len(field)>5 else '' }
+               , 'CRON weekday [0=Sun]': field[4]
+               # could allow hires:
+               #, 'CRON second [opt]': field[5] if len(field)>5 else ''
+               }
 
 
 #========== controllers ==========
@@ -323,7 +325,53 @@ class CtrlMinimum(Controller):
         return { 'State': 'ON' if self.data else 'OFF' }
 
     def get_settings(self):
-        return { 'Set point [°C]': self.threshold \
+        return { 'Minimum [°C]': self.threshold \
+               , 'Hysteresis [K]': self.hysteresis  }
+
+
+class CtrlMaximum(Controller):
+    ''' A controller switching an output to keep a maximum
+        input measuremnt by an adjustable threshold and
+        an optional hysteresis, e.g. for a cooler, or pH
+
+        Output MsgData(100) when input rises above threshold+hyst.
+               MsgData(0) when input passes threshold-hyst.
+    '''
+    def __init__(self, name, inputs, threshold, hysteresis=0):
+        super().__init__(name, inputs)
+        self.threshold = threshold
+        self.hysteresis = hysteresis
+        self._in_val = None
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(threshold=self.threshold, hysteresis=self.hysteresis)
+        log.debug('CtrlMaximum.getstate %r', state)
+        return state
+
+    def __setstate__(self, state):
+        log.warning('CtrlMaximum.setstate %r', state)
+        self.__init__(state['name'], state['inputs'], state['threshold'], state['hysteresis'])
+
+    def listen(self, msg):
+        if isinstance(msg, MsgData):
+            self._in_val = float(msg.data)
+            val = self.data
+            if float(msg.data) > self.threshold + self.hysteresis:
+                val = 100
+            elif float(msg.data) <= self.threshold - self.hysteresis:
+                val = 0
+            if self.data != val:
+                log.debug('CtrlMinimum: %d -> %d', self.data, val)
+                self.data = val
+                self.post(MsgData(self.name, self.data))
+        return super().listen(msg)
+
+    def get_dash(self):
+        return { 'State': 'ON' if self.data else 'OFF' }
+
+    def get_settings(self):
+        return { 'Maximum [°C]': self.threshold \
                , 'Hysteresis [K]': self.hysteresis  }
 
 
@@ -377,7 +425,7 @@ class CtrlLight(Controller):
                     self._fader_thread.start()
 
     def _fader(self):
-        #INCR = 1.0
+        #coarse INCR = 1.0
         INCR = 0.1
         step = (self.fade_time / abs(self.target - self.data) * INCR).total_seconds()
         log.info("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time.total_seconds(), self.data, self.target, step)
@@ -400,7 +448,7 @@ class CtrlLight(Controller):
         self._fader_stop = False
 
     def get_dash(self):
-        return { 'Current': 'ON' if self.data else 'OFF' \
+        return { 'State': 'ON' if self.data else 'OFF' \
                , 'Dim [%]': round(self.data, 2) }
 
     def get_settings(self):
@@ -467,7 +515,7 @@ class Average(Auxiliary):
         return super().listen(msg)
 
     def get_settings(self):
-        return { 'Input name(s)': ','.join(self.get_inputs()) }
+        return { 'Input name(s)': ';'.join(self.get_inputs()) }
 
 
 class Or(Auxiliary):
@@ -496,7 +544,7 @@ class Or(Auxiliary):
         return super().listen(msg)
 
     def get_settings(self):
-        return { 'Input name(s)': ','.join(self.get_inputs()) }
+        return { 'Input name(s)': ';'.join(self.get_inputs()) }
 
 
 #========== outputs AKA Device ==========

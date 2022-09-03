@@ -60,6 +60,10 @@ def create_app(test_config=None):
     mr = machineroom.MachineRoom(app.config)
     app.bus = mr.bus
 
+    @app.context_processor
+    def inject_globals():
+        return dict(bus=app.bus)
+
     from . import home
     app.register_blueprint(home.bp)
 

@@ -10,15 +10,99 @@
 {% include "sse_event_inc.html" %}
 
 <div class="main">
-{% for g in update.keys() %}
-    <h3>{{g}}</h3>
-    <div class="pure-g">
-{%     for k in update[g].keys() %}
-        <div class="pure-u-1-3">{{k}}:</div>
-        <div class="pure-u-2-3">{{update[g][k]}}</div>
-{%     endfor %}
-        <p>
-    </div>
+{% for ctrl in update.keys() %}
+    <details>
+      <summary>{{ctrl}}<br></summary>
+      <form method="post">
+{%       for setting in bus.get_node(ctrl).get_settings().items() %}
+          <div class="pure-g">
+            <div class="pure-u-1-3">
+              <label for="{{setting[0]}}">{{setting[0]}}:</label>
+            </div>
+            <div class="pure-u-1-3">
+              <input type="text" id="{{setting[0]}}" name="{{setting[0]}}" value="{{setting[1]}}">
+            </div>
+          </div>
+{%       endfor %}
+
+{%       for input in bus.get_node(ctrl).get_inputs() %}
+          <div class="pure-g">
+            <div class="pure-u-1-3">
+               <label for="{{input}}">Input:</label>
+            </div>
+            <div class="pure-u-1-3">
+              <select id="{{input}}" name="{{input}}" value="{{input}}">
+                <optgroup label="Sensors">
+{%              for in_node in bus.get_input_node_names() %}
+                <option {{"selected" if in_node==input else ""}}>{{in_node}}</>
+{%              endfor %}
+                </optgroup>
+                <optgroup label="Auxiliary">
+{%              for in_node in bus.get_aux_node_names() %}
+                <option {{"selected" if in_node==input else ""}}>{{in_node}}</>
+{%              endfor %}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+{%         for in_set in bus.get_node(input).get_settings().items() %}          
+          <div class="pure-g">
+            <div class="pure-u-1-3"></div>
+            <div class="pure-u-1-3">
+              <label for="{{in_set[0]}}">{{in_set[0]}}:</label>
+            </div>
+            <div class="pure-u-1-3">
+              <input type="text" id="{{in_set[0]}}" name="{{in_set[0]}}" value="{{in_set[1]}}">
+            </div>
+          </div>
+{%         endfor %}
+{%       endfor %}
+
+{%       for output in bus.get_node(ctrl).get_outputs() %}
+          <div class="pure-g">
+            <div class="pure-u-1-3">
+              <label for="{{output}}">Output:</label>
+            </div>
+            <div class="pure-u-1-3">
+              <select id="{{output}}" name="{{output}}" value="output">
+                <optgroup label="Devices">
+{%              for out_node in bus.get_output_node_names() %}
+                <option {{"selected" if out_node==output else ""}}>{{out_node}}</>
+{%              endfor %}
+                </optgroup>
+                <optgroup label="Auxiliary">
+{%              for out_node in bus.get_aux_node_names() %}
+                <option {{"selected" if out_node==output else ""}}>{{out_node}}</>
+{%              endfor %}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+{%         for out_set in bus.get_node(output).get_settings().items() %}
+          <div class="pure-g">
+            <div class="pure-u-1-3"></div>
+            <div class="pure-u-1-3">
+              <label for="{{out_set[0]}}">{{out_set[0]}}:</label>
+            </div>
+            <div class="pure-u-1-3">
+              <input type="text" id="{{out_set[0]}}" name="{{out_set[0]}}" value="{{out_set[1]}}">
+            </div>
+          </div>
+{%         endfor %}
+{%       endfor %}
+
+          <div class="pure-g">
+            <div class="pure-u-2-3"></div>
+            <div class="pure-u-1-3">
+              <input type="submit" value="Accept" style="border:2px solid green">
+              <!-- + formtarget="_self" src="static/image.png" -->
+              <input type="reset" value="Reset" style="border:2px solid red">
+            </div>
+          </div>
+        </div>
+      </form>
+    </details>
+    <hr>
 {% endfor %}
 </div>
 

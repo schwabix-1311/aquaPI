@@ -3,7 +3,6 @@
 from flask import (
     Flask, Blueprint, current_app, request, render_template
 )
-from ..sse_util import render_sse_template
 from ..machineroom import msg_bus
 
 
@@ -18,7 +17,7 @@ def settings():
 #        password = request.form['password']
     # hint: html <details> can be opened by default or by JS:
     # https://stackoverflow.com/questions/14286406/how-to-set-a-details-element-to-open-by-default-or-via-css
-# TODO: need a mechanism to keep a POSTing form (<details>) open, or use JS colapsibles
+# TODO: need a mechanism to keep a POSTing form (<details>) open, or use JS collapsibles
 
     bus = current_app.bus
     values = {}

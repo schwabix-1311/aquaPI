@@ -130,3 +130,6 @@ dmypy.json
 
 # ... and some space for myself
 _local/
+
+# JetBrains IDE
+.idea/

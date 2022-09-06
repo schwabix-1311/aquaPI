@@ -29,8 +29,8 @@ if (!!window.EventSource) {
     return msg
 
 def render_sse_template(html, read, update, delay=1):
-    ''' render a Jinja2 template with SSE updateable elements
-        html - the Jinja2 templat file
+    ''' render a Jinja2 template with SSE updatable elements
+        html - the Jinja2 template file
         read - long poll method returning a hash of updates
         update - hash of key:value, should be a superset of what
                  read() returns

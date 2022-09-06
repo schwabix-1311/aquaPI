@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+    <head>
+        {% block html_head %}
+            <title>{% block title %}{% endblock %} - aquaPi</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+            <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='uikit/css/uikit.css') }}">
+            <script src="{{ url_for('static', filename='uikit/js/uikit.min.js') }}"></script>
+            <script src="{{ url_for('static', filename='uikit/js/uikit-icons.min.js') }}"></script>
+
+            {% block html_head_script %}{% endblock %}
+        {% endblock html_head %}
+    </head>
+    <body id="page-{% if request.path == '/' %}home{% else %}{{ request.path | replace('/', '') }}{% endif %}">
+        <div class="body-inner">
+            {% include "partials/menu_inc.html.jinja2" %}
+
+            <main id="main" class="uk-section uk-section-muted">
+                <div class="uk-container uk-container-small uk-background-default uk-padding">
+                    <header>
+                        {% block content_header %}{% endblock %}
+                    </header>
+                    {% for message in get_flashed_messages() %}
+                        <div class="flash">{{ message }}</div>
+                    {% endfor %}
+                    <div id="main_content">
+                        {% block content_main %}{% endblock %}
+                    </div>
+                </div>
+            </main>
+        </div>
+        {% block footer_script %}{% endblock %}
+    </body>
+</html>

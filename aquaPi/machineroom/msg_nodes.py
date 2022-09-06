@@ -184,8 +184,6 @@ class Schedule(BusNode):
     def _scheduler(self):
         self.data = 0
         self.post(MsgData(self.name, self.data))
-        # get available zones: zoneinfo.available_timezones()
-        #now = datetime.now(ZoneInfo("Europe/Berlin"))
         now = datetime.now().astimezone()  # = local tz
 
         cron = croniter(self.cronspec, now, ret_type=float)

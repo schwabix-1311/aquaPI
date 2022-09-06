@@ -24,4 +24,4 @@ def config():
     values["in"] = bus.get_nodes(msg_bus.BusRole.IN_ENDP)
     values["out"] = bus.get_nodes(msg_bus.BusRole.OUT_ENDP)
 
-    return render_template('config/index.html', update=values)
+    return render_template('pages/config/index.html.jinja2', update=values)

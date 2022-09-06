@@ -166,6 +166,24 @@ class MsgBus:
         '''
         return [ n.name  for n in self.nodes if not roles or n.ROLE in roles ]
 
+    def get_input_node_names(self):
+        ''' specialization of get_node_names for jinja, as jinja
+            has no access to msg_bus.BusRole types
+        '''
+        return self.get_node_names(roles=BusRole.IN_ENDP)
+
+    def get_output_node_names(self):
+        ''' specialization of get_node_names for jinja, as jinja
+            has no access to msg_bus.BusRole types
+        '''
+        return self.get_node_names(roles=BusRole.OUT_ENDP)
+
+    def get_aux_node_names(self):
+        ''' specialization of get_node_names for jinja, as jinja
+            has no access to msg_bus.BusRole types
+        '''
+        return self.get_node_names(BusRole.AUX)
+
     def values_by_names(self, names):
         #TODO cache values{} seems unneccessary, access nodes.data directly!
         return { n:self.values[n]  for n in self.values if n in names }

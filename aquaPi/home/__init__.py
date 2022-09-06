@@ -15,7 +15,7 @@ def home():
     bus = current_app.bus
     values = {}
 
-    names = bus.get_node_names((msg_bus.BusRole.CTRL,msg_bus.BusRole.IN_ENDP))
+    names = bus.get_node_names((msg_bus.BusRole.CTRL, msg_bus.BusRole.IN_ENDP))
     for n in names:
         node = bus.get_node(n)
         if node:
@@ -23,10 +23,10 @@ def home():
 
     def sse_update():
         bus.changed.wait()
-        for n in values:
+        for n in values.copy():
             node = bus.get_node(n)
             if node:
                 values[n] = node.get_dash()
         bus.changed.clear()
         return json.dumps(values)
-    return render_sse_template('home/index.html', sse_update, values)
+    return render_sse_template('pages/home/index.html.jinja2', sse_update, values)

@@ -42,7 +42,7 @@ def settings():
 
             values[n] = settings
 
-    return render_template('settings/index.html', update=values)
+    return render_template('pages/settings/index.html.jinja2', update=values)
 
 
 #@bp.route('/settings', methods=['POST'])

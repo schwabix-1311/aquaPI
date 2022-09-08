@@ -418,9 +418,6 @@ class CtrlLight(Controller):
                         self._fader_thread.join()
                     self.target = float(msg.data)
                     log.debug("_fader %f" % self.target)
-                    if self._fader_thread:
-                        self._fader_stop = True
-                        self._fader_thread.join()
                     self._fader_thread = Thread(name=self.name, target=self._fader, daemon=True)
                     self._fader_thread.start()
 
@@ -428,7 +425,8 @@ class CtrlLight(Controller):
         #coarse INCR = 1.0
         INCR = 0.1
         step = (self.fade_time / abs(self.target - self.data) * INCR).total_seconds()
-        log.info("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time.total_seconds(), self.data, self.target, step)
+        #log.info("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time.total_seconds(), self.data, self.target, step)
+        log.warning("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time.total_seconds(), self.data, self.target, step)
         while abs(self.target - self.data) > INCR:
             if self.target >= self.data:
                 self.data += INCR
@@ -443,7 +441,7 @@ class CtrlLight(Controller):
         if self.data != self.target:
            self.data = self.target
            self.post(MsgData(self.name, self.data))
-        log.debug("_fader %f DONE" % self.target)
+        log.warning("_fader %f DONE" % self.target)
         self._fader_thread = None
         self._fader_stop = False
 

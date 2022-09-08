@@ -14,6 +14,7 @@ def create_app(test_config=None):
     log.setLevel(logging.WARNING)
     #log.setLevel(logging.DEBUG)
 
+#TODO wrap in try/catch, but how should exceptions be handled?
 
     if False:    #FIXME: this would use app.debug before assignment
         mail_handler = SMTPHandler(

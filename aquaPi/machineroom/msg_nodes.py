@@ -422,7 +422,7 @@ class CtrlLight(Controller):
                     self.data = float(msg.data)
                     self.post(MsgData(self.id, self.data))
                 else:
-                    if self.nameader_thread:
+                    if self._fader_thread:
                         self._fader_stop = True
                         self._fader_thread.join()
                     self.target = float(msg.data)

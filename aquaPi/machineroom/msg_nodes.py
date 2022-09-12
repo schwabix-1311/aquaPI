@@ -46,7 +46,7 @@ class Driver:
         elif rnd > .7:
             self.val += 0.05 * self.dir
         self.val = round(min(max( 24, self.val), 26 ), 2)
-        return self.val
+        return float(self.val)
 
     def delay(self):
         return 1.0
@@ -96,10 +96,9 @@ class SensorTemp(Sensor):
         return '{}({})'.format(type(self).__name__, self.driver.name)
 
     def plugin(self, bus):
-        if super().plugin(bus):
-            self._reader_thread = Thread(name=self.name, target=self._reader, daemon=True)
-            self._reader_thread.start()
-        return bool(self._bus != None)
+        super().plugin(bus)
+        self._reader_thread = Thread(name=self.id, target=self._reader, daemon=True)
+        self._reader_thread.start()
 
     def pullout(self):
         if self._reader_thread:
@@ -109,23 +108,31 @@ class SensorTemp(Sensor):
         super().pullout()
 
     def _reader(self):
-        #log.debug('SensorTemp.reader started')
+        log.debug('SensorTemp.reader started')
         self.data = None
         while not self._reader_stop:
-            #log.debug('SensorTemp.reader looping %r', self.data)
+            log.debug('SensorTemp.reader looping %r', self.data)
             val = self.driver.read()
             if self.data != val:
                 self.data = val
-                self.post(MsgData(self.name, round(self.data, 2)))
+                self.post(MsgData(self.id, round(self.data, 2)))
             time.sleep(self.driver.delay())
         self._reader_thread = None
         self._reader_stop = False
 
     def get_dash(self):
-        return { 'Temperature [°C]': round(self.data, 2) }
+        return [ ( 'data', 'Temperature [°C]', round(self.data, 2) ) ]
 
     def get_settings(self):
-        return { 'Sensor driver': self.driver.name }
+        return [ ( None, 'Sensor driver', self.driver.name, 'type="text"' ) ]
+
+    def get_alert(self):
+        if self.data > 25:
+            return ( 'danger', 'HIGH' )
+        elif self.data < 24.5:
+            return ( 'default', 'LOW' )
+        return ( 'success', '' )
+
 
 
 class Schedule(BusNode):
@@ -162,10 +169,9 @@ class Schedule(BusNode):
         self.__init__(state['name'], state['cronspec'])
 
     def plugin(self, bus):
-        if super().plugin(bus):
-            self._scheduler_thread = Thread(name=self.name, target=self._scheduler, daemon=True)
-            self._scheduler_thread.start()
-        return bool(self._bus != None)
+        super().plugin(bus)
+        self._scheduler_thread = Thread(name=self.id, target=self._scheduler, daemon=True)
+        self._scheduler_thread.start()
 
     def pullout(self):
         if self._scheduler_thread:
@@ -179,7 +185,7 @@ class Schedule(BusNode):
 
     def _scheduler(self):
         self.data = 0
-        self.post(MsgData(self.name, self.data))
+        self.post(MsgData(self.id, self.data))
         # get available zones: zoneinfo.available_timezones()
         now = datetime.now(ZoneInfo("Europe/Berlin"))
         cron = croniter(self.cronspec, now, ret_type=float)
@@ -198,7 +204,7 @@ class Schedule(BusNode):
                 nxt = cron.get_next() - time.time()
                 log.warning("%s: stay off for %f s (%f h)", self.name, nxt, nxt /60/60)
                 self.data = 0
-                self.post(MsgData(self.name, self.data))
+                self.post(MsgData(self.id, self.data))
 #send off
                 log.debug("%d for %f s - %s" % (int(self.data), nxt, str(cron.get_current(ret_type=datetime))))
                 if nxt > 0:
@@ -223,7 +229,7 @@ class Schedule(BusNode):
             nxt = nxt - time.time()
             log.warning("%s: stay ON for %f s (%f h)", self.name, nxt, nxt /60/60)
             self.data = 100
-            self.post(MsgData(self.name, self.data))
+            self.post(MsgData(self.id, self.data))
             log.debug("%d for %f s - %s", int(self.data), nxt, str(cron.get_current(ret_type=datetime)))
             if nxt > 0:
                 if self._scheduler_stop:
@@ -236,20 +242,20 @@ class Schedule(BusNode):
         self._scheduler_stop = False
 
     def get_dash(self):
-        if self.hires:
-            return { 'CRON [m h DoM M DoW s]': self.cronspec }
-        return { 'CRON [m h DoM M DoW]': self.cronspec }
+        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
 
     def get_settings(self):
-        field = self.cronspec.split()
-        return { 'CRON minute [*/digit/range/list]': field[0] \
-               , 'CRON hour ["]': field[1] \
-               , 'CRON day of month ["]': field[2] \
-               , 'CRON month ["]': field[3] \
-               , 'CRON weekday [0=Sun]': field[4]
-               # could allow hires:
-               #, 'CRON second [opt]': field[5] if len(field)>5 else ''
-               }
+        # TODO change to time control
+        #field = self.cronspec.split()
+        #return { 'CRON minute [*/digit/range/list]': field[0] \
+        #       , 'CRON hour ["]': field[1] \
+        #       , 'CRON day of month ["]': field[2] \
+        #       , 'CRON month ["]': field[3] \
+        #       , 'CRON weekday [0=Sun]': field[4]
+        #       # could allow hires:
+        #       #, 'CRON second [opt]': field[5] if len(field)>5 else ''
+        #       }
+        return [ ( 'cronspec', 'CRON (m h DoM M DoW)', self.cronspec, 'type="text"' ) ]
 
 
 #========== controllers ==========
@@ -293,9 +299,8 @@ class CtrlMinimum(Controller):
     '''
     def __init__(self, name, inputs, threshold, hysteresis=0):
         super().__init__(name, inputs)
-        self.threshold = threshold
-        self.hysteresis = hysteresis
-        self._in_val = None
+        self.threshold = float(threshold)
+        self.hysteresis = float(hysteresis)
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -309,24 +314,24 @@ class CtrlMinimum(Controller):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            self._in_val = float(msg.data)
-            val = self.data
-            if float(msg.data) < self.threshold - self.hysteresis:
-                val = 100
-            elif float(msg.data) >= self.threshold + self.hysteresis:
-                val = 0
-            if self.data != val:
-                log.debug('CtrlMinimum: %d -> %d', self.data, val)
-                self.data = val
-                self.post(MsgData(self.name, self.data))
+            new_val = self.data
+            if float(msg.data) < (self.threshold - self.hysteresis):
+                new_val = 100.0
+            elif float(msg.data) >= (self.threshold + self.hysteresis):
+                new_val = 0.0
+
+            if self.data != new_val:
+                log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
+                self.data = new_val
+                self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_dash(self):
-        return { 'State': 'ON' if self.data else 'OFF' }
+        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
 
     def get_settings(self):
-        return { 'Minimum [°C]': self.threshold \
-               , 'Hysteresis [K]': self.hysteresis  }
+        return [ ( 'threshold', 'Minimum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"' )
+               , ( 'hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"' ) ]
 
 
 class CtrlMaximum(Controller):
@@ -339,9 +344,8 @@ class CtrlMaximum(Controller):
     '''
     def __init__(self, name, inputs, threshold, hysteresis=0):
         super().__init__(name, inputs)
-        self.threshold = threshold
-        self.hysteresis = hysteresis
-        self._in_val = None
+        self.threshold = float(threshold)
+        self.hysteresis = float(hysteresis)
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -355,24 +359,24 @@ class CtrlMaximum(Controller):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            self._in_val = float(msg.data)
-            val = self.data
-            if float(msg.data) > self.threshold + self.hysteresis:
-                val = 100
-            elif float(msg.data) <= self.threshold - self.hysteresis:
-                val = 0
-            if self.data != val:
-                log.debug('CtrlMinimum: %d -> %d', self.data, val)
-                self.data = val
-                self.post(MsgData(self.name, self.data))
+            new_val = self.data
+            if float(msg.data) > (self.threshold + self.hysteresis):
+                new_val = 100.0
+            elif float(msg.data) <= (self.threshold - self.hysteresis):
+                new_val = 0.0
+
+            if self.data != new_val:
+                log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
+                self.data = new_val
+                self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_dash(self):
-        return { 'State': 'ON' if self.data else 'OFF' }
+        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
 
     def get_settings(self):
-        return { 'Maximum [°C]': self.threshold \
-               , 'Hysteresis [K]': self.hysteresis  }
+        return [ ( 'threshold', 'Maximum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"' )
+               , ( 'hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"' ) ]
 
 
 class CtrlLight(Controller):
@@ -391,8 +395,8 @@ class CtrlLight(Controller):
     def __init__(self, name, inputs, fade_time=None):
         super().__init__(name, inputs)
         self.fade_time = fade_time
-        if fade_time and not isinstance(fade_time, timedelta):
-            self.fade_time = timedelta(seconds=fade_time)
+        if fade_time and isinstance(fade_time, timedelta):
+            self.fade_time = fade_time.total_seconds()
         self._fader_thread = None
         self._fader_stop = False
 
@@ -411,22 +415,21 @@ class CtrlLight(Controller):
             if self.data != float(msg.data):
                 if not self.fade_time:
                     self.data = float(msg.data)
-                    self.post(MsgData(self.name, self.data))
+                    self.post(MsgData(self.id, self.data))
                 else:
-                    if self._fader_thread:
+                    if self.nameader_thread:
                         self._fader_stop = True
                         self._fader_thread.join()
                     self.target = float(msg.data)
                     log.debug("_fader %f" % self.target)
-                    self._fader_thread = Thread(name=self.name, target=self._fader, daemon=True)
+                    self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
                     self._fader_thread.start()
 
     def _fader(self):
         #coarse INCR = 1.0
         INCR = 0.1
-        step = (self.fade_time / abs(self.target - self.data) * INCR).total_seconds()
-        #log.info("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time.total_seconds(), self.data, self.target, step)
-        log.warning("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time.total_seconds(), self.data, self.target, step)
+        step = (self.fade_time / abs(self.target - self.data) * INCR)
+        log.warning("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time, self.data, self.target, step)
         while abs(self.target - self.data) > INCR:
             if self.target >= self.data:
                 self.data += INCR
@@ -434,23 +437,23 @@ class CtrlLight(Controller):
                 self.data -= INCR
             log.debug("_fader %f ..." % self.data)
 
-            self.post(MsgData(self.name, round(self.data, 3)))
+            self.post(MsgData(self.id, round(self.data, 3)))
             time.sleep(step)
             if self._fader_stop:
                 break
         if self.data != self.target:
            self.data = self.target
-           self.post(MsgData(self.name, self.data))
+           self.post(MsgData(self.id, self.data))
         log.warning("_fader %f DONE" % self.target)
         self._fader_thread = None
         self._fader_stop = False
 
     def get_dash(self):
-        return { 'State': 'ON' if self.data else 'OFF' \
-               , 'Dim [%]': round(self.data, 2) }
+        return [ ( 'state', 'State', 'ON' if self.data else 'OFF' )
+               , ( 'data', 'Dim [%]', round(self.data, 2) ) ]
 
     def get_settings(self):
-        return { 'Fade time [s]': self.fade_time.total_seconds() }
+        return [ ( 'fade_time', 'Fade time [s]', self.fade_time, 'type="number" min="0"' ) ]
 
 #========== auxiliary ==========
 
@@ -464,8 +467,11 @@ class Auxiliary(BusListener):
 
     def __init__(self, name, inputs):
         super().__init__(name, inputs)
-        self.data = None
+        self.data = -1
         self.values = {}
+
+    def get_settings(self):
+        return [ ( '', 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"' ) ]
 
 
 class Average(Auxiliary):
@@ -473,15 +479,15 @@ class Average(Auxiliary):
         The average wights either each input equally (where a dead source
         may factor in an incorrect old value),
         or an "unfair moving average", where the most active input is
-        over-represented. In case of a died input it's effect would
-        decrease quickly, thus is a good selection for sensor redundancy.
+        over-represented. In case an input fails it's effect would
+        decrease quickly, thus it's a good selection for sensor redundancy.
 
         Output: float arithmetic average of all sensors,
                 of moving average of all delivering inputs.
     '''
     def __init__(self, name, inputs):
         super().__init__(name, inputs)
-        # 0 -> 1:1 average; >=2 -> moving average, active source dominates
+        # 0 -> 1:1 average; >=2 -> moving average over 2..n values, weighted by reporting frequency
         self.unfair_moving = 0
 
     #def __getstate__(self):
@@ -493,14 +499,14 @@ class Average(Auxiliary):
     def listen(self, msg):
         if isinstance(msg, MsgData):
             if self.unfair_moving:
-                if not self.data:
+                if self.data == -1:
                     self.data = float(msg.data)
-                    self.post(MsgData(self.name, self.data))
+                    self.post(MsgData(self.id, self.data))
                 else:
                     val = round((self.data + float(msg.data)) / 2, self.unfair_moving)
                     if (self.data != val):
                         self.data = val
-                        self.post(MsgData(self.name, round(self.data, 2)))
+                        self.post(MsgData(self.id, round(self.data, 2)))
             else:
                 if self.values.setdefault(msg.sender) != float(msg.data):
                     self.values[msg.sender] = float(msg.data)
@@ -509,11 +515,11 @@ class Average(Auxiliary):
                     val += self.values[k] / len(self.values)
                 if (self.data != val):
                     self.data = val
-                    self.post(MsgData(self.name, round(self.data, 2)))
+                    self.post(MsgData(self.id, round(self.data, 2)))
         return super().listen(msg)
 
-    def get_settings(self):
-        return { 'Input name(s)': ';'.join(self.get_inputs()) }
+    def get_dash(self):
+        return [ ( 'data', 'Average', round(self.data, 2) ) ]
 
 
 class Or(Auxiliary):
@@ -538,11 +544,11 @@ class Or(Auxiliary):
                 val = max(val, self.values[k])
             if (self.data != val):
                 self.data = val
-                self.post(MsgData(self.name, round(self.data, 2)))
+                self.post(MsgData(self.id, round(self.data, 2)))
         return super().listen(msg)
 
-    def get_settings(self):
-        return { 'Input name(s)': ';'.join(self.get_inputs()) }
+    def get_dash(self):
+        return [ ( 'data', 'Or', round(self.data, 2) ) ]
 
 
 #========== outputs AKA Device ==========
@@ -563,7 +569,6 @@ class Device(BusListener):
     #    self.__init__(state)
 
 
-
 class DeviceSwitch(Device):
     ''' A binary output to a relais or GPIO pin.
     '''
@@ -571,7 +576,7 @@ class DeviceSwitch(Device):
     def __init__(self, name, inputs, inverted=False):
         super().__init__(name, inputs)
         self.data = False
-        self.inverted = inverted
+        self.inverted = bool(inverted)
 
     #def __getstate__(self):
     #    return super().__getstate__()
@@ -592,13 +597,15 @@ class DeviceSwitch(Device):
         # actual driver call would go here
         # if self.inverted ....
 
-        self.post(MsgData(self.name, self.data))   # to make our state known
+        self.post(MsgData(self.id, self.data))   # to make our state known
 
     def get_dash(self):
-        return { 'State': 'ON' if self.data else 'OFF' }
+        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
 
     def get_settings(self):
-        return { 'Inverted': self.inverted }
+        settings = super().get_settings()
+        settings.append( ( 'inverted', 'Inverted', self.inverted, 'type="number" min="0" max="1"' ) )   # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        return settings
 
 
 class SinglePWM(Device):
@@ -610,9 +617,9 @@ class SinglePWM(Device):
           maximum - set maximum duty cycle, allows to limit
     '''
 #TODO: currently a logging dummy, add a driver for the actual HW.
-    def __init__(self, name, inputs, squared, minimum=0, maximum=100):
+    def __init__(self, name, inputs, squared=False, minimum=0, maximum=100):
         super().__init__(name, inputs)
-        self.squared = squared
+        self.squared = bool(squared)
         self.minimum = min(max( 0, minimum), 90)
         self.maximum = min(max( minimum + 1, maximum), 100)
         self.data = 0
@@ -650,12 +657,14 @@ class SinglePWM(Device):
 
         # actual driver call would go here
 
-        self.post(MsgData(self.name, round(out_val, 4)))   # to make our state known
+        self.post(MsgData(self.id, round(out_val, 4)))   # to make our state known
 
     def get_dash(self):
-        return { 'Percent': round(self.data, 2) }
+        return [ ( 'data', 'Percent', round(self.data, 2) ) ]
 
     def get_settings(self):
-        return { 'Minimum [%]': self.minimum \
-               , 'Maximum [%]': self.maximum \
-               , 'Perceptive': self.squared }
+        settings = super().get_settings()
+        settings.append( ( 'minimum', 'Minimum [%]', self.minimum, 'type="number" min="0" max="99"' ) )
+        settings.append( ( 'maximum', 'Maximum [%]', self.maximum, 'type="number" min="1" max="100"' ) )
+        settings.append( ( 'squared', 'Perceptive', self.squared, 'type="number" min="0" max="1"' ) )   # 'type="checkbox"' )
+        return settings

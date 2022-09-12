@@ -1,3 +1,4 @@
+<!doctype html>
 {% extends 'layouts/default.html.jinja2' %}
 
 {% block content_header %}
@@ -22,83 +23,105 @@
 
 {% block content_main %}
     <ul uk-accordion="collapsible: true; multiple: false" class="uk-list uk-list-divider">
-        {% for ctrl in update.keys() %}
-            {% set ctrlId = ctrl | lower %}
-            <li id="{{ ctrlId }}">
-                <a class="uk-accordion-title" href="#{{ ctrlId }}">
-                    <span class="uk-h3">{{ ctrl }}</span>
+        {# % for ctrl in update.keys() % #}
+        {% for c_node in bus.get_controller_nodes() %}
+            <li id="{{ c_node.id | lower }}" {{ 'class="uk-open"' if c_node.id==sub_form}}>
+                <a class="uk-accordion-title" href="#{{ c_node.id | lower }}">
+                    <span class="uk-h3">{{ c_node.name }}</span>
                 </a>
                 <div class="uk-accordion-content">
                     <form action="/settings" method="post" class="uk-form-horizontal">
-                        {% for setting in bus.get_node(ctrl).get_settings().items() %}
+                        {% for setting in c_node.get_settings() %}
+                            {% set uniId = c_node.id + '.' + setting[0] %}
                             <div class="uk-margin-small">
-                                <label class="uk-form-label" for="{{ setting[0] }}">{{ setting[0] }}:</label>
+                                <label class="uk-form-label" for="{{ uniId }}">{{ setting[1] }}:</label>
                                 <div class="uk-form-controls">
-                                    <input type="text" id="{{ setting[0] }}" name="{{ setting[0] }}" value="{{ setting[1] }}" class="uk-input">
+{# TODO use setting[4] to define the input type and its restrictions #}
+                                    <input {{ setting[3] }} id="{{ uniId }}" name="{{ uniId }}" value="{{ setting[2] }}" class="uk-input">
                                 </div>
                             </div>
                         {% endfor %}
 
-                        {% for input in bus.get_node(ctrl).get_inputs() %}
+                        {% for i_node in c_node.get_inputs(recurse=True) %}
                             <div class="uk-margin-small">
-                                <label class="uk-form-label" for="{{ input }}">Input:</label>
+{% if false %}                                
+{# TODO this should be r/o on this page, but keep it as template for select on page config #}
+                                {% set uniId = c_node.id + '.inputs' %}
+                                <label class="uk-form-label" for="{{ uniId }}">Input:</label>
                                 <div class="uk-form-controls">
-                                    <select id="{{ input }}" name="{{ input }}" value="{{ input }}" class="uk-select">
+                                    <select id="{{ uniId }}" name="{{ uniId }}" value="{{ i_node.name }}" class="uk-select">
                                         <optgroup label="Sensors">
-                                            {% for in_node in bus.get_input_node_names() %}
-                                                <option {{ "selected" if in_node==input else "" }}>{{ in_node }}</option>
-                                            {% endfor %}
+                                        {% for node in bus.get_input_nodes() %}
+                                            <option {{ "selected" if node.id==i_node.id else "" }}>{{ node.name }}</option>
+                                        {% endfor %}
                                         </optgroup>
-                                        <optgroup label="Auxiliary">
-                                            {% for in_node in bus.get_aux_node_names() %}
-                                                <option {{ "selected" if in_node==input else "" }}>{{ in_node }}</option>
-                                            {% endfor %}
-                                        </optgroup>
+                                        {% for node in bus.get_auxiliary_nodes() %}
+                                            {% if loop.first %}
+                                                <optgroup label="Auxiliary">
+                                            {% endif %}
+                                            <option {{ "selected" if node.id==i_node.id else "" }}>{{ node.name }}</option>
+                                            {% if loop.last %}
+                                                </optgroup>
+                                            {% endif %}
+                                        {% endfor %}
                                     </select>
                                 </div>
+{% else %}
+                                <label class="uk-form-label">Input:</label>
+                                <div class="uk-form-controls">
+                                    <input disabled type="text" value="{{ i_node.name }}" class="uk-input">
+                                </div>
+{% endif %}                                    
                             </div>
                             <div class="uk-margin-small">
                                 <label class="uk-form-label"></label>
                                 <div class="uk-form-controls">
-                                    {% for in_set in bus.get_node(input).get_settings().items() %}
+                                    {% for in_set in i_node.get_settings() %}
+{# TODO loop body could be a jinja macro, usable for all get_settings() fields #}
                                         <div class="uk-margin-small">
-                                            <label class="uk-form-label" for="{{ in_set[0] }}">{{ in_set[0] }}:</label>
-                                            <div class="uk-form-controls">
-                                                <input type="text" id="{{ in_set[0] }}" name="{{ in_set[0] }}" value="{{ in_set[1] }}" class="uk-input">
-                                            </div>
+                                            {% if in_set[0] %}
+                                                {% set uniId = i_node.id + '.' + in_set[0] %}
+                                                <label class="uk-form-label" for="{{ uniId }}">{{ in_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+{# TODO use in_set[4] to define the input type and its restrictions #}
+                                                    <input {{ in_set[3] }} id="{{ uniId }}" name="{{ uniId }}" value="{{ in_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% else %}
+                                                <label class="uk-form-label">{{ in_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+                                                    <input disabled type="text" value="{{ in_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% endif %}
                                         </div>
                                     {% endfor %}
                                 </div>
                             </div>
                         {% endfor %}
 
-                        {% for output in bus.get_node(ctrl).get_outputs() %}
+                        {% for o_node in c_node.get_outputs(recurse=True) %}
                             <div class="uk-margin-small">
-                                <label class="uk-form-label" for="{{ output }}">Output:</label>
+                                <label class="uk-form-label">Output:</label>
                                 <div class="uk-form-controls">
-                                    <select id="{{ output }}" name="{{ output }}" class="uk-select">
-                                        <optgroup label="Devices">
-                                            {% for out_node in bus.get_output_node_names() %}
-                                                <option {{ "selected" if out_node==output else "" }}>{{ out_node }}</option>
-                                            {% endfor %}
-                                        </optgroup>
-                                        <optgroup label="Auxiliary">
-                                            {% for out_node in bus.get_aux_node_names() %}
-                                                <option {{ "selected" if out_node==output else "" }}>{{ out_node }}</option>
-                                            {% endfor %}
-                                        </optgroup>
-                                    </select>
+                                    <input disabled type="text" value="{{ o_node.name }}" class="uk-input">
                                 </div>
                             </div>
                             <div class="uk-margin-small">
                                 <label class="uk-form-label"></label>
                                 <div class="uk-form-controls">
-                                    {% for out_set in bus.get_node(output).get_settings().items() %}
+                                    {% for out_set in o_node.get_settings() %}
                                         <div class="uk-margin-small">
-                                            <label class="uk-form-label" for="{{ out_set[0] }}">{{ out_set[0] }}:</label>
-                                            <div class="uk-form-controls">
-                                                <input type="text" id="{{ out_set[0] }}" name="{{ out_set[0] }}" value="{{ out_set[1] }}" class="uk-input">
-                                            </div>
+                                            {% if out_set[0] %}
+                                                {% set uniId = o_node.id + '.' + out_set[0] %}
+                                                <label class="uk-form-label" for="{{ uniId }}">{{ out_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+                                                    <input {{ out_set[3] }} id="{{ uniId }}" name="{{ uniId }}" value="{{ out_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% else %}
+                                                <label class="uk-form-label">{{ out_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+                                                    <input disabled type="text" value="{{ out_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% endif %}
                                         </div>
                                     {% endfor %}
                                 </div>
@@ -106,6 +129,7 @@
                         {% endfor %}
 
                         <div class="uk-flex uk-flex-right">
+                            <input type="hidden" id="sub_form_{{ c_node.id }}" name="sub_form" value="{{ c_node.id }}">
                             <button type="reset" class="uk-button uk-margin-small-left">Reset</button>
                             <button type="submit" class="uk-button uk-button-primary uk-margin-small-left">Accept</button>
                         </div>

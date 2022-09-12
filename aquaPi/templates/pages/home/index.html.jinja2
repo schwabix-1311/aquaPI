@@ -8,40 +8,32 @@
 
 {% block content_main %}
     <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
-        {% for ctrl in update.keys() %}
-            <div data-control="{{ ctrl }}">
+     !! Unfertig, hier erscheinen Nodes mehrfach. ID, Label und Daten können nicht alle in the SSE Liste
+        {% for d_entry in update %}
+            {% set node_id = d_entry.split('.')[0] %}
+            {% set d_node = bus.get_node(node_id) %}
+            <div data-control="{{ d_node.id }}">
                 <div class="uk-card uk-card-small uk-card-default">
                     <div class="uk-card-header">
-                        <h2 class="uk-card-title uk-margin-remove-bottom">{{ ctrl }}</h2>
+                        <h2 class="uk-card-title uk-margin-remove-bottom">{{ d_node.name }}</h2>
 
-                        {# TODO: just hard coded example #}
-                        {% for prop in update[ctrl].keys() %}
-                            {% set value = update[ctrl][prop] %}
-                            {% if ctrl in ['Wasser', 'Heiz1.IN.1', 'Heiz1.IN.2'] and prop == 'Temperature [°C]' %}
-                                {% if value > 25.2 %}
-                                    <div id="badge_{{ ctrl|lower }}" class="uk-card-badge uk-label uk-label-danger">HIGH TEMP</div>
-                                {% elif value > 24.6 %}
-                                    <div id="badge_{{ ctrl|lower }}" class="uk-card-badge uk-label uk-label-warning">HIGH TEMP</div>
-                                {% elif value < 24.1 %}
-                                    <div id="badge_{{ ctrl|lower }}" class="uk-card-badge uk-label uk-label-warning">LOW TEMP</div>
-                                {% elif value < 23.8 %}
-                                    <div id="badge_{{ ctrl|lower }}" class="uk-card-badge uk-label uk-label-danger">LOW TEMP</div>
-                                {% else %}
-                                    <div id="badge_{{ ctrl|lower }}" class="uk-card-badge uk-label uk-label-success">OK</div>
-                                {% endif %}
-                            {% endif %}
-                        {% endfor %}
+                        {# FIXME works statically, dynamic needs SSE updates, or JS do compares against existing SSE data #}
+                        {% set alert = d_node.get_alert() %}
+                        {% if alert[0] %}
+                            <div id="badge_{{ d_node.id }}" class="uk-card-badge uk-label uk-label-{{ alert[0] }}">{{ alert[1] }}</div>
+                        {% endif %}
                     </div>
                     <div class="uk-card-body">
-                        {% for prop in update[ctrl].keys() %}
+                        {% set prop_set = d_node.get_dash() %}
+                        {% for prop in prop_set %}
                             <div class="uk-grid-collapse" uk-grid>
                                 <div class="uk-width-1-3">
-                                 {{ prop }}:
+                                 {{ prop[1] }}:
                                 </div>
                                 <div class="uk-width-expand"
-                                     id="{{ "sse_" ~ ctrl|lower ~ "-" ~ prop|lower }}"
+                                     id="{{ "sse_" ~ d_node.id ~ "." ~ prop[0] }}"
                                 >
-                                  {{ update[ctrl][prop] }}
+                                  {{ prop[2] }}
                                 </div>
                             </div>
                         {% endfor %}

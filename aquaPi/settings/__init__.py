@@ -12,36 +12,30 @@ bp = Blueprint('settings', __name__)
 #@bp.route('/settings')
 @bp.route('/settings', methods=['GET','POST'])
 def settings():
-#    if request.method == 'POST':
-#        username = request.form['username']
-#        password = request.form['password']
-    # hint: html <details> can be opened by default or by JS:
-    # https://stackoverflow.com/questions/14286406/how-to-set-a-details-element-to-open-by-default-or-via-css
-# TODO: need a mechanism to keep a POSTing form (<details>) open, or use JS collapsibles
+    sub_form = None
 
-    bus = current_app.bus
-    values = {}
+    if request.method == 'POST':
+        for key in request.form.keys():
 
-    # TODO: this can be simplified to get_nodes(CTRL) since now jinja has access to app.bus
-    # Should keep the parameter with nodes though, as this allows to handle groups of CTRL nodes
-    # with same page.
-    names = bus.get_node_names(msg_bus.BusRole.CTRL)
-    for n in names:
-        node = bus.get_node(n)
-        if node:
-            settings = node.get_settings()
-            in_name = node.get_inputs()[0]
-            settings['>> Driven by'] = in_name
-            in_node = bus.get_node(in_name)
-            settings.update(in_node.get_settings())
-            out_name = node.get_outputs()[0]
-            settings['>> Driving'] = out_name
-            out_node = bus.get_node(out_name)
-            settings.update(out_node.get_settings())
+            # page has a (sub-) form for each controller. each sets a hidden input with sub_form name,
+            # forward this after submit to allow this sub_form to render in unfolded state
+            if key=='sub_form':
+                sub_form = request.form[key]
+                continue
 
-            values[n] = settings
+            # all other values are built like  node_id.attr: value -> update node's attribute
+            node_attr = key.split('.')
+            if len(node_attr) == 2:
+                try:
+                    new_value = float(request.form[key])
+                except ValueError:
+                    new_value = request.form[key]
+                # FIXME some attributes need further action, e.g. Schedule.cronspec. Can we use property-set for these?
+                setattr(current_app.bus.get_node(node_attr[0]), node_attr[1], new_value)
 
-    return render_template('pages/settings/index.html.jinja2', update=values)
+# TODO: need a mechanism to keep a POSTing form (<details>) open, or use JS collapsibles, sub_form= might be it -> DONE, however, we might need to redirect to same page + anchor, otherwise we jump to top of page
+
+    return render_template('pages/settings/index.html.jinja2', sub_form=sub_form)
 
 
 #@bp.route('/settings', methods=['POST'])

@@ -1,7 +1,7 @@
 {# <!-- this is a include file for routes with sse updates --> #}
 
 {#
-<!-- Target pages must contain elments with ID 'sse_'+key.toLowerCase()
+<!-- Target pages must contain elments with ID 'sse_'+id.toLowerCase()
      These elements will be updated if the values dict sent
      with the event contains an entry with this key.
      -->
@@ -10,14 +10,13 @@
 if (!!window.EventSource) {
   const source = new EventSource(document.URL);
   source.onmessage = function(e) {
-    console.debug(e.data);
+    //console.debug(e.data);
     const obj = JSON.parse(e.data);
-    for (let g in obj) {
-      for (let k in obj[g]) {
-        el = document.getElementById("sse_" + g.toLowerCase() + "-" + k.toLowerCase());
-        if (el !== null) { el.textContent = obj[g][k]; }
-      }
+    for (let i in obj) {
+      el = document.getElementById("sse_" + i.toLowerCase());
+      if (el !== null) { el.textContent = obj[i]; }
     }
+    //console.debug("event done")
   }
 }
 </script>

@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
+import sys
 import logging
 import time
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+if sys.version_info >= (3,9):
+    from zoneinfo import ZoneInfo
+else:
+    from backports.zoneinfo import ZoneInfo
 from croniter import croniter
 from threading import Thread
 import random
@@ -185,9 +189,10 @@ class Schedule(BusNode):
 
     def _scheduler(self):
         self.data = 0
-        self.post(MsgData(self.id, self.data))
-        # get available zones: zoneinfo.available_timezones()
-        now = datetime.now(ZoneInfo("Europe/Berlin"))
+
+        self.post(MsgData(self.name, self.data))
+        now = datetime.now().astimezone()  # = local tz
+
         cron = croniter(self.cronspec, now, ret_type=float)
         tick = 1 if self.hires else 60
 

@@ -9,8 +9,10 @@ from .msg_types import *
 
 
 log = logging.getLogger('MsgBus')
-log.setLevel(logging.WARNING)  # INFO)
+log.setLevel(logging.WARNING)
+#log.setLevel(logging.INFO)
 #log.setLevel(logging.DEBUG)
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 class BusRole(Flag):
@@ -55,7 +57,7 @@ class MsgBus:
         return state
 
     def __setstate__(self, state):
-        log.warning('MsgBus.setstate %r', state)
+        log.debug('MsgBus.setstate %r', state)
         self.__init__(state['threaded'])
         for n in state['nodes']:
             n.plugin(self)
@@ -327,7 +329,7 @@ class BusListener(BusNode):
         return state
 
     def __setstate__(self, state):
-        log.warning('BusListener.setstate %r', state)
+        log.debug('BusListener.setstate %r', state)
         self.__init__(state['name'], inputs=state['inputs'])
 
     def listen(self, msg):

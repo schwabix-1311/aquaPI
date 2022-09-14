@@ -4,10 +4,6 @@ import sys
 import logging
 import time
 from datetime import datetime, timedelta
-if sys.version_info >= (3,9):
-    from zoneinfo import ZoneInfo
-else:
-    from backports.zoneinfo import ZoneInfo
 from croniter import croniter
 from threading import Thread
 import random
@@ -18,8 +14,10 @@ from .msg_bus import *
 
 
 log = logging.getLogger('MsgNodes')
-log.setLevel(logging.WARNING) #INFO)
+log.setLevel(logging.WARNING)
+#log.setLevel(logging.INFO)
 #log.setLevel(logging.DEBUG)
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 #TODO Driver does not belong here
@@ -40,7 +38,7 @@ class Driver:
         return state
 
     def __setstate__(self, state):
-        log.warning('Driver.setstate %r', state)
+        log.debug('Driver.setstate %r', state)
         self.__init__(state['name'], state['cfg'])
 
     def read(self):
@@ -93,7 +91,7 @@ class SensorTemp(Sensor):
         return state
 
     def __setstate__(self, state):
-        log.warning('SensorTemp.setstate %r', state)
+        log.debug('SensorTemp.setstate %r', state)
         self.__init__(state['name'], state['driver'])
 
     def __str__(self):
@@ -116,10 +114,11 @@ class SensorTemp(Sensor):
         self.data = None
         while not self._reader_stop:
             log.debug('SensorTemp.reader looping %r', self.data)
-            val = self.driver.read()
+            val = round(self.driver.read(),2)
             if self.data != val:
                 self.data = val
-                self.post(MsgData(self.id, round(self.data, 2)))
+                log.brief('SensorTemp %s: output %f', self.id, self.data)
+                self.post(MsgData(self.id, self.data))
             time.sleep(self.driver.delay())
         self._reader_thread = None
         self._reader_stop = False
@@ -169,7 +168,7 @@ class Schedule(BusNode):
         return state
 
     def __setstate__(self, state):
-        log.warning('Schedule.setstate %r', state)
+        log.debug('Schedule.setstate %r', state)
         self.__init__(state['name'], state['cronspec'])
 
     def plugin(self, bus):
@@ -188,63 +187,56 @@ class Schedule(BusNode):
         return '{}({})'.format(type(self).__name__, self.cronspec)
 
     def _scheduler(self):
+        log.brief('Schedule %s: start', self.id )
         self.data = 0
 
-        self.post(MsgData(self.name, self.data))
-        now = datetime.now().astimezone()  # = local tz
 
+        now = datetime.now().astimezone()  # = local tz
         cron = croniter(self.cronspec, now, ret_type=float)
         tick = 1 if self.hires else 60
+        log.debug(' now  %s = %f, 1 tick = %d s', now, time.time(), tick)
 
-        while True:
-            # for 1st loop iteration find seconds since preciding cron event ...
+        try:
             cron.get_next()
-            pre = cron.get_prev() - time.time()
-            log.debug(' backwd %f =  %s', pre, str(cron.get_current(ret_type=datetime)))
-
-            # ... if more than 1 tick in the past, start with OFF, else start with ON
-            # Following iterations pre will be >1 tick in past, otherwise it would
-            # have been concatenated with current.
-            if pre < -tick:
-                nxt = cron.get_next() - time.time()
-                log.warning("%s: stay off for %f s (%f h)", self.name, nxt, nxt /60/60)
-                self.data = 0
-                self.post(MsgData(self.id, self.data))
-#send off
-                log.debug("%d for %f s - %s" % (int(self.data), nxt, str(cron.get_current(ret_type=datetime))))
-                if nxt > 0:
-                    if self._scheduler_stop:
-                        break
-                    time.sleep(nxt)
-                if self._scheduler_stop:
-                    break
-
-            nxt = cron.get_next()
-            log.debug('next is  %s', str(cron.get_current(ret_type=datetime)))
             while True:
-                # concatenate cron events that occur every tick
-                n_nxt = cron.get_next()
-                log.debug(' ?  %s', str(cron.get_current(ret_type=datetime)))
-                if n_nxt - nxt > tick:
-                    break
-                nxt = n_nxt
-                log.debug(' + extended to %s', str(cron.get_current(ret_type=datetime)))
-            cron.get_prev()
+                sec_now = time.time()  # reference for each loop to avoid drift
+                sec_prev = cron.get_prev()  # look one event back
+                log.debug(' prev %s = %f', str(cron.get_current(ret_type=datetime)), sec_prev - sec_now)
 
-            nxt = nxt - time.time()
-            log.warning("%s: stay ON for %f s (%f h)", self.name, nxt, nxt /60/60)
-            self.data = 100
-            self.post(MsgData(self.id, self.data))
-            log.debug("%d for %f s - %s", int(self.data), nxt, str(cron.get_current(ret_type=datetime)))
-            if nxt > 0:
+                sec_next = cron.get_next()  # seconds 'til future cron event
+                log.debug(' next %s = %f', str(cron.get_current(ret_type=datetime)), sec_next - sec_now)
+
+                if sec_next - sec_prev > tick:
+                    # since we concatenate cron events <1 tick apart, this must be a pause
+                    self.data = 0
+                    log.brief('Schedule %s: output 0 for %f s', self.id, sec_next - sec_now)
+                    self.post(MsgData(self.id, self.data))
+
+                    time.sleep(sec_next - sec_now)
+                    if self._scheduler_stop:
+                        return
+
+                # now look how many ticks to concatenate
+                while True:
+                    candidate = cron.get_next()
+                    log.debug('  ? %s = + %f s', str(cron.get_current(ret_type=datetime)), candidate - sec_next)
+                    if candidate - sec_next > tick:
+                        log.debug('  ... busted!')
+                        break
+                    sec_next = candidate
+
+                self.data = 100
+                log.brief('Schedule %s: output 100 for %f s', self.id, sec_next - sec_now)
+                self.post(MsgData(self.id, self.data))
+
+                time.sleep(sec_next - sec_now)
                 if self._scheduler_stop:
-                    break
-                time.sleep(nxt)
-            if self._scheduler_stop:
-                break
-
-        self._scheduler_thread = None
-        self._scheduler_stop = False
+                    return
+        finally:
+            # turn off? Probably not, to avoid flicker after settings change
+            self._scheduler_thread = None
+            self._scheduler_stop = False
+            log.brief('Schedule %s: end', self.id )
 
     def get_dash(self):
         return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
@@ -314,7 +306,7 @@ class CtrlMinimum(Controller):
         return state
 
     def __setstate__(self, state):
-        log.warning('CtrlMinimum.setstate %r', state)
+        log.debug('CtrlMinimum.setstate %r', state)
         self.__init__(state['name'], state['inputs'], state['threshold'], state['hysteresis'])
 
     def listen(self, msg):
@@ -328,6 +320,7 @@ class CtrlMinimum(Controller):
             if self.data != new_val:
                 log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
                 self.data = new_val
+                log.brief('CtrlMinimum %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
@@ -359,7 +352,7 @@ class CtrlMaximum(Controller):
         return state
 
     def __setstate__(self, state):
-        log.warning('CtrlMaximum.setstate %r', state)
+        log.debug('CtrlMaximum.setstate %r', state)
         self.__init__(state['name'], state['inputs'], state['threshold'], state['hysteresis'])
 
     def listen(self, msg):
@@ -371,8 +364,8 @@ class CtrlMaximum(Controller):
                 new_val = 0.0
 
             if self.data != new_val:
-                log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
                 self.data = new_val
+                log.brief('CtrlMaximum: %d -> %d', self.data, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
@@ -412,14 +405,16 @@ class CtrlLight(Controller):
         return state
 
     def __setstate__(self, state):
-        log.warning('CtrlLight.setstate %r', state)
+        log.debug('CtrlLight.setstate %r', state)
         self.__init__(state['name'], state['inputs'], state['fade_time'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
+            log.info('CtrlLight: got %f', self.data)
             if self.data != float(msg.data):
                 if not self.fade_time:
                     self.data = float(msg.data)
+                    log.brief('CtrlLight %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
                     if self._fader_thread:
@@ -434,7 +429,7 @@ class CtrlLight(Controller):
         #coarse INCR = 1.0
         INCR = 0.1
         step = (self.fade_time / abs(self.target - self.data) * INCR)
-        log.warning("%s: fading in %f s from %f -> %f, change every %f s", self.name, self.fade_time, self.data, self.target, step)
+        log.brief("CtrLight %s: fading in %f s from %f -> %f, change every %f s", self.id, self.fade_time, self.data, self.target, step)
         while abs(self.target - self.data) > INCR:
             if self.target >= self.data:
                 self.data += INCR
@@ -449,7 +444,7 @@ class CtrlLight(Controller):
         if self.data != self.target:
            self.data = self.target
            self.post(MsgData(self.id, self.data))
-        log.warning("_fader %f DONE" % self.target)
+        log.brief("CtrlLight %s: fader DONE" % self.id)
         self._fader_thread = None
         self._fader_stop = False
 
@@ -506,11 +501,13 @@ class Average(Auxiliary):
             if self.unfair_moving:
                 if self.data == -1:
                     self.data = float(msg.data)
+                    #log.brief('Average %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
                     val = round((self.data + float(msg.data)) / 2, self.unfair_moving)
                     if (self.data != val):
                         self.data = val
+                        #log.brief('Average %s: output %f', self.id, self.data)
                         self.post(MsgData(self.id, round(self.data, 2)))
             else:
                 if self.values.setdefault(msg.sender) != float(msg.data):
@@ -520,6 +517,7 @@ class Average(Auxiliary):
                     val += self.values[k] / len(self.values)
                 if (self.data != val):
                     self.data = val
+                    #log.brief('Average %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, round(self.data, 2)))
         return super().listen(msg)
 
@@ -547,9 +545,11 @@ class Or(Auxiliary):
             val = -1 #0
             for k in self.values:
                 val = max(val, self.values[k])
+            val = round(val, 2)
             if (self.data != val):
                 self.data = val
-                self.post(MsgData(self.id, round(self.data, 2)))
+                #log.brief('Or %s: output %f', self.id, self.data)
+                self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_dash(self):
@@ -597,7 +597,7 @@ class DeviceSwitch(Device):
 
     def switch(self, on):
         self.data = bool(on)
-        log.info('%s turns %s', self.name, 'ON' if self.data else 'OFF')
+        log.info('DeviceSwitch %s: turns %s', self.id, 'ON' if self.data else 'OFF')
 
         # actual driver call would go here
         # if self.inverted ....
@@ -637,7 +637,7 @@ class SinglePWM(Device):
         return state
 
     def __setstate__(self, state):
-        log.warning('SinglePWM.setstate %r', state)
+        log.debug('SinglePWM.setstate %r', state)
         self.__init__(state['name'], state['inputs'], state['squared'], state['minimum'], state['maximum'])
 
     def listen(self, msg):

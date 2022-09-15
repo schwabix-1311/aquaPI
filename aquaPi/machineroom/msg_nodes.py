@@ -137,7 +137,6 @@ class SensorTemp(Sensor):
         return ( 'success', '' )
 
 
-
 class Schedule(BusNode):
     ''' A scheduler supporting monthly/weekly/daily/hourly(/per minute)
         trigger output (On=100 / Off=0).
@@ -151,15 +150,21 @@ class Schedule(BusNode):
 
         Output: MsgData(100) at start time, MsgData)0) at end time.
     '''
-    #TODO: since cron specs are not always intuitive, and require more than 1 cron line to start or end long events at an odd minute, this class should get simple start/end/repeat options.
+    #TODO: since cron specs are not always intuitive, and require more than 1 cron line to start or end long events at an odd minute (not yet supported!), this class should get simple start/end/repeat options.
+
     ROLE = BusRole.IN_ENDP
+    # time [s] to stop the scheduler thread, lower value raises idle load
+    STOP_DURATION = 5
+    # This limits CPU usage to find rare events with long gaps,
+    # such as '0 4 1 1 fri' = Jan. 1st 4pm and Friday -> very rare!
+    CRON_YEARS_DEPTH = 2
 
     def __init__(self, name, cronspec):
         super().__init__(name)
-        self.cronspec = cronspec
-        self.hires = len(cronspec.split(' ')) > 5
         self._scheduler_thread = None
         self._scheduler_stop = False
+        self.cronspec = cronspec
+        self.hires = len(cronspec.split(' ')) > 5
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -171,28 +176,47 @@ class Schedule(BusNode):
         log.debug('Schedule.setstate %r', state)
         self.__init__(state['name'], state['cronspec'])
 
+    @property
+    def cronspec(self):
+        return self._cronspec
+    @cronspec.setter
+    def cronspec(self, value):
+        # validate it here, since the exception would be raised in our thread.
+        now = datetime.now().astimezone()  # = local tz, this enables DST
+        validcron = croniter(value, now, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)
+
+        self._stop_thread()
+        self._cronspec = value
+        self._start_thread()
+
     def plugin(self, bus):
         super().plugin(bus)
-        self._scheduler_thread = Thread(name=self.id, target=self._scheduler, daemon=True)
-        self._scheduler_thread.start()
+        self._start_thread()
 
     def pullout(self):
-        if self._scheduler_thread:
-            self._scheduler_stop = True
-            self._scheduler_thread.join(timeout=5)
-            self._scheduler_thread = None
+        self._stop_thread()
         return super().pullout()
 
     def __str__(self):
         return '{}({})'.format(type(self).__name__, self.cronspec)
 
+    def _start_thread(self):
+        if self._bus:
+            self._scheduler_thread = Thread(name=self.id, target=self._scheduler, daemon=True)
+            self._scheduler_thread.start()
+
+    def _stop_thread(self):
+        if self._scheduler_thread:
+            self._scheduler_stop = True
+            self._scheduler_thread.join()
+            self._scheduler_thread = None
+
     def _scheduler(self):
         log.brief('Schedule %s: start', self.id )
         self.data = 0
 
-
-        now = datetime.now().astimezone()  # = local tz
-        cron = croniter(self.cronspec, now, ret_type=float)
+        now = datetime.now().astimezone()  # = local tz, this enables DST
+        cron = croniter(self._cronspec, now, ret_type=float, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)
         tick = 1 if self.hires else 60
         log.debug(' now  %s = %f, 1 tick = %d s', now, time.time(), tick)
 
@@ -206,15 +230,20 @@ class Schedule(BusNode):
                 sec_next = cron.get_next()  # seconds 'til future cron event
                 log.debug(' next %s = %f', str(cron.get_current(ret_type=datetime)), sec_next - sec_now)
 
+                # just to be sure, croniter may need longer for sparse schedules with long pauses
+                if self._scheduler_stop:
+                    return  # cleanup is done in finally!
+
                 if sec_next - sec_prev > tick:
                     # since we concatenate cron events <1 tick apart, this must be a pause
                     self.data = 0
                     log.brief('Schedule %s: output 0 for %f s', self.id, sec_next - sec_now)
                     self.post(MsgData(self.id, self.data))
 
-                    time.sleep(sec_next - sec_now)
-                    if self._scheduler_stop:
-                        return
+                    while (sec_next > time.time()):
+                        time.sleep(self.STOP_DURATION)
+                        if self._scheduler_stop:
+                            return  # cleanup is done in finally!
 
                 # now look how many ticks to concatenate
                 while True:
@@ -225,15 +254,23 @@ class Schedule(BusNode):
                         break
                     sec_next = candidate
 
+                # just to be sure, croniter may need longer for sparse schedules with long pauses
+                if self._scheduler_stop:
+                    return  # cleanup is done in finally!
+
                 self.data = 100
                 log.brief('Schedule %s: output 100 for %f s', self.id, sec_next - sec_now)
                 self.post(MsgData(self.id, self.data))
 
-                time.sleep(sec_next - sec_now)
-                if self._scheduler_stop:
-                    return
+                while (sec_next > time.time()):
+                    time.sleep(self.STOP_DURATION)
+                    if self._scheduler_stop:
+                        return  # cleanup is done in finally!
+        except Exception as ex:
+            # FIXME: how can such errors bubble up to the UI? Flask flash messages, but long way to there
+            log.error('Failed to find next date for %s within the next %d years.', self._cronspec, self.CRON_YEARS_DEPTH)
         finally:
-            # turn off? Probably not, to avoid flicker after settings change
+            # turn off? Probably not, to avoid flicker when schedule is changed
             self._scheduler_thread = None
             self._scheduler_stop = False
             log.brief('Schedule %s: end', self.id )
@@ -242,16 +279,6 @@ class Schedule(BusNode):
         return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
 
     def get_settings(self):
-        # TODO change to time control
-        #field = self.cronspec.split()
-        #return { 'CRON minute [*/digit/range/list]': field[0] \
-        #       , 'CRON hour ["]': field[1] \
-        #       , 'CRON day of month ["]': field[2] \
-        #       , 'CRON month ["]': field[3] \
-        #       , 'CRON weekday [0=Sun]': field[4]
-        #       # could allow hires:
-        #       #, 'CRON second [opt]': field[5] if len(field)>5 else ''
-        #       }
         return [ ( 'cronspec', 'CRON (m h DoM M DoW)', self.cronspec, 'type="text"' ) ]
 
 
@@ -387,12 +414,11 @@ class CtrlLight(Controller):
         Output: float 0...target  fade-in (or switch) when input goes to >0
                 float target...0  fade-out (or switch) after input goes to 0
     '''
-    #TODO: could add random variation, other profiles, and overheat reductions driven from tmeperature ...
-
+    #TODO: could add random variation, other profiles, and overheat reduction driven from temperature ...
 
     def __init__(self, name, inputs, fade_time=None):
         super().__init__(name, inputs)
-        self.fade_time = fade_time
+        self.fade_time = fade_time   #TODO: change to property, to allow immediate changes
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
         self._fader_thread = None
@@ -449,8 +475,7 @@ class CtrlLight(Controller):
         self._fader_stop = False
 
     def get_dash(self):
-        return [ ( 'state', 'State', 'ON' if self.data else 'OFF' )
-               , ( 'data', 'Dim [%]', round(self.data, 2) ) ]
+        return [ ( 'data', 'Dim [%]', round(self.data, 2) if self.data else 'OFF' ) ]
 
     def get_settings(self):
         return [ ( 'fade_time', 'Fade time [s]', self.fade_time, 'type="number" min="0"' ) ]
@@ -581,7 +606,7 @@ class DeviceSwitch(Device):
     def __init__(self, name, inputs, inverted=False):
         super().__init__(name, inputs)
         self.data = False
-        self.inverted = bool(inverted)
+        self.inverted = bool(inverted)   #TODO: change to property, to allow immediate changes
 
     #def __getstate__(self):
     #    return super().__getstate__()
@@ -624,7 +649,7 @@ class SinglePWM(Device):
 #TODO: currently a logging dummy, add a driver for the actual HW.
     def __init__(self, name, inputs, squared=False, minimum=0, maximum=100):
         super().__init__(name, inputs)
-        self.squared = bool(squared)
+        self.squared = bool(squared)   #TODO: change to property, to allow immediate changes
         self.minimum = min(max( 0, minimum), 90)
         self.maximum = min(max( minimum + 1, maximum), 100)
         self.data = 0

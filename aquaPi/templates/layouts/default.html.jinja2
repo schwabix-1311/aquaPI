@@ -23,9 +23,16 @@
                     <header>
                         {% block content_header %}{% endblock %}
                     </header>
-                    {% for message in get_flashed_messages() %}
-                        <div class="flash">{{ message }}</div>
-                    {% endfor %}
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for cat, msg in messages %}
+                                <!-- div class="flash">{{ msg }}!</div -->
+                                <script>
+                                  UIkit.notification({message: '{{ msg }}', status: '{{ cat }}'})
+                                </script>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
                     <div id="main_content">
                         {% block content_main %}{% endblock %}
                     </div>

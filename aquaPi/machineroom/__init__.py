@@ -9,10 +9,13 @@ from .msg_nodes import *
 
 
 log = logging.getLogger('MachineRoom')
-log.setLevel(logging.INFO)
+log.setLevel(logging.WARNING)
+#log.setLevel(logging.INFO)
+#log.setLevel(logging.DEBUG)
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
-class MachineRoom():
+class MachineRoom:
     ''' The Machine Room
         The core is a message bus, on which different sensors,
         controllers, devices and auxiliary nodes communicate.
@@ -21,31 +24,61 @@ class MachineRoom():
         works in msg handlers and callbacks.
     '''
     def __init__(self, config):
+        ''' Create everything needed to get the machinery going.
+            So far the only thing here is the bus.
+        '''
         #TODO: this might move to the DB, currently separate file is handy
-        if not path.exists(config['NODES']):
-            # construct default controlleri(s) if there's
-            # no configuration storage (pickle stream)
+        self.bus_storage = config['NODES']
 
+        if not path.exists(self.bus_storage):
             self.bus = MsgBus()  #threaded=True)
 
+            log.brief("=== There are no controllers defined, creating default")
             self.create_default_nodes()
-
-            log.info("Bus & Nodes created: %s", str(self.bus))
-            # this will pickle the MsgBus, all referenced BusNodes and Drivers
-            with open(config['NODES'], 'wb') as p:
-                pickle.dump(self.bus, p, protocol=pickle.HIGHEST_PROTOCOL)
-            log.info("  ... and saved")
+            self.save_nodes(self.bus)
+            log.brief("=== Successfully created Bus and default Nodes")
+            log.brief("  ... and saved to %s", self.bus_storage)
 
         else:
-            # likewise this restores Bus, Nodes and Drivers
-            with open(config['NODES'], 'rb') as p:
-                self.bus = pickle.load(p)
-            log.info("Bus & Nodes loaded")
+            log.brief("=== Loading Bus & Nodes from %s", self.bus_storage)
+            self.bus = self.restore_nodes()
 
-        log.info("Bus & Nodes created: %s", str(self.bus))
-        log.warning(self.bus.get_nodes())
+        log.brief("%s", str(self.bus))
+        log.info(self.bus.get_nodes())
+
+    def __del__(self):
+        ''' Persist the required objects, cleanup
+            (other languages call this a destructor)
+        '''
+        if self.bus:
+            self.save_nodes()
+            self.bus.teardown()
+
+    def save_nodes(self, container, fname=None):
+        ''' save the Bus, Nodes and Drivers to storage
+            Parameters allow usage for controller templates, contained in "something", not a bus
+        '''
+        if container:
+            if not fname:
+                fname = self.bus_storage
+            with open(fname, 'wb') as p:
+                pickle.dump(container, p, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def restore_nodes(self, fname=None):
+        ''' recreate the Bus, Nodes and Drivers from storage,
+            or a controller template in a container from some file
+        '''
+        if not fname:
+            fname = self.bus_storage
+        with open(fname, 'rb') as p:
+            container = pickle.load(p)
+        return container
 
     def create_default_nodes(self):
+        ''' "let there be light" and heating of course, what else do my fish(es) need?
+            Distraction: interesting fact on English:
+              "fish" is plural, "fishes" is several species of fish
+        '''
         single_light = True
         dawn_light = single_light and True
         single_temp = True
@@ -71,7 +104,6 @@ class MachineRoom():
                 light_or.plugin(self.bus)
                 light_pwm = SinglePWM('Dimmer', light_or.id, squared=True, maximum=80)
                 light_pwm.plugin(self.bus)
-
 
         if single_temp:
             # single temp sensor -> temp ctrl -> relais
@@ -104,8 +136,6 @@ class MachineRoom():
 
             w_cool = DeviceSwitch('W-Lüfter', w2_ctrl.id)
             w_cool.plugin(self.bus)
-
-    #TODO: add a destructor with self.bus.teardown()  and pickle self.bus !
 
 
 #   class MyClass:

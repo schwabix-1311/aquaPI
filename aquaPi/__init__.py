@@ -59,6 +59,7 @@ def create_app(test_config=None):
 
     from . import machineroom
     mr = machineroom.MachineRoom(app.config)
+    app.machineroom = mr
     app.bus = mr.bus
 
     @app.context_processor

@@ -11,6 +11,7 @@ main#main {
 
 
 /* -- Some UI kit overwrites -- */
+/* TODO: implement in aquqpi uikit theme */
 .uk-box-shadow-medium {
     box-shadow: 0 5px 15px rgb(0 0 0 / 12%) !important;
 }

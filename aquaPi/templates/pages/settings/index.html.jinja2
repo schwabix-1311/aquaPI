@@ -5,7 +5,7 @@
     {% set page_heading = 'Settings' %}
     {% include 'partials/page_heading.html.jinja2' %}
 
-    <div class="uk-alert-primary" uk-alert>
+    <div class="uk-alert-primary" uk-alert="animation: uk-animation-scale-up; duration: 500">
         <a class="uk-alert-close" uk-close></a>
         <p class="uk-text-small">
             <strong>TODO</strong>
@@ -22,7 +22,7 @@
 {% endblock %}
 
 {% block content_main %}
-    <ul uk-accordion="collapsible: true; multiple: false" class="uk-list uk-list-divider">
+    <ul uk-accordion="collapsible: true; multiple: false" class="uk-list YYYuk-list-divider">
         {# % for ctrl in update.keys() % #}
         {% for c_node in bus.get_controller_nodes() %}
             <li id="{{ c_node.id | lower }}" {{ 'class="uk-open"' if c_node.id==sub_form}}>
@@ -44,7 +44,7 @@
 
                         {% for i_node in c_node.get_inputs(recurse=True) %}
                             <div class="uk-margin-small">
-{% if false %}                                
+{% if false %}
 {# TODO this should be r/o on this page, but keep it as template for select on page config #}
                                 {% set uniId = c_node.id + '.inputs' %}
                                 <label class="uk-form-label" for="{{ uniId }}">Input:</label>
@@ -143,5 +143,19 @@
 
 {% block footer_script %}
     {{ super() }}
+    <script>
+        (function(){
+            // Check for location hash, and open related accordion
+            const hash = window.location.hash || null;
+            if (hash) {
+                let accrdn = document.querySelector(decodeURIComponent(hash));
+                if (accrdn) {
+                    if (!accrdn.classList.contains('uk-open')) {
+                        document.querySelector(decodeURIComponent(hash) + ' > a').click();
+                    }
+                }
+            }
+        })();
+    </script>
 {#    {% include "sse_event_inc.html" %}#}
 {% endblock %}

@@ -131,5 +131,10 @@ dmypy.json
 # ... and some space for myself
 _local/
 
+# UIkit
+/static/uikit/
+!/static/uikit/dist/
+!/static/uikit/custom/
+
 # JetBrains IDE
 .idea/

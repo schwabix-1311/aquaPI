@@ -10,27 +10,28 @@ from .msg_types import *
 
 log = logging.getLogger('MsgBus')
 log.setLevel(logging.WARNING)
-#log.setLevel(logging.INFO)
-#log.setLevel(logging.DEBUG)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 class BusRole(Flag):
     IN_ENDP = auto()    # data sources: sensor, switch, schedule
     OUT_ENDP = auto()   # output: relais, logs, mails
-    CTRL = auto() # the core of a controller: process IN -> OUT
+    CTRL = auto()       # the core of a controller: process IN -> OUT
     AUX = auto()        # helper func: 2:1/n:1, e.g. avg, delay, or
 
 # This may help to fill selection lists/combos with the appropriate node types
-#class PayloadType
-    #TUPEL = auto()      # operates on data tupels, e.g. RGB light
-    #ANALOG = auto()     # the receiver interprets MsgData according to his capabilites
-    #BINARY = auto()     # interprets MsgData in a binary way (on/off)
+# class PayloadType
+    # TUPEL = auto()      # operates on data tupels, e.g. RGB light
+    # ANALOG = auto()     # the receiver interprets MsgData according to his capabilites
+    # BINARY = auto()     # interprets MsgData in a binary way (on/off)
 
 #############################
 
+
 class MsgBus:
-    ''' Communication channel between all registered
+    """ Communication channel between all registered
         BusNodes.
         Supports public and 1:1 messaging, plugin/pullout
         notification and message filtering for each listener.
@@ -38,7 +39,7 @@ class MsgBus:
         or in a worker thread. Unthreaded is much faster
         and easier to debug, thus the default.
         Several get_* methods build the interface to Flask backend
-    '''
+    """
     def __init__(self, threaded=False):
         self._threaded = threaded
         self.nodes = []
@@ -52,7 +53,7 @@ class MsgBus:
             Thread(target=self._dispatch, daemon=True).start()
 
     def __getstate__(self):
-        state = {'nodes':self.nodes, 'threaded':self._threaded}
+        state = {'nodes': self.nodes, 'threaded': self._threaded}
         log.debug('MsgBus.getstate %r', state)
         return state
 
@@ -68,9 +69,9 @@ class MsgBus:
         return '{}({} nodes, {} queue\'d)'.format(type(self).__name__, len(self.nodes), self._queue.qsize())
 
     def _register(self, node):
-        ''' Add a BusNode to the bus.
+        """ Add a BusNode to the bus.
             Raise exception if duplicate id.
-        '''
+        """
         lst = self.get_node(node.id)  # this rejects ambiguities in id or name
         if lst:
             raise Exception('Duplicate node: name ' + node.name + ', id ' + node.id)
@@ -81,8 +82,8 @@ class MsgBus:
         self.nodes.append(node)
 
     def _unregister(self, node):
-        ''' Remove BusNode from bus.
-        '''
+        """ Remove BusNode from bus.
+        """
         node = self.get_node(id)
         if node:
             if self._queue:
@@ -92,12 +93,12 @@ class MsgBus:
             self.nodes.remove(node)
 
     def post(self, msg):
-        ''' Put message into the queue or dispatch in a
+        """ Put message into the queue or dispatch in a
             blocking loop.
             Descendants of MsgReply contain the id of
             receiver (send_to) for 1:1 communication.
             This might change too to a send_to parameter.
-        '''
+        """
         self._m_cnt += 1
         msg._m_cnt = self._m_cnt
         log.debug('%s   + %s', str(self), str(msg))
@@ -107,19 +108,19 @@ class MsgBus:
             self._dispatch_one(msg)
 
     def _dispatch(self):
-        ''' Dispatch all queued messages in a worker thread
-        '''
+        """ Dispatch all queued messages in a worker thread
+        """
         while True:
             msg = self._queue.get()
             self._dispatch_one(msg)
             self._queue.task_done()
 
     def _dispatch_one(self, msg):
-        ''' Dispatch one message to all listeners in a blocking loop.
+        """ Dispatch one message to all listeners in a blocking loop.
             Maintain a cache of MsgData values (is it worth the effort?)
-        '''
-        #FIXME cache before or after dispatching?
-        if isinstance(msg, (MsgData,MsgBorn)):
+        """
+        # FIXME cache before or after dispatching?
+        if isinstance(msg, (MsgData, MsgBorn)):
             log.debug('  cache upd %s', str(msg))
             if self.values.setdefault(msg.sender) != msg.data:
                 self.values[msg.sender] = msg.data
@@ -134,78 +135,77 @@ class MsgBus:
             # broadcast message, exclude sender
             lst = [n for n in self.nodes if n.id != msg.sender]
         if not isinstance(msg, MsgInfra):
-            #lst = [l for l in lst if isinstance(l, BusListener)]
+            # lst = [l for l in lst if isinstance(l, BusListener)]
             lst = [n for n in lst if n._inputs and n._inputs.filter(msg)]
         for n in lst:
             log.debug('  -> %s', str(n))
             n.listen(msg)
 
     def teardown(self):
-        ''' Prepare for shutdown, e.g. unplug all.
-        '''
+        """ Prepare for shutdown, e.g. unplug all.
+        """
         for n in self.nodes:
             log.debug('teardown %s', str(n))
             n.pullout()
 
     def get_node(self, id_or_name):
-        ''' Find BusNode by id or name.
+        """ Find BusNode by id or name.
             id is derived from name, and both are unique.
-        '''
-        lst = [ n for n in self.nodes if id_or_name in (n.id, n.name) ]
-        return lst[0] if len(lst)==1 else None
+        """
+        lst = [n for n in self.nodes if id_or_name in (n.id, n.name)]
+        return lst[0] if len(lst) == 1 else None
 
     # former BusBroker functions, i.e. the interface for Flask backend
 
     def get_nodes(self, roles=None):
-        ''' return list of current nodes: { id:BusNode, ... }
+        """ return list of current nodes: { id:BusNode, ... }
             filtered by set of roles, or all
-        '''
-        return [ n for n in self.nodes if not roles or n.ROLE in roles ]
+        """
+        return [n for n in self.nodes if not roles or n.ROLE in roles]
 
     def get_controller_nodes(self):
-        ''' return list of controller nodes: { id:BusNode, ... }
+        """ return list of controller nodes: { id:BusNode, ... }
             Jinja code has no access to BusRoles -> specialized get_nodes
-        '''
+        """
         return self.get_nodes(roles=BusRole.CTRL)
 
     def get_input_nodes(self):
-        ''' return list of input nodes: { id:BusNode, ... }
+        """ return list of input nodes: { id:BusNode, ... }
             Jinja code has no access to BusRoles -> specialized get_nodes
-        '''
+        """
         return self.get_nodes(roles=BusRole.IN_ENDP)
 
     def get_output_nodes(self):
-        ''' return list of output nodes: { id:BusNode, ... }
+        """ return list of output nodes: { id:BusNode, ... }
             Jinja code has no access to BusRoles -> specialized get_nodes
-        '''
+        """
         return self.get_nodes(roles=BusRole.OUT_ENDP)
 
     def get_auxiliary_nodes(self):
-        ''' return list of auxiliary nodes: { id:BusNode, ... }
+        """ return list of auxiliary nodes: { id:BusNode, ... }
             Jinja code has no access to BusRoles -> specialized get_nodes
-        '''
+        """
         return self.get_nodes(roles=BusRole.AUX)
-
 
     @staticmethod
     def to_names(node_list):
-        ''' return a list of names from whatever iterable container with nodes
-        '''
-        return [ node.name for node in node_list ]
-
+        """ return a list of names from whatever iterable container with nodes
+        """
+        return [node.name for node in node_list]
 
     def values_by_ids(self, ids):
-        #TODO cache values{} seems unneccessary, access nodes.data directly!
-        return { i:self.values[i]  for i in self.values if i in ids }
+        # TODO cache values{} seems unneccessary, access nodes.data directly!
+        return {i: self.values[i] for i in self.values if i in ids}
 
     def values_by_role(self, roles):
-        #TODO cache values{} seems unneccessary, access nodes.data directly!
-        return { i:self.values[i]  for i in self.values if self.nodes[i].ROLE in roles }
+        # TODO cache values{} seems unneccessary, access nodes.data directly!
+        return {i: self.values[i] for i in self.values if self.nodes[i].ROLE in roles}
+
 
 #############################
 
 class BusNode:
-    ''' BusNode is a minimal bus participant
+    """ BusNode is a minimal bus participant
         It has little overhead, can only post messages.
         Methods plugin/pullout can be redirected to a callback to
         let you know when to start or finish your task.
@@ -214,13 +214,13 @@ class BusNode:
         The bus protocol (MsgBorn/MsgBye/MsgReplyHello)
         is handled internally.
         The _inputs should always be None = listen to everbody!
-    '''
+    """
     ROLE = None
 
     def __init__(self, name, bus_cbk=None):
         self.name = name
         self.id = name.lower()  # uuid.uuid4(uuid.NAMSPACE_OID,name)
-        self.id = self.id.replace(' ','').replace('.','').replace(';','')
+        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '')
         self._inputs = None
         self._bus = None
         self.data = None
@@ -228,7 +228,7 @@ class BusNode:
         self._msg_cbk = None
 
     def __getstate__(self):
-        state = {'name':self.name, 'inputs':self._inputs, 'data':self.data}
+        state = {'name': self.name, 'inputs': self._inputs, 'data': self.data}
         log.debug('< BusNode.getstate %r', state)
         return state
 
@@ -282,7 +282,7 @@ class BusNode:
             if recurse:
                 for s_node in inputs:
                     inputs = s_node.get_inputs(recurse) + inputs 
-        return inputs # if self._inputs else ['-']
+        return inputs  # if self._inputs else ['-']
 
     def get_outputs(self, recurse=False):
         outputs = []
@@ -297,11 +297,11 @@ class BusNode:
         return outputs  # if outputs else ['-']
 
     def get_alert(self):
-        return ( None, '' )
+        return (None, '')
 
 
 class BusListener(BusNode):
-    ''' BusListener is an extension to BusNode.
+    """ BusListener is an extension to BusNode.
         Listeners usually filter the messages they listen to.
         Bus protocol is handled internally.
         All (!) messages can be redirected to message callback,
@@ -311,7 +311,7 @@ class BusListener(BusNode):
         Listening to MsgBorn/MsgBye allows to adjust MsgFilters.
         A derived class must call BusListener.listen() to keep
         protocol intact!
-    '''
+    """
     def __init__(self, name, inputs=None, msg_cbk=None, bus_cbk=None):
         super().__init__(name, bus_cbk)
         if inputs:
@@ -343,7 +343,7 @@ class BusListener(BusNode):
         return ret
 
     def get_settings(self):
-        return [ ( '', 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"' ) ]
+        return [('', 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"')]
 
 
 #############################
@@ -356,6 +356,7 @@ class BusListener(BusNode):
 
 t_avg = None
 
+
 def temp_avg(self, msg):
     global t_avg
     if isinstance(msg, MsgData):
@@ -366,30 +367,34 @@ def temp_avg(self, msg):
             t_new = round((t_avg + msg.data) / 2, 2)
             if t_new != t_avg:
                 t_avg = t_new
-                #print(str(self) + ' = ' + str(t_avg))
-                self.post(MsgData(self.id,t_avg))
+                # print(str(self) + ' = ' + str(t_avg))
+                self.post(MsgData(self.id, t_avg))
         return True
     return False
 
+
 def minThreshold(self, msg):
     if isinstance(msg, MsgData):
-        #print(str(self) + ' got ' + str(msg))
+        # print(str(self) + ' got ' + str(msg))
         if msg.data < 25:
             self.post(MsgData(self.id, True))
         else:
             self.post(MsgData(self.id, False))
 
+
 relais_state = False
+
 
 def relais(self, msg):
     global relais_state
     if isinstance(msg, MsgData):
-        #print('{} = {}'.format(msg.sender,msg.data))
+        # print('{} = {}'.format(msg.sender,msg.data))
         if msg.data != relais_state:
-            #print('{} switching {}'.format(self.id,{True:'ON',False:'off'}[msg.data]))
+            # print('{} switching {}'.format(self.id,{True:'ON',False:'off'}[msg.data]))
             relais_state = msg.data
         return True
     return False
+
 
 #############################
 
@@ -402,9 +407,9 @@ if __name__ == "__main__":
     import random
 
     mb = MsgBus()
-    #mb = MsgBus(threaded=True)
+    # mb = MsgBus(threaded=True)
 
-    # this are primitive BusNodes, they are implemented as message callbacks of the basic types
+    # these are primitive BusNodes, they are implemented as message callbacks of the basic types
 
     sensor1 = BusNode('TempSensor1')
     sensor1.plugin(mb)
@@ -420,13 +425,13 @@ if __name__ == "__main__":
     relais = BusListener('TempRelais', msg_cbk=relais, inputs=[temp_ctrl.id])
     relais.plugin(mb)
 
-    #mb.register(BusListener('BL3'))
+    # mb.register(BusListener('BL3'))
 
-    #for d in [42, 24.83, 'LOW', [1,2,3]]:
+    # for d in [42, 24.83, 'LOW', [1,2,3]]:
     for d in range(100):
         sensor1.post(MsgData(sensor1.id, round(random.random() * 3 + 23.5, 2)))
         if d % 3:
             sensor2.post(MsgData(sensor2.id, round(random.random() * 3 + 23.5, 2)))
-        #time.sleep(.1)
+        # time.sleep(.1)
 
     mb.teardown()

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
-import time
+# import time
 from flask import (
-    Flask, Blueprint, current_app, render_template, json
+    # Flask, Blueprint, current_app, render_template, json
+    Blueprint, current_app, json
 )
 from ..sse_util import render_sse_template
-from ..machineroom import msg_bus
+# from ..machineroom import msg_bus
 
 
 bp = Blueprint('home', __name__)

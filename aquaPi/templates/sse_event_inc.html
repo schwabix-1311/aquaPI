@@ -13,7 +13,7 @@ if (!!window.EventSource) {
     //console.debug(e.data);
     const obj = JSON.parse(e.data);
     for (let i in obj) {
-      el = document.getElementById("sse_" + i.toLowerCase());
+      let el = document.getElementById("sse_" + i.toLowerCase());
       if (el !== null) { el.textContent = obj[i]; }
     }
     //console.debug("event done")

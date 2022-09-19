@@ -5,18 +5,18 @@ from os import path
 import sys
 from flask import Flask
 import logging
-#from logging.handlers import SMTPHandler
+# from logging.handlers import SMTPHandler
 
 
 def create_app(test_config=None):
     logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s', datefmt='%I:%M:%S', stream=sys.stdout, level=logging.WARNING)
     log = logging.getLogger('aquaPi')
     log.setLevel(logging.WARNING)
-    #log.setLevel(logging.DEBUG)
+    # log.setLevel(logging.DEBUG)
 
-#TODO wrap in try/catch, but how should exceptions be handled?
+# TODO wrap in try/catch, but how should exceptions be handled?
 
-    if False:    #FIXME: this would use app.debug before assignment
+    if False:    # FIXME: this would use app.debug before assignment
         mail_handler = SMTPHandler(
             mailhost='127.0.0.1',
             fromaddr='server-error@example.com',
@@ -32,7 +32,7 @@ def create_app(test_config=None):
 
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
-        SECRET_KEY='ToDo during installation',   #TODO !!
+        SECRET_KEY='ToDo during installation',   # TODO !!
         DATABASE=os.path.join(app.instance_path, 'aquaPi.sqlite'),
         NODES=os.path.join(app.instance_path, 'nodes.pickle')
     )
@@ -78,10 +78,10 @@ def create_app(test_config=None):
     from . import about
     app.register_blueprint(about.bp)
 
-    #from . import auth
-    #app.register_blueprint(auth.bp)
+    # from . import auth
+    # app.register_blueprint(auth.bp)
 
-    #from .hello import hello as hello_blueprint
-    #app.register_blueprint(hello_blueprint)
+    # from .hello import hello as hello_blueprint
+    # app.register_blueprint(hello_blueprint)
 
     return app

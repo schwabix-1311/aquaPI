@@ -28,7 +28,7 @@ def close_db(e=None):
         db.close()
 
 
-#====================#
+# ===================#
 # cmd line
 
 def init_db():

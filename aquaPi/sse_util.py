@@ -7,7 +7,7 @@ from flask import Response, request, render_template
 def format_msg(data: str, event=None) -> str:
     """ Formats a string and an event name in order to follow the event stream convention.
         for event!=None you'll need a custom event listener
-        The receivin page needs something like:
+        The receiving page needs something like:
 <script>
 if (!!window.EventSource) {
   var source = new EventSource('/dash'); // this must match the page route
@@ -28,14 +28,15 @@ if (!!window.EventSource) {
         msg = f'event: {event}\n{msg}'
     return msg
 
+
 def render_sse_template(html, read, update, delay=1):
-    ''' render a Jinja2 template with SSE updatable elements
+    """ render a Jinja2 template with SSE updatable elements
         html - the Jinja2 template file
         read - long poll method returning a hash of updates
         update - hash of key:value, should be a superset of what
                  read() returns
         delay - timespan between updates, or None for read blocks itself
-    '''
+    """
     if request.headers.get('accept') == 'text/event-stream':
         def events():
             while True:

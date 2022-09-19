@@ -10,22 +10,22 @@ import random
 from flask import json
 
 from .msg_bus import *
-#import driver
+# import driver
 
 
 log = logging.getLogger('MsgNodes')
 log.setLevel(logging.WARNING)
-#log.setLevel(logging.INFO)
-#log.setLevel(logging.DEBUG)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
-#TODO Driver does not belong here
+# TODO Driver does not belong here
 class Driver:
-    ''' a fake/development driver!
+    """ a fake/development driver!
         once we get 'real':
         DS1820 family:  /sys/bus/w1/devices/28-............/temperature(25125) ../resolution(12) ../conv_time(750)
-    '''
+    """
     def __init__(self, name, cfg):
         self.name = 'fake DS1820'  # name
         self.cfg = cfg
@@ -33,7 +33,7 @@ class Driver:
         self.dir = 1
 
     def __getstate__(self):
-        state = {'name':self.name, 'cfg':self.cfg}
+        state = {'name': self.name, 'cfg': self.cfg}
         log.debug('Driver.getstate %r', state)
         return state
 
@@ -47,36 +47,36 @@ class Driver:
             self.dir *= -1
         elif rnd > .7:
             self.val += 0.05 * self.dir
-        self.val = round(min(max( 24, self.val), 26 ), 2)
+        self.val = round(min(max(24, self.val), 26), 2)
         return float(self.val)
 
     def delay(self):
         return 1.0
 
 
-#========== inputs AKA sensors ==========
+# ========== inputs AKA sensors ==========
 
 
 class Sensor(BusNode):
-    ''' Base class for IN_ENDP delivering measurments,
+    """ Base class for IN_ENDP delivering measurments,
         e.g. temperature, pH, water level switch
-    '''
+    """
     ROLE = BusRole.IN_ENDP
 
-    #def __getstate__(self):
+    # def __getstate__(self):
     #    return super().__getstate__()
 
-    #def __setstate__(self, state):
+    # def __setstate__(self, state):
     #    self.__init__(state)
 
 
 class SensorTemp(Sensor):
-    ''' A temperature sensor, utilizing a Driver class for
+    """ A temperature sensor, utilizing a Driver class for
         different interface types.
         Measurements taken in a worker thread, looping with driver.delay()
 
         Output: float with temperature in °C, unchanged measurements are suppressed.
-    '''
+    """
     def __init__(self, name, driver):
         super().__init__(name)
         self.driver = driver
@@ -114,7 +114,7 @@ class SensorTemp(Sensor):
         self.data = None
         while not self._reader_stop:
             log.debug('SensorTemp.reader looping %r', self.data)
-            val = round(self.driver.read(),2)
+            val = round(self.driver.read(), 2)
             if self.data != val:
                 self.data = val
                 log.brief('SensorTemp %s: output %f', self.id, self.data)
@@ -124,21 +124,21 @@ class SensorTemp(Sensor):
         self._reader_stop = False
 
     def get_dash(self):
-        return [ ( 'data', 'Temperature [°C]', round(self.data, 2) ) ]
+        return [('data', 'Temperature [°C]', round(self.data, 2))]
 
     def get_settings(self):
-        return [ ( None, 'Sensor driver', self.driver.name, 'type="text"' ) ]
+        return [(None, 'Sensor driver', self.driver.name, 'type="text"')]
 
     def get_alert(self):
         if self.data > 25:
-            return ( 'danger', 'HIGH' )
+            return ('danger', 'HIGH')
         elif self.data < 24.5:
-            return ( 'default', 'LOW' )
-        return ( 'success', '' )
+            return ('default', 'LOW')
+        return ('success', '')
 
 
 class Schedule(BusNode):
-    ''' A scheduler supporting monthly/weekly/daily/hourly(/per minute)
+    """ A scheduler supporting monthly/weekly/daily/hourly(/per minute)
         trigger output (On=100 / Off=0).
         Internally working like cron; a spec is 'min hour day month weekday'.
         In contrast to cron we concatenate consecutive events to a long ON state,
@@ -149,8 +149,8 @@ class Schedule(BusNode):
         By concatenation the shortest time between pulses is 2min or 2sec
 
         Output: MsgData(100) at start time, MsgData)0) at end time.
-    '''
-    #TODO: since cron specs are not always intuitive, and require more than 1 cron line to start or end long events at an odd minute (not yet supported!), this class should get simple start/end/repeat options.
+    """
+    # TODO: since cron specs are not always intuitive, and require more than 1 cron line to start or end long events at an odd minute (not yet supported!), this class should get simple start/end/repeat options.
 
     ROLE = BusRole.IN_ENDP
     # time [s] to stop the scheduler thread, lower value raises idle load
@@ -179,6 +179,7 @@ class Schedule(BusNode):
     @property
     def cronspec(self):
         return self._cronspec
+
     @cronspec.setter
     def cronspec(self, value):
         # validate it here, since the exception would be raised in our thread.
@@ -212,7 +213,7 @@ class Schedule(BusNode):
             self._scheduler_thread = None
 
     def _scheduler(self):
-        log.brief('Schedule %s: start', self.id )
+        log.brief('Schedule %s: start', self.id)
         self.data = 0
 
         now = datetime.now().astimezone()  # = local tz, this enables DST
@@ -273,32 +274,32 @@ class Schedule(BusNode):
             # turn off? Probably not, to avoid flicker when schedule is changed
             self._scheduler_thread = None
             self._scheduler_stop = False
-            log.brief('Schedule %s: end', self.id )
+            log.brief('Schedule %s: end', self.id)
 
     def get_dash(self):
-        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
+        return [('data', 'State', 'ON' if self.data else 'OFF')]
 
     def get_settings(self):
-        return [ ( 'cronspec', 'CRON (m h DoM M DoW)', self.cronspec, 'type="text"' ) ]
+        return [('cronspec', 'CRON (m h DoM M DoW)', self.cronspec, 'type="text"')]
 
 
-#========== controllers ==========
+# ========== controllers ==========
 
 
 class Controller(BusListener):
-    ''' The base class of all controllers, i.e. BusNodes that connect
+    """ The base class of all controllers, i.e. BusNodes that connect
         inputs with outputs (same may be just forwarding data)
-    '''
+    """
     ROLE = BusRole.CTRL
 
     def __init__(self, name, inputs):
         super().__init__(name, inputs)
         self.data = 0
 
-    #def __getstate__(self):
+    # def __getstate__(self):
     #    return super().__getstate__()
 
-    #def __setstate__(self, state):
+    # def __setstate__(self, state):
     #    self.__init__(state)
 
     def is_advanced(self):
@@ -314,13 +315,13 @@ class Controller(BusListener):
 
 
 class CtrlMinimum(Controller):
-    ''' A controller switching an output to keep a minimum
+    """ A controller switching an output to keep a minimum
         input measuremnt by an adjustable threshold and
         an optional hysteresis, e.g. for a heater.
 
         Output MsgData(100) when input falls below threshold-hyst.
                MsgData(0) when input passes threshold+hyst.
-    '''
+    """
     def __init__(self, name, inputs, threshold, hysteresis=0):
         super().__init__(name, inputs)
         self.threshold = float(threshold)
@@ -352,21 +353,23 @@ class CtrlMinimum(Controller):
         return super().listen(msg)
 
     def get_dash(self):
-        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
+        return [('data', 'State', 'ON' if self.data else 'OFF')]
 
     def get_settings(self):
-        return [ ( 'threshold', 'Minimum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"' )
-               , ( 'hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"' ) ]
+        return [
+            ('threshold', 'Minimum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"'),
+            ('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"')
+        ]
 
 
 class CtrlMaximum(Controller):
-    ''' A controller switching an output to keep a maximum
+    """ A controller switching an output to keep a maximum
         input measuremnt by an adjustable threshold and
         an optional hysteresis, e.g. for a cooler, or pH
 
         Output MsgData(100) when input rises above threshold+hyst.
                MsgData(0) when input passes threshold-hyst.
-    '''
+    """
     def __init__(self, name, inputs, threshold, hysteresis=0):
         super().__init__(name, inputs)
         self.threshold = float(threshold)
@@ -397,15 +400,17 @@ class CtrlMaximum(Controller):
         return super().listen(msg)
 
     def get_dash(self):
-        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
+        return [('data', 'State', 'ON' if self.data else 'OFF')]
 
     def get_settings(self):
-        return [ ( 'threshold', 'Maximum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"' )
-               , ( 'hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"' ) ]
+        return [
+            ('threshold', 'Maximum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"'),
+            ('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"')
+        ]
 
 
 class CtrlLight(Controller):
-    ''' A single channel light controller with fader (dust/dawn).
+    """ A single channel light controller with fader (dust/dawn).
         When input goes to >0, a fader will send a series of
         MsgData with increasing values over a period of fade_time,
         to finally reach the target level. When input goes to 0
@@ -413,12 +418,12 @@ class CtrlLight(Controller):
 
         Output: float 0...target  fade-in (or switch) when input goes to >0
                 float target...0  fade-out (or switch) after input goes to 0
-    '''
-    #TODO: could add random variation, other profiles, and overheat reduction driven from temperature ...
+    """
+    # TODO: could add random variation, other profiles, and overheat reduction driven from temperature ...
 
     def __init__(self, name, inputs, fade_time=None):
         super().__init__(name, inputs)
-        self.fade_time = fade_time   #TODO: change to property, to allow immediate changes
+        self.fade_time = fade_time   # TODO: change to property, to allow immediate changes
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
         self._fader_thread = None
@@ -452,7 +457,7 @@ class CtrlLight(Controller):
                     self._fader_thread.start()
 
     def _fader(self):
-        #coarse INCR = 1.0
+        # coarse INCR = 1.0
         INCR = 0.1
         step = (self.fade_time / abs(self.target - self.data) * INCR)
         log.brief("CtrLight %s: fading in %f s from %f -> %f, change every %f s", self.id, self.fade_time, self.data, self.target, step)
@@ -468,26 +473,26 @@ class CtrlLight(Controller):
             if self._fader_stop:
                 break
         if self.data != self.target:
-           self.data = self.target
-           self.post(MsgData(self.id, self.data))
+            self.data = self.target
+            self.post(MsgData(self.id, self.data))
         log.brief("CtrlLight %s: fader DONE" % self.id)
         self._fader_thread = None
         self._fader_stop = False
 
     def get_dash(self):
-        return [ ( 'data', 'Dim [%]', round(self.data, 2) if self.data else 'OFF' ) ]
+        return [('data', 'Dim [%]', round(self.data, 2) if self.data else 'OFF')]
 
     def get_settings(self):
-        return [ ( 'fade_time', 'Fade time [s]', self.fade_time, 'type="number" min="0"' ) ]
+        return [('fade_time', 'Fade time [s]', self.fade_time, 'type="number" min="0"')]
 
-#========== auxiliary ==========
+# ========== auxiliary ==========
 
 
 class Auxiliary(BusListener):
-    ''' Auxiliary nodes are for advanced configurations where
+    """ Auxiliary nodes are for advanced configurations where
         direct connections of input to controller or controller to
         output does not suffice.
-    '''
+    """
     ROLE = BusRole.AUX
 
     def __init__(self, name, inputs):
@@ -496,29 +501,29 @@ class Auxiliary(BusListener):
         self.values = {}
 
     def get_settings(self):
-        return [ ( '', 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"' ) ]
+        return [('', 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"')]
 
 
 class Average(Auxiliary):
-    ''' Auxiliary node to average 2 or more inputs together.
+    """ Auxiliary node to average 2 or more inputs together.
         The average wights either each input equally (where a dead source
         may factor in an incorrect old value),
         or an "unfair moving average", where the most active input is
-        over-represented. In case an input fails it's effect would
+        over-represented. In case an input fails its effect would
         decrease quickly, thus it's a good selection for sensor redundancy.
 
         Output: float arithmetic average of all sensors,
                 of moving average of all delivering inputs.
-    '''
+    """
     def __init__(self, name, inputs):
         super().__init__(name, inputs)
         # 0 -> 1:1 average; >=2 -> moving average over 2..n values, weighted by reporting frequency
         self.unfair_moving = 0
 
-    #def __getstate__(self):
+    # def __getstate__(self):
     #    return super().__getstate__()
 
-    #def __setstate__(self, state):
+    # def __setstate__(self, state):
     #    self.__init__(state)
 
     def listen(self, msg):
@@ -526,13 +531,13 @@ class Average(Auxiliary):
             if self.unfair_moving:
                 if self.data == -1:
                     self.data = float(msg.data)
-                    #log.brief('Average %s: output %f', self.id, self.data)
+                    # log.brief('Average %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
                     val = round((self.data + float(msg.data)) / 2, self.unfair_moving)
                     if (self.data != val):
                         self.data = val
-                        #log.brief('Average %s: output %f', self.id, self.data)
+                        # log.brief('Average %s: output %f', self.id, self.data)
                         self.post(MsgData(self.id, round(self.data, 2)))
             else:
                 if self.values.setdefault(msg.sender) != float(msg.data):
@@ -542,76 +547,76 @@ class Average(Auxiliary):
                     val += self.values[k] / len(self.values)
                 if (self.data != val):
                     self.data = val
-                    #log.brief('Average %s: output %f', self.id, self.data)
+                    # log.brief('Average %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, round(self.data, 2)))
         return super().listen(msg)
 
     def get_dash(self):
-        return [ ( 'data', 'Average', round(self.data, 2) ) ]
+        return [('data', 'Average', round(self.data, 2))]
 
 
 class Or(Auxiliary):
-    ''' Auxiliary node to output the hioger of two or more inputs.
-        Can be use to let two controllers drive one output, or to have
+    """ Auxiliary node to output the hioger of two or more inputs.
+        Can be used to let two controllers drive one output, or to have
         redundant inputs.
 
         Output: the maximum of all listened inputs.
-    '''
-    #def __getstate__(self):
+    """
+    # def __getstate__(self):
     #    return super().__getstate__()
 
-    #def __setstate__(self, state):
+    # def __setstate__(self, state):
     #    self.__init__(state)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
             if self.values.setdefault(msg.sender) != float(msg.data):
                 self.values[msg.sender] = float(msg.data)
-            val = -1 #0
+            val = -1  # 0
             for k in self.values:
                 val = max(val, self.values[k])
             val = round(val, 2)
             if (self.data != val):
                 self.data = val
-                #log.brief('Or %s: output %f', self.id, self.data)
+                # log.brief('Or %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_dash(self):
-        return [ ( 'data', 'Or', round(self.data, 2) ) ]
+        return [('data', 'Or', round(self.data, 2))]
 
 
-#========== outputs AKA Device ==========
+# ========== outputs AKA Device ==========
 
 
 class Device(BusListener):
-    ''' Base class for OUT_ENDP such as relais, PWM, GPIO pins.
+    """ Base class for OUT_ENDP such as relais, PWM, GPIO pins.
         Receives float input from listened sender.
         The interpretation is device specific, recommendation is
         to follow pythonic truth testing to avoid surprises.
-    '''
+    """
     ROLE = BusRole.OUT_ENDP
 
-    #def __getstate__(self):
+    # def __getstate__(self):
     #    return super().__getstate__()
 
-    #def __setstate__(self, state):
+    # def __setstate__(self, state):
     #    self.__init__(state)
 
 
 class DeviceSwitch(Device):
-    ''' A binary output to a relais or GPIO pin.
-    '''
-#TODO: currently a logging dummy, add a driver to the actual HW.
+    """ A binary output to a relais or GPIO pin.
+    """
+# TODO: currently a logging dummy, add a driver to the actual HW.
     def __init__(self, name, inputs, inverted=False):
         super().__init__(name, inputs)
         self.data = False
-        self.inverted = bool(inverted)   #TODO: change to property, to allow immediate changes
+        self.inverted = bool(inverted)   # TODO: change to property, to allow immediate changes
 
-    #def __getstate__(self):
+    # def __getstate__(self):
     #    return super().__getstate__()
 
-    #def __setstate__(self, state):
+    # def __setstate__(self, state):
     #    self.__init__(state)
 
     def listen(self, msg):
@@ -630,30 +635,30 @@ class DeviceSwitch(Device):
         self.post(MsgData(self.id, self.data))   # to make our state known
 
     def get_dash(self):
-        return [ ( 'data', 'State', 'ON' if self.data else 'OFF' ) ]
+        return [('data', 'State', 'ON' if self.data else 'OFF')]
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append( ( 'inverted', 'Inverted', self.inverted, 'type="number" min="0" max="1"' ) )   # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        settings.append(('inverted', 'Inverted', self.inverted, 'type="number" min="0" max="1"'))   # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
         return settings
 
 
 class SinglePWM(Device):
-    ''' Analog PWM output, using input data as a percentage of full range.
+    """ Analog PWM output, using input data as a percentage of full range.
           squared - perceptive brightness correction, close to linear
                       brightness perception
           minimum - set minimal duty cycle for input >0, fixes flicker of
                       poorly dimming devices, and motor start
           maximum - set maximum duty cycle, allows to limit
-    '''
-#TODO: currently a logging dummy, add a driver for the actual HW.
+    """
+# TODO: currently a logging dummy, add a driver for the actual HW.
     def __init__(self, name, inputs, squared=False, minimum=0, maximum=100):
         super().__init__(name, inputs)
-        self.squared = bool(squared)   #TODO: change to property, to allow immediate changes
-        self.minimum = min(max( 0, minimum), 90)
-        self.maximum = min(max( minimum + 1, maximum), 100)
+        self.squared = bool(squared)   # TODO: change to property, to allow immediate changes
+        self.minimum = min(max(0, minimum), 90)
+        self.maximum = min(max(minimum + 1, maximum), 100)
         self.data = 0
-        log.info('%s init to %r|%f|%f', self.name, squared,minimum,maximum)
+        log.info('%s init to %r|%f|%f', self.name, squared, minimum, maximum)
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -690,11 +695,11 @@ class SinglePWM(Device):
         self.post(MsgData(self.id, round(out_val, 4)))   # to make our state known
 
     def get_dash(self):
-        return [ ( 'data', 'Percent', round(self.data, 2) ) ]
+        return [('data', 'Percent', round(self.data, 2))]
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append( ( 'minimum', 'Minimum [%]', self.minimum, 'type="number" min="0" max="99"' ) )
-        settings.append( ( 'maximum', 'Maximum [%]', self.maximum, 'type="number" min="1" max="100"' ) )
-        settings.append( ( 'squared', 'Perceptive', self.squared, 'type="number" min="0" max="1"' ) )   # 'type="checkbox"' )
+        settings.append(('minimum', 'Minimum [%]', self.minimum, 'type="number" min="0" max="99"'))
+        settings.append(('maximum', 'Maximum [%]', self.maximum, 'type="number" min="1" max="100"'))
+        settings.append(('squared', 'Perceptive', self.squared, 'type="number" min="0" max="1"'))   # 'type="checkbox"' )
         return settings

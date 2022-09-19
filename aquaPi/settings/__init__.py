@@ -8,18 +8,17 @@ from ..machineroom import msg_bus
 
 log = logging.getLogger('Settings')
 log.setLevel(logging.WARNING)
-#log.setLevel(logging.INFO)
-#log.setLevel(logging.DEBUG)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-
-
 
 bp = Blueprint('settings', __name__)
 
 
-#@bp.route('/settings')
-@bp.route('/settings', methods=['GET','POST'])
+# @bp.route('/settings')
+@bp.route('/settings', methods=['GET', 'POST'])
+
+
 def settings():
     bus = current_app.bus
     mr = current_app.machineroom
@@ -31,7 +30,7 @@ def settings():
 
             # page has a (sub-) form for each controller. each sets a hidden input with sub_form name,
             # forward this after submit to allow this sub_form to render in unfolded state
-            if key=='sub_form':
+            if key == 'sub_form':
                 sub_form = request.form[key]
                 continue
 
@@ -50,18 +49,16 @@ def settings():
                     success = False
                     flash(str(ex), 'danger')
 
-        #TODO: validation in setters must raise exceptions
+        # TODO: validation in setters must raise exceptions
         if success:
             mr.save_nodes(bus)
             log.brief("Saved changes")
             flash('Saved changes', 'success')
 
-
-# TODO: need a mechanism to keep a POSTing form (<details>) open, or use JS collapsibles, sub_form= might be it -> DONE, however, we might need to redirect to same page + anchor, otherwise we jump to top of page
-
+    # TODO: need a mechanism to keep a POSTing form (<details>) open, or use JS collapsibles, sub_form= might be it
+    # -> DONE, however, we might need to redirect to same page + anchor, otherwise we jump to top of page
     return render_template('pages/settings/index.html.jinja2', sub_form=sub_form)
 
-
-#@bp.route('/settings', methods=['POST'])
-#def settings_post():
+# @bp.route('/settings', methods=['POST'])
+# def settings_post():
 

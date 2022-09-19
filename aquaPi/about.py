@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import time
-#import os
-#from resource import *
-#import sys
+# import os
+# from resource import *
+# import sys
 from flask import (
     Blueprint, render_template, json
 )
@@ -14,11 +14,11 @@ bp = Blueprint('about', __name__)
 
 
 # for later ...
-#def get_cpu():
+# def get_cpu():
 #    # could read /proc/loadavg
 #    return "NYI"
 #
-#def get_mem(idx):
+# def get_mem(idx):
 #    # could read /proc/meminfo or /proc/self/statm
 #    return getrusage(RUSAGE_SELF)[idx] + getrusage(RUSAGE_CHILDREN)[idx]
 #

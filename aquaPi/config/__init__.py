@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 from flask import (
-    Flask, Blueprint, render_template
+    # Flask, Blueprint, render_template
+    Blueprint, render_template
 )
-#from ..sse_util import render_sse_template
-from ..machineroom import msg_bus
+# from ..sse_util import render_sse_template
+# from ..machineroom import msg_bus
 
 
 bp = Blueprint('config', __name__)

@@ -17,8 +17,6 @@ bp = Blueprint('settings', __name__)
 
 # @bp.route('/settings')
 @bp.route('/settings', methods=['GET', 'POST'])
-
-
 def settings():
     bus = current_app.bus
     mr = current_app.machineroom
@@ -61,4 +59,3 @@ def settings():
 
 # @bp.route('/settings', methods=['POST'])
 # def settings_post():
-

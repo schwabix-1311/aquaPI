@@ -221,6 +221,10 @@ class BusNode:
         self.name = name
         self.id = name.lower()  # uuid.uuid4(uuid.NAMSPACE_OID,name)
         self.id = self.id.replace(' ', '').replace('.', '').replace(';', '')
+        # this is a bit of abuse: replace all non-ASCII with xml refs, then back to utf-8
+        self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
+        log.debug(self.id)
+
         self._inputs = None
         self._bus = None
         self.data = None

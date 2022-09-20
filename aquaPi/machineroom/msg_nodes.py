@@ -29,8 +29,8 @@ class Driver:
     def __init__(self, name, cfg):
         self.name = 'fake DS1820'  # name
         self.cfg = cfg
-        self.val = 24.25
-        self.dir = 1
+        self._val = 24.25
+        self._dir = 1
 
     def __getstate__(self):
         state = {'name': self.name, 'cfg': self.cfg}
@@ -41,17 +41,20 @@ class Driver:
         log.debug('Driver.setstate %r', state)
         self.__init__(state['name'], state['cfg'])
 
+    def __str__(self):
+        return '{}({})'.format(type(self).__name__, self.cfg)
+
     def read(self):
         rnd = random.random()
         if rnd < .1:
-            self.dir *= -1
+            self._dir *= -1
         elif rnd > .7:
-            self.val += 0.05 * self.dir
-        self.val = round(min(max(24, self.val), 26), 2)
-        return float(self.val)
+            self._val += 0.05 * self._dir
+        self._val = round(min(max(24, self._val), 26), 2)
+        return float(self._val)
 
     def delay(self):
-        return 1.0
+        return 60.0  #1.0
 
 
 # ========== inputs AKA sensors ==========
@@ -348,6 +351,10 @@ class CtrlMinimum(Controller):
             if self.data != new_val:
                 log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
                 self.data = new_val
+                # self.alert = ''
+                # self.alert = 'HEAT' if self.data else self.alert
+                # self.alert = 'HIGH' if msg.data > ((self.threshold + self.hysteresis) * 1.05) else self.alert
+                # self.alert = 'LOW' if msg.data < ((self.threshold - self.hysteresis) * 0.95) else self.alert
                 log.brief('CtrlMinimum %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)

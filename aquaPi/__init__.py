@@ -57,11 +57,6 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
 
-    from . import machineroom
-    mr = machineroom.MachineRoom(app.config)
-    app.machineroom = mr
-    app.bus = mr.bus
-
     @app.context_processor
     def inject_globals():
         return dict(bus=app.bus)
@@ -78,10 +73,23 @@ def create_app(test_config=None):
     from . import about
     app.register_blueprint(about.bp)
 
+    from . import api
+    app.register_blueprint(api.bp)
+
     # from . import auth
     # app.register_blueprint(auth.bp)
 
     # from .hello import hello as hello_blueprint
     # app.register_blueprint(hello_blueprint)
+
+    # Is there a better way? We won't start, so no reason to construct
+    # and finally save the bus.
+    if 'routes' in sys.argv:
+        return app
+
+    from . import machineroom
+    mr = machineroom.MachineRoom(app.config)
+    app.machineroom = mr
+    app.bus = mr.bus
 
     return app

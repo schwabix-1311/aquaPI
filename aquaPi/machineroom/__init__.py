@@ -51,7 +51,7 @@ class MachineRoom:
             (other languages call this a destructor)
         """
         if self.bus:
-            self.save_nodes()
+            self.save_nodes(self.bus)
             self.bus.teardown()
 
     def save_nodes(self, container, fname=None):

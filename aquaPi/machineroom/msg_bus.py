@@ -3,7 +3,7 @@
 import logging
 from queue import Queue
 from enum import Flag, auto
-from threading import Thread, Event
+from threading import Condition, Thread, Event
 
 from .msg_types import *
 
@@ -43,6 +43,8 @@ class MsgBus:
     def __init__(self, threaded=False):
         self._threaded = threaded
         self.nodes = []
+        self._changes = []
+        self._changed = Condition()
         self.values = {}
         self.changed = Event()
         self.changed.clear()
@@ -117,7 +119,6 @@ class MsgBus:
 
     def _dispatch_one(self, msg):
         """ Dispatch one message to all listeners in a blocking loop.
-            Maintain a cache of MsgData values (is it worth the effort?)
         """
         # FIXME cache before or after dispatching?
         if isinstance(msg, (MsgData, MsgBorn)):
@@ -125,6 +126,10 @@ class MsgBus:
             if self.values.setdefault(msg.sender) != msg.data:
                 self.values[msg.sender] = msg.data
                 self.changed.set()
+
+        if isinstance(msg, (MsgData, MsgBorn)):
+            log.debug('  notify() the changed event for %s', str(msg))
+            self.report_change(msg.sender)
 
         # dispatch the message
         log.debug('%s ->', str(msg))
@@ -193,13 +198,24 @@ class MsgBus:
         """
         return [node.name for node in node_list]
 
-    def values_by_ids(self, ids):
-        # TODO cache values{} seems unneccessary, access nodes.data directly!
-        return {i: self.values[i] for i in self.values if i in ids}
+    def report_change(self, node_id):
+        """ add ID to list of changed nodes and notify one (!) waiting thread
+        """
+        with self._changed:
+            if not node_id in self._changes:
+                self._changes.append(node_id)
+            self._changed.notify()
 
-    def values_by_role(self, roles):
-        # TODO cache values{} seems unneccessary, access nodes.data directly!
-        return {i: self.values[i] for i in self.values if self.nodes[i].ROLE in roles}
+    def wait_for_changes(self):
+        """ block until at least one node reported data changes,
+            then clear the internal list of changes
+            return ids of modified nodes [id1, id2, ...]
+        """
+        with self._changed:
+            self._changed.wait_for(lambda :len(self._changes))
+            change = self._changes.copy()
+            self._changes.clear()
+            return change
 
 
 #############################

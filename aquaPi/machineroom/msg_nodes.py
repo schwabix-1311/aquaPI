@@ -54,7 +54,7 @@ class Driver:
         return float(self._val)
 
     def delay(self):
-        return 60.0  #1.0
+        return 10  # 1.0
 
 
 # ========== inputs AKA sensors ==========

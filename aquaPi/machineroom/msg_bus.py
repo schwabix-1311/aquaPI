@@ -233,10 +233,13 @@ class BusNode:
     """
     ROLE = None
 
-    def __init__(self, name, bus_cbk=None):
+    def __init__(self, name, unit='', bus_cbk=None):
         self.name = name
         self.id = name.lower()  # uuid.uuid4(uuid.NAMSPACE_OID,name)
-        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '')
+        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '').replace('-','_')
+        self.id = self.id.replace('ä', 'ae').replace('ö', 'oe').replace('ü','ue')
+        self.id = self.id.replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü','Ue')
+        self.id = self.id.replace('-','_').replace('ß', 'ss')
         # this is a bit of abuse: replace all non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         log.debug(self.id)
@@ -244,6 +247,7 @@ class BusNode:
         self._inputs = None
         self._bus = None
         self.data = None
+        self.unit = unit
         self._bus_cbk = bus_cbk
         self._msg_cbk = None
 
@@ -316,8 +320,9 @@ class BusNode:
                             outputs = outputs + s_node.get_outputs(recurse)
         return outputs  # if outputs else ['-']
 
-    def get_alert(self):
-        return (None, '')
+    def get_renderdata(self):
+        ret = {'pretty_data': '%.2f%s' % (self.data, self.unit)}
+        return ret
 
 
 class BusListener(BusNode):

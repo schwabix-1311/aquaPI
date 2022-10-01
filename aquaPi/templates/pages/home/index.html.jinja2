@@ -6,78 +6,35 @@
     {% include 'partials/page_heading.html.jinja2' %}
 {% endblock %}
 
-{% block content_main %}
-    <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
-     !! Unfertig, hier erscheinen Nodes mehrfach. ID, Label und Daten können nicht alle in the SSE Liste
-        {% for d_entry in update %}
-            {% set node_id = d_entry.split('.')[0] %}
-            {% set d_node = bus.get_node(node_id) %}
-            <div data-control="{{ d_node.id }}">
-                <div class="uk-card uk-card-small uk-card-default">
-                    <div class="uk-card-header">
-                        <h2 class="uk-card-title uk-margin-remove-bottom">{{ d_node.name }}</h2>
+{% block html_head_script %}
+    {{ super() }}
+{% endblock %}
 
-                        {# FIXME works statically, dynamic needs SSE updates, or JS do compares against existing SSE data #}
-                        {% set alert = d_node.get_alert() %}
-                        {% if alert[0] %}
-                            <div id="badge_{{ d_node.id }}" class="uk-card-badge uk-label uk-label-{{ alert[0] }}">{{ alert[1] }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="uk-card-body">
-                        {% set prop_set = d_node.get_dash() %}
-                        {% for prop in prop_set %}
-                            <div class="uk-grid-collapse" uk-grid>
-                                <div class="uk-width-1-3">
-                                 {{ prop[1] }}:
-                                </div>
-                                <div class="uk-width-expand"
-                                     id="{{ "sse_" ~ d_node.id ~ "." ~ prop[0] }}"
-                                >
-                                  {{ prop[2] }}
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        {% endfor %}
+{% block content_main %}
+    <div id="vm">
+        <!-- this is filled with Vue content using below teplate -->
     </div>
+
+    <template id="vueHome">
+        <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
+            {% for node in update %}
+                <component is='BusNode' id='{{ node.id }}' ref='{{ node.id }}'></component><br/>
+            {% endfor %}
+        </div>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="{{ url_for('static', filename='home.js') }}"></script>
+
     <div class="uk-padding-small uk-margin-top uk-background-secondary uk-light">
         <div>
             {{ now }}
         </div>
     </div>
+
 {% endblock %}
 
 {% block footer_script %}
     {{ super() }}
-    {% include "sse_event_inc.html" %}
-
-    <script>
-    if (999 === 111) {
-        if (!!window.EventSource) {
-            const source = new EventSource(document.URL);
-            source.onmessage = function (e) {
-                // console.debug(e.data);
-                const data = JSON.parse(e.data);
-                for (const [ctrl, value] of Object.entries(data)) {
-                    // console.log('ctrl:', ctrl);
-                    // console.log('value:', value);
-                    let elm = document.querySelector('div[data-control="' + ctrl + '"]');
-                    if (elm instanceof HTMLElement) {
-                        // console.log('elm:', elm);
-                        let targetElm = elm.querySelector('div.uk-card');
-                        if (targetElm instanceof HTMLElement) {
-                            // append content
-                            targetElm.innerHTML += '<div style="border:solid 1px blue;"> INHALT ergänzt per JS SSE event message listener, value: ' + JSON.stringify(value) + '</div>'
-                            // OR replace content
-                            // targetElm.innerHTML = '<div style="border:solid 1px blue;"> INHALT ersetz per JS SSE event message listener, value: ' + JSON.stringify(value) + '</div>'
-                        }
-                    }
-                }
-            }
-        }
-    }
-    </script>
-
+    {# static/home.js has it's own:  % include "sse_event_inc.html" % #}
 {% endblock %}

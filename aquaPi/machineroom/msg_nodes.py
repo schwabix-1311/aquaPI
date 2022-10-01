@@ -14,10 +14,11 @@ from .msg_bus import *
 
 
 log = logging.getLogger('MsgNodes')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # TODO Driver does not belong here
@@ -29,6 +30,7 @@ class Driver:
     def __init__(self, name, cfg):
         self.name = 'fake DS1820'  # name
         self.cfg = cfg
+        self._delay = 10 if 'delay' not in cfg else int(cfg['delay'])
         self._val = 24.25
         self._dir = 1
 
@@ -54,7 +56,7 @@ class Driver:
         return float(self._val)
 
     def delay(self):
-        return 10  # 1.0
+        return self._delay
 
 
 # ========== inputs AKA sensors ==========
@@ -84,8 +86,10 @@ class SensorTemp(Sensor):
         super().__init__(name)
         self.driver = driver
         self.data = self.driver.read()
+        self.unit = '°C'
         self._reader_thread = None
         self._reader_stop = False
+        self._read_err = False
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -118,7 +122,13 @@ class SensorTemp(Sensor):
         while not self._reader_stop:
             log.debug('SensorTemp.reader looping %r', self.data)
             val = round(self.driver.read(), 2)
-            if self.data != val:
+
+            # typical error of DS1820 on parasitic power -> ignore reading
+            self._read_err = False
+            if self.data == 85:
+                self._read_err = True
+
+            elif self.data != val:
                 self.data = val
                 log.brief('SensorTemp %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
@@ -126,18 +136,16 @@ class SensorTemp(Sensor):
         self._reader_thread = None
         self._reader_stop = False
 
-    def get_dash(self):
-        return [('data', 'Temperature [°C]', round(self.data, 2))]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(label='Messwert')
+        if self._read_err:
+            ret.update(alert=('Read error!', 'err'))
+        return ret
 
     def get_settings(self):
-        return [(None, 'Sensor driver', self.driver.name, 'type="text"')]
-
-    def get_alert(self):
-        if self.data > 25:
-            return ('danger', 'HIGH')
-        elif self.data < 24.5:
-            return ('default', 'LOW')
-        return ('success', '')
+        return [('unit', 'Einheit', self.unit, 'type="text"')
+               ,(None, 'Sensor driver', self.driver.name, 'type="text"')]
 
 
 class Schedule(BusNode):
@@ -279,8 +287,11 @@ class Schedule(BusNode):
             self._scheduler_stop = False
             log.brief('Schedule %s: end', self.id)
 
-    def get_dash(self):
-        return [('data', 'State', 'ON' if self.data else 'OFF')]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(label='Status')
+        ret.update(pretty_data='Ein' if self.data else 'Aus')
+        return ret
 
     def get_settings(self):
         return [('cronspec', 'CRON (m h DoM M DoW)', self.cronspec, 'type="text"')]
@@ -329,6 +340,7 @@ class CtrlMinimum(Controller):
         super().__init__(name, inputs)
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
+        self._in_data = 0
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -342,6 +354,7 @@ class CtrlMinimum(Controller):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
+            self._in_data = msg.data
             new_val = self.data
             if float(msg.data) < (self.threshold - self.hysteresis):
                 new_val = 100.0
@@ -351,22 +364,26 @@ class CtrlMinimum(Controller):
             if self.data != new_val:
                 log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
                 self.data = new_val
-                # self.alert = ''
-                # self.alert = 'HEAT' if self.data else self.alert
-                # self.alert = 'HIGH' if msg.data > ((self.threshold + self.hysteresis) * 1.05) else self.alert
-                # self.alert = 'LOW' if msg.data < ((self.threshold - self.hysteresis) * 0.95) else self.alert
                 log.brief('CtrlMinimum %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
-    def get_dash(self):
-        return [('data', 'State', 'ON' if self.data else 'OFF')]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(pretty_data='Ein' if self.data else 'Aus')
+        ret.update(label='Status')
+        # TODO: see below @ CtrlMaximum
+        # if self._in_data > (self.threshold + self.hysteresis) * 1.05:
+        #     ret.update(alert=('HIGH', 'err'))
+        if self._in_data < (self.threshold - self.hysteresis) * 0.95:
+            ret.update(alert=('LOW', 'err'))
+        elif self.data:
+            ret.update(alert=('*', 'act'))
+        return ret
 
     def get_settings(self):
-        return [
-            ('threshold', 'Minimum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"'),
-            ('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"')
-        ]
+        return [('threshold', 'Minimum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"')
+               ,('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"')]
 
 
 class CtrlMaximum(Controller):
@@ -381,6 +398,7 @@ class CtrlMaximum(Controller):
         super().__init__(name, inputs)
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
+        self._in_data = 0
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -394,6 +412,7 @@ class CtrlMaximum(Controller):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
+            self._in_data = msg.data
             new_val = self.data
             if float(msg.data) > (self.threshold + self.hysteresis):
                 new_val = 100.0
@@ -406,14 +425,23 @@ class CtrlMaximum(Controller):
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
-    def get_dash(self):
-        return [('data', 'State', 'ON' if self.data else 'OFF')]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(pretty_data='Ein' if self.data else 'Aus')
+        ret.update(label='Status')
+        if self._in_data > (self.threshold + self.hysteresis) * 1.05:
+            ret.update(alert=('HIGH', 'err'))
+        # TODO: instead Controller should have a threshold for max. active time -> warning
+        #       as e.g. for a cooler LOW warning would be caused by its counterpart, the heating
+        # elif self._in_data < (self.threshold - self.hysteresis) * 0.95:
+        #     ret.update(alert=('LOW', 'err'))
+        elif self.data:
+            ret.update(alert=('*', 'act'))
+        return ret
 
     def get_settings(self):
-        return [
-            ('threshold', 'Maximum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"'),
-            ('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"')
-        ]
+        return [('threshold', 'Maximum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"')
+               ,('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.1"')]
 
 
 class CtrlLight(Controller):
@@ -430,6 +458,7 @@ class CtrlLight(Controller):
 
     def __init__(self, name, inputs, fade_time=None):
         super().__init__(name, inputs)
+        self.unit = '%'
         self.fade_time = fade_time   # TODO: change to property, to allow immediate changes
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
@@ -486,8 +515,13 @@ class CtrlLight(Controller):
         self._fader_thread = None
         self._fader_stop = False
 
-    def get_dash(self):
-        return [('data', 'Dim [%]', round(self.data, 2) if self.data else 'OFF')]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(pretty_data=('%.1f%s' % (self.data, self.unit)) if self.data else 'Aus')
+        ret.update(label='Helligkeit')
+        if self.data:
+            ret.update(alert=('%i' % self.data, 'act'))
+        return ret
 
     def get_settings(self):
         return [('fade_time', 'Fade time [s]', self.fade_time, 'type="number" min="0"')]
@@ -506,6 +540,7 @@ class Auxiliary(BusListener):
         super().__init__(name, inputs)
         self.data = -1
         self.values = {}
+        self.unit = ''
 
     def get_settings(self):
         return [('', 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"')]
@@ -558,8 +593,10 @@ class Average(Auxiliary):
                     self.post(MsgData(self.id, round(self.data, 2)))
         return super().listen(msg)
 
-    def get_dash(self):
-        return [('data', 'Average', round(self.data, 2))]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(label='Mittelwert')
+        return ret
 
 
 class Or(Auxiliary):
@@ -589,8 +626,10 @@ class Or(Auxiliary):
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
-    def get_dash(self):
-        return [('data', 'Or', round(self.data, 2))]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(label='Maximum')
+        return ret
 
 
 # ========== outputs AKA Device ==========
@@ -641,8 +680,11 @@ class DeviceSwitch(Device):
 
         self.post(MsgData(self.id, self.data))   # to make our state known
 
-    def get_dash(self):
-        return [('data', 'State', 'ON' if self.data else 'OFF')]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(pretty_data='Ein' if self.data else 'Aus')
+        ret.update(label='Schalter')
+        return ret
 
     def get_settings(self):
         settings = super().get_settings()
@@ -665,6 +707,7 @@ class SinglePWM(Device):
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)
         self.data = 0
+        self.unit = '%'
         log.info('%s init to %r|%f|%f', self.name, squared, minimum, maximum)
 
     def __getstate__(self):
@@ -701,8 +744,11 @@ class SinglePWM(Device):
 
         self.post(MsgData(self.id, round(out_val, 4)))   # to make our state known
 
-    def get_dash(self):
-        return [('data', 'Percent', round(self.data, 2))]
+    def get_renderdata(self):
+        ret = super().get_renderdata()
+        ret.update(pretty_data=('%.2f%s' % (self.data, self.unit)) if self.data else 'Aus')
+        ret.update(label='Helligkeit')
+        return ret
 
     def get_settings(self):
         settings = super().get_settings()

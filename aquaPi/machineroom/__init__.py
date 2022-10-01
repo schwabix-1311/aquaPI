@@ -107,7 +107,7 @@ class MachineRoom:
 
         if single_temp:
             # single temp sensor -> temp ctrl -> relais
-            wasser_i = SensorTemp('Wasser', Driver('dummy', '0x1234'))
+            wasser_i = SensorTemp('Wasser', Driver('dummy', {'port': 0x1234, 'delay': 2}))
             wasser = CtrlMinimum('Temperatur', wasser_i.id, 24.3)
             wasser_o = DeviceSwitch('Heizstab', wasser.id)
             wasser.plugin(self.bus)

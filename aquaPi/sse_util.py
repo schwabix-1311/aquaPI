@@ -10,15 +10,17 @@ def format_msg(data: str, event=None) -> str:
         The receiving page needs something like:
 <script>
 if (!!window.EventSource) {
-  var source = new EventSource('/dash'); // this must match the page route
-  // source.onmessage allows "data:.." events; "event: bla\ndata: blub" needs source.addEventListener('join', event => { ...event code... });
+  const source = new EventSource(document.URL);
+
+  // .onmessage allows "data:.." events;
+  // "event: bla\ndata: blub" needs source.addEventListener('join', event => { ...event code... });
   source.onmessage = function(e) {
-    //console.debug(e.data);
-    i = 0
-    {% for c in values %}
-      $("{{"#c_" ~ c|lower}}").text(e.data.split(';')[i]);
-      i = i + 1;
-    {% endfor %}
+    console.debug(`EventSource sent: ${e.data}`);
+    const obj = JSON.parse(e.data);
+    // react on the received data, can be any JSON data structure
+    for (const i in obj) {
+        ...
+    }
   }
 }
 </script>

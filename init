@@ -4,31 +4,31 @@
 # sourced it can't determine its own home (AFAIK)
 MyHome=~/aquaPI
 
-if [[ `basename $0` = "init" ]]
+# 'basename $0' produces '-bash' on Debian/Rasberry OS ! why?? Skip the check!
+if [[ ! "grep -i debian /usr/lib/os-release" ]]
 then
-  echo "ERROR: this script must be sourced: '. ${MyHome}/init'"
-  fi
+  if [[ `basename $0` = "init" ]]
+  then
+    echo "ERROR: this script must be sourced: '. ${MyHome}/init'"
+    fi
+fi
 
 if [[ ! -d ${MyHome}/venv ]]
 then
   echo "First time init of aquaPi development env."
-  read -p "CR to continue / Ctrl-C" dummy
+  read -p "CR to continue / Ctrl-C to cancel" dummy
   cd ${MyHome}
-  . ./venv/bin/activate
-  echo ===== get all python modules
-  pip install -r requirements.txt
-  echo =====
-  echo "Created a virtual Python environment and installed"
-  echo "required modules into it."
-else
-  echo "Activate aquaPi development env."
-  cd ${MyHome}
-  . ./venv/bin/activate
-  echo ===== get all python modules
-  pip install -r requirements.txt
-  echo =====
-  echo "Activated existing virtual Py environment."
-  fi
+  # Debian derivatives don't come with py3 venv by default
+  grep -i debian /usr/lib/os-release && sudo apt-get install python3-venv
+  python3 -m venv venv
+fi
+
+echo "Activate aquaPi development env."
+cd ${MyHome}
+. ./venv/bin/activate
+echo ===== get all python modules
+pip3 install -r requirements.txt
+echo =====
 
 echo "To run the development server, use './run'"
 echo "The debug server is 'http://localhost:5000'"

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import logging
 import os
@@ -6,6 +6,7 @@ from os import path
 import pickle
 from .msg_bus import MsgBus
 from .msg_nodes import *
+from ..driver import *
 
 
 log = logging.getLogger('MachineRoom')
@@ -107,19 +108,20 @@ class MachineRoom:
 
         if single_temp:
             # single temp sensor -> temp ctrl -> relais
-            wasser_i = SensorTemp('Wasser', Driver('dummy', '0x1234'))
-            wasser = CtrlMinimum('Temperatur', wasser_i.id, 24.3)
-            wasser_o = DeviceSwitch('Heizstab', wasser.id)
+            wasser_i = SensorTemp('Wasser', DriverDS1820({'address': '28-0119383a2e9c' }))  # '28-01193867a71e0x1234'
+            #wasser_i = SensorTemp('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
+            wasser = CtrlMinimum('Temperatur', wasser_i.id, 25.0)
+            wasser_o = DeviceSwitch('Heizstab', wasser.id, DriverGPIOout({'pin': 12, 'fake': False}))
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
             wasser_i.plugin(self.bus)
 
         if dual_temp:
             # 2 temp sensors -> average -> temp ctrl -> relais
-            w1_temp = SensorTemp('T-Sensor 1', Driver('dummy', '28-0000x123'))
+            w1_temp = SensorTemp('T-Sensor 1', DriverDS1820({'address': '28-0000x123', 'fake': True}))
             w1_temp.plugin(self.bus)
 
-            w2_temp = SensorTemp('T-Sensor 2', Driver('dummy', '28-0000x876'))
+            w2_temp = SensorTemp('T-Sensor 2', DriverDS1820({'address': '28-0000x876', 'fake': True}))
             w2_temp.plugin(self.bus)
 
             w_temp = Average('T-Mittel', [w1_temp.id, w2_temp.id])
@@ -131,10 +133,10 @@ class MachineRoom:
             w2_ctrl = CtrlMaximum('W-Kühlung', w2_temp.id, 26.5)
             w2_ctrl.plugin(self.bus)
 
-            w_heat = DeviceSwitch('W-Heizer', w1_ctrl.id)
+            w_heat = DeviceSwitch('W-Heizer', w1_ctrl.id, DriverGPIOout({'pin': 4, 'fake': True}))
             w_heat.plugin(self.bus)
 
-            w_cool = DeviceSwitch('W-Lüfter', w2_ctrl.id)
+            w_cool = DeviceSwitch('W-Lüfter', w2_ctrl.id, DriverGPIOout({'pin': 5, 'fake': True}))
             w_cool.plugin(self.bus)
 
 

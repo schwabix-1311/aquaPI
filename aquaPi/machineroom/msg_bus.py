@@ -1,9 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import logging
+import time
 from queue import Queue
 from enum import Flag, auto
-from threading import Condition, Thread, Event
+from threading import Condition, Event, Lock, Thread
 
 from .msg_types import *
 
@@ -43,11 +44,8 @@ class MsgBus:
     def __init__(self, threaded=False):
         self._threaded = threaded
         self.nodes = []
-        self._changes = []
+        self._changes = set()
         self._changed = Condition()
-        self.values = {}
-        self.changed = Event()
-        self.changed.clear()
         self._m_cnt = 0
         self._queue = None
         if threaded:
@@ -91,7 +89,6 @@ class MsgBus:
             if self._queue:
                 # empty the queue before nodes change
                 self._queue.join()
-            del self.values[node.id]
             self.nodes.remove(node)
 
     def post(self, msg):
@@ -120,15 +117,9 @@ class MsgBus:
     def _dispatch_one(self, msg):
         """ Dispatch one message to all listeners in a blocking loop.
         """
-        # FIXME cache before or after dispatching?
+        # FIXME report before or after dispatching? this might be too early, try at very end,
         if isinstance(msg, (MsgData, MsgBorn)):
-            log.debug('  cache upd %s', str(msg))
-            if self.values.setdefault(msg.sender) != msg.data:
-                self.values[msg.sender] = msg.data
-                self.changed.set()
-
-        if isinstance(msg, (MsgData, MsgBorn)):
-            log.debug('  notify() the changed event for %s', str(msg))
+            log.debug('  notify the change event about %s', str(msg))
             self.report_change(msg.sender)
 
         # dispatch the message
@@ -139,9 +130,9 @@ class MsgBus:
         else:
             # broadcast message, exclude sender
             lst = [n for n in self.nodes if n.id != msg.sender]
-        if not isinstance(msg, MsgInfra):
-            # lst = [l for l in lst if isinstance(l, BusListener)]
-            lst = [n for n in lst if n._inputs and n._inputs.filter(msg)]
+            # ... and apply each node's filter for non-Infra msgs
+            if not isinstance(msg, MsgInfra):
+                lst = [n for n in lst if n._inputs and n._inputs.filter(msg)]
         for n in lst:
             log.debug('  -> %s', str(n))
             n.listen(msg)
@@ -201,21 +192,25 @@ class MsgBus:
     def report_change(self, node_id):
         """ add ID to list of changed nodes and notify one (!) waiting thread
         """
+        log.debug('report_change locked: ' + node_id)
         with self._changed:
-            if not node_id in self._changes:
-                self._changes.append(node_id)
+            self._changes.add(node_id)
             self._changed.notify()
+            log.debug('report_change notified & done: ' + node_id)
+            time.sleep(.01)  # this is a hack, I don't find the race cond.
 
     def wait_for_changes(self):
         """ block until at least one node reported data changes,
             then clear the internal list of changes
             return ids of modified nodes [id1, id2, ...]
         """
+        log.debug('wait_for_changes')
         with self._changed:
             self._changed.wait_for(lambda :len(self._changes))
-            change = self._changes.copy()
+            change = [id for id in self._changes]
             self._changes.clear()
-            return change
+            log.debug('cleared change_list: %r' % change)
+        return change
 
 
 #############################
@@ -233,17 +228,21 @@ class BusNode:
     """
     ROLE = None
 
-    def __init__(self, name, bus_cbk=None):
+    def __init__(self, name, unit='', bus_cbk=None):
         self.name = name
         self.id = name.lower()  # uuid.uuid4(uuid.NAMSPACE_OID,name)
-        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '')
+        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '').replace('-','_')
+        self.id = self.id.replace('ä', 'ae').replace('ö', 'oe').replace('ü','ue')
+        self.id = self.id.replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü','Ue')
+        self.id = self.id.replace('-','_').replace('ß', 'ss')
         # this is a bit of abuse: replace all non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         log.debug(self.id)
 
         self._inputs = None
         self._bus = None
-        self.data = None
+        self.data = 0
+        self.unit = unit
         self._bus_cbk = bus_cbk
         self._msg_cbk = None
 
@@ -316,8 +315,12 @@ class BusNode:
                             outputs = outputs + s_node.get_outputs(recurse)
         return outputs  # if outputs else ['-']
 
-    def get_alert(self):
-        return (None, '')
+    def get_renderdata(self):
+        ret = {'pretty_data': '%.2f%s' % (self.data, self.unit)}
+        return ret
+
+    def get_settings(self):
+        return []
 
 
 class BusListener(BusNode):
@@ -363,7 +366,9 @@ class BusListener(BusNode):
         return ret
 
     def get_settings(self):
-        return [('', 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"')]
+        settings = super().get_settings()
+        settings.append((None, 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"'))
+        return settings
 
 
 #############################

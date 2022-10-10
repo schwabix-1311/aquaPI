@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import logging
 import time
 # import os
 # from resource import *
@@ -9,6 +10,13 @@ from flask import (
     Blueprint, current_app, json, Response
 )
 from http import HTTPStatus
+
+log = logging.getLogger('API')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
+log.setLevel(logging.WARNING)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
 
 
 bp = Blueprint('api', __name__)
@@ -20,18 +28,23 @@ def api_node(node_id):
     node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
     node = bus.get_node(node_id)
 
-    print(str(node))
-
     if node:
         state = {}
         state.update(node.__getstate__())
         # FIXME: node.name shows incorrectly, this started with node.id containing xmlcharrefs
         # ?? state['name'] = str(state['name'], encodingerrors='xmlcharrefreplace')
         state.update(id=node.id)
+        state.update(type=type(node).__name__)
+        try:
+            state.update(render_data=node.get_renderdata())
+        except Exception as ex:
+            log.debug('API exception: ' + ex.message)
+            pass
         try:
             state.update(alert=node.alert)
         except:
             pass
+        log.debug(state)
 
         return json.dumps(state, default=vars)
     else:

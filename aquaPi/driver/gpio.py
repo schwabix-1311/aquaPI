@@ -4,7 +4,10 @@ import sys
 import logging
 import os
 import random
-import RPi.GPIO as GPIO
+try:
+    import RPi.GPIO as GPIO
+except:
+    pass
 
 from .base import *
 

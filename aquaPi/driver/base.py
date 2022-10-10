@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
 import logging
-import RPi.GPIO as GPIO
+from os import path
+try:
+    import RPi.GPIO as GPIO
+except:
+    pass
 
 
 log = logging.getLogger('Driver Base')
@@ -16,8 +20,10 @@ log.setLevel(logging.DEBUG)
 
 
 def is_raspi():
-    with open('/sys/firmware/devicetree/base/model', 'r') as f:
-        model = f.readline()
+    model = ''
+    if path.exists('/sys/firmware/devicetree/model'):
+        with open('/sys/firmware/devicetree/base/model', 'r') as f:
+            model = f.readline()
     return 'raspberry' in model.lower()
 
 

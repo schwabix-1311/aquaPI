@@ -86,7 +86,7 @@ Vue.component( 'BusNode', {
                 <div v-bind:class="getAlertClass">[[ getAlert ]]</div>
               </div
             </div>
-            <div v-if="node" class="uk-card-body">
+            <div v-if="node" class="uk-card-body uk-padding-remove">
               <div class="uk-grid-collapse" uk-grid>
                 <div class="uk-width-2-3">
                   [[ getLabel ]]

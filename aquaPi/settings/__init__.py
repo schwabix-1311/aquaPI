@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from flask import (
     Flask, Blueprint, current_app, flash, request, render_template

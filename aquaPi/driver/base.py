@@ -21,7 +21,7 @@ log.setLevel(logging.DEBUG)
 
 def is_raspi():
     model = ''
-    if path.exists('/sys/firmware/devicetree/model'):
+    if path.exists('/sys/firmware/devicetree/base/model'):
         with open('/sys/firmware/devicetree/base/model', 'r') as f:
             model = f.readline()
     return 'raspberry' in model.lower()

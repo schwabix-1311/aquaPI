@@ -8,6 +8,14 @@ import logging
 # from logging.handlers import SMTPHandler
 
 
+log = logging.getLogger('werkzeug')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
+log.setLevel(logging.WARNING)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
+
+
 def create_app(test_config=None):
     logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s', datefmt='%I:%M:%S', stream=sys.stdout, level=logging.WARNING)
     log = logging.getLogger('aquaPi')

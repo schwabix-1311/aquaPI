@@ -81,9 +81,9 @@ class MachineRoom:
               "fish" is plural, "fishes" is several species of fish
         """
         single_light = True
-        dawn_light = single_light and True
-        single_temp = True
-        dual_temp = True
+        dawn_light = single_light and False #True
+        single_temp = False #True
+        dual_temp = False #True
         overlapped_temp = dual_temp and True
 
         if single_light:
@@ -93,7 +93,7 @@ class MachineRoom:
             light_c.plugin(self.bus)
 
             if not dawn_light:
-                light_pwm = SinglePWM('Dimmer', light_c.id, squared=True, maximum=80)
+                light_pwm = SinglePWM('Dimmer', light_c.id, DriverPWM({'channel': 0, 'fake': True}), squared=True, maximum=80)
                 light_pwm.plugin(self.bus)
             else:
                 dawn_schedule = Schedule('Zeitplan 2', '* 22 * * *')
@@ -103,7 +103,7 @@ class MachineRoom:
 
                 light_or = Or('Licht-Oder', [light_c.id, dawn_c.id])
                 light_or.plugin(self.bus)
-                light_pwm = SinglePWM('Dimmer', light_or.id, squared=True, maximum=80)
+                light_pwm = SinglePWM('Dimmer', light_or.id, DriverPWM({'channel': 0, 'fake': True}), squared=True, maximum=80)
                 light_pwm.plugin(self.bus)
 
         if single_temp:

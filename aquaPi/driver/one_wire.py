@@ -41,14 +41,12 @@ class DriverDS1820(InDriver):
         """
         super().__init__(cfg)
         self.name = 'DS1820 @ ' + cfg['address']
+        if self._fake:
+            self.name = '!' + self.name
 
         self._fast = False
         if 'fast' in cfg:
             self._fast |= bool(cfg['fast'])
-
-        self._fake = not is_raspi()
-        if 'fake' in cfg:
-            self._fake |= bool(cfg['fake'])
 
         if not self._fake:
             self._val = 0
@@ -57,30 +55,21 @@ class DriverDS1820(InDriver):
             # DS1820 family:  /sys/bus/w1/devices/28-............/temperature(25125) ../resolution(12) ../conv_time(750)
             self._sysfs_path = '/sys/bus/w1/devices/%s/' % cfg['address']
             if not path.exists(self._sysfs_path):
-                raise Exception('Wrong address, no DS1820 found at ' + self._sysfs_path)
+                raise DriverInvalidAdrError(adr=self._sysfs_path)
             self._temp = path.join(self._sysfs_path, 'temperature')
             # required? read resolution: _sysfs_path, 'resolution' [bits) e.g. 12
         else:
-            self.name = 'fake ' + self.name
             self._initval = 25.0
             if 'fake_initval' in cfg:
                 self._initval = float(cfg['fake_initval'])
             self._val = self._initval
             self._dir = 1
 
-    # def __getstate__(self):
-    #     super().__getstate__()
-    #     return state
-
-    # def __setstate__(self, state):
-    #     log.debug('DriverDS1820.setstate %r', state)
-    #     self.__init__(state['name'], state['cfg'])
-
     def read(self):
         if not self._fake:
             with open(self._temp, 'r') as temp:
                 ln = temp.readline()
-                log.debug('DS1820 read %s' % ln)
+                log.debug('%s = %s' % (self.name, ln))
                 if ln and not ln == '85000\n':
                     val = float(ln) / 1000
                     if self._fast:
@@ -91,8 +80,7 @@ class DriverDS1820(InDriver):
                 elif self._err_cnt <= self._err_retry:
                     self._err_cnt += 1
                 else:
-                    log.error('DriverDS1820 read error')
-                    raise DriverReadError()
+                    raise DriverReadError(self.name)
         else:
             rnd = random.random()
             if rnd < .1:
@@ -100,4 +88,5 @@ class DriverDS1820(InDriver):
             elif rnd > .7:
                 self._val += 0.05 * self._dir
             self._val = round(min(max(self._initval - 1, self._val), self._initval + 1), 2)
+        log.info('%s = %s' % (self.name, self._val))
         return float(self._val)

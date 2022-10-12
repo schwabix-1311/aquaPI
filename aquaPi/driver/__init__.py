@@ -3,3 +3,4 @@
 from .base import *
 from .gpio import *
 from .one_wire import *
+from .pwm import *

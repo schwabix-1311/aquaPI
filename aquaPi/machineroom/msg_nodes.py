@@ -62,7 +62,7 @@ class SensorTemp(Sensor):
 
     def __setstate__(self, state):
         log.debug('SensorTemp.setstate %r', state)
-        self.__init__(state['name'], state['driver'], state['interval'], state['unit'])
+        self.__init__(state['name'], state['driver'], interval=state['interval'], unit=state['unit'])
 
     def __str__(self):
         return '{}({})'.format(type(self).__name__, self.driver.name)
@@ -320,7 +320,7 @@ class CtrlMinimum(Controller):
 
     def __setstate__(self, state):
         log.debug('CtrlMinimum.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], state['threshold'], state['hysteresis'])
+        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -381,7 +381,7 @@ class CtrlMaximum(Controller):
 
     def __setstate__(self, state):
         log.debug('CtrlMaximum.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], state['threshold'], state['hysteresis'])
+        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -448,7 +448,7 @@ class CtrlLight(Controller):
 
     def __setstate__(self, state):
         log.debug('CtrlLight.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], state['fade_time'])
+        self.__init__(state['name'], state['inputs'], fade_time=state['fade_time'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -519,10 +519,10 @@ class Auxiliary(BusListener):
         self.values = {}
         self.unit = ''
 
-    def get_settings(self):
-        settings = super().get_settings()
-        settings.append((None, 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"'))
-        return settings
+    # def get_settings(self):
+    #     settings = super().get_settings()
+    #     settings.append((None, 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"'))
+    #     return settings
 
 
 class Average(Auxiliary):
@@ -645,7 +645,7 @@ class DeviceSwitch(Device):
         return state
 
     def __setstate__(self, state):
-        self.__init__(state['name'], state['inputs'], state['driver'], state['inverted'])
+        self.__init__(state['name'], state['inputs'], state['driver'], inverted=state['inverted'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -685,8 +685,9 @@ class SinglePWM(Device):
           maximum - set maximum duty cycle, allows to limit
     """
 # TODO: currently a logging dummy, add a driver for the actual HW.
-    def __init__(self, name, inputs, squared=False, minimum=0, maximum=100):
+    def __init__(self, name, inputs, driver, squared=False, minimum=0, maximum=100):
         super().__init__(name, inputs)
+        self.driver = driver
         self.squared = bool(squared)   # TODO: change to property, to allow immediate changes
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)
@@ -696,6 +697,7 @@ class SinglePWM(Device):
 
     def __getstate__(self):
         state = super().__getstate__()
+        state.update(driver=self.driver)
         state.update(squared=self.squared)
         state.update(minimum=self.minimum)
         state.update(maximum=self.maximum)
@@ -704,7 +706,7 @@ class SinglePWM(Device):
 
     def __setstate__(self, state):
         log.debug('SinglePWM.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], state['squared'], state['minimum'], state['maximum'])
+        self.__init__(state['name'], state['inputs'], state['driver'], squared=state['squared'], minimum=state['minimum'], maximum=state['maximum'])
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -726,7 +728,7 @@ class SinglePWM(Device):
         log.debug('    finally %f %%', out_val)
         self.data = out_val
 
-        # actual driver call would go here
+        self.driver.write(out_val)
 
         self.post(MsgData(self.id, round(out_val, 4)))   # to make our state known
 

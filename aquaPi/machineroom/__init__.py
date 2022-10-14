@@ -4,6 +4,7 @@ import logging
 import os
 from os import path
 import pickle
+import atexit
 from .msg_bus import MsgBus
 from .msg_nodes import *
 from ..driver import *
@@ -14,6 +15,26 @@ log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
+
+mr = None
+
+# This is brute force, as a destructor AKA __del__ is not called after Ctrl-C.
+# However, the concept of shutting down a web server by app code is a no-no.
+# A development server might allow this, but this was removed from werkzeug with v2.1.
+# Instead, I could crete a route /flush and a button (debug-only). This should
+# save_nodes and bring all nodes to a safe state, e.g. heater & (some) pumps OFF
+# Seen as an appliance aquaPi should somehow allow a restart for updates, recover SW state
+
+@atexit.register
+def cleanup():
+    log.brief('Preparing shutdown ...')
+    if mr.bus:
+        # this does not work completely, teardown aborts half-way.
+        # Best guess: we run multi-threaded and have only limited time until we're killed.
+        mr.save_nodes(mr.bus)
+        mr.bus.teardown()
+        mr.bus = None
 
 
 class MachineRoom:
@@ -47,14 +68,6 @@ class MachineRoom:
         log.brief("%s", str(self.bus))
         log.info(self.bus.get_nodes())
 
-    def __del__(self):
-        """ Persist the required objects, cleanup
-            (other languages call this a destructor)
-        """
-        if self.bus:
-            self.save_nodes(self.bus)
-            self.bus.teardown()
-
     def save_nodes(self, container, fname=None):
         """ save the Bus, Nodes and Drivers to storage
             Parameters allow usage for controller templates, contained in "something", not a bus
@@ -82,18 +95,36 @@ class MachineRoom:
         """
         single_light = True
         dawn_light = single_light and False #True
-        single_temp = False #True
+        single_temp = True
         dual_temp = False #True
         overlapped_temp = dual_temp and True
+
+        if True:  # my real & working config
+            # single LED bar, dawn & dusk 30mins, perceptive corr.
+            light_schedule = Schedule('Zeitplan Licht', '* 14-21 * * *')
+            light_c = CtrlLight('Beleuchtung', light_schedule.id, fade_time=15*60)
+            light_pwm = SinglePWM('Dimmer', light_c.id, DriverPWM({'channel': 0}), squared=True, maximum=85)
+            light_schedule.plugin(self.bus)
+            light_c.plugin(self.bus)
+            light_pwm.plugin(self.bus)
+
+            # single temp sensor, switched relais
+            wasser_i = SensorTemp('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fast': False}))
+            wasser = CtrlMinimum('Temperatur', wasser_i.id, 25.0)
+            wasser_o = DeviceSwitch('Heizstab', wasser.id, DriverGPIOout({'pin': 12}))
+            wasser_i.plugin(self.bus)
+            wasser.plugin(self.bus)
+            wasser_o.plugin(self.bus)
+            return
 
         if single_light:
             light_schedule = Schedule('Zeitplan 1', '* 14-21 * * *')
             light_schedule.plugin(self.bus)
-            light_c = CtrlLight('Beleuchtung', light_schedule.id, fade_time=60) #30*60)
+            light_c = CtrlLight('Beleuchtung', light_schedule.id, fade_time=30*60) #30*60)
             light_c.plugin(self.bus)
 
             if not dawn_light:
-                light_pwm = SinglePWM('Dimmer', light_c.id, DriverPWM({'channel': 0, 'fake': True}), squared=True, maximum=80)
+                light_pwm = SinglePWM('Dimmer', light_c.id, DriverPWM({'channel': 0}), squared=True, maximum=80)
                 light_pwm.plugin(self.bus)
             else:
                 dawn_schedule = Schedule('Zeitplan 2', '* 22 * * *')
@@ -103,7 +134,7 @@ class MachineRoom:
 
                 light_or = Or('Licht-Oder', [light_c.id, dawn_c.id])
                 light_or.plugin(self.bus)
-                light_pwm = SinglePWM('Dimmer', light_or.id, DriverPWM({'channel': 0, 'fake': True}), squared=True, maximum=80)
+                light_pwm = SinglePWM('Dimmer', light_or.id, DriverPWM({'channel': 1, 'fake': True}), squared=True, maximum=80)
                 light_pwm.plugin(self.bus)
 
         if single_temp:
@@ -138,10 +169,3 @@ class MachineRoom:
 
             w_cool = DeviceSwitch('W-Lüfter', w2_ctrl.id, DriverGPIOout({'pin': 5, 'fake': True}))
             w_cool.plugin(self.bus)
-
-
-#   class MyClass:
-#   @classmethod
-#   def cleanOnExit(cls):
-#       # do here your cleaning
-#import atexit ; atexit.register(MyClass.cleanOnExit)

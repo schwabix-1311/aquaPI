@@ -42,20 +42,22 @@ class DriverPWM(DriverPWMbase):
     #       possibly through a factory method.
     def __init__(self, cfg):
         super().__init__(cfg)
-        addr = assign_pwm(self._channel, True)  # may raise exceptions InvalidAdr|PortInuse
+        addr = assign_pwm(self._channel, True)  # may raise exceptions InvalidAddr|PortInuse
 
         if type(addr) is int:
-            self.name = 'PWM %d @ pin %d' % (self._channel, addr)
+            pin = int(addr)
+            self.name = 'PWM %d @ pin %d' % (self._channel, pin)
             if not self._fake:
                 GPIO.setup(pin, GPIO.OUT)
                 self._pwm = GPIO.PWM(pin, 300)
                 self._pwm.start(0)
-#         elif addr[:5] == '/sys/':
-#             self.name = 'PWM %d @ sysfs' % (self._channel, addr)
-#             with open(path.join(addr, 'period', 'wt') as p:
-#                 p.write('3333333')
-#             with open(path.join(addr, 'enable', 'wt') as p:
-#                 p.write('0')
+        elif addr[:5] == '/sys/':
+            self._pwm = addr
+            self.name = 'PWM %d @ sysfs' % self._channel
+            with open(path.join(self._pwm, 'enable'), 'wt') as p:
+                p.write('0')
+            with open(path.join(self._pwm, 'period'), 'wt') as p:
+                p.write('3333333')
         else:
             raise DriverNYI()
 
@@ -66,20 +68,27 @@ class DriverPWM(DriverPWMbase):
 
     def close(self):
         if not self._fake:
-            self._pwm.stop()
-            pin = assign_pwm(self._channel, False)
-            GPIO.cleanup(pin)
+            addr = assign_pwm(self._channel, False)
+            if type(addr) is str:
+                with open(path.join(self._pwm, 'enable'), 'wt') as p:
+                    p.write('0')
+            else:
+                pin = int(addr)
+                self._pwm.stop()
+                GPIO.cleanup(pin)
 
     def write(self, val):
         log.info('%s -> %f' % (self.name, float(val)))
         if not self._fake:
-            self._pwm.ChangeDutyCycle(float(val))
+            if type(self._pwm) is str:
+                with open(path.join(self._pwm, 'duty_cycle'), 'wt') as p:
+                    p.write('%d' % int(val / 100.0 * 3333333))
+                with open(path.join(self._pwm, 'enable'), 'wt') as p:
+                    p.write('1' if val > 0 else '0')
+            else:
+              self._pwm.ChangeDutyCycle(float(val))
         else:
             self._val = float(val)
-            #with open(path.join(addr, 'enable', 'wt') as p:
-            #    p.write('0')
-            #with open(path.join(addr, 'duty_cycle', 'wt') as p:
-            #    p.write('1')
 
 """
 class SoftPWM:

@@ -33,7 +33,7 @@ class DriverGPIO(InDriver):
     def __init__(self, cfg):
         super().__init__(cfg)
         self._pin = int(cfg['pin'])
-        assign_pin(self._pin, True)  # may raise exceptions: InvalidAdr|PortInuse
+        assign_pin(self._pin, True)  # may raise exceptions: InvalidAddr|PortInuse
 
     def __del__(self):
         self.close()

@@ -96,8 +96,8 @@ def create_app(test_config=None):
         return app
 
     from . import machineroom
-    mr = machineroom.MachineRoom(app.config)
-    app.machineroom = mr
-    app.bus = mr.bus
+    machineroom.mr = machineroom.MachineRoom(app.config)
+    app.machineroom = machineroom.mr
+    app.bus = machineroom.mr.bus
 
     return app

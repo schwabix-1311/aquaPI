@@ -27,7 +27,52 @@ def is_raspi():
     return 'raspberry' in model.lower()
 
 
-_func_map = {-1: 'UNKNOWN', 0: 'OUT', 1: 'IN', 40: 'SERIAL', 41: 'SPI', 42: 'I2C', 43: 'PWM'}
+# ========== IO resource map ==========
+
+
+"""
+[ (driver,   addr,        port,    func, free) ]
+
+('GPIO',    '',           12,       OUT, False )   "GPIOout 12 - Relais"
+('GPIO',    '',           0/1/4-17, IO,  True )
+('Motor',   '',           (21,22),  OUT, False )   "H-Bridge - Dosierpumpe"
+('I2C',     'x47',        0,        OUT, False )   "IOext 0 - CO2 Ventil"
+('I2C',     'x47',        1-7,      IO,  True )    "IOext 0 - CO2 Ventil"
+('Shelly',  '192.16..',   0,        OUT, False )   "Shelly Plug - Heizer"
+
+('GPIO',    '',           20,       IN,  False )   "GPIOin 20 - Taster"
+('Shelly',  '192.16..',   1,        IN,  False )   "Shelly Temp.1"
+
+('PWM',     '/sys/...',   18,       PWM, False )   "H-PWM 0 - Licht"
+('PWM',     '/sys/...',   19,       PWM, True )    "H-PWM 1"
+('PWM',     '',           24,       PWM, True )    "S-PWM 2 - Lüfter"
+('PA9685',  'x7F',        15,       PWM, True )    "X-PWM 3"
+('TC420',   '??',         (3,4,5),  PWM, False )   "TC420 2 - RGB Licht"
+('Shelly',  '192.16..',   0,        PWM, False )   "Shelly Dimmer - Ambilight"
+
+('AD1115',  'x7E',        2,        ADC, True )    "ADC 3 - pH Sonde"
+('OneWire', '28-xx',      0,        ADC, False )   "Sens 1 - Wassertemperatur"
+
+Initial enumeration fills this map via static driver functions. 
+GPIO has 3 functions: undetermined IO, IN, OUT
+Drivers can provide entries for more than one function if they implement all their methods.
+Each channel/port/pin is one entry. We will need multi-channel drivers (RGB, motor).
+Creation of a driver instance reserves the entry, in case of GPIO (or soft-PWM) this may change function!
+Function to query avilable entries by function. 
+Function to allocte/release a set of entries. This must restore initial function.
+
+IoPort = namedtupel('IoPort', ['function', 'driver', 'address', 'port', 'free'])
+
+class IoManager(object):
+    _map = {}
+
+    def __init__(self):
+        # iterate all class imports from a module, then call each class' port enumerator
+        # https://stackoverflow.com/questions/7584418/iterate-the-classes-defined-in-a-module-imported-dynamically
+        for driver in ['DrvGPIO', 'OneWire']):
+            _map.update(driver.enumerate(...))
+"""
+
 
 _pins_available = None
 _pins_unused = None
@@ -39,7 +84,9 @@ _pins_unused = None
 _pwms_available = None
 _pwms_unused = None
 
-def init_maps():
+_pin_func_map = {-1: 'UNKNOWN', 0: 'OUT', 1: 'IN', 40: 'SERIAL', 41: 'SPI', 42: 'I2C', 43: 'PWM'}
+
+def _init_maps():
     global _pins_available, _pins_unused
     global _pwms_available, _pwms_unused
 
@@ -55,12 +102,12 @@ def init_maps():
                     fnc = GPIO.gpio_function(i)
                     if fnc in [0, 1]:
                         _pins_available.add(i)
-                    elif fnc == [43]:
-                        ##! _pwms_available.append('/sys/class/pwm/pwmchip0/pwm%d/' % pwm_cnt)
-                        _pwms_available.append(pwm_cnt)
+                    elif fnc == 43:
+                        _pwms_available.append('/sys/class/pwm/pwmchip0/pwm%d/' % pwm_cnt)
+                        #soft-PWM _pwms_available.append(i)
                         pwm_cnt += 1
                     else:
-                        log.info('pin %d is in use as %s' % (i, _func_map[fnc]))
+                        log.info('pin %d is in use as %s' % (i, _pin_func_map[fnc]))
                 except:
                     log.debug('func pin %d = %d' % (i, fnc))
         else:
@@ -75,14 +122,14 @@ def init_maps():
 
 
 def get_unused_pins():
-    init_maps()
+    _init_maps()
     return _pins_unused
 
 
 def assign_pin(pin, used):
     global _pins_available, _pins_unused
 
-    init_maps()
+    _init_maps()
     # pin must be a member of set _pins_available
     if not pin in _pins_available:
         raise DriverInvalidPortError(port=pin)
@@ -96,17 +143,17 @@ def assign_pin(pin, used):
 
 
 def get_unused_pwms():
-    init_maps()
+    _init_maps()
     return _pwms_unused
 
 
 def assign_pwm(channel, used):
     global _pwms_available, _pwms_unused
 
-    init_maps()
+    _init_maps()
     # channel must be an index into array pwms_available
     if channel < 0 or channel >= len(_pwms_available):
-        raise DriverInvalidAdrError(adr=channel)
+        raise DriverInvalidAddrError(adr=channel)
     if used and not channel in _pwms_unused:
         raise DriverPortInuseError(port=channel)
 
@@ -128,16 +175,16 @@ class DriverParamError(Exception):
     def __init__(self, msg='Invalid parameter value.'):
         super().__init__(msg)
 
-class DriverInvalidAdrError(Exception):
+class DriverInvalidAddrError(Exception):
     def __init__(self, msg=None, adr=None):
         if not msg:
-            msg = 'Pin, channel or address %rdoes not exist.' % adr
+            msg = 'Pin, channel or address %r does not exist.' % adr
         super().__init__(msg)
 
 class DriverPortInuseError(Exception):
     def __init__(self, msg=None, port=None):
         if not msg:
-            msg = 'Pin or channel %ris already assigned.' % port
+            msg = 'Pin or channel %r is already assigned.' % port
         super().__init__(msg)
 
 class DriverReadError(Exception):

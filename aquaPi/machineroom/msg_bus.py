@@ -11,7 +11,7 @@ from .msg_types import *
 
 log = logging.getLogger('MsgBus')
 log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
+log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
@@ -218,17 +218,14 @@ class MsgBus:
 class BusNode:
     """ BusNode is a minimal bus participant
         It has little overhead, can only post messages.
-        Methods plugin/pullout can be redirected to a callback to
-        let you know when to start or finish your task.
-        Bus callback:
-          bus_cbk(self: BusNode, bus|None: MsgBus) : None
         The bus protocol (MsgBorn/MsgBye/MsgReplyHello)
-        is handled internally.
+        is handled internally. Overload if you need one of them,
+        but don't forget to call super().listen(...)
         The _inputs should always be None = listen to everbody!
     """
     ROLE = None
 
-    def __init__(self, name, unit='', bus_cbk=None):
+    def __init__(self, name, _cont=False):
         self.name = name
         self.id = name.lower()  # uuid.uuid4(uuid.NAMSPACE_OID,name)
         self.id = self.id.replace(' ', '').replace('.', '').replace(';', '').replace('-','_')
@@ -241,10 +238,9 @@ class BusNode:
 
         self._inputs = None
         self._bus = None
-        self.data = 0
-        self.unit = unit
-        self._bus_cbk = bus_cbk
-        self._msg_cbk = None
+        if not _cont:
+            self.data = 0
+        self.unit = ''
 
     def __getstate__(self):
         state = {'name': self.name, 'inputs': self._inputs, 'data': self.data}
@@ -253,8 +249,8 @@ class BusNode:
 
     def __setstate__(self, state):
         log.debug('BusNode.setstate %r', state)
-        self.__init__(state['name'])
         self.data = state['data']
+        self.__init__(state['name'], _cont=True)
 
     def __str__(self):
         snd = self._inputs.sender if self._inputs else []
@@ -266,16 +262,12 @@ class BusNode:
             self._bus = None
         bus._register(self)
         self._bus = bus
-        if self._bus_cbk:
-            self._bus_cbk(self, self._bus)
         self.post(MsgBorn(self.id, self.data))
         log.info('%s plugged, role %s', str(self), str(self.ROLE))
 
     def pullout(self):
         if not self._bus:
             return False
-        if self._bus_cbk:
-            self._bus_cbk(self, None)
         self.post(MsgBye(self.id))
         self._bus._unregister(self)
         self._bus = None
@@ -327,23 +319,18 @@ class BusListener(BusNode):
     """ BusListener is an extension to BusNode.
         Listeners usually filter the messages they listen to.
         Bus protocol is handled internally.
-        All (!) messages can be redirected to message callback,
-        which returns True, for handled messages, False otherwise.
-        message callback:
-          message_cbk(self: BusListener, msg: Msg) : bool
         Listening to MsgBorn/MsgBye allows to adjust MsgFilters.
         A derived class must call BusListener.listen() to keep
         protocol intact!
     """
-    def __init__(self, name, inputs=None, msg_cbk=None, bus_cbk=None):
-        super().__init__(name, bus_cbk)
+    def __init__(self, name, inputs=None, _cont=False):
+        super().__init__(name, _cont=_cont)
         if inputs:
             if not isinstance(inputs, MsgFilter):
                 inputs = MsgFilter(inputs)
         else:
             inputs = MsgFilter('*')
         self._inputs = inputs
-        self._msg_cbk = msg_cbk
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -353,17 +340,12 @@ class BusListener(BusNode):
 
     def __setstate__(self, state):
         log.debug('BusListener.setstate %r', state)
-        self.__init__(state['name'], inputs=state['inputs'])
+        self.data = state['data']
+        self.__init__(state['name'], inputs=state['inputs'], _cont=True)
 
     def listen(self, msg):
-        ret = False
-        if self._msg_cbk:
-            log.debug('%s._msg_cbk got %s', str(self), str(msg))
-            ret = self._msg_cbk(self, msg)
-        if not ret:
-            log.debug('%s.listen got %s', str(self), str(msg))
-            ret = BusNode.listen(self, msg)
-        return ret
+        log.debug('%s.listen got %s', str(self), str(msg))
+        return super().listen(msg)
 
     def get_settings(self):
         settings = super().get_settings()
@@ -373,57 +355,8 @@ class BusListener(BusNode):
 
 #############################
 
-''' samples of low-level nodes using callbacks
-    TODO: unclear whether callbacks will be used finally, for now keep 'em
-          Currently all higher level nodes derive from BusNodes,
-          derived classes overload methods and thus don't need callbacks
-'''
 
-t_avg = None
-
-
-def temp_avg(self, msg):
-    global t_avg
-    if isinstance(msg, MsgData):
-        if not t_avg:
-            t_avg = msg.data
-        else:
-            print(str(msg))
-            t_new = round((t_avg + msg.data) / 2, 2)
-            if t_new != t_avg:
-                t_avg = t_new
-                # print(str(self) + ' = ' + str(t_avg))
-                self.post(MsgData(self.id, t_avg))
-        return True
-    return False
-
-
-def minThreshold(self, msg):
-    if isinstance(msg, MsgData):
-        # print(str(self) + ' got ' + str(msg))
-        if msg.data < 25:
-            self.post(MsgData(self.id, True))
-        else:
-            self.post(MsgData(self.id, False))
-
-
-relais_state = False
-
-
-def relais(self, msg):
-    global relais_state
-    if isinstance(msg, MsgData):
-        # print('{} = {}'.format(msg.sender,msg.data))
-        if msg.data != relais_state:
-            # print('{} switching {}'.format(self.id,{True:'ON',False:'off'}[msg.data]))
-            relais_state = msg.data
-        return True
-    return False
-
-
-#############################
-
-''' kind of unit tests and sample usage
+''' This is your playground ... not used in the application
 '''
 
 if __name__ == "__main__":
@@ -441,22 +374,15 @@ if __name__ == "__main__":
     sensor2 = BusNode('TempSensor2')
     sensor2.plugin(mb)
 
-    avg = BusListener('TempSensor', msg_cbk=temp_avg)
-    avg.plugin(mb)
+    # callbak functions have been removed in favor of
+    # derived classes, therefore below code does no longer work
 
-    temp_ctrl = BusListener('TempController', msg_cbk=minThreshold, inputs=MsgFilter(['TempSensor']))
-    temp_ctrl.plugin(mb)
+    # temp_ctrl = BusListener('TempController', msg_cbk=minThreshold, inputs=MsgFilter(['TempSensor']))
+    # temp_ctrl.plugin(mb)
 
-    relais = BusListener('TempRelais', msg_cbk=relais, inputs=[temp_ctrl.id])
-    relais.plugin(mb)
+    # relais = BusListener('TempRelais', msg_cbk=relais, inputs=[temp_ctrl.id])
+    # relais.plugin(mb)
 
-    # mb.register(BusListener('BL3'))
-
-    # for d in [42, 24.83, 'LOW', [1,2,3]]:
-    for d in range(100):
-        sensor1.post(MsgData(sensor1.id, round(random.random() * 3 + 23.5, 2)))
-        if d % 3:
-            sensor2.post(MsgData(sensor2.id, round(random.random() * 3 + 23.5, 2)))
-        # time.sleep(.1)
+    mb.register(BusListener('BL3'))
 
     mb.teardown()

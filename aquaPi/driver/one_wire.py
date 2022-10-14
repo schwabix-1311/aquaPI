@@ -15,7 +15,7 @@ log = logging.getLogger('Driver 1-wire')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 log.setLevel(logging.WARNING)
-log.setLevel(logging.INFO)
+# log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
 
 
@@ -55,7 +55,7 @@ class DriverDS1820(InDriver):
             # DS1820 family:  /sys/bus/w1/devices/28-............/temperature(25125) ../resolution(12) ../conv_time(750)
             self._sysfs_path = '/sys/bus/w1/devices/%s/' % cfg['address']
             if not path.exists(self._sysfs_path):
-                raise DriverInvalidAdrError(adr=self._sysfs_path)
+                raise DriverInvalidAddrError(adr=self._sysfs_path)
             self._temp = path.join(self._sysfs_path, 'temperature')
             # required? read resolution: _sysfs_path, 'resolution' [bits) e.g. 12
         else:

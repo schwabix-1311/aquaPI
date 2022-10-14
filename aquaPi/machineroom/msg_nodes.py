@@ -15,7 +15,7 @@ log = logging.getLogger('MsgNodes')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 log.setLevel(logging.WARNING)
-log.setLevel(logging.INFO)
+# log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
 
 
@@ -32,7 +32,7 @@ class Sensor(BusNode):
     #    return super().__getstate__()
 
     # def __setstate__(self, state):
-    #    self.__init__(state)
+    #    self.__init__(state, _cont=True)
 
 
 class SensorTemp(Sensor):
@@ -42,8 +42,8 @@ class SensorTemp(Sensor):
 
         Output: float with temperature in °C, unchanged measurements are suppressed.
     """
-    def __init__(self, name, driver, interval=10.0, unit='°C'):
-        super().__init__(name)
+    def __init__(self, name, driver, interval=10.0, unit='°C', _cont=False):
+        super().__init__(name, _cont=_cont)
         self.driver = driver
         self.unit = unit
         self.interval = min(1., float(interval))
@@ -62,7 +62,7 @@ class SensorTemp(Sensor):
 
     def __setstate__(self, state):
         log.debug('SensorTemp.setstate %r', state)
-        self.__init__(state['name'], state['driver'], interval=state['interval'], unit=state['unit'])
+        self.__init__(state['name'], state['driver'], interval=state['interval'], unit=state['unit'], _cont=True)
 
     def __str__(self):
         return '{}({})'.format(type(self).__name__, self.driver.name)
@@ -134,12 +134,14 @@ class Schedule(BusNode):
     # such as '0 4 1 1 fri' = Jan. 1st 4pm and Friday -> very rare!
     CRON_YEARS_DEPTH = 2
 
-    def __init__(self, name, cronspec):
-        super().__init__(name)
+    def __init__(self, name, cronspec, _cont=False):
+        super().__init__(name, _cont=_cont)
         self._scheduler_thread = None
         self._scheduler_stop = False
         self.cronspec = cronspec
         self.hires = len(cronspec.split(' ')) > 5
+        if not _cont:
+            self.data = 0
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -149,7 +151,8 @@ class Schedule(BusNode):
 
     def __setstate__(self, state):
         log.debug('Schedule.setstate %r', state)
-        self.__init__(state['name'], state['cronspec'])
+        self.data = state['data']
+        self.__init__(state['name'], state['cronspec'], _cont=True)
 
     @property
     def cronspec(self):
@@ -189,7 +192,6 @@ class Schedule(BusNode):
 
     def _scheduler(self):
         log.brief('Schedule %s: start', self.id)
-        self.data = 0
 
         now = datetime.now().astimezone()  # = local tz, this enables DST
         cron = croniter(self._cronspec, now, ret_type=float, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)
@@ -272,15 +274,15 @@ class Controller(BusListener):
     """
     ROLE = BusRole.CTRL
 
-    def __init__(self, name, inputs):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         self.data = 0
 
     # def __getstate__(self):
     #    return super().__getstate__()
 
     # def __setstate__(self, state):
-    #    self.__init__(state)
+    #    self.__init__(state, _cont=True)
 
     def is_advanced(self):
         for i in self.get_inputs():
@@ -305,8 +307,8 @@ class CtrlMinimum(Controller):
         Output MsgData(100) when input falls below threshold-hyst.
                MsgData(0) when input passes threshold+hyst.
     """
-    def __init__(self, name, inputs, threshold, hysteresis=0):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
         self._in_data = 0
@@ -320,7 +322,8 @@ class CtrlMinimum(Controller):
 
     def __setstate__(self, state):
         log.debug('CtrlMinimum.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'])
+        self.data = state['data']
+        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -335,7 +338,7 @@ class CtrlMinimum(Controller):
                 log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
                 self.data = new_val
                 log.brief('CtrlMinimum %s: output %f', self.id, self.data)
-                self.post(MsgData(self.id, self.data))
+            self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_renderdata(self):
@@ -366,8 +369,8 @@ class CtrlMaximum(Controller):
         Output MsgData(100) when input rises above threshold+hyst.
                MsgData(0) when input passes threshold-hyst.
     """
-    def __init__(self, name, inputs, threshold, hysteresis=0):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
         self._in_data = 0
@@ -381,7 +384,8 @@ class CtrlMaximum(Controller):
 
     def __setstate__(self, state):
         log.debug('CtrlMaximum.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'])
+        self.data = state['data']
+        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -395,7 +399,7 @@ class CtrlMaximum(Controller):
             if self.data != new_val:
                 self.data = new_val
                 log.brief('CtrlMaximum: %d -> %d', self.data, self.data)
-                self.post(MsgData(self.id, self.data))
+            self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_renderdata(self):
@@ -431,14 +435,17 @@ class CtrlLight(Controller):
     """
     # TODO: could add random variation, other profiles, and overheat reduction driven from temperature ...
 
-    def __init__(self, name, inputs, fade_time=None):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, fade_time=None, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         self.unit = '%'
         self.fade_time = fade_time   # TODO: change to property, to allow immediate changes
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
         self._fader_thread = None
         self._fader_stop = False
+        if not _cont:
+            self.data = 0
+        self
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -448,11 +455,12 @@ class CtrlLight(Controller):
 
     def __setstate__(self, state):
         log.debug('CtrlLight.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], fade_time=state['fade_time'])
+        self.data = state['data']
+        self.__init__(state['name'], state['inputs'], fade_time=state['fade_time'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            log.info('CtrlLight: got %f', self.data)
+            log.info('CtrlLight: got %f', msg.data)
             if self.data != float(msg.data):
                 if not self.fade_time:
                     self.data = float(msg.data)
@@ -468,24 +476,25 @@ class CtrlLight(Controller):
                     self._fader_thread.start()
 
     def _fader(self):
-        # coarse INCR = 1.0
-        INCR = 0.1
-        step = (self.fade_time / abs(self.target - self.data) * INCR)
-        log.brief("CtrLight %s: fading in %f s from %f -> %f, change every %f s", self.id, self.fade_time, self.data, self.target, step)
-        while abs(self.target - self.data) > INCR:
-            if self.target >= self.data:
-                self.data += INCR
-            else:
-                self.data -= INCR
-            log.debug("_fader %f ..." % self.data)
+        # TODO: adjust the calculation, short fade_times need longer or show steps
+        INCR = 0.1 if self.fade_time >= 30 else 1.0 if self.fade_time >= 2.9 else 2.0
+        if self.target != self.data:
+            step = (self.fade_time / abs(self.target - self.data) * INCR)
+            log.brief("CtrLight %s: fading in %f s from %f -> %f, change every %f s", self.id, self.fade_time, self.data, self.target, step)
+            while abs(self.target - self.data) > INCR:
+                if self.target >= self.data:
+                    self.data += INCR
+                else:
+                    self.data -= INCR
+                log.debug("_fader %f ..." % self.data)
 
-            self.post(MsgData(self.id, round(self.data, 3)))
-            time.sleep(step)
-            if self._fader_stop:
-                break
-        if self.data != self.target:
-            self.data = self.target
-            self.post(MsgData(self.id, self.data))
+                self.post(MsgData(self.id, round(self.data, 3)))
+                time.sleep(step)
+                if self._fader_stop:
+                    break
+            if self.data != self.target:
+                self.data = self.target
+                self.post(MsgData(self.id, self.data))
         log.brief("CtrlLight %s: fader DONE" % self.id)
         self._fader_thread = None
         self._fader_stop = False
@@ -494,8 +503,9 @@ class CtrlLight(Controller):
         ret = super().get_renderdata()
         ret.update(pretty_data=('%.1f%s' % (self.data, self.unit)) if self.data else 'Aus')
         ret.update(label='Helligkeit')
-        if self.data:
-            ret.update(alert=('%i' % self.data, 'act'))
+        if self.data > 0 and self.data < 100:
+            # ret.update(alert=('%i' % self.data, 'act'))
+            ret.update(alert=('+' if self.target > self.data else '-', 'act'))
         return ret
 
     def get_settings(self):
@@ -513,8 +523,8 @@ class Auxiliary(BusListener):
     """
     ROLE = BusRole.AUX
 
-    def __init__(self, name, inputs):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         self.data = -1
         self.values = {}
         self.unit = ''
@@ -536,16 +546,17 @@ class Average(Auxiliary):
         Output: float arithmetic average of all sensors,
                 of moving average of all delivering inputs.
     """
-    def __init__(self, name, inputs):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         # 0 -> 1:1 average; >=2 -> moving average over 2..n values, weighted by reporting frequency
         self.unfair_moving = 0
 
     # def __getstate__(self):
-    #    return super().__getstate__()
+    #     return super().__getstate__()
 
     # def __setstate__(self, state):
-    #    self.__init__(state)
+    #     self.data = state['data']
+    #     self.__init__(state, _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -586,10 +597,11 @@ class Or(Auxiliary):
         Output: the maximum of all listened inputs.
     """
     # def __getstate__(self):
-    #    return super().__getstate__()
+    #     return super().__getstate__()
 
     # def __setstate__(self, state):
-    #    self.__init__(state)
+    #     self.data = state['data']
+    #     self.__init__(state, _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -623,20 +635,22 @@ class Device(BusListener):
     ROLE = BusRole.OUT_ENDP
 
     # def __getstate__(self):
-    #    return super().__getstate__()
+    #     return super().__getstate__()
 
     # def __setstate__(self, state):
-    #    self.__init__(state)
+    #     self.data = state['data']
+    #     self.__init__(state, _cont=True)
 
 
 class DeviceSwitch(Device):
     """ A binary output to a relais or GPIO pin.
     """
-    def __init__(self, name, inputs, driver, inverted=0):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, driver, inverted=0, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         self.inverted = int(inverted)
         self.driver = driver
-        self.data = 0
+        self.switch(self.data if _cont else 0)
+        log.info('%s init to %r|%f|%f', self.name, _cont, self.data, inverted)
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -645,7 +659,8 @@ class DeviceSwitch(Device):
         return state
 
     def __setstate__(self, state):
-        self.__init__(state['name'], state['inputs'], state['driver'], inverted=state['inverted'])
+        self.data = state['data']
+        self.__init__(state['name'], state['inputs'], state['driver'], inverted=state['inverted'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -654,9 +669,9 @@ class DeviceSwitch(Device):
         return super().listen(msg)
 
     def switch(self, on):
-        self.data = bool(on)
-        log.info('DeviceSwitch %s: turns %s', self.id, 'ON' if self.data else 'OFF')
+        self.data = 100 if bool(on) else 0
 
+        log.info('DeviceSwitch %s: turns %s', self.id, 'ON' if self.data else 'OFF')
         if not self.inverted:
             self.driver.write(self.data)
         else:
@@ -685,15 +700,18 @@ class SinglePWM(Device):
           maximum - set maximum duty cycle, allows to limit
     """
 # TODO: currently a logging dummy, add a driver for the actual HW.
-    def __init__(self, name, inputs, driver, squared=False, minimum=0, maximum=100):
-        super().__init__(name, inputs)
+    def __init__(self, name, inputs, driver, squared=False, minimum=0, maximum=100, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         self.driver = driver
         self.squared = bool(squared)   # TODO: change to property, to allow immediate changes
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)
-        self.data = 0
+        if not _cont:
+            self.data = 0
         self.unit = '%'
-        log.info('%s init to %r|%f|%f', self.name, squared, minimum, maximum)
+        self.set_percent(self.data)
+        log.info('%s init to %r | sq %r | min %f | max %f', self.name, self.data, squared, minimum, maximum)
+
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -706,7 +724,8 @@ class SinglePWM(Device):
 
     def __setstate__(self, state):
         log.debug('SinglePWM.setstate %r', state)
-        self.__init__(state['name'], state['inputs'], state['driver'], squared=state['squared'], minimum=state['minimum'], maximum=state['maximum'])
+        self.data = state['data']
+        self.__init__(state['name'], state['inputs'], state['driver'], squared=state['squared'], minimum=state['minimum'], maximum=state['maximum'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):

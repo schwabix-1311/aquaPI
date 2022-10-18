@@ -7,14 +7,14 @@ import pickle
 import atexit
 from .msg_bus import MsgBus
 from .msg_nodes import *
-from ..driver import *
 
 
 log = logging.getLogger('MachineRoom')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 mr = None
@@ -29,7 +29,7 @@ mr = None
 @atexit.register
 def cleanup():
     log.brief('Preparing shutdown ...')
-    if mr.bus:
+    if  mr and mr.bus:
         # this does not work completely, teardown aborts half-way.
         # Best guess: we run multi-threaded and have only limited time until we're killed.
         mr.save_nodes(mr.bus)
@@ -96,22 +96,21 @@ class MachineRoom:
         single_light = True
         dawn_light = single_light and False #True
         single_temp = True
-        dual_temp = False #True
-        overlapped_temp = dual_temp and True
+        complex_temp = False #True
 
-        if True:  # my real & working config
-            # single LED bar, dawn & dusk 30mins, perceptive corr.
+        if False:  #True:  # my real & working config
+            # single LED bar, dawn & dusk 15mins, perceptive corr.
             light_schedule = Schedule('Zeitplan Licht', '* 14-21 * * *')
             light_c = CtrlLight('Beleuchtung', light_schedule.id, fade_time=15*60)
-            light_pwm = SinglePWM('Dimmer', light_c.id, DriverPWM({'channel': 0}), squared=True, maximum=85)
+            light_pwm = SinglePWM('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=85)
             light_schedule.plugin(self.bus)
             light_c.plugin(self.bus)
             light_pwm.plugin(self.bus)
 
             # single temp sensor, switched relais
-            wasser_i = SensorTemp('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fast': False}))
+            wasser_i = SensorTemp('Wasser', 'DS1820 xA2E9C')
             wasser = CtrlMinimum('Temperatur', wasser_i.id, 25.0)
-            wasser_o = DeviceSwitch('Heizstab', wasser.id, DriverGPIOout({'pin': 12}))
+            wasser_o = DeviceSwitch('Heizstab', wasser.id, 'GPIO 12')
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
@@ -122,9 +121,8 @@ class MachineRoom:
             light_schedule.plugin(self.bus)
             light_c = CtrlLight('Beleuchtung', light_schedule.id, fade_time=30*60) #30*60)
             light_c.plugin(self.bus)
-
             if not dawn_light:
-                light_pwm = SinglePWM('Dimmer', light_c.id, DriverPWM({'channel': 0}), squared=True, maximum=80)
+                light_pwm = SinglePWM('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
             else:
                 dawn_schedule = Schedule('Zeitplan 2', '* 22 * * *')
@@ -134,25 +132,26 @@ class MachineRoom:
 
                 light_or = Or('Licht-Oder', [light_c.id, dawn_c.id])
                 light_or.plugin(self.bus)
-                light_pwm = SinglePWM('Dimmer', light_or.id, DriverPWM({'channel': 1, 'fake': True}), squared=True, maximum=80)
+                light_pwm = SinglePWM('Dimmer', light_or.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
+
 
         if single_temp:
             # single temp sensor -> temp ctrl -> relais
-            wasser_i = SensorTemp('Wasser', DriverDS1820({'address': '28-0119383a2e9c' }))  # '28-01193867a71e0x1234'
+            wasser_i = SensorTemp('Wasser', 'DS1820 xA2E9C')
             #wasser_i = SensorTemp('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
             wasser = CtrlMinimum('Temperatur', wasser_i.id, 25.0)
-            wasser_o = DeviceSwitch('Heizstab', wasser.id, DriverGPIOout({'pin': 12, 'fake': False}))
+            wasser_o = DeviceSwitch('Heizstab', wasser.id, 'GPIO 12')
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
             wasser_i.plugin(self.bus)
 
-        if dual_temp:
+        elif complex_temp:
             # 2 temp sensors -> average -> temp ctrl -> relais
-            w1_temp = SensorTemp('T-Sensor 1', DriverDS1820({'address': '28-0000x123', 'fake': True}))
+            w1_temp = SensorTemp('T-Sensor 1', 'DS1820 xA2E9C')
             w1_temp.plugin(self.bus)
 
-            w2_temp = SensorTemp('T-Sensor 2', DriverDS1820({'address': '28-0000x876', 'fake': True}))
+            w2_temp = SensorTemp('T-Sensor 2', 'DS1820 x7A71E')
             w2_temp.plugin(self.bus)
 
             w_temp = Average('T-Mittel', [w1_temp.id, w2_temp.id])
@@ -164,8 +163,8 @@ class MachineRoom:
             w2_ctrl = CtrlMaximum('W-Kühlung', w2_temp.id, 26.5)
             w2_ctrl.plugin(self.bus)
 
-            w_heat = DeviceSwitch('W-Heizer', w1_ctrl.id, DriverGPIOout({'pin': 4, 'fake': True}))
+            w_heat = DeviceSwitch('W-Heizer', w1_ctrl.id, 'GPIO 0')
             w_heat.plugin(self.bus)
 
-            w_cool = DeviceSwitch('W-Lüfter', w2_ctrl.id, DriverGPIOout({'pin': 5, 'fake': True}))
+            w_cool = DeviceSwitch('W-Lüfter', w2_ctrl.id, 'GPIO 1')
             w_cool.plugin(self.bus)

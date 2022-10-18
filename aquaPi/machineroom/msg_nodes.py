@@ -42,19 +42,20 @@ class SensorTemp(Sensor):
 
         Output: float with temperature in °C, unchanged measurements are suppressed.
     """
-    def __init__(self, name, driver, interval=10.0, unit='°C', _cont=False):
+    def __init__(self, name, port, interval=10.0, unit='°C', _cont=False):
         super().__init__(name, _cont=_cont)
-        self.driver = driver
+        self.port = port
         self.unit = unit
         self.interval = min(1., float(interval))
-        self.data = self.driver.read()
+        self._driver = io_registry.driver_factory(port, PortFunc.ADC)
+        self.data = self._driver.read()
         self._reader_thread = None
         self._reader_stop = False
         self._read_err = False
 
     def __getstate__(self):
         state = super().__getstate__()
-        state.update(driver=self.driver)
+        state.update(port=self.port)
         state.update(interval=self.interval)
         state.update(unit=self.unit)
         log.debug('< SensorTemp.getstate %r', state)
@@ -62,10 +63,10 @@ class SensorTemp(Sensor):
 
     def __setstate__(self, state):
         log.debug('SensorTemp.setstate %r', state)
-        self.__init__(state['name'], state['driver'], interval=state['interval'], unit=state['unit'], _cont=True)
+        self.__init__(state['name'], state['port'], interval=state['interval'], unit=state['unit'], _cont=True)
 
     def __str__(self):
-        return '{}({})'.format(type(self).__name__, self.driver.name)
+        return '{}({})'.format(type(self).__name__, self.port)
 
     def plugin(self, bus):
         super().plugin(bus)
@@ -85,7 +86,7 @@ class SensorTemp(Sensor):
         while not self._reader_stop:
             log.debug('SensorTemp.reader looping %r', self.data)
             try:
-                val = round(self.driver.read(), 2)
+                val = round(self._driver.read(), 2)
                 self._read_err = False
                 if self.data != val:
                     self.data = val
@@ -108,7 +109,7 @@ class SensorTemp(Sensor):
     def get_settings(self):
         settings = super().get_settings()
         settings.append(('unit', 'Einheit', self.unit, 'type="text"'))
-        settings.append((None, 'Sensor driver', self.driver.name, 'type="text"'))
+        settings.append(('port', 'Sensor', self.port, 'type="text"'))
         return settings
 
 
@@ -645,22 +646,23 @@ class Device(BusListener):
 class DeviceSwitch(Device):
     """ A binary output to a relais or GPIO pin.
     """
-    def __init__(self, name, inputs, driver, inverted=0, _cont=False):
+    def __init__(self, name, inputs, port, inverted=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.inverted = int(inverted)
-        self.driver = driver
+        self.port = port
+        self._driver = io_registry.driver_factory(port, PortFunc.OUT)
         self.switch(self.data if _cont else 0)
         log.info('%s init to %r|%f|%f', self.name, _cont, self.data, inverted)
 
     def __getstate__(self):
         state = super().__getstate__()
-        state.update(driver=self.driver)
+        state.update(port=self.port)
         state.update(inverted=self.inverted)
         return state
 
     def __setstate__(self, state):
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], state['driver'], inverted=state['inverted'], _cont=True)
+        self.__init__(state['name'], state['inputs'], state['port'], inverted=state['inverted'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -673,9 +675,9 @@ class DeviceSwitch(Device):
 
         log.info('DeviceSwitch %s: turns %s', self.id, 'ON' if self.data else 'OFF')
         if not self.inverted:
-            self.driver.write(self.data)
+            self._driver.write(self.data)
         else:
-            self.driver.write(not self.data)
+            self._driver.write(not self.data)
 
         self.post(MsgData(self.id, self.data))   # to make our state known
 
@@ -693,30 +695,29 @@ class DeviceSwitch(Device):
 
 class SinglePWM(Device):
     """ Analog PWM output, using input data as a percentage of full range.
-          squared - perceptive brightness correction, close to linear
-                      brightness perception
+          percept - brightness correction, close to linear perception
           minimum - set minimal duty cycle for input >0, fixes flicker of
                       poorly dimming devices, and motor start
           maximum - set maximum duty cycle, allows to limit
     """
-# TODO: currently a logging dummy, add a driver for the actual HW.
-    def __init__(self, name, inputs, driver, squared=False, minimum=0, maximum=100, _cont=False):
+    def __init__(self, name, inputs, port, percept=False, minimum=0, maximum=100, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
-        self.driver = driver
-        self.squared = bool(squared)   # TODO: change to property, to allow immediate changes
+        self.port = port
+        self._driver = io_registry.driver_factory(port, PortFunc.PWM)
+        self.percept = bool(percept)   # TODO: change to property, to allow immediate changes
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)
         if not _cont:
             self.data = 0
         self.unit = '%'
         self.set_percent(self.data)
-        log.info('%s init to %r | sq %r | min %f | max %f', self.name, self.data, squared, minimum, maximum)
+        log.info('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
 
 
     def __getstate__(self):
         state = super().__getstate__()
-        state.update(driver=self.driver)
-        state.update(squared=self.squared)
+        state.update(port=self.port)
+        state.update(percept=self.percept)
         state.update(minimum=self.minimum)
         state.update(maximum=self.maximum)
         log.debug('SinglePWM.getstate %r', state)
@@ -725,7 +726,7 @@ class SinglePWM(Device):
     def __setstate__(self, state):
         log.debug('SinglePWM.setstate %r', state)
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], state['driver'], squared=state['squared'], minimum=state['minimum'], maximum=state['maximum'], _cont=True)
+        self.__init__(state['name'], state['inputs'], state['port'], percept=state['percept'], minimum=state['minimum'], maximum=state['maximum'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -741,13 +742,13 @@ class SinglePWM(Device):
             out_val = out_val / 100 * out_range
             log.debug('  scale to %f %% [%f]', out_val, out_range)
             out_val += self.minimum
-            if self.squared:
+            if self.percept:
                 out_val = (out_val ** 2) / (100 ** 2) * 100
-                log.debug('  squared to %f %%', out_val)
+                log.debug('  percept to %f %%', out_val)
         log.debug('    finally %f %%', out_val)
         self.data = out_val
 
-        self.driver.write(out_val)
+        self._driver.write(out_val)
 
         self.post(MsgData(self.id, round(out_val, 4)))   # to make our state known
 
@@ -761,5 +762,5 @@ class SinglePWM(Device):
         settings = super().get_settings()
         settings.append(('minimum', 'Minimum [%]', self.minimum, 'type="number" min="0" max="99"'))
         settings.append(('maximum', 'Maximum [%]', self.maximum, 'type="number" min="1" max="100"'))
-        settings.append(('squared', 'Perceptive', self.squared, 'type="number" min="0" max="1"'))   # 'type="checkbox"' )
+        settings.append(('percept', 'Perceptive', self.percept, 'type="number" min="0" max="1"'))   # 'type="checkbox"' )
         return settings

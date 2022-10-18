@@ -30,20 +30,16 @@ def api_node(node_id):
 
     if node:
         state = {}
-        state.update(node.__getstate__())
-        # FIXME: node.name shows incorrectly, this started with node.id containing xmlcharrefs
-        # ?? state['name'] = str(state['name'], encodingerrors='xmlcharrefreplace')
         state.update(id=node.id)
         state.update(type=type(node).__name__)
-        try:
+        state.update(node.__getstate__())
+
+        # FIXME: node.name shows incorrectly, this started with node.id containing xmlcharrefs
+        # ?? state['name'] = str(state['name'], encodingerrors='xmlcharrefreplace')
+        if hasattr(node, 'get_renderdata'):
             state.update(render_data=node.get_renderdata())
-        except Exception as ex:
-            log.debug('API exception: ' + ex.message)
-            pass
-        try:
+        if hasattr(node, 'alert'):
             state.update(alert=node.alert)
-        except:
-            pass
         log.debug(state)
 
         return json.dumps(state, default=vars)

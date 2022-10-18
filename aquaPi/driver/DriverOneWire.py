@@ -4,6 +4,7 @@ import sys
 import logging
 import os
 from os import path
+import glob
 import math
 import time
 import random
@@ -11,7 +12,7 @@ import random
 from .base import *
 
 
-log = logging.getLogger('Driver 1-wire')
+log = logging.getLogger('DriverOneWire')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 log.setLevel(logging.WARNING)
@@ -23,27 +24,43 @@ log.setLevel(logging.WARNING)
 
 
 class DriverDS1820(InDriver):
-    # @staticmethod
-    # def find():
+    @staticmethod
+    def find_ports():
+        if not is_raspi():
+            # name: IoPort('function', 'driver', 'cfg')
+            io_ports = { 'DS1820 xA2E9C':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-0119383a2e9c', 'fast': True, 'fake': True})
+                       , 'DS1820 x7A71E':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-01193867a71e', 'fast': True, 'fake': True}) }
+        else:
+            io_ports = {}
+            cnt = 1
+            for sensor in glob.glob('/sys/bus/w1/devices/28-*'):
+                port_name = 'DS1829 x%s' % sensor[-5:].upper()
+                io_ports[port_name] = IoPort(PortFunc.ADC, DriverDS1820, {'address': sensor})
+                cnt += 1
+        return io_ports
 
-    def __init__(self, cfg):
+    def __init__(self, func, cfg):
         """ 1-wire temperature sensor of Dallas DS1820 series
             Sensor types vary by conversion speed and resolution.
             Paarasitic power is supported; the typical read error of 85°C
             resulting from this (on cheap sensors?) is filtered out before
             an exception is raised,
             cfg = { address : string   # 1-wire bus address, see DriverDS1820.find()
-                  , fast: False        # increase precision & switch frequncy (disable moving avaerage)
+TODO: move              , fast: False        # increase precision & switch frequncy (disable moving avaerage)
                   , fake: False        # force driver simulation even on Raspi
-                  , fake_inival: 25.0  # start value for the fake driver
+                  , fake_initval: 25.0  # start value for the fake driver
                   }
             Fake is always set on non-Raspi.
         """
-        super().__init__(cfg)
+        if func not in [PortFunc.ADC]:
+            raise DriverParamError('This driver supports ADC, nothing else.')
+
+        super().__init__(func, cfg)
         self.name = 'DS1820 @ ' + cfg['address']
         if self._fake:
             self.name = '!' + self.name
 
+        # TODO move 'fast' to the receiver(s)
         self._fast = False
         if 'fast' in cfg:
             self._fast |= bool(cfg['fast'])

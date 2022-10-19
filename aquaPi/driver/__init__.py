@@ -31,7 +31,12 @@ for drv_path in __path__:
     for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
         log.debug('Found driver file ' + drv_file)
 
-        drv_name = path.basename(drv_file).removeprefix(DRIVER_FILE_PREFIX).removesuffix('.py')
+        # drv_name = path.basename(drv_file).removeprefix(DRIVER_FILE_PREFIX).removesuffix('.py')
+        drv_name = path.basename(drv_file)
+        if drv_name.startswith(DRIVER_FILE_PREFIX):
+            drv_name = drv_name[len(DRIVER_FILE_PREFIX):]
+        if drv_name.endswith('.py'):
+            drv_name = drv_name[:-3]
         drv_name = __name__ + '.' + drv_name.lower()
         drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
         log.debug('Driver spec ' + str(drv_spec))

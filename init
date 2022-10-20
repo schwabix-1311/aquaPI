@@ -30,6 +30,11 @@ echo ===== get all python modules
 pip3 install -r requirements.txt
 echo =====
 
-echo "To run the development server, use './run'"
-echo "The debug server is 'http://localhost:5000'"
-echo "'deactivate' will return to 'normal' - whatever that is ;-)"
+echo "There are two scripts to run the development server:"
+echo "  './run' should be used to start the software in a SSH"
+echo "     shell, termination of the shell will not hang up (HUP)"
+echo "     the process, and output is tee-ed to run.log"
+echo "  './dbg' starts without output redirect to allow debugger"
+echo "     interaction. If used via SSH the process will die"
+echo "     when you close the shell."
+echo "Use your browser to see the UI at 'http://<localIP>:5000'"

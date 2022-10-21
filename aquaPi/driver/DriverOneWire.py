@@ -34,7 +34,7 @@ class DriverDS1820(InDriver):
             io_ports = {}
             cnt = 1
             for sensor in glob.glob('/sys/bus/w1/devices/28-*'):
-                port_name = 'DS1829 x%s' % sensor[-5:].upper()
+                port_name = 'DS1820 x%s' % sensor[-5:].upper()
                 io_ports[port_name] = IoPort(PortFunc.ADC, DriverDS1820, {'address': sensor})
                 cnt += 1
         return io_ports
@@ -70,11 +70,11 @@ TODO: move              , fast: False        # increase precision & switch frequ
             self._err_cnt = 0
             self._err_retry = 3
             # DS1820 family:  /sys/bus/w1/devices/28-............/temperature(25125) ../resolution(12) ../conv_time(750)
-            self._sysfs_path = '/sys/bus/w1/devices/%s/' % cfg['address']
-            if not path.exists(self._sysfs_path):
-                raise DriverInvalidAddrError(adr=self._sysfs_path)
-            self._temp = path.join(self._sysfs_path, 'temperature')
-            # required? read resolution: _sysfs_path, 'resolution' [bits) e.g. 12
+            self._sysfs_addr = cfg['address']
+            if not path.exists(self._sysfs_addr):
+                raise DriverInvalidAddrError(adr=self._sysfs_addr)
+            self._temp = path.join(self._sysfs_addr, 'temperature')
+            # required? read resolution: _sysfs_addr, 'resolution' [bits) e.g. 12
         else:
             self._initval = 25.0
             if 'fake_initval' in cfg:

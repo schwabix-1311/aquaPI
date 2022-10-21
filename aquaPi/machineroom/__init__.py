@@ -110,7 +110,7 @@ class MachineRoom:
             # single temp sensor, switched relais
             wasser_i = SensorTemp('Wasser', 'DS1820 xA2E9C')
             wasser = CtrlMinimum('Temperatur', wasser_i.id, 25.0)
-            wasser_o = DeviceSwitch('Heizstab', wasser.id, 'GPIO 12')
+            wasser_o = DeviceSwitch('Heizstab', wasser.id, 'GPIO 12', inverted=True)
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)

@@ -40,7 +40,7 @@ class DriverPWM(DriverPWMbase):
     """
     @staticmethod
     def find_ports():
-        if not is_raspi() or True:
+        if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg')
             io_ports = { 'PWM 0':  IoPort(PortFunc.PWM, DriverPWM, {'pin': 18, 'channel': 0, 'fake': True})
                        , 'PWM 1':  IoPort(PortFunc.PWM, DriverPWM, {'pin': 19, 'channel': 1, 'fake': True}) }

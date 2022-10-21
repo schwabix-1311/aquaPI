@@ -33,21 +33,19 @@ class DriverGPIO(OutDriver, InDriver):
     """
     @staticmethod
     def find_ports():
-        if not is_raspi() or True:
+        if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg')
             io_ports = { 'GPIO 0':  IoPort(PortFunc.IO, DriverGPIO, {'pin': 0, 'fake': True})
                        , 'GPIO 1':  IoPort(PortFunc.IO, DriverGPIO, {'pin': 1, 'fake': True})
                        , 'GPIO 12': IoPort(PortFunc.IO, DriverGPIO, {'pin': 12, 'fake': True}) }
         else:
             io_ports = {}
-            cnt = 0
             for pin in range(28):
                 try:
                     func = PinFunc(GPIO.gpio_function(pin))
                     if func in [PinFunc.IN, PinFunc.OUT]:
-                        port_name = 'GPIO %d' % cnt
+                        port_name = 'GPIO %d' % pin
                         io_ports[port_name] = IoPort(PortFunc.IO, DriverGPIO, {'pin': pin})
-                        cnt += 1
                     else:
                         log.debug('pin %d is in use as %s' % (pin, func.name))
                 except:

@@ -130,9 +130,9 @@ class MachineRoom:
                 dawn_c = CtrlLight('Dämmerlicht', dawn_schedule.id, fade_time=30*60)
                 dawn_c.plugin(self.bus)
 
-                light_or = Or('Licht-Oder', [light_c.id, dawn_c.id])
-                light_or.plugin(self.bus)
-                light_pwm = SinglePWM('Dimmer', light_or.id, 'PWM 0', percept=True, maximum=80)
+                light_max = Max('Max Licht', [light_c.id, dawn_c.id])
+                light_max.plugin(self.bus)
+                light_pwm = SinglePWM('Dimmer', light_max.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
 
 

@@ -19,6 +19,20 @@ log.setLevel(logging.WARNING)
 # log.setLevel(logging.DEBUG)
 
 
+def get_unit_limits(unit):
+    if unit in ('°C', 'C'):
+        limits = 'min="15" max="33"'
+    elif unit in ('F', '°F'):
+        limits = 'min="59" max="90"'
+    elif unit in ('pH'):
+        limits = 'min="6.0" max="8.0"'
+    elif unit in ('%'):
+        limits = 'min="0" max="100"'
+    else:
+        limits = ''
+    return limits
+
+
 # ========== inputs AKA sensors ==========
 
 
@@ -36,17 +50,27 @@ class Sensor(BusNode):
 
 
 class SensorTemp(Sensor):
-    """ A temperature sensor, utilizing a Driver class for
-        different interface types.
-        Measurements taken in a worker thread, reading at most every 'interval' secs.
+    """ A temperature sensor, actually analog input for anything read from a port driver.
+        Just name and labels refer to temperatures.
+        Measurements taken in a worker thread$.
 
-        Output: float with temperature in °C, unchanged measurements are suppressed.
+        Options:
+            name     - unique name of this input node in UI
+            port     - name of a IoRegistry port to use
+            port     - name of a IoRegistry port driver to read input
+            interval - delay of reader loop, reader conversion time adds to this!
+            unit     - unit of measurement for labels
+            avg      - floating average, with 1=no average, 2..5=depth of averaging
+
+        Output:
+            float - posts stream of measurement in driver units, unchanged measurements are suppressed
     """
-    def __init__(self, name, port, interval=10.0, unit='°C', _cont=False):
+    def __init__(self, name, port, interval=10.0, unit='°C', avg=0, _cont=False):
         super().__init__(name, _cont=_cont)
-        self.port = port
-        self.unit = unit
+        self.port = port    # prop!
         self.interval = min(1., float(interval))
+        self.unit = unit
+        self.avg = min(max( 1, avg), 5)
         self._driver = io_registry.driver_factory(port, PortFunc.ADC)
         self.data = self._driver.read()
         self._reader_thread = None
@@ -58,12 +82,13 @@ class SensorTemp(Sensor):
         state.update(port=self.port)
         state.update(interval=self.interval)
         state.update(unit=self.unit)
+        state.update(avg=self.avg)
         log.debug('< SensorTemp.getstate %r', state)
         return state
 
     def __setstate__(self, state):
         log.debug('SensorTemp.setstate %r', state)
-        self.__init__(state['name'], state['port'], interval=state['interval'], unit=state['unit'], _cont=True)
+        self.__init__(state['name'], state['port'], interval=state['interval'], unit=state['unit'], avg=state['avg'], _cont=True)
 
     def __str__(self):
         return '{}({})'.format(type(self).__name__, self.port)
@@ -86,7 +111,9 @@ class SensorTemp(Sensor):
         while not self._reader_stop:
             log.debug('SensorTemp.reader looping %r', self.data)
             try:
-                val = round(self._driver.read(), 2)
+                val = self._driver.read()
+                val = (val + self.data * (self.avg - 1)) / self.avg
+                val = round(val, 2)
                 self._read_err = False
                 if self.data != val:
                     self.data = val
@@ -109,6 +136,7 @@ class SensorTemp(Sensor):
     def get_settings(self):
         settings = super().get_settings()
         settings.append(('unit', 'Einheit', self.unit, 'type="text"'))
+        settings.append(('avg', 'Mittelwert [1=direkt]', self.avg, 'type="number" min="1" max="5" step="1"'))
         settings.append(('port', 'Sensor', self.port, 'type="text"'))
         return settings
 
@@ -118,13 +146,18 @@ class Schedule(BusNode):
         trigger output (On=100 / Off=0).
         Internally working like cron; a spec is 'min hour day month weekday'.
         In contrast to cron we concatenate consecutive events to a long ON state,
-        i,e.  '20-24 9 * * *' is a MsgData(100) at 9:20 and MsgData(0) at 9:24,
-        while '20,24 9 * * *' sends two short On/Off pulses at 9:29 and 9:24.
-        The cron spec supports a sixth field appened. This is for seconds and will
-        switch the time base ("tick") from 1 minute to 1 second (hires cron).
-        By concatenation the shortest time between pulses is 2min or 2sec
+        i,e.  '20-24 9 * * *' outputs 100 at 9:20 and 0 at 9:24,
+        while '20,24 9 * * *' results in 100 at 9:20 & 9:24, and 0 at 9:21 & 9:25.
+        Highres cron is supported, where a sixth field defines seconds, and the
+        internal time base ("tick") changes from 1 minute to 1 second.
+        NOTE: the concatenation makes shortest time between pulses 2min or 2sec
 
-        Output: MsgData(100) at start time, MsgData)0) at end time.
+        Options:
+            name     - unique name of this input node in UI
+            cronspec - a cron-style definition with 5 or 6 fields
+
+        Output:
+            posts a single 100 at start time, a single 0 at end time.
     """
     # TODO: since cron specs are not always intuitive, and require more than 1 cron line to start or end long events at an odd minute (not yet supported!), this class should get simple start/end/repeat options.
 
@@ -271,7 +304,7 @@ class Schedule(BusNode):
 
 class Controller(BusListener):
     """ The base class of all controllers, i.e. BusNodes that connect
-        inputs with outputs (same may be just forwarding data)
+        1 input with output(s)he required core of each controller chain.
     """
     ROLE = BusRole.CTRL
 
@@ -301,13 +334,21 @@ class Controller(BusListener):
 
 
 class CtrlMinimum(Controller):
-    """ A controller switching an output to keep a minimum
-        input measuremnt by an adjustable threshold and
-        an optional hysteresis, e.g. for a heater.
+    """ A controller switching an output to keep a minimum input value.
+        Should usually drive an output changing the input in the appropriate
+        direction. Can also be used to generate warning or error states.
 
-        Output MsgData(100) when input falls below threshold-hyst.
-               MsgData(0) when input passes threshold+hyst.
+        Options:
+            name       - unique name of this controller node in UI
+            inputs     - id of a single (!) input to receive measurements from
+            threshold  - the minimum measurement to maintain
+            hysteresis - a tolerance, to reduce switch frequency
+
+        Output:
+            posts a single 100 when input < (threshold-hysteresis), 0 when input >= /thgreshold+hysteresis)
     """
+    # TODO: some controllers could have a threshold for max. active time -> warning
+
     def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.threshold = float(threshold)
@@ -346,9 +387,6 @@ class CtrlMinimum(Controller):
         ret = super().get_renderdata()
         ret.update(pretty_data='Ein' if self.data else 'Aus')
         ret.update(label='Status')
-        # TODO: see below @ CtrlMaximum
-        # if self._in_data > (self.threshold + self.hysteresis) * 1.05:
-        #     ret.update(alert=('HIGH', 'err'))
         if self._in_data < (self.threshold - self.hysteresis) * 0.95:
             ret.update(alert=('LOW', 'err'))
         elif self.data:
@@ -356,19 +394,32 @@ class CtrlMinimum(Controller):
         return ret
 
     def get_settings(self):
+        unit = '?'
+        for inp in self.get_inputs(True):
+            if hasattr(inp,'unit'):
+                unit = inp.unit
+                break
+        limits = get_unit_limits(unit)
+
         settings = super().get_settings()
-        settings.append(('threshold', 'Minimum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"'))
-        settings.append(('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('threshold', 'Minimum [%s]' % unit,  self.threshold, 'type="number" %s step="0.1"' % limits))
+        settings.append(('hysteresis', 'Hysteresis [%s]' % unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
 class CtrlMaximum(Controller):
-    """ A controller switching an output to keep a maximum
-        input measuremnt by an adjustable threshold and
-        an optional hysteresis, e.g. for a cooler, or pH
+    """ A controller switching an output to keep a maximum input value.
+        Should usually drive an output changing the input in the appropriate
+        direction. Can also be used to generate warning or error states.
 
-        Output MsgData(100) when input rises above threshold+hyst.
-               MsgData(0) when input passes threshold-hyst.
+        Options:
+            name       - unique name of this controller node in UI
+            inputs     - id of a single (!) input to receive measurements from
+            threshold  - the maximum measurement to maintain
+            hysteresis - a tolerance, to reduce switch frequency
+
+        Output:
+            posts a single 100 when input > (threshold-hysteresis), 0 when input <= /thgreshold+hysteresis)
     """
     def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
@@ -409,37 +460,46 @@ class CtrlMaximum(Controller):
         ret.update(label='Status')
         if self._in_data > (self.threshold + self.hysteresis) * 1.05:
             ret.update(alert=('HIGH', 'err'))
-        # TODO: instead Controller should have a threshold for max. active time -> warning
-        #       as e.g. for a cooler LOW warning would be caused by its counterpart, the heating
-        # elif self._in_data < (self.threshold - self.hysteresis) * 0.95:
-        #     ret.update(alert=('LOW', 'err'))
         elif self.data:
             ret.update(alert=('*', 'act'))
         return ret
 
     def get_settings(self):
+        unit = '?'
+        for inp in self.get_inputs(True):
+            if hasattr(inp,'unit'):
+                unit = inp.unit
+                break
+        limits = get_unit_limits(unit)
+
         settings = super().get_settings()
-        settings.append(('threshold', 'Maximum [°C]', self.threshold, 'type="number" min="15" max="30" step="0.1"'))
-        settings.append(('hysteresis', 'Hysteresis [K]', self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('threshold', 'Maximum [%s]' % unit, self.threshold, 'type="number" %s step="0.1"' % limits))
+        settings.append(('hysteresis', 'Hysteresis [%s]' % unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
 class CtrlLight(Controller):
     """ A single channel light controller with fader (dust/dawn).
-        When input goes to >0, a fader will send a series of
-        MsgData with increasing values over a period of fade_time,
+        When input goes to >0, a fader will post a series of
+        increasing values over the period of fade_time,
         to finally reach the target level. When input goes to 0
         the same fading period is appended (!) to reach 0.
 
-        Output: float 0...target  fade-in (or switch) when input goes to >0
-                float target...0  fade-out (or switch) after input goes to 0
+        Options:
+            name       - unique name of this controller node in UI
+            inputs     - id of a single (!) input to receive measurements from
+            fade_time  - time span in secs to transition to the target state
+
+        Output:
+            float - posts series of percentages after input state change
     """
-    # TODO: could add random variation, other profiles, and overheat reduction driven from temperature ...
+    # TODO: add random variation, other profiles
+    # TODO: overheat reduction driven from temperature - separate nodes!
 
     def __init__(self, name, inputs, fade_time=None, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.unit = '%'
-        self.fade_time = fade_time   # TODO: change to property, to allow immediate changes
+        self.fade_time = fade_time   # TODO: change to property for immediate changes, see Schedule
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
         self._fader_thread = None
@@ -520,7 +580,7 @@ class CtrlLight(Controller):
 class Auxiliary(BusListener):
     """ Auxiliary nodes are for advanced configurations where
         direct connections of input to controller or controller to
-        output does not suffice.
+        output aren't sufficient.
     """
     ROLE = BusRole.AUX
 
@@ -538,36 +598,46 @@ class Auxiliary(BusListener):
 
 class Average(Auxiliary):
     """ Auxiliary node to average 2 or more inputs together.
-        The average wights either each input equally (where a dead source
+        The average weights either each input equally (where a dead source
         may factor in an incorrect old value),
         or an "unfair moving average", where the most active input is
         over-represented. In case an input fails its effect would
-        decrease quickly, thus it's a good selection for sensor redundancy.
+        decrease quickly, thus it's a better selection for sensor redundancy.
 
-        Output: float arithmetic average of all sensors,
-                of moving average of all delivering inputs.
+        Options:
+            name       - unique name of this auxiliar node in UI
+            inputs     - collection of input ids
+            unfair_avg - 0 = equally weights all inputs in output
+                         >0 = moving average of a received input values
+
+        Output:
+            float - posts arithmetic average of inputs whenever average changes
     """
-    def __init__(self, name, inputs, _cont=False):
+    def __init__(self, name, inputs, unfair_avg=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         # 0 -> 1:1 average; >=2 -> moving average over 2..n values, weighted by reporting frequency
-        self.unfair_moving = 0
+        self.unfair_avg = unfair_avg
 
-    # def __getstate__(self):
-    #     return super().__getstate__()
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(unfair_avg=self.unfair_avg)
+        log.debug('Average.getstate %r', state)
+        return state
 
-    # def __setstate__(self, state):
-    #     self.data = state['data']
-    #     self.__init__(state, _cont=True)
+    def __setstate__(self, state):
+        log.debug('Average.setstate %r', state)
+        self.__init__(state['name'], state['inputs'], unfair_avg=state['unfair_avg'], _cont=True)
+
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            if self.unfair_moving:
+            if self.unfair_avg:
                 if self.data == -1:
                     self.data = float(msg.data)
                     # log.brief('Average %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
-                    val = round((self.data + float(msg.data)) / 2, self.unfair_moving)
+                    val = round((self.data + float(msg.data)) / 2, self.unfair_avg)
                     if (self.data != val):
                         self.data = val
                         # log.brief('Average %s: output %f', self.id, self.data)
@@ -589,13 +659,24 @@ class Average(Auxiliary):
         ret.update(label='Mittelwert')
         return ret
 
+    def get_settings(self):
+        settings = super().get_settings()
+        settings.append(('unfair_avg', 'Unweighted avg.', self.unfair_avg, 'type="number" min="0" step="1"'))
+        return settings
 
-class Or(Auxiliary):
-    """ Auxiliary node to output the hioger of two or more inputs.
+
+
+class Max(Auxiliary):
+    """ Auxiliary node to post the higher of two or more inputs.
         Can be used to let two controllers drive one output, or to have
         redundant inputs.
 
-        Output: the maximum of all listened inputs.
+        Options:
+            name       - unique name of this auxiliary node in UI
+            inputs     - collection of input ids
+
+        Output:
+            float - posts maximum of inputs whenever this changes
     """
     # def __getstate__(self):
     #     return super().__getstate__()
@@ -614,7 +695,7 @@ class Or(Auxiliary):
             val = round(val, 2)
             if (self.data != val):
                 self.data = val
-                # log.brief('Or %s: output %f', self.id, self.data)
+                # log.brief('Max %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
@@ -644,7 +725,16 @@ class Device(BusListener):
 
 
 class DeviceSwitch(Device):
-    """ A binary output to a relais or GPIO pin.
+    """ A binary output to a GPIO pin or relais.
+
+        Options:
+            name     - unique name of this output node in UI
+            inputs   - id of a single (!) input to receive data from
+            port     - name of a IoRegistry port driver to drive output
+            inverted - swap the boolean interpretation for active low outputs
+
+        Output:
+            drive output with bool(input), possibly inverted
     """
     def __init__(self, name, inputs, port, inverted=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
@@ -699,6 +789,20 @@ class SinglePWM(Device):
           minimum - set minimal duty cycle for input >0, fixes flicker of
                       poorly dimming devices, and motor start
           maximum - set maximum duty cycle, allows to limit
+    """
+    """ An analog output using PWM (or DAC), 0..100% input range is
+        mapped to the pysical minimum...maximum range of this node.
+
+        Options:
+            name     - unique name of this output node in UI
+            inputs   - id of a single (!) input to receive data from
+            port     - name of a IoRegistry port driver to drive output
+            minimum  - minimum percentage value to avoid flicker, or reliable start (motor!)
+            maximum  - upper physical percentage limit (overload, brightness, ...)
+            percept  - perceptive correction using in², close to linear brightness perception
+
+        Output:
+            drive analog output with minimum...maximum, optional perceptive correction
     """
     def __init__(self, name, inputs, port, percept=False, minimum=0, maximum=100, _cont=False):
         super().__init__(name, inputs, _cont=_cont)

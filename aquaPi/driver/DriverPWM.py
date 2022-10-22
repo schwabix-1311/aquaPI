@@ -23,7 +23,7 @@ log.setLevel(logging.WARNING)
 # ========== PWM ==========
 
 
-class DriverPWMbase(Driver):
+class DriverPWMbase(OutDriver):
     """ abstrract base of PWM drivers
     """
     def __init__(self, func, cfg):
@@ -76,7 +76,11 @@ class DriverPWM(DriverPWMbase):
 
         self.write(0)
 
+    def __del__(self):
+        self.close()
+
     def close(self):
+        log.debug('Closing %r' % self)
         if not self._fake:
             with open(path.join(self._sysfs, 'enable'), 'wt') as p:
                 p.write('0')
@@ -134,7 +138,11 @@ if False:
 
             self.write(0)
 
+        def __del__(self):
+            self.close()
+
         def close(self):
+            log.debug('Closing %r' % self)
             if not self._fake:
                 self._pwm.stop()
                 GPIO.cleanup(self._pin)

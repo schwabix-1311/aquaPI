@@ -56,7 +56,6 @@ class SensorTemp(Sensor):
 
         Options:
             name     - unique name of this input node in UI
-            port     - name of a IoRegistry port to use
             port     - name of a IoRegistry port driver to read input
             interval - delay of reader loop, reader conversion time adds to this!
             unit     - unit of measurement for labels
@@ -67,15 +66,15 @@ class SensorTemp(Sensor):
     """
     def __init__(self, name, port, interval=10.0, unit='°C', avg=0, _cont=False):
         super().__init__(name, _cont=_cont)
-        self.port = port    # prop!
+        self._driver = None
         self.interval = min(1., float(interval))
         self.unit = unit
         self.avg = min(max( 1, avg), 5)
-        self._driver = io_registry.driver_factory(port, PortFunc.ADC)
-        self.data = self._driver.read()
         self._reader_thread = None
         self._reader_stop = False
         self._read_err = False
+        self.port = port
+        self.data = self._driver.read()
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -92,6 +91,17 @@ class SensorTemp(Sensor):
 
     def __str__(self):
         return '{}({})'.format(type(self).__name__, self.port)
+
+    @property
+    def port(self):
+        return self._port
+
+    @port.setter
+    def port(self, port):
+        if self._driver:
+            io_registry.driver_release(self.port)
+        self._driver = io_registry.driver_factory(port, PortFunc.ADC)
+        self._port = port
 
     def plugin(self, bus):
         super().plugin(bus)
@@ -111,10 +121,12 @@ class SensorTemp(Sensor):
         while not self._reader_stop:
             log.debug('SensorTemp.reader looping %r', self.data)
             try:
-                val = self._driver.read()
-                val = (val + self.data * (self.avg - 1)) / self.avg
-                val = round(val, 2)
-                self._read_err = False
+                val = self.data
+                if self._driver:
+                    val = self._driver.read()
+                    val = (val + self.data * (self.avg - 1)) / self.avg
+                    val = round(val, 2)
+                    self._read_err = False
                 if self.data != val:
                     self.data = val
                     log.brief('SensorTemp %s: output %f', self.id, self.data)
@@ -193,13 +205,13 @@ class Schedule(BusNode):
         return self._cronspec
 
     @cronspec.setter
-    def cronspec(self, value):
+    def cronspec(self, cronspec):
         # validate it here, since the exception would be raised in our thread.
         now = datetime.now().astimezone()  # = local tz, this enables DST
-        validcron = croniter(value, now, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)
+        validcron = croniter(cronspec, now, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)
 
         self._stop_thread()
-        self._cronspec = value
+        self._cronspec = cronspec
         self._start_thread()
 
     def plugin(self, bus):
@@ -499,7 +511,7 @@ class CtrlLight(Controller):
     def __init__(self, name, inputs, fade_time=None, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.unit = '%'
-        self.fade_time = fade_time   # TODO: change to property for immediate changes, see Schedule
+        self.fade_time = fade_time
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
         self._fader_thread = None
@@ -665,7 +677,6 @@ class Average(Auxiliary):
         return settings
 
 
-
 class Max(Auxiliary):
     """ Auxiliary node to post the higher of two or more inputs.
         Can be used to let two controllers drive one output, or to have
@@ -738,9 +749,9 @@ class DeviceSwitch(Device):
     """
     def __init__(self, name, inputs, port, inverted=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
-        self.inverted = int(inverted)
+        self._driver = None
         self.port = port
-        self._driver = io_registry.driver_factory(port, PortFunc.OUT)
+        self.inverted = int(inverted)
         self.switch(self.data if _cont else 0)
         log.info('%s init to %r|%f|%f', self.name, _cont, self.data, inverted)
 
@@ -753,6 +764,26 @@ class DeviceSwitch(Device):
     def __setstate__(self, state):
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], state['port'], inverted=state['inverted'], _cont=True)
+
+    @property
+    def port(self):
+        return self._port
+
+    @port.setter
+    def port(self, port):
+        if self._driver:
+            io_registry.driver_release(self.port)
+        self._driver = io_registry.driver_factory(port, PortFunc.OUT)
+        self._port = port
+
+    @property
+    def inverted(self):
+        return self._inverted
+
+    @inverted.setter
+    def inverted(self, inverted):
+       self._inverted = inverted
+       self.switch(self.data)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -806,14 +837,14 @@ class SinglePWM(Device):
     """
     def __init__(self, name, inputs, port, percept=False, minimum=0, maximum=100, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
-        self.port = port
-        self._driver = io_registry.driver_factory(port, PortFunc.PWM)
-        self.percept = bool(percept)   # TODO: change to property, to allow immediate changes
+        self._driver = None
+        self.percept = bool(percept)
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)
         if not _cont:
             self.data = 0
         self.unit = '%'
+        self.port = port
         self.set_percent(self.data)
         log.info('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
 
@@ -831,6 +862,17 @@ class SinglePWM(Device):
         log.debug('SinglePWM.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], state['port'], percept=state['percept'], minimum=state['minimum'], maximum=state['maximum'], _cont=True)
+
+    @property
+    def port(self):
+        return self._port
+
+    @port.setter
+    def port(self, port):
+        if self._driver:
+            io_registry.driver_release(self.port)
+        self._driver = io_registry.driver_factory(port, PortFunc.PWM)
+        self._port = port
 
     def listen(self, msg):
         if isinstance(msg, MsgData):

@@ -82,6 +82,14 @@ TODO: move              , fast: False        # increase precision & switch frequ
             self._val = self._initval
             self._dir = 1
 
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        log.debug('Closing %r' % self)
+        pass
+
+
     def read(self):
         if not self._fake:
             with open(self._temp, 'r') as temp:

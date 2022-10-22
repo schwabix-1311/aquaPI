@@ -10,10 +10,11 @@ from .msg_types import *
 
 
 log = logging.getLogger('MsgBus')
-log.setLevel(logging.WARNING)
-log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
+log.setLevel(logging.WARNING)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
 
 
 class BusRole(Flag):

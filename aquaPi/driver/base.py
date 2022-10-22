@@ -15,8 +15,8 @@ log = logging.getLogger('Driver Base')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 log.setLevel(logging.WARNING)
-log.setLevel(logging.INFO)
-log.setLevel(logging.DEBUG)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
 
 
 # ========== common functions ==========
@@ -225,9 +225,20 @@ class IoRegistry(object):
             io_port = IoRegistry._map[port]
             driver = io_port.driver(func, io_port.cfg)
 
-            IoRegistry._inuse.update(port = IoPort(func, io_port.driver, io_port.cfg))
+            IoRegistry._inuse.update({port: IoPort(io_port.function, driver, io_port.cfg)})
             del IoRegistry._map[port]
         except Exception as ex:
             #TODO report error, e.g.
             log.exception('Failed to create driver:' + port)
         return driver
+
+    def driver_release(self, port):
+        log.debug('release driver for %r', port)
+        if not port in IoRegistry._inuse.keys():
+            raise DriverParamError('There is driver open for port %s' % port)
+
+        io_port = IoRegistry._inuse[port]
+        io_port.driver.close()
+
+        IoRegistry._map.update({port: IoPort(io_port.function, type(io_port.driver), io_port.cfg)})
+        del IoRegistry._inuse[port]

@@ -19,19 +19,25 @@ log.setLevel(logging.WARNING)
 
 mr = None
 
+
+def init(storage):
+    mr = MachineRoom(storage)
+    return mr
+
+
 # This is brute force, as a destructor AKA __del__ is not called after Ctrl-C.
 # However, the concept of shutting down a web server by app code is a no-no.
 # A development server might allow this, but this was removed from werkzeug with v2.1.
 # Instead, I could crete a route /flush and a button (debug-only). This should
-# save_nodes and bring all nodes to a safe state, e.g. heater & (some) pumps OFF
-# Seen as an appliance aquaPi should somehow allow a restart for updates, recover SW state
+# save_nodes and bring all nodes to a safe state, e.g. heater OFF
+# Seen as an appliance aquaPi should somehow allow a restart for updates, or to recover SW state
 
 @atexit.register
 def cleanup():
     log.brief('Preparing shutdown ...')
     if  mr and mr.bus:
         # this does not work completely, teardown aborts half-way.
-        # Best guess: we run multi-threaded and have only limited time until we're killed.
+        # Best guess: we run multi-threaded as a daemon and have only limited time until we're killed.
         mr.save_nodes(mr.bus)
         mr.bus.teardown()
         mr.bus = None
@@ -45,12 +51,11 @@ class MachineRoom:
         Some bus nodes start worker threads (e.g. sensors), the rest
         works in msg handlers and callbacks.
     """
-    def __init__(self, config):
+    def __init__(self, bus_storage):
         """ Create everything needed to get the machinery going.
             So far the only thing here is the bus.
         """
-        #TODO: this might move to the DB, currently separate file is handy
-        self.bus_storage = config['NODES']
+        self.bus_storage = bus_storage
 
         if not path.exists(self.bus_storage):
             self.bus = MsgBus()  #threaded=True)

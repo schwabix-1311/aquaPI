@@ -52,7 +52,6 @@ def create_app(test_config=None):
     # in debug mode, app is restarted in a 2nd interpreter and thus we
     # duplicate all our threads, which then compete :-(
     # https://stackoverflow.com/questions/17552482/hook-when-flask-restarts-in-debug-mode
-    # For safe debug/auto-reload operation, we should also have atexit.register(cleanOnExit)
     import werkzeug
     if app.debug and not werkzeug.serving.is_running_from_reloader():
         return app
@@ -96,8 +95,7 @@ def create_app(test_config=None):
         return app
 
     from . import machineroom
-    machineroom.mr = machineroom.MachineRoom(app.config)
-    app.machineroom = machineroom.mr
-    app.bus = machineroom.mr.bus
+    app.machineroom = machineroom.init(app.config['NODES'])
+    app.bus = app.machineroom.bus
 
     return app

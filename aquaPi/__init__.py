@@ -68,16 +68,16 @@ def create_app(test_config=None):
     def inject_globals():
         return dict(bus=app.bus)
 
-    from . import home
+    from .pages import home
     app.register_blueprint(home.bp)
 
-    from . import settings
+    from .pages import settings
     app.register_blueprint(settings.bp)
 
-    from . import config
+    from .pages import config
     app.register_blueprint(config.bp)
 
-    from . import about
+    from .pages import about
     app.register_blueprint(about.bp)
 
     from . import api

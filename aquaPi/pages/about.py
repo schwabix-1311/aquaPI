@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 
-import time
-# import os
-# from resource import *
-# import sys
+import logging
 from flask import (
     Blueprint, render_template, json
 )
-from .sse_util import render_sse_template
+import time
+# import os
+# import sys
+# from resource import *
+
+from ..sse_util import render_sse_template
+
+log = logging.getLogger('/about')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
+log.setLevel(logging.WARNING)
+# log.setLevel(logging.INFO)
+# log.setLevel(logging.DEBUG)
 
 
 bp = Blueprint('about', __name__)

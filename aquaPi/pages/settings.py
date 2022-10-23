@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 
-from flask import (
-    Flask, Blueprint, current_app, flash, request, render_template
-)
 import logging
+from flask import (
+    Blueprint, current_app, flash, request, render_template
+)
+
 from ..machineroom import msg_bus
 
-log = logging.getLogger('Settings')
+log = logging.getLogger('/settings')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
 
 bp = Blueprint('settings', __name__)
 

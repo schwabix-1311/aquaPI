@@ -18,7 +18,12 @@
     <template id="vueHome">
         <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
             {% for node in update %}
-                <component is='BusNode' id='{{ node.id }}' ></component><br/>
+                {% if 'Controller' in ('%s' % node.__class__.__bases__) %}
+                    <!-- component is='DebugNode' id='{{ node.id }}' ></component><br/ -->
+                    <component is='CtrlNode' id='{{ node.id }}' ></component><br/>
+                {% else %}
+                    <component is='BusNode' id='{{ node.id }}' ></component><br/>
+                {% endif %}
             {% endfor %}
         </div>
     </template>

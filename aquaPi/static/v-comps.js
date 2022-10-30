@@ -109,3 +109,39 @@ const BusNode = {
     `
 };
 Vue.component('BusNode', BusNode);
+
+const CtrlNode = {
+    extends: BusNode,
+    async beforeMount () {
+        await this.$root.updateNode(this.id, addNew=true)
+
+        // recurse all inputs? Advanced Ctrl have a chain and n:1
+        this.in_id = this.node.inputs.sender[0]
+        await this.$root.updateNode(this.in_id, addNew=true)
+    },
+    template: `
+          <div class="uk-card uk-card-small uk-card-default">
+            <div class="uk-card-header">
+              <h1 class="uk-card-title uk-margin-remove-bottom">
+                <span v-if="node != undefined">Controller [[ node.name ]]</span>
+                <span v-else>[[ id ]] loading ...</span>
+              </h1>
+              <div :hidden="!getAlert">
+                <div v-bind:class="getAlertClass">[[ getAlert ]]</div>
+              </div
+            </div>
+            <div v-if="node != undefined" class="uk-card-body uk-padding-remove">
+              <div class="uk-grid-collapse" uk-grid>
+                <div class="uk-width-2-3">
+                  [[ getLabel ]]
+                </div
+                <div class="uk-width-expand">
+                  [[ getPrettyData ]]
+                </div>
+              </div>
+              <component is='BusNode' :id='in_id' ></component><br/>
+            </div>
+          </div>
+    `
+};
+Vue.component('CtrlNode', CtrlNode);

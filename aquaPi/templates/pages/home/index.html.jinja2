@@ -18,12 +18,14 @@
     <template id="vueHome">
         <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
             {% for node in update %}
-                <component is='BusNode' id='{{ node.id }}' ref='{{ node.id }}'></component><br/>
+                <component is='BusNode' id='{{ node.id }}' ></component><br/>
             {% endfor %}
         </div>
     </template>
 
-    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://unpkg.com/vue@2.7/dist/vue.js"></script>
+    <!-- script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script -->
+
     <script src="{{ url_for('static', filename='v-comps.js') }}"></script>
     <script src="{{ url_for('static', filename='home.js') }}"></script>
 

@@ -7,69 +7,79 @@
  * quick implementation (import?) of new nodes W/O a Vue component
  */
 
-Vue.component( 'BusNode', {
+const AnyNode = {
     delimiters: ['[[', ']]'],
     props: {
         id: String
     },
     async beforeMount () {
-        this.node = await getNode(this.id)
-    },
-    data() {
-        return { 
-            node: null
-        }
+        this.$root.updateNode(this.id, addNew=true)
     },
     computed: {
+        node() {
+            if (this.id in this.$root.nodes)
+                return this.$root.nodes[this.id]
+            // may be undefined beforeMount
+            return undefined
+        },
+    },
+};
+
+const DebugNode = {
+    extends: AnyNode,
+    template: `
+          <div class="uk-card uk-card-small uk-card-default">
+            <div class="uk-card-header">
+              <h2 class="uk-card-title uk-margin-remove-bottom">
+                [[ id ]] - raw:
+              </h2>
+            </div>
+            <div class="uk-card-body uk-padding-remove">
+              <div class="uk-grid-collapse" uk-grid>
+                <div>
+                  [[ $root.nodes[id] ]]
+                </div>
+              </div>
+            </div>
+          </div>
+    `
+};
+Vue.component('DebugNode', DebugNode);
+
+const BusNode = {
+    extends: AnyNode,
+    computed: {
         getLabel() {
-            let ret = ''
-            if (this.node)
-                try {
-                    ret = this.node.render_data['label']
-                }
-                catch {
-                    ret = ""
-                }
-            return ret
+            return this.node?.render_data['label']
         },
         getPrettyData() {
-            let ret = ''
-            if (this.node)
-                try {
-                    ret = this.node.render_data['pretty_data']
-                }
-                catch {
-                    ret = this.node.data.toFixed(2)
-                }
-            return ret
+            try {
+                return this.node?.render_data['pretty_data']
+            }
+            catch {
+                return this.node?.data.toFixed(2)
+            }
         },
         getAlert() {
-            try {
-                ret = this.node.render_data['alert'][0]
-            }
-            catch {
-                ret = null
-            }
-            return ret
+            if ((this.node === undefined) || !('alert' in this.node.render_data))
+                return ''
+            return this.node.render_data['alert'][0]
         },
         getAlertClass() {
+            if ((this.node === undefined) || !('alert' in this.node.render_data))
+                return ''
+            const severity_map = { 'act': 'uk-label-success'
+                                 , 'wrn': 'uk-label-warning'
+                                 , 'err': 'uk-label-danger'
+                                 , 'std': 'uk-label-default'
+                                 }
+            let ret = "uk-card-badge uk-label "
+            severity = this.node.render_data['alert'][1]
             try {
-                const severity_map = { 'act': 'uk-label-success'
-                                     , 'wrn': 'uk-label-warning'
-                                     , 'err': 'uk-label-danger'
-                                     , 'std': 'uk-label-default'
-                                     }
-                severity = this.node.render_data['alert'][1]
-                ret = "uk-card-badge uk-label "
-                try {
-                    ret += severity_map[severity]
-                }
-                catch {
-                    console.warn('Unknown alert severity: "' + severity + '" used by ' + this.node.id)
-                }
+                ret += severity_map[severity]
             }
             catch {
-                ret = null
+                console.warn('Unknown alert severity: "' + severity + '" used by ' + this.id)
             }
             return ret
         }
@@ -78,14 +88,14 @@ Vue.component( 'BusNode', {
           <div class="uk-card uk-card-small uk-card-default">
             <div class="uk-card-header">
               <h2 class="uk-card-title uk-margin-remove-bottom">
-                <span v-if="node">[[ node.name ]]</span>
+                <span v-if="node != undefined">[[ node.name ]]</span>
                 <span v-else>[[ id ]] loading ...</span>
               </h2>
               <div :hidden="!getAlert">
                 <div v-bind:class="getAlertClass">[[ getAlert ]]</div>
               </div
             </div>
-            <div v-if="node" class="uk-card-body uk-padding-remove">
+            <div v-if="node != undefined" class="uk-card-body uk-padding-remove">
               <div class="uk-grid-collapse" uk-grid>
                 <div class="uk-width-2-3">
                   [[ getLabel ]]
@@ -97,5 +107,5 @@ Vue.component( 'BusNode', {
             </div>
           </div>
     `
-})
-
+};
+Vue.component('BusNode', BusNode);

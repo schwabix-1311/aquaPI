@@ -47,4 +47,3 @@ def render_sse_template(html, read, update, delay=1):
                     time.sleep(delay)
         return Response(events(), content_type='text/event-stream')
     return render_template(html, update=update, now=time.asctime())
-

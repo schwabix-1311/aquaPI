@@ -32,4 +32,4 @@ def home():
         nodes = bus.wait_for_changes()
         return json.dumps(nodes)
 
-    return render_sse_template('pages/home/index.html.jinja2', sse_update, nodes)
+    return render_sse_template('pages/home.html.jinja2', sse_update, nodes)

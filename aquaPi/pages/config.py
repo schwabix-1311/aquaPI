@@ -24,4 +24,4 @@ def config():
     # this template accesses nodes of all roles directly through context var "bus"
     # no real-time updates
 
-    return render_template('pages/config/index.html.jinja2')
+    return render_template('pages/config.html.jinja2')

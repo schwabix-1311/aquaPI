@@ -51,4 +51,4 @@ def about():
         values['now'] = time.asctime()
         return json.dumps(values)
 
-    return render_sse_template('pages/about/index.html.jinja2', sse_update, values, delay=1)
+    return render_sse_template('pages/about.html.jinja2', sse_update, values, delay=1)

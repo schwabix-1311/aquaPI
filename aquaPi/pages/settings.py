@@ -58,7 +58,7 @@ def settings():
 
     # TODO: need a mechanism to keep a POSTing form (<details>) open, or use JS collapsibles, sub_form= might be it
     # -> DONE, however, we might need to redirect to same page + anchor, otherwise we jump to top of page
-    return render_template('pages/settings/index.html.jinja2', sub_form=sub_form)
+    return render_template('pages/settings.html.jinja2', sub_form=sub_form)
 
 # @bp.route('/settings', methods=['POST'])
 # def settings_post():

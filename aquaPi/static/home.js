@@ -22,11 +22,13 @@ const App = {
             Vue.set(this.nodes, id, node)
         },
         async updateNode(id, addNew=false) {
-            if ((id in this.nodes) | addNew) {
-                //TODO: error handler - might loose connection
-                const response = await fetch('/api/node/' + id)
-                const node = await response.json()
-                this.setNode(id, node)
+            if (id !== undefined) {
+                if ((id in this.nodes) | addNew) {
+                    //TODO: error handler - might loose connection
+                    const response = await fetch('/api/node/' + id)
+                    const node = await response.json()
+                    this.setNode(id, node)
+                }
             }
         }
     }

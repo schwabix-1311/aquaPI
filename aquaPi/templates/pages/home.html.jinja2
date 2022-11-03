@@ -20,7 +20,7 @@
             {% for node in update %}
                 {% if 'Controller' in ('%s' % node.__class__.__bases__) %}
                     <!-- component is='DebugNode' id='{{ node.id }}' ></component><br/ -->
-                    <component is='CtrlNode' id='{{ node.id }}' ></component><br/>
+                    <component is='{{node.__class__.__name__}}' id='{{ node.id }}' ></component><br/>
                 {% else %}
                     <component is='BusNode' id='{{ node.id }}' ></component><br/>
                 {% endif %}

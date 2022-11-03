@@ -20,9 +20,9 @@ log.setLevel(logging.WARNING)
 
 
 def get_unit_limits(unit):
-    if unit in ('°C', 'C'):
+    if unit in ('°C'):
         limits = 'min="15" max="33"'
-    elif unit in ('F', '°F'):
+    elif unit in ('°F'):
         limits = 'min="59" max="90"'
     elif unit in ('pH'):
         limits = 'min="6.0" max="8.0"'
@@ -188,6 +188,7 @@ class Schedule(BusNode):
         self.hires = len(cronspec.split(' ')) > 5
         if not _cont:
             self.data = 0
+        self.unit = '%'
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -371,6 +372,13 @@ class CtrlMinimum(Controller):
         state = super().__getstate__()
         state.update(threshold=self.threshold)
         state.update(hysteresis=self.hysteresis)
+
+        for inp in self.get_inputs(True):
+            if hasattr(inp,'unit'):
+                unit = inp.unit
+                break
+        state.update(unit=unit)
+
         log.debug('CtrlMinimum.getstate %r', state)
         return state
 
@@ -397,8 +405,6 @@ class CtrlMinimum(Controller):
 
     def get_renderdata(self):
         ret = super().get_renderdata()
-        ret.update(pretty_data='Ein' if self.data else 'Aus')
-        ret.update(label='Status')
         if self._in_data < (self.threshold - self.hysteresis) * 0.95:
             ret.update(alert=('LOW', 'err'))
         elif self.data:
@@ -406,7 +412,6 @@ class CtrlMinimum(Controller):
         return ret
 
     def get_settings(self):
-        unit = '?'
         for inp in self.get_inputs(True):
             if hasattr(inp,'unit'):
                 unit = inp.unit
@@ -443,6 +448,13 @@ class CtrlMaximum(Controller):
         state = super().__getstate__()
         state.update(threshold=self.threshold)
         state.update(hysteresis=self.hysteresis)
+
+        for inp in self.get_inputs(True):
+            if hasattr(inp,'unit'):
+                unit = inp.unit
+                break
+        state.update(unit=unit)
+
         log.debug('CtrlMaximum.getstate %r', state)
         return state
 
@@ -468,8 +480,6 @@ class CtrlMaximum(Controller):
 
     def get_renderdata(self):
         ret = super().get_renderdata()
-        ret.update(pretty_data='Ein' if self.data else 'Aus')
-        ret.update(label='Status')
         if self._in_data > (self.threshold + self.hysteresis) * 1.05:
             ret.update(alert=('HIGH', 'err'))
         elif self.data:
@@ -477,7 +487,6 @@ class CtrlMaximum(Controller):
         return ret
 
     def get_settings(self):
-        unit = '?'
         for inp in self.get_inputs(True):
             if hasattr(inp,'unit'):
                 unit = inp.unit
@@ -523,6 +532,7 @@ class CtrlLight(Controller):
     def __getstate__(self):
         state = super().__getstate__()
         state.update(fade_time=self.fade_time)
+        state.update(unit=self.unit)
         log.debug('CtrlLight.getstate %r', state)
         return state
 
@@ -574,8 +584,6 @@ class CtrlLight(Controller):
 
     def get_renderdata(self):
         ret = super().get_renderdata()
-        ret.update(pretty_data=('%.1f%s' % (self.data, self.unit)) if self.data else 'Aus')
-        ret.update(label='Helligkeit')
         if self.data > 0 and self.data < 100:
             # ret.update(alert=('%i' % self.data, 'act'))
             ret.update(alert=('+' if self.target > self.data else '-', 'act'))

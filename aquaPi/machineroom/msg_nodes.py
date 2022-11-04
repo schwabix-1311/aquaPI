@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
-import sys
 import logging
 import time
 from datetime import datetime, timedelta
 from croniter import croniter
 from threading import Thread
 
-from .msg_bus import *
-from ..driver import *
+from .msg_bus import (BusNode, BusListener, BusRole, MsgData)
+from ..driver import (PortFunc, io_registry, DriverReadError)
 
 
 log = logging.getLogger('MsgNodes')
@@ -209,7 +208,7 @@ class Schedule(BusNode):
     def cronspec(self, cronspec):
         # validate it here, since the exception would be raised in our thread.
         now = datetime.now().astimezone()  # = local tz, this enables DST
-        validcron = croniter(cronspec, now, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)
+        croniter(cronspec, now, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)  # created for validation, then discarded
 
         self._stop_thread()
         self._cronspec = cronspec
@@ -291,9 +290,6 @@ class Schedule(BusNode):
                     time.sleep(self.STOP_DURATION)
                     if self._scheduler_stop:
                         return  # cleanup is done in finally!
-        except Exception as ex:
-            # FIXME: how can such errors bubble up to the UI? Flask flash messages, but long way to there
-            log.error('Failed to find next date for %s within the next %d years.', self._cronspec, self.CRON_YEARS_DEPTH)
         finally:
             # turn off? Probably not, to avoid flicker when schedule is changed
             self._scheduler_thread = None
@@ -527,7 +523,6 @@ class CtrlLight(Controller):
         self._fader_stop = False
         if not _cont:
             self.data = 0
-        self
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -554,7 +549,7 @@ class CtrlLight(Controller):
                         self._fader_stop = True
                         self._fader_thread.join()
                     self.target = float(msg.data)
-                    log.debug("_fader %f" % self.target)
+                    log.debug('_fader %f',  self.target)
                     self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
                     self._fader_thread.start()
 
@@ -563,13 +558,13 @@ class CtrlLight(Controller):
         INCR = 0.1 if self.fade_time >= 30 else 1.0 if self.fade_time >= 2.9 else 2.0
         if self.target != self.data:
             step = (self.fade_time / abs(self.target - self.data) * INCR)
-            log.brief("CtrLight %s: fading in %f s from %f -> %f, change every %f s", self.id, self.fade_time, self.data, self.target, step)
+            log.brief('CtrLight %s: fading in %f s from %f -> %f, change every %f s', self.id, self.fade_time, self.data, self.target, step)
             while abs(self.target - self.data) > INCR:
                 if self.target >= self.data:
                     self.data += INCR
                 else:
                     self.data -= INCR
-                log.debug("_fader %f ..." % self.data)
+                log.debug('_fader %f ...', self.data)
 
                 self.post(MsgData(self.id, round(self.data, 3)))
                 time.sleep(step)
@@ -578,7 +573,7 @@ class CtrlLight(Controller):
             if self.data != self.target:
                 self.data = self.target
                 self.post(MsgData(self.id, self.data))
-        log.brief("CtrlLight %s: fader DONE" % self.id)
+        log.brief('CtrlLight %s: fader DONE', self.id)
         self._fader_thread = None
         self._fader_stop = False
 
@@ -790,8 +785,8 @@ class DeviceSwitch(Device):
 
     @inverted.setter
     def inverted(self, inverted):
-       self._inverted = inverted
-       self.switch(self.data)
+        self._inverted = inverted
+        self.switch(self.data)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -823,12 +818,6 @@ class DeviceSwitch(Device):
 
 
 class SinglePWM(Device):
-    """ Analog PWM output, using input data as a percentage of full range.
-          percept - brightness correction, close to linear perception
-          minimum - set minimal duty cycle for input >0, fixes flicker of
-                      poorly dimming devices, and motor start
-          maximum - set maximum duty cycle, allows to limit
-    """
     """ An analog output using PWM (or DAC), 0..100% input range is
         mapped to the pysical minimum...maximum range of this node.
 

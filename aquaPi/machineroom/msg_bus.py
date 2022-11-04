@@ -3,10 +3,10 @@
 import logging
 import time
 from queue import Queue
-from enum import Flag, auto
-from threading import Condition, Event, Lock, Thread
+from enum import (Flag, auto)
+from threading import (Condition, Thread)
 
-from .msg_types import *
+from .msg_types import (MsgInfra, MsgBorn, MsgBye, MsgReply, MsgReplyHello, MsgData, MsgFilter)
 
 
 log = logging.getLogger('MsgBus')
@@ -45,9 +45,9 @@ class MsgBus:
     def __init__(self, threaded=False):
         self._threaded = threaded
         self.nodes = []
+        self.dbg_cnt = 0
         self._changes = set()
         self._changed = Condition()
-        self._m_cnt = 0
         self._queue = None
         if threaded:
             self._queue = Queue(maxsize=10)
@@ -69,8 +69,8 @@ class MsgBus:
             return '{}({} nodes)'.format(type(self).__name__, len(self.nodes))
         return '{}({} nodes, {} queue\'d)'.format(type(self).__name__, len(self.nodes), self._queue.qsize())
 
-    def _register(self, node):
-        """ Add a BusNode to the bus.
+    def register(self, node):
+        """ Add a BusNode to the bus. Do not call directly, use BusNode.plugin() instead!
             Raise exception if duplicate id.
         """
         lst = self.get_node(node.id)  # this rejects ambiguities in id or name
@@ -82,8 +82,8 @@ class MsgBus:
             self._queue.join()
         self.nodes.append(node)
 
-    def _unregister(self, node):
-        """ Remove BusNode from bus.
+    def unregister(self, node):
+        """ Remove BusNode from bus. Do not call directly, use BusNode.plugin() instead!
         """
         node = self.get_node(id)
         if node:
@@ -99,8 +99,8 @@ class MsgBus:
             receiver (send_to) for 1:1 communication.
             This might change too to a send_to parameter.
         """
-        self._m_cnt += 1
-        msg._m_cnt = self._m_cnt
+        self.dbg_cnt += 1
+        msg.dbg_cnt = self.dbg_cnt
         log.debug('%s   + %s', str(self), str(msg))
         if self._queue:
             self._queue.put(msg, block=True, timeout=5)
@@ -193,11 +193,11 @@ class MsgBus:
     def report_change(self, node_id):
         """ add ID to list of changed nodes and notify one (!) waiting thread
         """
-        log.debug('report_change locked: ' + node_id)
+        log.debug('report_change locked: %s', node_id)
         with self._changed:
             self._changes.add(node_id)
             self._changed.notify()
-            log.debug('report_change notified & done: ' + node_id)
+            log.debug('report_change notified & done: %s', node_id)
             time.sleep(.01)  # this is a hack, I don't find the race cond.
 
     def wait_for_changes(self):
@@ -210,7 +210,7 @@ class MsgBus:
             self._changed.wait_for(lambda :len(self._changes))
             change = [id for id in self._changes]
             self._changes.clear()
-            log.debug('cleared change_list: %r' % change)
+            log.debug('cleared change_list: %r', change)
         return change
 
 
@@ -259,9 +259,9 @@ class BusNode:
 
     def plugin(self, bus):
         if self._bus:
-            self._bus._unregister(self)
+            self._bus.unregister(self)
             self._bus = None
-        bus._register(self)
+        bus.register(self)
         self._bus = bus
         self.post(MsgBorn(self.id, self.data))
         log.info('%s plugged, role %s', str(self), str(self.ROLE))
@@ -270,7 +270,7 @@ class BusNode:
         if not self._bus:
             return False
         self.post(MsgBye(self.id))
-        self._bus._unregister(self)
+        self._bus.unregister(self)
         self._bus = None
         log.info('%s pulled', str(self))
         return True
@@ -357,13 +357,8 @@ class BusListener(BusNode):
 #############################
 
 
-''' This is your playground ... not used in the application
-'''
-
 if __name__ == "__main__":
-
-    import time
-    import random
+    # This is your playground ... not used in the application
 
     mb = MsgBus()
     # mb = MsgBus(threaded=True)

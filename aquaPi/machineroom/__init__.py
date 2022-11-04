@@ -21,6 +21,8 @@ mr = None
 
 
 def init(storage):
+    global mr
+
     mr = MachineRoom(storage)
     return mr
 
@@ -98,12 +100,13 @@ class MachineRoom:
             Distraction: interesting fact on English:
               "fish" is plural, "fishes" is several species of fish
         """
-        single_light = True
-        dawn_light = single_light and False #True
-        single_temp = True
-        complex_temp = False #True
+        REAL_CONFIG = False
+        SINGLE_LIGHT = True
+        DAWN_LIGHT = SINGLE_LIGHT and False #True
+        SINGLE_TEMP = True
+        COMPLEX_TEMP = False #True
 
-        if False:  #True:  # my real & working config
+        if REAL_CONFIG:
             # single LED bar, dawn & dusk 15mins, perceptive corr.
             light_schedule = Schedule('Zeitplan Licht', '* 14-21 * * *')
             light_c = CtrlLight('Beleuchtung', light_schedule.id, fade_time=15*60)
@@ -121,12 +124,12 @@ class MachineRoom:
             wasser_o.plugin(self.bus)
             return
 
-        if single_light:
+        if SINGLE_LIGHT:
             light_schedule = Schedule('Zeitplan 1', '* 14-21 * * *')
             light_schedule.plugin(self.bus)
             light_c = CtrlLight('Beleuchtung', light_schedule.id, fade_time=30*60) #30*60)
             light_c.plugin(self.bus)
-            if not dawn_light:
+            if not DAWN_LIGHT:
                 light_pwm = SinglePWM('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
             else:
@@ -141,7 +144,7 @@ class MachineRoom:
                 light_pwm.plugin(self.bus)
 
 
-        if single_temp:
+        if SINGLE_TEMP:
             # single temp sensor -> temp ctrl -> relais
             wasser_i = SensorTemp('Wasser', 'DS1820 xA2E9C')
             #wasser_i = SensorTemp('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
@@ -151,7 +154,7 @@ class MachineRoom:
             wasser_o.plugin(self.bus)
             wasser_i.plugin(self.bus)
 
-        elif complex_temp:
+        elif COMPLEX_TEMP:
             # 2 temp sensors -> average -> temp ctrl -> relais
             w1_temp = SensorTemp('T-Sensor 1', 'DS1820 xA2E9C')
             w1_temp.plugin(self.bus)

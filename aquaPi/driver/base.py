@@ -4,7 +4,6 @@ import logging
 from os import path
 from enum import Enum
 from collections import namedtuple
-from abc import (ABC, abstractmethod)
 
 
 log = logging.getLogger('Driver Base')
@@ -31,31 +30,31 @@ def is_raspi():
 
 class DriverNYI(Exception):
     def __init__(self, msg='Not yet implemented.'):
-        super().__init__(msg=msg)
+        super().__init__(msg)
 
 class DriverParamError(Exception):
     def __init__(self, msg='Invalid parameter value.'):
-        super().__init__(msg=msg)
+        super().__init__(msg)
 
 class DriverInvalidAddrError(Exception):
     def __init__(self, msg=None, adr=None):
         if not msg:
             msg = 'Pin, channel or address %r does not exist.' % adr
-        super().__init__(msg=msg)
+        super().__init__(msg)
 
 class DriverPortInuseError(Exception):
     def __init__(self, msg=None, port=None):
         if not msg:
             msg = 'Pin or channel %r is already assigned.' % port
-        super().__init__(msg=msg)
+        super().__init__(msg)
 
 class DriverReadError(Exception):
     def __init__(self, msg='Failed to read a valid value.'):
-        super().__init__(msg=msg)
+        super().__init__(msg)
 
 class DriverWriteError(Exception):
     def __init__(self, msg='Failed to write value to the output.'):
-        super().__init__(msg=msg)
+        super().__init__(msg)
 
 
 # ========== common types ==========
@@ -79,7 +78,7 @@ class PinFunc(Enum):
 # ========== driver base classes ==========
 
 
-class Driver(ABC):
+class Driver:
     """ base class of all drivers
         Drivers persist their cinfiguration in dict 'cfg', no need for
         __getstate__/__setstate__ overloads in derived classes.
@@ -97,7 +96,7 @@ class Driver(ABC):
         return '{}({})'.format(type(self).__name__, self.cfg)
 
 
-class InDriver(Driver, ABC):
+class InDriver(Driver):
     """ base class of all input drivers
         InDriver can be read, e.g. a temperature sensor.
     """
@@ -106,7 +105,6 @@ class InDriver(Driver, ABC):
         self.name = '!abstract IN'
         self._interval = 0
 
-    @abstractmethod
     def read(self):
         return 0.0
 
@@ -120,10 +118,8 @@ class OutDriver(Driver):
         self.name = '!abstract OUT'
         self._val = 0
 
-    @abstractmethod
     def write(self, value):
         self._val = value
 
-    @abstractmethod
     def read(self):
         return self._val

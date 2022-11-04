@@ -12,10 +12,10 @@ class Msg:
     """
     def __init__(self, sender):
         self.sender = sender
-        self._m_cnt = 0
+        self.dbg_cnt = 0
 
     def __str__(self):
-        return '{}({})#{}'.format(type(self).__name__, self.sender, self._m_cnt)
+        return '{}({})#{}'.format(type(self).__name__, self.sender, self.dbg_cnt)
 
 # payload messages
 
@@ -30,7 +30,7 @@ class MsgPayload(Msg):
         self.data = data
 
     def __str__(self):
-        return '{}({})#{}:{}'.format(type(self).__name__, self.sender, self._m_cnt, self.data)
+        return '{}({})#{}:{}'.format(type(self).__name__, self.sender, self.dbg_cnt, self.data)
 
 
 class MsgData(MsgPayload):
@@ -42,7 +42,6 @@ class MsgData(MsgPayload):
         Caveat: data='off' -> True
         Non-binary outputs should use 0=off, 100=full on (%)
     """
-    pass
 
 
 # TODO further Msg types
@@ -57,7 +56,6 @@ class MsgData(MsgPayload):
 class MsgInfra(Msg):
     """ Base for basic protocol msgs, may not be filtered
     """
-    pass
 
 
 class MsgBorn(MsgInfra, MsgPayload):
@@ -66,14 +64,12 @@ class MsgBorn(MsgInfra, MsgPayload):
         All nodes return a MsgReplyHello to show their presence.
         Can be used to adjust MsgFilter.
     """
-    pass
 
 
 class MsgBye(MsgInfra):
     """ Announces removal of a bus node.
         Dependant nodes can adjust their behavior.
     """
-    pass
 
 
 # reply messages
@@ -93,7 +89,6 @@ class MsgReplyHello(MsgReply, MsgInfra):
     """ Reply from plugged-in nodes to MsgBorn.
         Used to let new nodes see who's present.
     """
-    pass
 
 
 #############################

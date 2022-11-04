@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 
 import logging
-import sys
 from os import path
 from enum import Enum
 from collections import namedtuple
-try:
-    import RPi.GPIO as GPIO
-except:
-    pass
+from abc import (ABC, abstractmethod)
 
 
 log = logging.getLogger('Driver Base')
@@ -25,7 +21,7 @@ log.setLevel(logging.WARNING)
 def is_raspi():
     model = ''
     if path.exists('/sys/firmware/devicetree/base/model'):
-        with open('/sys/firmware/devicetree/base/model', 'r') as f:
+        with open('/sys/firmware/devicetree/base/model', 'r', encoding='utf-8') as f:
             model = f.readline()
     return 'raspberry' in model.lower()
 
@@ -35,31 +31,31 @@ def is_raspi():
 
 class DriverNYI(Exception):
     def __init__(self, msg='Not yet implemented.'):
-        super().__init__(msg)
+        super().__init__(msg=msg)
 
 class DriverParamError(Exception):
     def __init__(self, msg='Invalid parameter value.'):
-        super().__init__(msg)
+        super().__init__(msg=msg)
 
 class DriverInvalidAddrError(Exception):
     def __init__(self, msg=None, adr=None):
         if not msg:
             msg = 'Pin, channel or address %r does not exist.' % adr
-        super().__init__(msg)
+        super().__init__(msg=msg)
 
 class DriverPortInuseError(Exception):
     def __init__(self, msg=None, port=None):
         if not msg:
             msg = 'Pin or channel %r is already assigned.' % port
-        super().__init__(msg)
+        super().__init__(msg=msg)
 
 class DriverReadError(Exception):
     def __init__(self, msg='Failed to read a valid value.'):
-        super().__init__(msg)
+        super().__init__(msg=msg)
 
 class DriverWriteError(Exception):
     def __init__(self, msg='Failed to write value to the output.'):
-        super().__init__(msg)
+        super().__init__(msg=msg)
 
 
 # ========== common types ==========
@@ -83,7 +79,7 @@ class PinFunc(Enum):
 # ========== driver base classes ==========
 
 
-class Driver:
+class Driver(ABC):
     """ base class of all drivers
         Drivers persist their cinfiguration in dict 'cfg', no need for
         __getstate__/__setstate__ overloads in derived classes.
@@ -91,7 +87,7 @@ class Driver:
     # TODO this persistance approach could be transferred to MsgNodes!
     def __init__(self, func, cfg):
         self.name = '!abstract'
-        self.func = None
+        self.func = func
         self.cfg = cfg
         self._fake = not is_raspi()
         if 'fake' in cfg:
@@ -101,7 +97,7 @@ class Driver:
         return '{}({})'.format(type(self).__name__, self.cfg)
 
 
-class InDriver(Driver):
+class InDriver(Driver, ABC):
     """ base class of all input drivers
         InDriver can be read, e.g. a temperature sensor.
     """
@@ -110,6 +106,7 @@ class InDriver(Driver):
         self.name = '!abstract IN'
         self._interval = 0
 
+    @abstractmethod
     def read(self):
         return 0.0
 
@@ -121,10 +118,12 @@ class OutDriver(Driver):
     def __init__(self, func, cfg):
         super().__init__(func, cfg)
         self.name = '!abstract OUT'
-        self._state = 0
+        self._val = 0
 
-    def write(self, state):
-        self._state = state
+    @abstractmethod
+    def write(self, value):
+        self._val = value
 
+    @abstractmethod
     def read(self):
-        return self._state
+        return self._val

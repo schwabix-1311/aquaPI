@@ -21,44 +21,44 @@ log.setLevel(logging.WARNING)
 # ========== IO registry ==========
 
 
-"""
-example
-
-"GPIO 0..xx": { IO,  DriverGPIO,   {pin: 0..x} }         - unused, func IO -> OUT/IN, x entries
-"IOext 1..7": { IO,  DriverPCFxx,  {addr: 0x47, ch: x} } - unused, x entries
-
-"GPIO 12":    { OUT, DriverGPIO,   {pin: 12} }           - Relais
-"IOext 0":    { OUT, DriverPCFxx,  {addr: 0x47, ch: 0} } - CO2 Ventil
-"ShellyPlug1":{ OUT, DriverShelly, {ip: '192..', ch:0} } - S.Plug - Heizer
-"H-Bridge 1": { OUT, Drivermotor,  {pins: (21,22)} }     - Dosierpumpe
-
-"GPIO 20":    { IN,  DriverGPIO,   {pin: 20} }           - Taster
-"ShellyTemp1":{ IN,  DriverShelly, {ip: '192..', ch:2} } - S.Temp1
-
-"PWM 0":      { PWM, DriverPWM,    {ch: 0, pin: 18} }    - Licht"
-"PWM 1":      { PWM, DriverPWM,    {ch: 1, pin: 19} }    -
-"S-PWM 2":    { IO/PWM, DriverGPIO, {pin: 24} }          - Lüfter"   GPIO conflict!
-"PWMext 0-15":{ PWM, DriverPA9685, {addr:0x7F, ch:0..} } -
-"TC420 1":    { PWM, DriverTC420,  {usb:id, ch:1} }      - Mondlicht
-"TC420 2":    { PWM, DriverTC420,  {usb:id, ch:(3,4,5)}} - RGB Licht
-"ShellyDim":  { PWM, DriverShelly, {ip: '192..', ch:X} } - Ambilight
-
-"Sens 1":     { ADC, DriverOneWr,  {id:'28-xx'} }        - Wassertemperatur"
-"ADC 3":      { ADC, DriverAD1115, {addr:0x7E, ch:3} }   - pH Sonde"
-
-Initial enumeration fills this map via static driver functions.
-GPIO has 3 functions: IO (=undetermined), IN, OUT. or 4th: S-PWM?
-Drivers can provide entries for more than one function if they implement all their methods.
-Each channel/port/pin is one entry. Dict cfg is driver's private property!
-Creation of a driver instance reserves the entry, in case of GPIO (or soft-PWM) this may change function!
-get_ports_by_function() returns a view on avialbale or used IoPorts.
-driver_factory(key,func) creates a driver for specified port and function.
-driver_destruct(key) returns IoPort to unused. This must restore initial function.
-
-Multi-port drivers (RGB, motor) will need a dedicated factory method; very likely getting a higher level driver and a tupel of IoPorts.
-"""
-
 class IoRegistry(object):
+    """
+    example
+
+    "GPIO 0..xx": { IO,  DriverGPIO,   {pin: 0..x} }         - unused, func IO -> OUT/IN, x entries
+    "IOext 1..7": { IO,  DriverPCFxx,  {addr: 0x47, ch: x} } - unused, x entries
+
+    "GPIO 12":    { OUT, DriverGPIO,   {pin: 12} }           - Relais
+    "IOext 0":    { OUT, DriverPCFxx,  {addr: 0x47, ch: 0} } - CO2 Ventil
+    "ShellyPlug1":{ OUT, DriverShelly, {ip: '192..', ch:0} } - S.Plug - Heizer
+    "H-Bridge 1": { OUT, Drivermotor,  {pins: (21,22)} }     - Dosierpumpe
+
+    "GPIO 20":    { IN,  DriverGPIO,   {pin: 20} }           - Taster
+    "ShellyTemp1":{ IN,  DriverShelly, {ip: '192..', ch:2} } - S.Temp1
+
+    "PWM 0":      { PWM, DriverPWM,    {ch: 0, pin: 18} }    - Licht"
+    "PWM 1":      { PWM, DriverPWM,    {ch: 1, pin: 19} }    -
+    "S-PWM 2":    { IO/PWM, DriverGPIO, {pin: 24} }          - Lüfter"   GPIO conflict!
+    "PWMext 0-15":{ PWM, DriverPA9685, {addr:0x7F, ch:0..} } -
+    "TC420 1":    { PWM, DriverTC420,  {usb:id, ch:1} }      - Mondlicht
+    "TC420 2":    { PWM, DriverTC420,  {usb:id, ch:(3,4,5)}} - RGB Licht
+    "ShellyDim":  { PWM, DriverShelly, {ip: '192..', ch:X} } - Ambilight
+
+    "Sens 1":     { ADC, DriverOneWr,  {id:'28-xx'} }        - Wassertemperatur"
+    "ADC 3":      { ADC, DriverAD1115, {addr:0x7E, ch:3} }   - pH Sonde"
+
+    Initial enumeration fills this map via static driver functions.
+    GPIO has 3 functions: IO (=undetermined), IN, OUT. or 4th: S-PWM?
+    Drivers can provide entries for more than one function if they implement all their methods.
+    Each channel/port/pin is one entry. Dict cfg is driver's private property!
+    Creation of a driver instance reserves the entry, in case of GPIO (or soft-PWM) this may change function!
+    get_ports_by_function() returns a view on avialbale or used IoPorts.
+    driver_factory(key,func) creates a driver for specified port and function.
+    driver_destruct(key) returns IoPort to unused. This must restore initial function.
+
+    Multi-port drivers (RGB, motor) will need a dedicated factory method; very likely getting a higher level driver and a tupel of IoPorts.
+    """
+
     _map = {}
     _inuse = {}
 
@@ -118,9 +118,9 @@ class IoRegistry(object):
 
             IoRegistry._inuse.update({port: IoPort(io_port.function, driver, io_port.cfg)})
             del IoRegistry._map[port]
-        except Exception as ex:
+        except:
             #TODO report error, e.g.
-            log.exception('Failed to create driver:' + port)
+            log.exception('Failed to create driver: %s', port)
         return driver
 
     def driver_release(self, port):
@@ -147,7 +147,7 @@ __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
 
 for drv_path in __path__:
     for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
-        log.debug('Found driver file ' + drv_file)
+        log.debug('Found driver file %s', drv_file)
 
         # drv_name = path.basename(drv_file).removeprefix(DRIVER_FILE_PREFIX).removesuffix('.py')
         drv_name = path.basename(drv_file)
@@ -157,10 +157,10 @@ for drv_path in __path__:
             drv_name = drv_name[:-3]
         drv_name = __name__ + '.' + drv_name.lower()
         drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
-        log.debug('Driver spec ' + str(drv_spec))
+        log.debug('Driver spec %s', drv_spec)
 
         drv_mod = importlib.util.module_from_spec(drv_spec)
-        log.debug('Driver module ' + str(drv_mod))
+        log.debug('Driver module %s', drv_mod)
 
         sys.modules[drv_name] = drv_mod
         drv_spec.loader.exec_module(drv_mod)

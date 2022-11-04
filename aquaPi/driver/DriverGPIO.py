@@ -1,15 +1,42 @@
 #!/usr/bin/env python3
 
-import sys
 import logging
-import os
 import random
 try:
     import RPi.GPIO as GPIO
-except:
-    pass
+except RuntimeError:
+    # make lint happy with minimal non-funct facade
+    class GPIOdummy():
+        BCM = None
+        IN = None
+        OUT = None
+        @staticmethod
+        def setwarnings(warn):
+            warn = not warn
+        @staticmethod
+        def gpio_function(pin):
+            pin = not pin
+            return None
+        @staticmethod
+        def setmode(mode):
+            mode = not mode
+        @staticmethod
+        def setup(pin, mode):
+            pin = not pin
+            mode = not mode
+        @staticmethod
+        def cleanup(pin):
+            pin = not pin
+        @staticmethod
+        def input(pin):
+            return pin
+        @staticmethod
+        def output(pin, value):
+            pin = not pin
+            value = not value
+    GPIO = GPIOdummy
 
-from .base import *
+from .base import (InDriver, OutDriver, IoPort, PortFunc, PinFunc, is_raspi, DriverParamError, DriverWriteError)
 
 
 log = logging.getLogger('DriverGPIO')
@@ -47,9 +74,9 @@ class DriverGPIO(OutDriver, InDriver):
                         port_name = 'GPIO %d' % pin
                         io_ports[port_name] = IoPort(PortFunc.IO, DriverGPIO, {'pin': pin})
                     else:
-                        log.debug('pin %d is in use as %s' % (pin, func.name))
-                except:
-                    log.debug('Unknown function on pin %d = %d' % (pin, GPIO.gpio_function(pin)))
+                        log.debug('pin %d is in use as %s', pin, func.name)
+                except KeyError:
+                    log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
         return io_ports
 
     def __init__(self, func, cfg):
@@ -70,20 +97,20 @@ class DriverGPIO(OutDriver, InDriver):
         self.close()
 
     def close(self):
-        log.debug('Closing %r' % self)
+        log.debug('Closing %r', self)
         if not self._fake and self._pin != None:
             GPIO.cleanup(self._pin)
             self._pin = None
 
-    def write(self, val):
+    def write(self, value):
         if self.func == PortFunc.IN:
             raise DriverWriteError()
 
         if not self._fake:
-            GPIO.output(self._pin, bool(val))
+            GPIO.output(self._pin, bool(value))
         else:
-            log.info('%s -> %d' % (self.name, bool(val)))
-            self._val = bool(val)
+            log.info('%s -> %d', self.name, bool(value))
+            self._val = bool(value)
 
     def read(self):
         if not self._fake:
@@ -92,6 +119,6 @@ class DriverGPIO(OutDriver, InDriver):
             if self.func == PortFunc.IN:
                 val = False if random.random() <= 0.5 else True
             else:
-               val = self._val
-            log.info('%s = %d' % (self.name, val))
+                val = self._val
+            log.info('%s = %d', self.name, val)
         return val

@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 
-import sys
 import logging
-import os
 from os import path
 import glob
 import math
-import time
 import random
 
-from .base import *
+from .base import (InDriver, IoPort, PortFunc, is_raspi, DriverParamError, DriverInvalidAddrError, DriverReadError)
 
 
 log = logging.getLogger('DriverOneWire')
@@ -28,8 +25,8 @@ class DriverDS1820(InDriver):
     def find_ports():
         if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg')
-            io_ports = { 'DS1820 xA2E9C':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-0119383a2e9c', 'fast': True, 'fake': True})
-                       , 'DS1820 x7A71E':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-01193867a71e', 'fast': True, 'fake': True}) }
+            io_ports = { 'DS1820 xA2E9C':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-0119383a2e9c', 'fake': True})
+                       , 'DS1820 x7A71E':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-01193867a71e', 'fake': True}) }
         else:
             io_ports = {}
             cnt = 1
@@ -46,7 +43,6 @@ class DriverDS1820(InDriver):
             resulting from this (on cheap sensors?) is filtered out before
             an exception is raised,
             cfg = { address : string   # 1-wire bus address, see DriverDS1820.find()
-TODO: move              , fast: False        # increase precision & switch frequncy (disable moving avaerage)
                   , fake: False        # force driver simulation even on Raspi
                   , fake_initval: 25.0  # start value for the fake driver
                   }
@@ -59,11 +55,6 @@ TODO: move              , fast: False        # increase precision & switch frequ
         self.name = 'DS1820 @ ' + cfg['address']
         if self._fake:
             self.name = '!' + self.name
-
-        # TODO move 'fast' to the receiver(s)
-        self._fast = False
-        if 'fast' in cfg:
-            self._fast |= bool(cfg['fast'])
 
         if not self._fake:
             self._val = 0
@@ -86,21 +77,18 @@ TODO: move              , fast: False        # increase precision & switch frequ
         self.close()
 
     def close(self):
-        log.debug('Closing %r' % self)
-        pass
+        log.debug('Closing %r', self)
+        # pass
 
 
     def read(self):
         if not self._fake:
-            with open(self._temp, 'r') as temp:
+            with open(self._temp, 'r', encoding=ascii) as temp:
                 ln = temp.readline()
-                log.debug('%s = %s' % (self.name, ln))
+                log.debug('%s = %s', self.name, ln)
                 if ln and not ln == '85000\n':
                     val = float(ln) / 1000
-                    if self._fast:
-                        self._val = val
-                    else:
-                        self._val = (self._val + val) / 2  # mavg(2)
+                    self._val = val
                     self._err_cnt = 0
                 elif self._err_cnt <= self._err_retry:
                     self._err_cnt += 1
@@ -113,5 +101,5 @@ TODO: move              , fast: False        # increase precision & switch frequ
             elif rnd > .7:
                 self._val += 0.05 * self._dir
             self._val = round(min(max(self._initval - 1, self._val), self._initval + 1), 2)
-        log.info('%s = %s' % (self.name, self._val))
+        log.info('%s = %s', self.name, self._val)
         return float(self._val)

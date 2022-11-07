@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 
 import logging
-from flask import (
-    Blueprint, render_template, json
-)
+from flask import (Blueprint, json)
 import time
-# import os
-# import sys
-# from resource import *
 
-from ..sse_util import render_sse_template
+from .sse_util import render_sse_template
+
 
 log = logging.getLogger('/about')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -51,4 +47,4 @@ def about():
         values['now'] = time.asctime()
         return json.dumps(values)
 
-    return render_sse_template('pages/about.html.jinja2', sse_update, values, delay=1)
+    return render_sse_template('pages/about.html.jinja2', sse_update, delay=1, update=values)

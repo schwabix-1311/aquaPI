@@ -1,5 +1,5 @@
 /* This is the reactive Vue app to render interior 
- * of / <div id="vm"> AKA /home
+ * of / <div id="vm"> AKA /home AKA Dashboard
  *
  * We do not use a build step!
  * Page is composed in Flask/Jinja, reactivity and backend
@@ -13,7 +13,7 @@ const App = {
     delimiters: ['[[', ']]'],
     data () {
         return {
-            nodes: {}
+            nodes: {},
         }
     },
     template: '#vueHome',
@@ -33,6 +33,44 @@ const App = {
         }
     }
 };
+
+const Dashboard = {
+    delimiters: ['[[', ']]'],
+    props: [ 'all_tiles' ],
+    data: function() {
+        return { tiles: this.all_tiles }
+    },
+    template: `
+        <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
+            <div v-for="t in tiles" >
+                <component :is='t.comp' :id='t.id' :hidden="(!t.vis)" ></component>
+            </div>
+            <div id="modal-config" uk-modal>
+    <!-- form action="/home" method="post" class="uk-form-horizontal" -->
+    <!-- fieldset class="uk-fieldset" -->
+                <div class="uk-modal-dialog uk-modal-body">
+                    <div class="uk-modal-header">
+                        <button class="uk-modal-close-default" type="button" uk-close></button>
+                        <h2 class="uk-modal-title">Dashboard Configuration</h2>
+                    </div>
+                    <div class="uk-modal-body">
+                        <p>Which tiles should be shown?</p>
+                        <div v-for="t in tiles">
+                            <label><input class="uk-checkbox" type="checkbox" v-model="t.vis" > [[ t.name ]]</label>
+                        </div>
+                    </div>
+                    <div class="uk-modal-footer uk-text-right">
+                        <button class="uk-button uk-button-default uk-modal-close" type="submit" onClick='acceptConfig()'>Accept</button>
+                    </div>
+                </div>
+    <!-- /fieldset -->
+    <!-- /form -->
+            </div>
+        </div>
+    `
+};
+Vue.component('Dashboard', Dashboard);
+
 
 const vm = new Vue(App);
 

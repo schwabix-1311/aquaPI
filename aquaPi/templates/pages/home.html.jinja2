@@ -3,6 +3,7 @@
 
 {% block content_header %}
     {% set page_heading = 'Dashboard' %}
+    {% set page_modal_config = '#modal-config' %}
     {% include 'partials/page_heading.html.jinja2' %}
 {% endblock %}
 
@@ -16,33 +17,29 @@
     </div>
 
     <template id="vueHome">
-        <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
-            {% for node in update %}
-                {% if 'Controller' in ('%s' % node.__class__.__bases__) %}
-                    <!-- component is='DebugNode' id='{{ node.id }}' ></component><br/ -->
-                    <component is='{{node.__class__.__name__}}' id='{{ node.id }}' ></component><br/>
-                {% else %}
-                    <component is='BusNode' id='{{ node.id }}' ></component><br/>
-                {% endif %}
-            {% endfor %}
-        </div>
+        <dashboard :all_tiles="{{ tiles }}"></dashboard>
     </template>
-
-    <script src="https://unpkg.com/vue@2.7/dist/vue.js"></script>
-    <!-- script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script -->
-
-    <script src="{{ url_for('static', filename='v-comps.js') }}"></script>
-    <script src="{{ url_for('static', filename='home.js') }}"></script>
 
     <div class="uk-padding-small uk-margin-top uk-background-secondary uk-light">
         <div>
             {{ now }}
         </div>
     </div>
-
 {% endblock %}
 
 {% block footer_script %}
     {{ super() }}
-    {# static/home.js has it's own:  % include "sse_event_inc.html" % #}
+
+    <script>
+        function acceptConfig() {
+            // TODO: push to backend - REST or POST?
+            console.warn('Need to save the Dashboard config!')
+        }
+    </script>
+
+    <script src="https://unpkg.com/vue@2.7/dist/vue.js"></script>
+    <!-- script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script -->
+
+    <script src="{{ url_for('static', filename='v-comps.js') }}"></script>
+    <script src="{{ url_for('static', filename='home.js') }}"></script>
 {% endblock %}

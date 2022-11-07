@@ -7,6 +7,10 @@
  * quick implementation (import?) of new nodes W/O a Vue component
  */
 
+
+// IDEA: add UIkit.Drop to show details
+
+
 // SVG edit e.g. in LibreOffice.Draw, then https://iconly.io/tools/svg-cleaner (6K -> 1.5k!)
 const unit2icon = new Map([
     ['°C', 'thermo.svg'],

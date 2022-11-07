@@ -31,7 +31,7 @@ if (!!window.EventSource) {
     return msg
 
 
-def render_sse_template(html, read, update, delay=1):
+def render_sse_template(html, read, delay=1, **context):
     """ render a Jinja2 template with SSE updatable elements
         html - the Jinja2 template file
         read - long poll method returning a hash of updates
@@ -46,4 +46,4 @@ def render_sse_template(html, read, update, delay=1):
                 if delay:
                     time.sleep(delay)
         return Response(events(), content_type='text/event-stream')
-    return render_template(html, update=update, now=time.asctime())
+    return render_template(html, **context, now=time.asctime())

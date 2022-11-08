@@ -24,20 +24,6 @@ def create_app(test_config=None):
 
 # TODO wrap in try/catch, but how should exceptions be handled?
 
-    if False:    # FIXME: this would use app.debug before assignment
-        mail_handler = SMTPHandler(
-            mailhost='127.0.0.1',
-            fromaddr='server-error@example.com',
-            toaddrs=['admin@example.com'],
-            subject='Application Error'
-        )
-        mail_handler.setLevel(logging.ERROR)
-        mail_handler.setFormatter(logging.Formatter(
-            '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
-        ))
-        if not app.debug:
-            app.logger.addHandler(mail_handler)
-
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY='ToDo during installation',   # TODO !!
@@ -48,6 +34,20 @@ def create_app(test_config=None):
         app.config.from_mapping(test_config)
     else:
         app.config.from_pyfile('config.py', silent=True)
+
+    #if False:    # FIXME: this would use app.debug before assignment
+    #    mail_handler = SMTPHandler(
+    #        mailhost='127.0.0.1',
+    #        fromaddr='server-error@example.com',
+    #        toaddrs=['admin@example.com'],
+    #        subject='Application Error'
+    #    )
+    #    mail_handler.setLevel(logging.ERROR)
+    #    mail_handler.setFormatter(logging.Formatter(
+    #        '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
+    #    ))
+    #    if not app.debug:
+    #        app.logger.addHandler(mail_handler)
 
     # in debug mode, app is restarted in a 2nd interpreter and thus we
     # duplicate all our threads, which then compete :-(

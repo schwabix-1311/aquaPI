@@ -242,9 +242,10 @@ class BusNode:
         if not _cont:
             self.data = 0
         self.unit = ''
+        self.alert = None
 
     def __getstate__(self):
-        state = {'name': self.name, 'inputs': self._inputs, 'data': self.data}
+        state = {'name': self.name, 'inputs': self._inputs, 'data': self.data, 'unit': self.unit}
         log.debug('< BusNode.getstate %r', state)
         return state
 
@@ -307,10 +308,6 @@ class BusNode:
                         if s_node:
                             outputs = outputs + s_node.get_outputs(recurse)
         return outputs  # if outputs else ['-']
-
-    def get_renderdata(self):
-        ret = {'pretty_data': '%.2f%s' % (self.data, self.unit)}
-        return ret
 
     def get_settings(self):
         return []

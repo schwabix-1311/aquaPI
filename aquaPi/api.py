@@ -31,14 +31,13 @@ def api_node(node_id):
     if node:
         state = {}
         state.update(id=node.id)
-        state.update(type=type(node).__name__)
+        state.update(cls=type(node).__name__)
         state.update(node.__getstate__())
 
-        # FIXME: node.name shows incorrectly, this started with node.id containing xmlcharrefs
+        # FIXME: node.name shows some non-ascii chars incorrectly, this started with node.id containing xmlcharrefs
         # ?? state['name'] = str(state['name'], encodingerrors='xmlcharrefreplace')
-        if hasattr(node, 'get_renderdata'):
-            state.update(render_data=node.get_renderdata())
-        if hasattr(node, 'alert'):
+
+        if hasattr(node, 'alert') and node.alert:
             state.update(alert=node.alert)
         log.debug(state)
 

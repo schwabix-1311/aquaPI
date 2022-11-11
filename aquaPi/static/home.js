@@ -22,8 +22,8 @@ const App = {
             Vue.set(this.nodes, id, node)
         },
         async updateNode(id, addNew=false) {
-            if (id !== undefined) {
-                if ((id in this.nodes) | addNew) {
+            if (id != null) {
+                if ((id in this.nodes) || addNew) {
                     //TODO: error handler - might loose connection
                     const response = await fetch('/api/node/' + id)
                     const node = await response.json()
@@ -41,9 +41,9 @@ const Dashboard = {
         return { tiles: this.all_tiles }
     },
     template: `
-        <div class="uk-child-width-1-2@s uk-grid-small" uk-grid>
-            <div v-for="t in tiles" >
-                <component :is='t.comp' :id='t.id' :hidden="(!t.vis)" ></component>
+        <div class="uk-child-width-1-2@s uk-grid-small" uk-grid="masonry: true">
+            <div v-for="t in tiles" :hidden="(!t.vis)" >
+                <component :is="t.comp" :id="t.id" ></component>
             </div>
             <div id="modal-config" uk-modal>
     <!-- form action="/home" method="post" class="uk-form-horizontal" -->
@@ -60,7 +60,7 @@ const Dashboard = {
                         </div>
                     </div>
                     <div class="uk-modal-footer uk-text-right">
-                        <button class="uk-button uk-button-default uk-modal-close" type="submit" onClick='acceptConfig()'>Accept</button>
+                        <button class="uk-button uk-button-default uk-modal-close" type="submit" onClick="acceptConfig()">Accept</button>
                     </div>
                 </div>
     <!-- /fieldset -->

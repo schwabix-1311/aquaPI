@@ -35,7 +35,7 @@ def get_unit_limits(unit):
 # ========== inputs AKA sensors ==========
 
 
-class Sensor(BusNode):
+class InputNode(BusNode):
     """ Base class for IN_ENDP delivering measurments,
         e.g. temperature, pH, water level switch
     """
@@ -48,9 +48,9 @@ class Sensor(BusNode):
     #    self.__init__(state, _cont=True)
 
 
-class SensorTemp(Sensor):
-    """ A temperature sensor, actually analog input for anything read from a port driver.
-        Just name and labels refer to temperatures.
+class AnalogInput(InputNode):
+    """ An analog input for anything read from a port driver.
+        Just name and labels auto-adjust to unit (for the known ones).
         Measurements taken in a worker thread$.
 
         Options:
@@ -71,7 +71,6 @@ class SensorTemp(Sensor):
         self.avg = min(max( 1, avg), 5)
         self._reader_thread = None
         self._reader_stop = False
-        self._read_err = False
         self.port = port
         self.data = self._driver.read()
 
@@ -79,13 +78,12 @@ class SensorTemp(Sensor):
         state = super().__getstate__()
         state.update(port=self.port)
         state.update(interval=self.interval)
-        state.update(unit=self.unit)
         state.update(avg=self.avg)
-        log.debug('< SensorTemp.getstate %r', state)
+        log.debug('< AnalogInput.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('SensorTemp.setstate %r', state)
+        log.debug('AnalogInput.setstate %r', state)
         self.__init__(state['name'], state['port'], interval=state['interval'], unit=state['unit'], avg=state['avg'], _cont=True)
 
     def __str__(self):
@@ -115,44 +113,37 @@ class SensorTemp(Sensor):
         super().pullout()
 
     def _reader(self):
-        log.debug('SensorTemp.reader started')
+        log.debug('AnalogInput.reader started')
         self.data = 0  ##? None
         while not self._reader_stop:
-            log.debug('SensorTemp.reader looping %r', self.data)
+            log.debug('AnalogInput.reader looping %r', self.data)
             try:
                 val = self.data
                 if self._driver:
                     val = self._driver.read()
                     val = (val + self.data * (self.avg - 1)) / self.avg
                     val = round(val, 2)
-                    self._read_err = False
+                    self.alert = None
                 if self.data != val:
                     self.data = val
-                    log.brief('SensorTemp %s: output %f', self.id, self.data)
+                    log.brief('AnalogInput %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
             except DriverReadError:
-                self._read_err = True
+                self.alert = ('Read error!', 'err')
 
             time.sleep(self.interval)
         self._reader_thread = None
         self._reader_stop = False
 
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        ret.update(label='Messwert')
-        if self._read_err:
-            ret.update(alert=('Read error!', 'err'))
-        return ret
-
     def get_settings(self):
         settings = super().get_settings()
         settings.append(('unit', 'Einheit', self.unit, 'type="text"'))
         settings.append(('avg', 'Mittelwert [1=direkt]', self.avg, 'type="number" min="1" max="5" step="1"'))
-        settings.append(('port', 'Sensor', self.port, 'type="text"'))
+        settings.append(('port', 'Input', self.port, 'type="text"'))
         return settings
 
 
-class Schedule(BusNode):
+class ScheduleInput(BusNode):
     """ A scheduler supporting monthly/weekly/daily/hourly(/per minute)
         trigger output (On=100 / Off=0).
         Internally working like cron; a spec is 'min hour day month weekday'.
@@ -192,11 +183,11 @@ class Schedule(BusNode):
     def __getstate__(self):
         state = super().__getstate__()
         state.update(cronspec=self.cronspec)
-        log.debug('Schedule.getstate %r', state)
+        log.debug('ScheduleInput.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('Schedule.setstate %r', state)
+        log.debug('ScheduleInput.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['cronspec'], _cont=True)
 
@@ -237,7 +228,7 @@ class Schedule(BusNode):
             self._scheduler_thread = None
 
     def _scheduler(self):
-        log.brief('Schedule %s: start', self.id)
+        log.brief('ScheduleInput %s: start', self.id)
 
         now = datetime.now().astimezone()  # = local tz, this enables DST
         cron = croniter(self._cronspec, now, ret_type=float, day_or=False, max_years_between_matches=self.CRON_YEARS_DEPTH)
@@ -261,7 +252,7 @@ class Schedule(BusNode):
                 if sec_next - sec_prev > tick:
                     # since we concatenate cron events <1 tick apart, this must be a pause
                     self.data = 0
-                    log.brief('Schedule %s: output 0 for %f s', self.id, sec_next - sec_now)
+                    log.brief('ScheduleInput %s: output 0 for %f s', self.id, sec_next - sec_now)
                     self.post(MsgData(self.id, self.data))
 
                     while (sec_next > time.time()):
@@ -283,7 +274,7 @@ class Schedule(BusNode):
                     return  # cleanup is done in finally!
 
                 self.data = 100
-                log.brief('Schedule %s: output 100 for %f s', self.id, sec_next - sec_now)
+                log.brief('ScheduleInput %s: output 100 for %f s', self.id, sec_next - sec_now)
                 self.post(MsgData(self.id, self.data))
 
                 while (sec_next > time.time()):
@@ -294,13 +285,7 @@ class Schedule(BusNode):
             # turn off? Probably not, to avoid flicker when schedule is changed
             self._scheduler_thread = None
             self._scheduler_stop = False
-            log.brief('Schedule %s: end', self.id)
-
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        ret.update(label='Status')
-        ret.update(pretty_data='Ein' if self.data else 'Aus')
-        return ret
+            log.brief('ScheduleInput %s: end', self.id)
 
     def get_settings(self):
         settings = super().get_settings()
@@ -311,7 +296,7 @@ class Schedule(BusNode):
 # ========== controllers ==========
 
 
-class Controller(BusListener):
+class ControllerNode(BusListener):
     """ The base class of all controllers, i.e. BusNodes that connect
         1 input with output(s)he required core of each controller chain.
     """
@@ -342,7 +327,7 @@ class Controller(BusListener):
         return []  # don't inherit inputs!
 
 
-class CtrlMinimum(Controller):
+class MinimumCtrl(ControllerNode):
     """ A controller switching an output to keep a minimum input value.
         Should usually drive an output changing the input in the appropriate
         direction. Can also be used to generate warning or error states.
@@ -362,7 +347,6 @@ class CtrlMinimum(Controller):
         super().__init__(name, inputs, _cont=_cont)
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
-        self._in_data = 0
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -370,22 +354,20 @@ class CtrlMinimum(Controller):
         state.update(hysteresis=self.hysteresis)
 
         for inp in self.get_inputs(True):
-            if hasattr(inp,'unit'):
-                unit = inp.unit
-                break
-        state.update(unit=unit)
+            self.unit = inp.unit
+            break
+        state.update(unit=self.unit)
 
-        log.debug('CtrlMinimum.getstate %r', state)
+        log.debug('MinimumCtrl.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('CtrlMinimum.setstate %r', state)
+        log.debug('MinimumCtrl.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            self._in_data = msg.data
             new_val = self.data
             if float(msg.data) < (self.threshold - self.hysteresis):
                 new_val = 100.0
@@ -393,34 +375,34 @@ class CtrlMinimum(Controller):
                 new_val = 0.0
 
             if self.data != new_val:
-                log.debug('CtrlMinimum: %d -> %d', self.data, new_val)
+                log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
-                log.brief('CtrlMinimum %s: output %f', self.id, self.data)
-            self.post(MsgData(self.id, self.data))
-        return super().listen(msg)
 
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        if self._in_data < (self.threshold - self.hysteresis) * 0.95:
-            ret.update(alert=('LOW', 'err'))
-        elif self.data:
-            ret.update(alert=('*', 'act'))
-        return ret
+                if msg.data < (self.threshold - self.hysteresis) * 0.95:
+                    self.alert = ('LOW', 'err')
+                    log.brief('MinimumCtrl %s: output %f - alert %r', self.id, self.data, self.alert )
+                elif self.data:
+                    self.alert = ('*', 'act')
+                else:
+                    self.alert = None
+                    log.brief('MinimumCtrl %s: output %f', self.id, self.data)
+
+                self.post(MsgData(self.id, self.data))     # only on data change? or 1 level outdented?
+        return super().listen(msg)
 
     def get_settings(self):
         for inp in self.get_inputs(True):
-            if hasattr(inp,'unit'):
-                unit = inp.unit
-                break
-        limits = get_unit_limits(unit)
+            self.unit = inp.unit
+            break
+        limits = get_unit_limits(self.unit)
 
         settings = super().get_settings()
-        settings.append(('threshold', 'Minimum [%s]' % unit,  self.threshold, 'type="number" %s step="0.1"' % limits))
-        settings.append(('hysteresis', 'Hysteresis [%s]' % unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('threshold', 'Minimum [%s]' % self.unit,  self.threshold, 'type="number" %s step="0.1"' % limits))
+        settings.append(('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
-class CtrlMaximum(Controller):
+class MaximumCtrl(ControllerNode):
     """ A controller switching an output to keep a maximum input value.
         Should usually drive an output changing the input in the appropriate
         direction. Can also be used to generate warning or error states.
@@ -438,7 +420,6 @@ class CtrlMaximum(Controller):
         super().__init__(name, inputs, _cont=_cont)
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
-        self._in_data = 0
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -446,22 +427,20 @@ class CtrlMaximum(Controller):
         state.update(hysteresis=self.hysteresis)
 
         for inp in self.get_inputs(True):
-            if hasattr(inp,'unit'):
-                unit = inp.unit
-                break
-        state.update(unit=unit)
+            self.unit = inp.unit
+            break
+        state.update(unit=self.unit)
 
-        log.debug('CtrlMaximum.getstate %r', state)
+        log.debug('MaximumCtrl.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('CtrlMaximum.setstate %r', state)
+        log.debug('MaximumCtrl.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            self._in_data = msg.data
             new_val = self.data
             if float(msg.data) > (self.threshold + self.hysteresis):
                 new_val = 100.0
@@ -469,33 +448,34 @@ class CtrlMaximum(Controller):
                 new_val = 0.0
 
             if self.data != new_val:
+                log.debug('MaximumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
-                log.brief('CtrlMaximum: %d -> %d', self.data, self.data)
-            self.post(MsgData(self.id, self.data))
-        return super().listen(msg)
 
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        if self._in_data > (self.threshold + self.hysteresis) * 1.05:
-            ret.update(alert=('HIGH', 'err'))
-        elif self.data:
-            ret.update(alert=('*', 'act'))
-        return ret
+                if msg.data < (self.threshold - self.hysteresis) * 0.95:
+                    self.alert = ('HIGH', 'err')
+                    log.brief('MaximumCtrl %s: output %f - alert %r', self.id, self.data, self.alert )
+                elif self.data:
+                    self.alert = ('*', 'act')
+                else:
+                    self.alert = None
+                    log.brief('MaximumCtrl %s: output %f', self.id, self.data)
+
+                self.post(MsgData(self.id, self.data))     # only on data change? or 1 level outdented?
+        return super().listen(msg)
 
     def get_settings(self):
         for inp in self.get_inputs(True):
-            if hasattr(inp,'unit'):
-                unit = inp.unit
-                break
-        limits = get_unit_limits(unit)
+            self.unit = inp.unit
+            break
+        limits = get_unit_limits(self.unit)
 
         settings = super().get_settings()
-        settings.append(('threshold', 'Maximum [%s]' % unit, self.threshold, 'type="number" %s step="0.1"' % limits))
-        settings.append(('hysteresis', 'Hysteresis [%s]' % unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('threshold', 'Maximum [%s]' % self.unit, self.threshold, 'type="number" %s step="0.1"' % limits))
+        settings.append(('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
-class CtrlLight(Controller):
+class LightCtrl(ControllerNode):
     """ A single channel light controller with fader (dust/dawn).
         When input goes to >0, a fader will post a series of
         increasing values over the period of fade_time,
@@ -527,22 +507,21 @@ class CtrlLight(Controller):
     def __getstate__(self):
         state = super().__getstate__()
         state.update(fade_time=self.fade_time)
-        state.update(unit=self.unit)
-        log.debug('CtrlLight.getstate %r', state)
+        log.debug('LightCtrl.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('CtrlLight.setstate %r', state)
+        log.debug('LightCtrl.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], fade_time=state['fade_time'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            log.info('CtrlLight: got %f', msg.data)
+            log.info('LightCtrl: got %f', msg.data)
             if self.data != float(msg.data):
                 if not self.fade_time:
                     self.data = float(msg.data)
-                    log.brief('CtrlLight %s: output %f', self.id, self.data)
+                    log.brief('LightCtrl %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
                     if self._fader_thread:
@@ -566,23 +545,18 @@ class CtrlLight(Controller):
                     self.data -= INCR
                 log.debug('_fader %f ...', self.data)
 
+                self.alert = ('+' if self.target > self.data else '-', 'act')
                 self.post(MsgData(self.id, round(self.data, 3)))
                 time.sleep(step)
                 if self._fader_stop:
                     break
             if self.data != self.target:
                 self.data = self.target
+                self.alert = None
                 self.post(MsgData(self.id, self.data))
-        log.brief('CtrlLight %s: fader DONE', self.id)
+        log.brief('LightCtrl %s: fader DONE', self.id)
         self._fader_thread = None
         self._fader_stop = False
-
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        if self.data > 0 and self.data < 100:
-            # ret.update(alert=('%i' % self.data, 'act'))
-            ret.update(alert=('+' if self.target > self.data else '-', 'act'))
-        return ret
 
     def get_settings(self):
         settings = super().get_settings()
@@ -592,7 +566,7 @@ class CtrlLight(Controller):
 # ========== auxiliary ==========
 
 
-class Auxiliary(BusListener):
+class AuxNode(BusListener):
     """ Auxiliary nodes are for advanced configurations where
         direct connections of input to controller or controller to
         output aren't sufficient.
@@ -603,7 +577,6 @@ class Auxiliary(BusListener):
         super().__init__(name, inputs, _cont=_cont)
         self.data = -1
         self.values = {}
-        self.unit = ''
 
     # def get_settings(self):
     #     settings = super().get_settings()
@@ -611,7 +584,7 @@ class Auxiliary(BusListener):
     #     return settings
 
 
-class Average(Auxiliary):
+class AvgAux(AuxNode):
     """ Auxiliary node to average 2 or more inputs together.
         The average weights either each input equally (where a dead source
         may factor in an incorrect old value),
@@ -636,11 +609,17 @@ class Average(Auxiliary):
     def __getstate__(self):
         state = super().__getstate__()
         state.update(unfair_avg=self.unfair_avg)
-        log.debug('Average.getstate %r', state)
+
+        for inp in self.get_inputs(True):
+            self.unit = inp.unit
+            break
+        state.update(unit=self.unit)
+
+        log.debug('AvgAux.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('Average.setstate %r', state)
+        log.debug('AvgAux.setstate %r', state)
         self.__init__(state['name'], state['inputs'], unfair_avg=state['unfair_avg'], _cont=True)
 
 
@@ -649,13 +628,13 @@ class Average(Auxiliary):
             if self.unfair_avg:
                 if self.data == -1:
                     self.data = float(msg.data)
-                    # log.brief('Average %s: output %f', self.id, self.data)
+                    # log.brief('AvgAux %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
                     val = round((self.data + float(msg.data)) / 2, self.unfair_avg)
                     if (self.data != val):
                         self.data = val
-                        # log.brief('Average %s: output %f', self.id, self.data)
+                        # log.brief('AvgAux %s: output %f', self.id, self.data)
                         self.post(MsgData(self.id, round(self.data, 2)))
             else:
                 if self.values.setdefault(msg.sender) != float(msg.data):
@@ -665,14 +644,9 @@ class Average(Auxiliary):
                     val += self.values[k] / len(self.values)
                 if (self.data != val):
                     self.data = val
-                    # log.brief('Average %s: output %f', self.id, self.data)
+                    # log.brief('AvgAux %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, round(self.data, 2)))
         return super().listen(msg)
-
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        ret.update(label='Mittelwert')
-        return ret
 
     def get_settings(self):
         settings = super().get_settings()
@@ -680,7 +654,7 @@ class Average(Auxiliary):
         return settings
 
 
-class Max(Auxiliary):
+class MaxAux(AuxNode):
     """ Auxiliary node to post the higher of two or more inputs.
         Can be used to let two controllers drive one output, or to have
         redundant inputs.
@@ -692,8 +666,15 @@ class Max(Auxiliary):
         Output:
             float - posts maximum of inputs whenever this changes
     """
-    # def __getstate__(self):
-    #     return super().__getstate__()
+    def __getstate__(self):
+        state = super().__getstate__()
+        for inp in self.get_inputs(True):
+            self.unit = inp.unit
+            break
+        state.update(unit=self.unit)
+        log.debug('MaxAux.getstate %r', state)
+        return state
+
 
     # def __setstate__(self, state):
     #     self.data = state['data']
@@ -709,20 +690,15 @@ class Max(Auxiliary):
             val = round(val, 2)
             if (self.data != val):
                 self.data = val
-                # log.brief('Max %s: output %f', self.id, self.data)
+                # log.brief('MaxAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
-
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        ret.update(label='Maximum')
-        return ret
 
 
 # ========== outputs AKA Device ==========
 
 
-class Device(BusListener):
+class DeviceNode(BusListener):
     """ Base class for OUT_ENDP such as relais, PWM, GPIO pins.
         Receives float input from listened sender.
         The interpretation is device specific, recommendation is
@@ -738,7 +714,7 @@ class Device(BusListener):
     #     self.__init__(state, _cont=True)
 
 
-class DeviceSwitch(Device):
+class SwitchDevice(DeviceNode):
     """ A binary output to a GPIO pin or relais.
 
         Options:
@@ -797,19 +773,12 @@ class DeviceSwitch(Device):
     def switch(self, on):
         self.data = 100 if bool(on) else 0
 
-        log.info('DeviceSwitch %s: turns %s', self.id, 'ON' if self.data else 'OFF')
+        log.info('SwitchDevice %s: turns %s', self.id, 'ON' if self.data else 'OFF')
         if not self.inverted:
             self._driver.write(self.data)
         else:
             self._driver.write(not self.data)
-
         self.post(MsgData(self.id, self.data))   # to make our state known
-
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        ret.update(pretty_data='Ein' if self.data else 'Aus')
-        ret.update(label='Schalter')
-        return ret
 
     def get_settings(self):
         settings = super().get_settings()
@@ -817,7 +786,7 @@ class DeviceSwitch(Device):
         return settings
 
 
-class SinglePWM(Device):
+class AnalogDevice(DeviceNode):
     """ An analog output using PWM (or DAC), 0..100% input range is
         mapped to the pysical minimum...maximum range of this node.
 
@@ -852,11 +821,11 @@ class SinglePWM(Device):
         state.update(percept=self.percept)
         state.update(minimum=self.minimum)
         state.update(maximum=self.maximum)
-        log.debug('SinglePWM.getstate %r', state)
+        log.debug('AnalogDevice.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('SinglePWM.setstate %r', state)
+        log.debug('AnalogDevice.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], state['port'], percept=state['percept'], minimum=state['minimum'], maximum=state['maximum'], _cont=True)
 
@@ -892,14 +861,7 @@ class SinglePWM(Device):
         self.data = out_val
 
         self._driver.write(out_val)
-
         self.post(MsgData(self.id, round(out_val, 4)))   # to make our state known
-
-    def get_renderdata(self):
-        ret = super().get_renderdata()
-        ret.update(pretty_data=('%.2f%s' % (self.data, self.unit)) if self.data else 'Aus')
-        ret.update(label='Helligkeit')
-        return ret
 
     def get_settings(self):
         settings = super().get_settings()

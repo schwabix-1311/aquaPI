@@ -631,7 +631,7 @@ class AvgAux(AuxNode):
                     # log.brief('AvgAux %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
-                    val = round((self.data + float(msg.data)) / 2, self.unfair_avg)
+                    val = round((self.data + float(msg.data)) / 2, int(self.unfair_avg))
                     if (self.data != val):
                         self.data = val
                         # log.brief('AvgAux %s: output %f', self.id, self.data)

@@ -83,7 +83,7 @@ class DriverDS1820(InDriver):
 
     def read(self):
         if not self._fake:
-            with open(self._temp, 'r', encoding=ascii) as temp:
+            with open(self._temp, 'r') as temp:
                 ln = temp.readline()
                 log.debug('%s = %s', self.name, ln)
                 if ln and not ln == '85000\n':

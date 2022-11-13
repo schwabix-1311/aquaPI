@@ -72,9 +72,9 @@ class DriverPWM(DriverPWMbase):
         if not self._fake:
             self._sysfs = path.join('/sys/class/pwm/pwmchip0/pwm%d/' % self._channel)
             self.name = 'PWM %d @ sysfs' % self._channel
-            with open(path.join(self._sysfs, 'enable'), 'wt', encoding=ascii) as p:
+            with open(path.join(self._sysfs, 'enable'), 'wt') as p:
                 p.write('0')
-            with open(path.join(self._sysfs, 'period'), 'wt', encoding=ascii) as p:
+            with open(path.join(self._sysfs, 'period'), 'wt') as p:
                 p.write('3333333')
         else:
             self.name = '!' + self.name
@@ -87,15 +87,15 @@ class DriverPWM(DriverPWMbase):
     def close(self):
         log.debug('Closing %r', self)
         if not self._fake:
-            with open(path.join(self._sysfs, 'enable'), 'wt', encoding=ascii) as p:
+            with open(path.join(self._sysfs, 'enable'), 'wt') as p:
                 p.write('0')
 
     def write(self, value):
         log.info('%s -> %f', self.name, float(value))
         if not self._fake:
-            with open(path.join(self._sysfs, 'duty_cycle'), 'wt', encoding=ascii) as p:
+            with open(path.join(self._sysfs, 'duty_cycle'), 'wt') as p:
                 p.write('%d' % int(value / 100.0 * 3333333))
-            with open(path.join(self._sysfs, 'enable'), 'wt', encoding=ascii) as p:
+            with open(path.join(self._sysfs, 'enable'), 'wt') as p:
                 p.write('1' if value > 0 else '0')
         else:
             self._val = float(value)

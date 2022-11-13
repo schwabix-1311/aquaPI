@@ -131,5 +131,11 @@ dmypy.json
 # ... and some space for myself
 _local/
 
+# UIkit source and build tool stuff
+/aquaPi/static/uikit/
+!/aquaPi/static/uikit/dist/
+!/aquaPi/static/uikit/custom/
+
+
 # JetBrains IDE
 .idea/

@@ -1,0 +1,28 @@
+<!doctype html>
+{% extends 'layouts/default.html.jinja2' %}
+
+{% block content_header %}
+    {% set page_heading = 'About' %}
+    {% include 'partials/page_heading.html.jinja2' %}
+
+    <div class="uk-alert-primary" uk-alert="animation: uk-animation-scale-up; duration: 500">
+        <a class="uk-alert-close" uk-close></a>
+        <p class="uk-text-small">
+            Someday this page will show version, copyright, system state.<br>
+        ... and a link to REST API documentation.<br>
+        </p>
+    </div>
+{% endblock %}
+
+{% block content_main %}
+    v0.0.0.0.1 - read: mostly not working yet!<br><br>
+
+    <div class="uk-background-secondary uk-light uk-padding-small uk-panel">
+        System time: <div id="sse_now">{{ update['now'] }}</div>
+    </div>
+{% endblock %}
+
+{% block footer_script %}
+    {{ super() }}
+    {% include "sse_event_inc.html" %}
+{% endblock %}

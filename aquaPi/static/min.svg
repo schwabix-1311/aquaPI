@@ -1,0 +1,18 @@
+<svg version="1.2" width="80mm" height="80mm" viewBox="0 0 8000 8000" preserveAspectRatio="xMidYMid" fill-rule="evenodd" stroke-width="28.222" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" xml:space="preserve">
+    <defs class="ClipPathGroup">
+        <clipPath id="a" clipPathUnits="userSpaceOnUse">
+            <path d="M0 0h8000v8000H0z"/>
+        </clipPath>
+    </defs>
+    <g class="SlideGroup">
+        <g class="Slide" clip-path="url(#a)">
+            <g class="Page">
+                <g class="com.sun.star.drawing.LineShape">
+                    <path class="BoundingBox" fill="none" d="M2528 1026h2999v6902H2528z"/>
+                    <path fill="none" stroke="#000" stroke-width="1799" d="M4027 7027v-206"/>
+                    <path d="m2529 7021 1498-5994 1499 5994H2529Z"/>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

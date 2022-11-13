@@ -2,4 +2,4 @@
 
 export FLASK_APP=aquaPi
 export FLASK_ENV=development
-flask run
+nohup flask run -h $(hostname -i|head -n 1) | tee run.log

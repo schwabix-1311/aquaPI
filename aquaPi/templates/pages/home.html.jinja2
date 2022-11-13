@@ -1,0 +1,47 @@
+<!doctype html>
+{% extends 'layouts/default.html.jinja2' %}
+
+{% block content_header %}
+    {% set page_heading = 'Dashboard' %}
+    {% set page_modal_config = '#modal-config' %}
+    {% include 'partials/page_heading.html.jinja2' %}
+{% endblock %}
+
+{% block html_head_script %}
+    {{ super() }}
+{% endblock %}
+
+{% block content_main %}
+    <div id="vm">
+        <!-- this is filled with Vue content using below teplate -->
+    </div>
+
+    <template id="vueHome">
+        <div class="uk-padding-small">
+            <dashboard :all_tiles="{{ tiles }}"></dashboard>
+        </div>
+    </template>
+
+    <div class="uk-padding-small uk-margin-top uk-background-secondary uk-light">
+        <div>
+            {{ now }}
+        </div>
+    </div>
+{% endblock %}
+
+{% block footer_script %}
+    {{ super() }}
+
+    <script>
+        function acceptConfig() {
+            // TODO: push to backend - REST or POST?
+            console.warn('Need to save the Dashboard config!')
+        }
+    </script>
+
+    <script src="https://unpkg.com/vue@2.7/dist/vue.js"></script>
+    <!-- script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script -->
+
+    <script src="{{ url_for('static', filename='v-comps.js') }}"></script>
+    <script src="{{ url_for('static', filename='home.js') }}"></script>
+{% endblock %}

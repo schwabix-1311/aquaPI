@@ -1,0 +1,162 @@
+<!doctype html>
+{% extends 'layouts/default.html.jinja2' %}
+
+{% block content_header %}
+    {% set page_heading = 'Settings' %}
+    {% include 'partials/page_heading.html.jinja2' %}
+
+    <div class="uk-alert-primary" uk-alert="animation: uk-animation-scale-up; duration: 500">
+        <a class="uk-alert-close" uk-close></a>
+
+        <p class="uk-text-small">
+            <strong>TODO</strong>
+            <ul>
+                <li>Handle accordion on page reload (url hash, class 'uk-open')</li>
+                <li>form submit event listener, ajax post (fetch ...), error or success message (UIkit Notification)</li>
+                <li>dynamic form generation on base of JSON(?)</li>
+                <li>form content (settings of controls) depends on selected node input or output type (maybe use vue for easier handling)</li>
+                <li>styling</li>
+            </ul>
+        </p>
+    </div>
+
+{% endblock %}
+
+{% block content_main %}
+    <ul uk-accordion="collapsible: true; multiple: false" class="uk-list YYYuk-list-divider">
+        {# % for ctrl in update.keys() % #}
+        {% for c_node in bus.get_controller_nodes() %}
+            <li id="{{ c_node.id | lower }}" {{ 'class="uk-open"' if c_node.id==sub_form}}>
+                <a class="uk-accordion-title" href="#{{ c_node.id | lower }}">
+                    <span class="uk-h3">{{ c_node.name }}</span>
+                </a>
+                <div class="uk-accordion-content">
+                    <form action="/settings" method="post" class="uk-form-horizontal">
+                        {% for setting in c_node.get_settings() %}
+                            {% set uniId = c_node.id + '.' + setting[0] %}
+                            <div class="uk-margin-small">
+                                <label class="uk-form-label" for="{{ uniId }}">{{ setting[1] }}:</label>
+                                <div class="uk-form-controls">
+{# TODO use setting[4] to define the input type and its restrictions #}
+                                    <input {{ setting[3] }} id="{{ uniId }}" name="{{ uniId }}" value="{{ setting[2] }}" class="uk-input">
+                                </div>
+                            </div>
+                        {% endfor %}
+
+                        {% for i_node in c_node.get_inputs(recurse=True) %}
+                            <div class="uk-margin-small">
+{% if false %}
+{# TODO this should be r/o on this page, but keep it as template for select on page config #}
+                                {% set uniId = c_node.id + '.inputs' %}
+                                <label class="uk-form-label" for="{{ uniId }}">Input:</label>
+                                <div class="uk-form-controls">
+                                    <select id="{{ uniId }}" name="{{ uniId }}" value="{{ i_node.name }}" class="uk-select">
+                                        <optgroup label="Sensors">
+                                        {% for node in bus.get_input_nodes() %}
+                                            <option {{ "selected" if node.id==i_node.id else "" }}>{{ node.name }}</option>
+                                        {% endfor %}
+                                        </optgroup>
+                                        {% for node in bus.get_auxiliary_nodes() %}
+                                            {% if loop.first %}
+                                                <optgroup label="Auxiliary">
+                                            {% endif %}
+                                            <option {{ 'selected' if node.id == i_node.id else '' }}>{{ node.name }}</option>
+                                            {% if loop.last %}
+                                                </optgroup>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+{% else %}
+                                <label for="i_node.id" class="uk-form-label">Input:</label>
+                                <div class="uk-form-controls">
+                                    <input id="{{ i_node.id }}" disabled type="text" value="{{ i_node.name }}" class="uk-input">
+                                </div>
+{% endif %}                                    
+                            </div>
+                            <div class="uk-margin-small">
+                                <label class="uk-form-label"></label>
+                                <div class="uk-form-controls">
+                                    {% for in_set in i_node.get_settings() %}
+{# TODO loop body could be a jinja macro, usable for all get_settings() fields #}
+                                        <div class="uk-margin-small">
+                                            {% if in_set[0] %}
+                                                {% set uniId = i_node.id + '.' + in_set[0] %}
+                                                <label class="uk-form-label" for="{{ uniId }}">{{ in_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+{# TODO use in_set[4] to define the input type and its restrictions #}
+                                                    <input {{ in_set[3] }} id="{{ uniId }}" name="{{ uniId }}" value="{{ in_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% else %}
+                                                <label class="uk-form-label">{{ in_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+                                                    <input disabled type="text" value="{{ in_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endfor %}
+
+                        {% for o_node in c_node.get_outputs(recurse=True) %}
+                            <div class="uk-margin-small">
+                                <label class="uk-form-label">Output:</label>
+                                <div class="uk-form-controls">
+                                    <input disabled type="text" value="{{ o_node.name }}" class="uk-input">
+                                </div>
+                            </div>
+                            <div class="uk-margin-small">
+                                <label class="uk-form-label"></label>
+                                <div class="uk-form-controls">
+                                    {% for out_set in o_node.get_settings() %}
+                                        <div class="uk-margin-small">
+                                            {% if out_set[0] %}
+                                                {% set uniId = o_node.id + '.' + out_set[0] %}
+                                                <label class="uk-form-label" for="{{ uniId }}">{{ out_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+                                                    <input {{ out_set[3] }} id="{{ uniId }}" name="{{ uniId }}" value="{{ out_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% else %}
+                                                <label class="uk-form-label">{{ out_set[1] }}:</label>
+                                                <div class="uk-form-controls">
+                                                    <input disabled type="text" value="{{ out_set[2] }}" class="uk-input">
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endfor %}
+
+                        <div class="uk-flex uk-flex-right">
+                            <input type="hidden" id="sub_form_{{ c_node.id }}" name="sub_form" value="{{ c_node.id }}">
+                            <button type="reset" class="uk-button uk-margin-small-left">Reset</button>
+                            <button type="submit" class="uk-button uk-button-primary uk-margin-small-left">Accept</button>
+                        </div>
+                    </form>
+
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% endblock %}
+
+{% block footer_script %}
+    {{ super() }}
+    <script>
+        (function(){
+            // Check for location hash, and open related accordion
+            const hash = window.location.hash || null;
+            if (hash) {
+                let accrdn = document.querySelector(decodeURIComponent(hash));
+                if (accrdn) {
+                    if (!accrdn.classList.contains('uk-open')) {
+                        document.querySelector(decodeURIComponent(hash) + ' > a').click();
+                    }
+                }
+            }
+        })();
+    </script>
+{#    {% include "sse_event_inc.html" %}#}
+{% endblock %}

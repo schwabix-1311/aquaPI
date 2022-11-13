@@ -1,5 +1,17 @@
+<!doctype html>
 {% if page_heading %}
-    {% block header %}
-        <h1 class="uk-heading-large uk-heading-bullet">{{ page_heading }}</h1>
+    {% block page_heading %}
+    <div uk-grid>
+        <div class="uk-width-expand@m">
+            <h1 class="uk-heading-large uk-heading-line uk-heading-bullet">
+                {{ page_heading }}
+            </h1>
+        </div>
+        <div class="uk-width-auto@m">
+            {% if page_modal_config %}
+                <a href="{{ page_modal_config }}" uk-icon="icon: grid" uk-toggle></a>
+            {% endif %}
+        </div>
+    </div>
     {% endblock %}
 {% endif %}

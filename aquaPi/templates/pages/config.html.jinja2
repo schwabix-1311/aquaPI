@@ -1,0 +1,93 @@
+<!doctype html>
+{% extends 'layouts/default.html.jinja2' %}
+
+{% block content_header %}
+    {% set page_heading = 'Configuration' %}
+    {% include 'partials/page_heading.html.jinja2' %}
+
+    <div class="uk-alert-primary" uk-alert="animation: uk-animation-scale-up; duration: 500">
+        <a class="uk-alert-close" uk-close></a>
+        <p><strong>Große Baustelle!</strong></p>
+        <p class="uk-text-small">
+            Will be a page to show and modify structure of nodes + drivers.<br>
+            Some of it should be protected by authentication.
+        </p>
+    </div>
+{% endblock %}
+
+{% block content_main %}
+    {% for c_node in bus.get_controller_nodes() %}
+        <h3>{{ c_node.name }}</h3>
+        {{ c_node }}<br>
+
+        <small>Input</small><br>
+        {% for i_node in bus.get_input_nodes() %}
+            {% if i_node in c_node.get_inputs(True) %}
+                <strong>{{ i_node.name }}</strong> :  {{ i_node }}, 
+                drives {{ ','.join(bus.to_names(i_node.get_outputs())) }}<br>
+            {% endif %}
+        {% endfor %}
+
+        {% if c_node.is_advanced() %}
+            <small>Auxiliary</small><br>
+            {% for a_node in bus.get_auxiliary_nodes() %}
+                {% if a_node in c_node.get_inputs(True) %}
+                    <strong>{{ a_node.name }}</strong> :  {{ a_node }}, 
+                    drives {{ ','.join(bus.to_names(a_node.get_outputs)()) }}<br>
+                {% endif %}
+                {% if a_node in c_node.get_outputs(True).values() %}
+                    <strong>{{ a_node.name }}</strong> :  {{ a_node }}, 
+                    driven by {{ ','.join(bus.to_names(a_node.get_inputs())) }}<br>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+
+        <small>Ouput</small><br>
+        {% for o_node in bus.get_output_nodes() %}
+            {% if o_node in c_node.get_outputs(True) %}
+                <strong>{{ o_node.name }}</strong> :  {{ o_node }},  
+                driven by {{ ','.join(bus.to_names(o_node.get_inputs())) }})<br>
+            {% endif %}
+            {% endfor %}
+    {% endfor %}
+
+    <h2>Or a low-level way to look at same ...:</h2>
+
+    <h3>ctrl</h3>
+    {% for c_node in bus.get_controller_nodes() %}
+        {{ c_node.name }}: 
+        {{ ','.join(bus.to_names(c_node.get_inputs())) }} 
+           -&gt; <strong>{{ c_node }}</strong>
+           -&gt; {{ ','.join(bus.to_names(c_node.get_outputs())) }}
+        <br>
+    {% endfor %}
+    <h3>in</h3>
+    {% for i_node in bus.get_input_nodes() %}
+        {{ i_node.name }}:
+        {{ ','.join(bus.to_names(i_node.get_inputs())) }}
+           -&gt; <strong>{{ i_node }}</strong>
+           -&gt; {{ ','.join(bus.to_names(i_node.get_outputs())) }}
+        <br>
+    {% endfor %}
+    <h3>out</h3>
+    {% for o_node in bus.get_output_nodes() %}
+        {{ o_node.name }}:
+        {{ ','.join(bus.to_names(o_node.get_inputs())) }}
+           -&gt; <strong>{{ o_node }}</strong>
+           -&gt; {{ ','.join(bus.to_names(o_node.get_outputs())) }}
+        <br>
+    {% endfor %}
+    <h3>aux</h3>
+    {% for a_node in bus.get_auxiliary_nodes() %}
+        {{ a_node.name }}:
+        {{ ','.join(bus.to_names(a_node.get_inputs())) }} 
+           -&gt; <strong>{{ a_node }}</strong>
+           -&gt; {{ ','.join(bus.to_names(a_node.get_outputs())) }}
+        <br>
+    {% endfor %}
+{% endblock %}
+
+{% block footer_script %}
+    {{ super() }}
+    {# % include "sse_event_inc.html" % #}
+{% endblock %}

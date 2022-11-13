@@ -8,7 +8,6 @@ from threading import (Condition, Thread)
 
 from .msg_types import (MsgInfra, MsgBorn, MsgBye, MsgReply, MsgReplyHello, MsgData, MsgFilter)
 
-
 log = logging.getLogger('MsgBus')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
@@ -18,16 +17,17 @@ log.setLevel(logging.WARNING)
 
 
 class BusRole(Flag):
-    IN_ENDP = auto()    # data sources: sensor, switch, schedule
-    OUT_ENDP = auto()   # output: relais, logs, mails
-    CTRL = auto()       # the core of a controller: process IN -> OUT
-    AUX = auto()        # helper func: 2:1/n:1, e.g. avg, delay, or
+    IN_ENDP = auto()  # data sources: sensor, switch, schedule
+    OUT_ENDP = auto()  # output: relays, logs, mails
+    CTRL = auto()  # the core of a controller: process IN -> OUT
+    AUX = auto()  # helper func: 2:1/n:1, e.g. avg, delay, or
+
 
 # This may help to fill selection lists/combos with the appropriate node types
 # class PayloadType
-    # TUPEL = auto()      # operates on data tupels, e.g. RGB light
-    # ANALOG = auto()     # the receiver interprets MsgData according to his capabilites
-    # BINARY = auto()     # interprets MsgData in a binary way (on/off)
+# TUPEL = auto()      # operates on data tupels, e.g. RGB light
+# ANALOG = auto()     # the receiver interprets MsgData according to his capabilites
+# BINARY = auto()     # interprets MsgData in a binary way (on/off)
 
 #############################
 
@@ -42,6 +42,7 @@ class MsgBus:
         and easier to debug, thus the default.
         Several get_* methods build the interface to Flask backend
     """
+
     def __init__(self, threaded=False):
         self._threaded = threaded
         self.nodes = []
@@ -207,7 +208,7 @@ class MsgBus:
         """
         log.debug('wait_for_changes')
         with self._changed:
-            self._changed.wait_for(lambda :len(self._changes))
+            self._changed.wait_for(lambda: len(self._changes))
             change = [id for id in self._changes]
             self._changes.clear()
             log.debug('cleared change_list: %r', change)
@@ -229,10 +230,10 @@ class BusNode:
     def __init__(self, name, _cont=False):
         self.name = name
         self.id = name.lower()  # uuid.uuid4(uuid.NAMSPACE_OID,name)
-        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '').replace('-','_')
-        self.id = self.id.replace('ä', 'ae').replace('ö', 'oe').replace('ü','ue')
-        self.id = self.id.replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü','Ue')
-        self.id = self.id.replace('-','_').replace('ß', 'ss')
+        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '').replace('-', '_')
+        self.id = self.id.replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue')
+        self.id = self.id.replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü', 'Ue')
+        self.id = self.id.replace('-', '_').replace('ß', 'ss')
         # this is a bit of abuse: replace all non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         log.debug(self.id)
@@ -294,7 +295,7 @@ class BusNode:
             inputs = [self._bus.get_node(snd) for snd in self._inputs.sender]
             if recurse:
                 for s_node in inputs:
-                    inputs = s_node.get_inputs(recurse) + inputs 
+                    inputs = s_node.get_inputs(recurse) + inputs
         return inputs  # if self._inputs else ['-']
 
     def get_outputs(self, recurse=False):
@@ -321,6 +322,7 @@ class BusListener(BusNode):
         A derived class must call BusListener.listen() to keep
         protocol intact!
     """
+
     def __init__(self, name, inputs=None, _cont=False):
         super().__init__(name, _cont=_cont)
         if inputs:
@@ -367,14 +369,14 @@ if __name__ == "__main__":
     sensor2 = BusNode('TempSensor2')
     sensor2.plugin(mb)
 
-    # callbak functions have been removed in favor of
+    # callback functions have been removed in favor of
     # derived classes, therefore below code does no longer work
 
     # temp_ctrl = BusListener('TempController', msg_cbk=minThreshold, inputs=MsgFilter(['TempSensor']))
     # temp_ctrl.plugin(mb)
 
-    # relais = BusListener('TempRelais', msg_cbk=relais, inputs=[temp_ctrl.id])
-    # relais.plugin(mb)
+    # relay = BusListener('TempRelay', msg_cbk=relay, inputs=[temp_ctrl.id])
+    # relay.plugin(mb)
 
     mb.register(BusListener('BL3'))
 

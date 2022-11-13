@@ -45,5 +45,6 @@ def render_sse_template(html, read, delay=1, **context):
                 yield format_msg(read())
                 if delay:
                     time.sleep(delay)
+
         return Response(events(), content_type='text/event-stream')
     return render_template(html, **context, now=time.asctime())

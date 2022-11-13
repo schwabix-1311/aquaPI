@@ -24,7 +24,7 @@ const App = {
         async updateNode(id, addNew=false) {
             if (id != null) {
                 if ((id in this.nodes) || addNew) {
-                    //TODO: error handler - might loose connection
+                    // TODO: error handler - might loose connection
                     const response = await fetch('/api/node/' + id)
                     const node = await response.json()
                     this.setNode(id, node)
@@ -85,8 +85,7 @@ if (!!window.EventSource) {
         // this is an array of node ids that were modified
         const obj = JSON.parse(e.data);
         for (const i in obj) {
-            id = obj[i]
-            vm.updateNode(id)
+            vm.updateNode(obj[i])
         }
     }
 }

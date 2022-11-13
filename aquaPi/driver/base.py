@@ -5,7 +5,6 @@ from os import path
 from enum import Enum
 from collections import namedtuple
 
-
 log = logging.getLogger('Driver Base')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
@@ -32,9 +31,11 @@ class DriverNYI(Exception):
     def __init__(self, msg='Not yet implemented.'):
         super().__init__(msg)
 
+
 class DriverParamError(Exception):
     def __init__(self, msg='Invalid parameter value.'):
         super().__init__(msg)
+
 
 class DriverInvalidAddrError(Exception):
     def __init__(self, msg=None, adr=None):
@@ -42,15 +43,18 @@ class DriverInvalidAddrError(Exception):
             msg = 'Pin, channel or address %r does not exist.' % adr
         super().__init__(msg)
 
+
 class DriverPortInuseError(Exception):
     def __init__(self, msg=None, port=None):
         if not msg:
             msg = 'Pin or channel %r is already assigned.' % port
         super().__init__(msg)
 
+
 class DriverReadError(Exception):
     def __init__(self, msg='Failed to read a valid value.'):
         super().__init__(msg)
+
 
 class DriverWriteError(Exception):
     def __init__(self, msg='Failed to write value to the output.'):
@@ -62,8 +66,10 @@ class DriverWriteError(Exception):
 
 IoPort = namedtuple('IoPort', ['function', 'driver', 'cfg'])
 
+
 class PortFunc(Enum):
     IO, IN, OUT, PWM, ADC = range(1, 6)
+
 
 class PinFunc(Enum):
     UNKNOWN = -1
@@ -83,6 +89,7 @@ class Driver:
         Drivers persist their cinfiguration in dict 'cfg', no need for
         __getstate__/__setstate__ overloads in derived classes.
     """
+
     # TODO this persistance approach could be transferred to MsgNodes!
     def __init__(self, func, cfg):
         self.name = '!abstract'
@@ -100,6 +107,7 @@ class InDriver(Driver):
     """ base class of all input drivers
         InDriver can be read, e.g. a temperature sensor.
     """
+
     def __init__(self, func, cfg):
         super().__init__(func, cfg)
         self.name = '!abstract IN'
@@ -113,6 +121,7 @@ class OutDriver(Driver):
     """ base of all output drivers
         OutDriver can be written, the last written value can be read.
     """
+
     def __init__(self, func, cfg):
         super().__init__(func, cfg)
         self.name = '!abstract OUT'

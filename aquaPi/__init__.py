@@ -35,7 +35,8 @@ def create_app(test_config=None):
     else:
         app.config.from_pyfile('config.py', silent=True)
 
-    #if False:    # FIXME: this would use app.debug before assignment
+    # FIXME: this would use app.debug before assignment
+    # if False:
     #    mail_handler = SMTPHandler(
     #        mailhost='127.0.0.1',
     #        fromaddr='server-error@example.com',

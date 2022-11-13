@@ -8,7 +8,6 @@ import random
 
 from .base import (InDriver, IoPort, PortFunc, is_raspi, DriverParamError, DriverInvalidAddrError, DriverReadError)
 
-
 log = logging.getLogger('DriverOneWire')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
@@ -25,8 +24,10 @@ class DriverDS1820(InDriver):
     def find_ports():
         if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg')
-            io_ports = { 'DS1820 xA2E9C':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-0119383a2e9c', 'fake': True})
-                       , 'DS1820 x7A71E':  IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-01193867a71e', 'fake': True}) }
+            io_ports = {
+                'DS1820 xA2E9C': IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-0119383a2e9c', 'fake': True}),
+                'DS1820 x7A71E': IoPort(PortFunc.ADC, DriverDS1820, {'address': '28-01193867a71e', 'fake': True})
+            }
         else:
             io_ports = {}
             cnt = 1
@@ -80,7 +81,6 @@ class DriverDS1820(InDriver):
         log.debug('Closing %r', self)
         # pass
 
-
     def read(self):
         if not self._fake:
             with open(self._temp, 'r') as temp:
@@ -97,7 +97,7 @@ class DriverDS1820(InDriver):
         else:
             rnd = random.random()
             if rnd < .1:
-                self._dir = math.copysign(1, self._initval - self._val)  #*= -1
+                self._dir = math.copysign(1, self._initval - self._val)  # *= -1
             elif rnd > .7:
                 self._val += 0.05 * self._dir
             self._val = round(min(max(self._initval - 1, self._val), self._initval + 1), 2)

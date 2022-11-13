@@ -9,7 +9,6 @@ import glob
 
 from .base import *
 
-
 log = logging.getLogger('Driver Base')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
@@ -28,7 +27,7 @@ class IoRegistry(object):
     "GPIO 0..xx": { IO,  DriverGPIO,   {pin: 0..x} }         - unused, func IO -> OUT/IN, x entries
     "IOext 1..7": { IO,  DriverPCFxx,  {addr: 0x47, ch: x} } - unused, x entries
 
-    "GPIO 12":    { OUT, DriverGPIO,   {pin: 12} }           - Relais
+    "GPIO 12":    { OUT, DriverGPIO,   {pin: 12} }           - Relays
     "IOext 0":    { OUT, DriverPCFxx,  {addr: 0x47, ch: 0} } - CO2 Ventil
     "ShellyPlug1":{ OUT, DriverShelly, {ip: '192..', ch:0} } - S.Plug - Heizer
     "H-Bridge 1": { OUT, Drivermotor,  {pins: (21,22)} }     - Dosierpumpe
@@ -52,7 +51,7 @@ class IoRegistry(object):
     Drivers can provide entries for more than one function if they implement all their methods.
     Each channel/port/pin is one entry. Dict cfg is driver's private property!
     Creation of a driver instance reserves the entry, in case of GPIO (or soft-PWM) this may change function!
-    get_ports_by_function() returns a view on avialbale or used IoPorts.
+    get_ports_by_function() returns a view on available or used IoPorts.
     driver_factory(key,func) creates a driver for specified port and function.
     driver_destruct(key) returns IoPort to unused. This must restore initial function.
 
@@ -71,7 +70,7 @@ class IoRegistry(object):
         # We load all modules Driver*.py in specific folders, then lookup all
         # descendants of class Driver found in the module dicts.
         # Those with a method find_ports() can report "their" IoPorts to IoRegistry.
-        # May be there's a much simpler ways to achieve the same though.
+        # Maybe there's a much simpler ways to achieve the same though.
 
         # all driver modules are dynamically imported in __init__.py and added to sys.modules
         drv_mod_names = [mod for mod in sys.modules if 'driver.' in mod]
@@ -119,13 +118,13 @@ class IoRegistry(object):
             IoRegistry._inuse.update({port: IoPort(io_port.function, driver, io_port.cfg)})
             del IoRegistry._map[port]
         except:
-            #TODO report error, e.g.
+            # TODO report error, e.g.
             log.exception('Failed to create driver: %s', port)
         return driver
 
     def driver_release(self, port):
         log.debug('release driver for %r', port)
-        if not port in IoRegistry._inuse.keys():
+        if port not in IoRegistry._inuse.keys():
             raise DriverParamError('There is driver open for port %s' % port)
 
         io_port = IoRegistry._inuse[port]
@@ -140,7 +139,6 @@ class IoRegistry(object):
 
 DRIVER_FILE_PREFIX = 'Driver'
 CUSTOM_DRIVERS = 'CustomDrivers'
-
 
 # import all files named Driver*,py into our package, icluding a subfolder CustomDrivers
 __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))

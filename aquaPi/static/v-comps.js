@@ -12,29 +12,31 @@
 
 
 // SVG edit e.g. in LibreOffice.Draw, then https://iconly.io/tools/svg-cleaner (6K -> 1.5k!)
-const unit2icon = { '°C': 'thermo.svg'
-                  , '°C.min': 'thermo_min.svg'
-                  , '°C.max': 'thermo_max.svg'
-                  , '°F': 'thermo.svg'
-                  , '°F.min': 'thermo_min.svg'
-                  , '°F.max': 'thermo_max.svg'
-                  , 'pH': 'gas.svg'
-                  , 'pH.min': 'gas_min.svg'
-                  , 'pH.max': 'gas_max.svg'
-                  , 'rH': 'faucet.svg'
-                  , 'rH.min': 'faucet.svg'
-                  , 'rH.max': 'faucet.svg'
-                  , '%.min': 'min.'
-                  , '%.max': 'max.svg'
-                  , '.min': 'min.'
-                  , '.max': 'max.svg'
-                  };
+const unit2icon = {
+    '°C': 'thermo.svg',
+    '°C.min': 'thermo_min.svg',
+    '°C.max': 'thermo_max.svg',
+    '°F': 'thermo.svg',
+    '°F.min': 'thermo_min.svg',
+    '°F.max': 'thermo_max.svg',
+    'pH': 'gas.svg',
+    'pH.min': 'gas_min.svg',
+    'pH.max': 'gas_max.svg',
+    'rH': 'faucet.svg',
+    'rH.min': 'faucet.svg',
+    'rH.max': 'faucet.svg',
+    '%.min': 'min.',
+    '%.max': 'max.svg',
+    '.min': 'min.',
+    '.max': 'max.svg'
+};
 
-const severity_map = { 'act': 'uk-label-success'
-                     , 'wrn': 'uk-label-warning'
-                     , 'err': 'uk-label-danger'
-                     , 'std': 'uk-label-default'
-                     };
+const severity_map = {
+    'act': 'uk-label-success',
+    'wrn': 'uk-label-warning',
+    'err': 'uk-label-danger',
+    'std': 'uk-label-default'
+};
 
 
 const AnyNode = {
@@ -42,8 +44,8 @@ const AnyNode = {
     props: {
         id: String
     },
-    async beforeMount () {
-        this.$root.updateNode(this.id, addNew=true)
+    async beforeMount() {
+        await this.$root.updateNode(this.id, true)
     },
     computed: {
         node() {
@@ -100,7 +102,7 @@ const BusNode = {
             if ((this.node == null) || !('alert' in this.node))
                 return ''
             let ret = 'uk-card-badge uk-label '
-            severity = this.node.alert[1]
+            let severity = this.node.alert[1]
             if (severity in severity_map)
                 ret += severity_map[severity]
             else
@@ -131,13 +133,13 @@ Vue.component('BusNode', BusNode);
 
 const ControllerNode = {
     extends: BusNode,
-    async beforeMount () {
+    async beforeMount() {
         this.in_id = undefined
-        await this.$root.updateNode(this.id, addNew=true)
+        await this.$root.updateNode(this.id, true)
 
         // recurse all inputs? Advanced Ctrl have a chain and/or auxiliaries with n:1 inputs
         this.in_id = this.node.inputs.sender[0]
-        await this.$root.updateNode(this.in_id, addNew=true)
+        await this.$root.updateNode(this.in_id, true)
     },
     computed: {
         label() {
@@ -178,10 +180,10 @@ const MinimumCtrl = {
     extends: ControllerNode,
     computed: {
         decoration() {
-            ret = ''
+            let ret = ''
             if ((this.node !== undefined) && ('unit' in this.node))
                 if (this.node.unit + '.min' in unit2icon) {
-                    icon = unit2icon[this.node.unit + '.min']
+                    let icon = unit2icon[this.node.unit + '.min']
                     ret += `<img src="static/${icon}" style="width:24px;height:24px;">`
                 }
             return ret
@@ -194,10 +196,10 @@ const MaximumCtrl = {
     extends: ControllerNode,
     computed: {
         decoration() {
-            ret = ''
+            let ret = ''
             if ((this.node !== undefined) && ('unit' in this.node))
                 if (this.node.unit + '.max' in unit2icon) {
-                    icon = unit2icon[this.node.unit + '.max']
+                    let icon = unit2icon[this.node.unit + '.max']
                     ret += `<img src="static/${icon}" style="width:24px;height:24px;">`
                 }
             return ret
@@ -210,15 +212,15 @@ const LightCtrl = {
     extends: ControllerNode,
     computed: {
         decoration() {
-            ret = ''
+            let ret = ''
             if (this.node !== undefined)
                 ret = '<img src="static/light.svg" style="width:24px;height:24px;">'
             return ret
         },
         value() {
-            return this.node?.data==100 ? 'Ein'
-                 : this.node?.data == 0 ? 'Aus'
-                 : this.node?.data.toFixed(2).toString() + this.node?.unit
+            return this.node?.data == 100 ? 'Ein'
+                : this.node?.data == 0 ? 'Aus'
+                    : this.node?.data.toFixed(2).toString() + this.node?.unit
         },
     },
 };
@@ -309,13 +311,13 @@ Vue.component('AnalogDevice', AnalogDevice);
 
 const AuxNode = {
     extends: BusNode,
-    async beforeMount () {
+    async beforeMount() {
         this.in_ids = undefined
-        await this.$root.updateNode(this.id, addNew=true)
+        await this.$root.updateNode(this.id, true)
 
         this.in_ids = this.node.inputs.sender
-        for (in_id of this.in_ids) {
-          await this.$root.updateNode(in_id, addNew=true)
+        for (let in_id of this.in_ids) {
+            await this.$root.updateNode(in_id, true)
         }
     },
     template: `

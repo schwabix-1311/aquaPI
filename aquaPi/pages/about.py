@@ -6,7 +6,6 @@ import time
 
 from .sse_util import render_sse_template
 
-
 log = logging.getLogger('/about')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 

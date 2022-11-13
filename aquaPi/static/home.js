@@ -24,7 +24,7 @@ const App = {
         async updateNode(id, addNew=false) {
             if (id != null) {
                 if ((id in this.nodes) || addNew) {
-                    //TODO: error handler - might loose connection
+                    // TODO: error handler - might loose connection
                     const response = await fetch('/api/node/' + id)
                     const node = await response.json()
                     this.setNode(id, node)
@@ -46,25 +46,27 @@ const Dashboard = {
                 <component :is="t.comp" :id="t.id" ></component>
             </div>
             <div id="modal-config" uk-modal>
-    <!-- form action="/home" method="post" class="uk-form-horizontal" -->
-    <!-- fieldset class="uk-fieldset" -->
                 <div class="uk-modal-dialog uk-modal-body">
-                    <div class="uk-modal-header">
-                        <button class="uk-modal-close-default" type="button" uk-close></button>
-                        <h2 class="uk-modal-title">Dashboard Configuration</h2>
-                    </div>
-                    <div class="uk-modal-body">
-                        <p>Which tiles should be shown?</p>
-                        <div v-for="t in tiles">
-                            <label><input class="uk-checkbox" type="checkbox" v-model="t.vis" > [[ t.name ]]</label>
-                        </div>
-                    </div>
-                    <div class="uk-modal-footer uk-text-right">
-                        <button class="uk-button uk-button-default uk-modal-close" type="submit" onClick="acceptConfig()">Accept</button>
-                    </div>
+                    <form action="/home" method="post" class="uk-form-horizontal">
+                        <fieldset class="uk-fieldset">
+                            <div class="uk-modal-header">
+                                <button class="uk-modal-close-default" type="button" uk-close></button>
+                                <h2 class="uk-modal-title">Dashboard Configuration</h2>
+                            </div>
+                            <div class="uk-modal-body">
+                                <p>Which tiles should be shown?</p>
+                                <div v-for="t in tiles">
+                                    <label>
+                                        <input class="uk-checkbox uk-margin-small-right" type="checkbox" v-model="t.vis">[[ t.name ]]
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="uk-modal-footer uk-text-right">
+                                <button class="uk-button uk-button-default uk-modal-close" type="submit" onClick="acceptConfig()">Accept</button>
+                            </div>
+                        </fieldset>
+                    </form>
                 </div>
-    <!-- /fieldset -->
-    <!-- /form -->
             </div>
         </div>
     `
@@ -85,8 +87,7 @@ if (!!window.EventSource) {
         // this is an array of node ids that were modified
         const obj = JSON.parse(e.data);
         for (const i in obj) {
-            id = obj[i]
-            vm.updateNode(id)
+            vm.updateNode(obj[i])
         }
     }
 }

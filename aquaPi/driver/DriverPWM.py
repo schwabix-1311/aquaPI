@@ -2,20 +2,21 @@
 
 import logging
 from os import path
+
 try:
     import RPi.GPIO as GPIO
 except RuntimeError:
     # make lint happy with minimal non-funct facade
-    class GPIOdummy():
+    class GPIOdummy:
         @staticmethod
         def gpio_function(pin):
             pin = not pin
             return None
+
+
     GPIO = GPIOdummy
 
-
 from .base import (OutDriver, IoPort, PortFunc, PinFunc, is_raspi, DriverParamError)
-
 
 log = logging.getLogger('DriverPWM')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -31,6 +32,7 @@ log.setLevel(logging.WARNING)
 class DriverPWMbase(OutDriver):
     """ abstrract base of PWM drivers
     """
+
     def __init__(self, func, cfg):
         if func not in [PortFunc.PWM]:
             raise DriverParamError('This driver supports PWM, nothing else.')
@@ -43,12 +45,15 @@ class DriverPWMbase(OutDriver):
 class DriverPWM(DriverPWMbase):
     """ one PWM channel, hardware PWM
     """
+
     @staticmethod
     def find_ports():
         if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg')
-            io_ports = { 'PWM 0':  IoPort(PortFunc.PWM, DriverPWM, {'pin': 18, 'channel': 0, 'fake': True})
-                       , 'PWM 1':  IoPort(PortFunc.PWM, DriverPWM, {'pin': 19, 'channel': 1, 'fake': True}) }
+            io_ports = {
+                'PWM 0': IoPort(PortFunc.PWM, DriverPWM, {'pin': 18, 'channel': 0, 'fake': True}),
+                'PWM 1': IoPort(PortFunc.PWM, DriverPWM, {'pin': 19, 'channel': 1, 'fake': True})
+            }
         else:
             io_ports = {}
             cnt = 0

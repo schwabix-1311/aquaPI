@@ -8,7 +8,6 @@ import atexit
 from .msg_bus import MsgBus
 from .msg_nodes import *
 
-
 log = logging.getLogger('MachineRoom')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
@@ -37,7 +36,7 @@ def init(storage):
 @atexit.register
 def cleanup():
     log.brief('Preparing shutdown ...')
-    if  mr and mr.bus:
+    if mr and mr.bus:
         # this does not work completely, teardown aborts half-way.
         # Best guess: we run multi-threaded as a daemon and have only limited time until we're killed.
         mr.save_nodes(mr.bus)
@@ -53,6 +52,7 @@ class MachineRoom:
         Some bus nodes start worker threads (e.g. sensors), the rest
         works in msg handlers and callbacks.
     """
+
     def __init__(self, bus_storage):
         """ Create everything needed to get the machinery going.
             So far the only thing here is the bus.
@@ -60,7 +60,7 @@ class MachineRoom:
         self.bus_storage = bus_storage
 
         if not path.exists(self.bus_storage):
-            self.bus = MsgBus()  #threaded=True)
+            self.bus = MsgBus()  # threaded=True)
 
             log.brief("=== There are no controllers defined, creating default")
             self.create_default_nodes()
@@ -109,13 +109,13 @@ class MachineRoom:
         if REAL_CONFIG:
             # single LED bar, dawn & dusk 15mins, perceptive corr.
             light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
-            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=15*60)
+            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=15 * 60)
             light_pwm = AnalogDevice('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=85)
             light_schedule.plugin(self.bus)
             light_c.plugin(self.bus)
             light_pwm.plugin(self.bus)
 
-            # single temp sensor, switched relais
+            # single temp sensor, switched relays
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
             wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12', inverted=True)
@@ -127,7 +127,7 @@ class MachineRoom:
         if SINGLE_LIGHT:
             light_schedule = ScheduleInput('Zeitplan 1', '* 14-21 * * *')
             light_schedule.plugin(self.bus)
-            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=30*60) #30*60)
+            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
             light_c.plugin(self.bus)
             if not DAWN_LIGHT:
                 light_pwm = AnalogDevice('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=80)
@@ -135,7 +135,7 @@ class MachineRoom:
             else:
                 dawn_schedule = ScheduleInput('Zeitplan 2', '* 22 * * *')
                 dawn_schedule.plugin(self.bus)
-                dawn_c = LightCtrl('Dämmerlicht', dawn_schedule.id, fade_time=30*60)
+                dawn_c = LightCtrl('Dämmerlicht', dawn_schedule.id, fade_time=30 * 60)
                 dawn_c.plugin(self.bus)
 
                 light_max = MaxAux('Max Licht', [light_c.id, dawn_c.id])
@@ -143,11 +143,10 @@ class MachineRoom:
                 light_pwm = AnalogDevice('Dimmer', light_max.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
 
-
         if SINGLE_TEMP:
-            # single temp sensor -> temp ctrl -> relais
+            # single temp sensor -> temp ctrl -> relay
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
-            #wasser_i = AnalogInput('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
+            # wasser_i = AnalogInput('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
             wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12')
             wasser.plugin(self.bus)
@@ -155,7 +154,7 @@ class MachineRoom:
             wasser_i.plugin(self.bus)
 
         elif COMPLEX_TEMP:
-            # 2 temp sensors -> average -> temp ctrl -> relais
+            # 2 temp sensors -> average -> temp ctrl -> relay
             w1_temp = AnalogInput('T-Sensor 1', 'DS1820 xA2E9C')
             w1_temp.plugin(self.bus)
 

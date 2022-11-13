@@ -5,15 +5,16 @@
     {% set page_heading = 'Settings' %}
     {% include 'partials/page_heading.html.jinja2' %}
 
-    <div class="uk-alert-primary" uk-alert="animation: uk-animation-scale-up; duration: 500" >
+    <div class="uk-alert-primary" uk-alert="animation: uk-animation-scale-up; duration: 500">
         <a class="uk-alert-close" uk-close></a>
+
         <p class="uk-text-small">
             <strong>TODO</strong>
             <ul>
-                <li>Handle accordion on page reload (url hash and/or class 'uk-open')</li>
-                <li>form submit event listener, ajax post (fetch ...), error / success message (UIkit Notification)</li>
+                <li>Handle accordion on page reload (url hash, class 'uk-open')</li>
+                <li>form submit event listener, ajax post (fetch ...), error or success message (UIkit Notification)</li>
                 <li>dynamic form generation on base of JSON(?)</li>
-                <li>form content (settings of controls) depends on selected node input / output type (maybe use vue for easier handling)</li>
+                <li>form content (settings of controls) depends on selected node input or output type (maybe use vue for easier handling)</li>
                 <li>styling</li>
             </ul>
         </p>
@@ -59,7 +60,7 @@
                                             {% if loop.first %}
                                                 <optgroup label="Auxiliary">
                                             {% endif %}
-                                            <option {{ "selected" if node.id==i_node.id else "" }}>{{ node.name }}</option>
+                                            <option {{ 'selected' if node.id == i_node.id else '' }}>{{ node.name }}</option>
                                             {% if loop.last %}
                                                 </optgroup>
                                             {% endif %}
@@ -67,9 +68,9 @@
                                     </select>
                                 </div>
 {% else %}
-                                <label class="uk-form-label">Input:</label>
+                                <label for="i_node.id" class="uk-form-label">Input:</label>
                                 <div class="uk-form-controls">
-                                    <input disabled type="text" value="{{ i_node.name }}" class="uk-input">
+                                    <input id="{{ i_node.id }}" disabled type="text" value="{{ i_node.name }}" class="uk-input">
                                 </div>
 {% endif %}                                    
                             </div>

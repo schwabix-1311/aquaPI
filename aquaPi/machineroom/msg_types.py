@@ -35,7 +35,7 @@ class MsgPayload(Msg):
 
 class MsgData(MsgPayload):
     """ Transport for data items
-        Output of sensors and input for relais.
+        Output of sensors and input for relays.
         All using same type allows to chain BusListeners
         Data can have any type, receiver must interpret it in
         an expectable way, close to Python truthness,
@@ -94,7 +94,7 @@ class MsgReplyHello(MsgReply, MsgInfra):
 #############################
 
 
-class MsgFilter():
+class MsgFilter:
     """ MsgFilter is used to select messages received
         by BusListener via a list of sender names.
         Empty list (actually an array) means no filtering.
@@ -102,7 +102,7 @@ class MsgFilter():
     """
     # TODO add filtering by other attributes (group, category, sender role/type)
     def __init__(self, sender):
-        if (isinstance(sender, str)):
+        if isinstance(sender, str):
             self.sender = [sender]
         else:
             self.sender = sender

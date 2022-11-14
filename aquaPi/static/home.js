@@ -30,8 +30,8 @@ const App = {
                     this.setNode(id, node)
                 }
             }
-        }
-    }
+        },
+    },
 };
 
 const Dashboard = {
@@ -40,6 +40,14 @@ const Dashboard = {
     data: function() {
         return { tiles: this.all_tiles }
     },
+    methods: {
+        acceptConfig() {
+            const form = document.getElementById("home_config");
+            form.submit()
+            // in case of error, the POST handler redirects away
+            UIkit.notification({message: 'Konfiguration gespeichert!', status: 'success'})
+        },
+    },
     template: `
         <div class="uk-child-width-1-2@s uk-grid-small" uk-grid="masonry: true">
             <div v-for="t in tiles" :hidden="(!t.vis)" >
@@ -47,24 +55,22 @@ const Dashboard = {
             </div>
             <div id="modal-config" uk-modal>
                 <div class="uk-modal-dialog uk-modal-body">
-                    <form action="/home" method="post" class="uk-form-horizontal">
-                        <fieldset class="uk-fieldset">
-                            <div class="uk-modal-header">
-                                <button class="uk-modal-close-default" type="button" uk-close></button>
-                                <h2 class="uk-modal-title">Dashboard Configuration</h2>
+                    <form action="/" method="post" id="home_config" class="uk-form-horizontal">
+                        <div class="uk-modal-header">
+                            <h2 class="uk-modal-title">Dashboard Konfiguration</h2>
+                        </div>
+                        <div class="uk-modal-body">
+                            <p>Which tiles should be shown?</p>
+                            <div v-for="t in tiles">
+                                <label>
+                                    <input type="checkbox" v-model="t.vis" :name="t.comp+'.'+t.id" class="uk-checkbox uk-margin-small-right">
+                                    [[ t.name ]]
+                                </label>
                             </div>
-                            <div class="uk-modal-body">
-                                <p>Which tiles should be shown?</p>
-                                <div v-for="t in tiles">
-                                    <label>
-                                        <input class="uk-checkbox uk-margin-small-right" type="checkbox" v-model="t.vis">[[ t.name ]]
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="uk-modal-footer uk-text-right">
-                                <button class="uk-button uk-button-default uk-modal-close" type="submit" onClick="acceptConfig()">Accept</button>
-                            </div>
-                        </fieldset>
+                        </div>
+                        <div class="uk-modal-footer uk-text-right">
+                            <input type="submit" value="Übernehmen" class="uk-button uk-button-default uk-modal-close" @click="acceptConfig">
+                        </div>
                     </form>
                 </div>
             </div>

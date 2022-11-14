@@ -117,8 +117,8 @@ class IoRegistry(object):
 
             IoRegistry._inuse.update({port: IoPort(io_port.function, driver, io_port.cfg)})
             del IoRegistry._map[port]
-        except:
-            # TODO report error, e.g.
+        except Exception:
+            #TODO report error, e.g.
             log.exception('Failed to create driver: %s', port)
         return driver
 

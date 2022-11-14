@@ -29,36 +29,42 @@ def is_raspi():
 
 class DriverNYI(Exception):
     def __init__(self, msg='Not yet implemented.'):
-        super().__init__(msg)
+        super().__init__()
+        self.msg = msg
 
 
 class DriverParamError(Exception):
     def __init__(self, msg='Invalid parameter value.'):
-        super().__init__(msg)
+        super().__init__()
+        self.msg = msg
 
 
 class DriverInvalidAddrError(Exception):
     def __init__(self, msg=None, adr=None):
         if not msg:
             msg = 'Pin, channel or address %r does not exist.' % adr
-        super().__init__(msg)
+        super().__init__()
+        self.msg = msg
 
 
 class DriverPortInuseError(Exception):
     def __init__(self, msg=None, port=None):
         if not msg:
             msg = 'Pin or channel %r is already assigned.' % port
-        super().__init__(msg)
+        super().__init__()
+        self.msg = msg
 
 
 class DriverReadError(Exception):
     def __init__(self, msg='Failed to read a valid value.'):
-        super().__init__(msg)
+        super().__init__()
+        self.msg = msg
 
 
 class DriverWriteError(Exception):
     def __init__(self, msg='Failed to write value to the output.'):
-        super().__init__(msg)
+        super().__init__()
+        self.msg = msg
 
 
 # ========== common types ==========

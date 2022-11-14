@@ -65,6 +65,8 @@ class DriverDS1820(InDriver):
             if not path.exists(self._sysfs_addr):
                 raise DriverInvalidAddrError(adr=self._sysfs_addr)
             self._temp = path.join(self._sysfs_addr, 'temperature')
+            if not path.exists(self._temp):
+                self._temp = path.join(self._sysfs_addr, 'w1_slave')
             # required? read resolution: _sysfs_addr, 'resolution' [bits) e.g. 12
         else:
             self._initval = 25.0
@@ -85,6 +87,9 @@ class DriverDS1820(InDriver):
         if not self._fake:
             with open(self._temp, 'r', encoding=ascii) as temp:
                 ln = temp.readline()
+                if self._temp[-8:] == 'w1_slave':
+                    ln = temp.readline()
+                    ln = ln[29:]  # e.g. '90 01 4b 46 7f ff 0c 10 33 t=25000'
                 log.debug('%s = %s', self.name, ln)
                 if ln and not ln == '85000\n':
                     val = float(ln) / 1000

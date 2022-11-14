@@ -49,18 +49,24 @@ class MsgBus:
         self._changes = set()
         self._changed = Condition()
         self._queue = None
+
+        #FIXME: Terrible place to store this, but we have no better place YET!
+        #       Having it here is the least effort. Add a global config later.
+        self.dash_tiles = []  # TODO prelim!!
+
         if threaded:
             self._queue = Queue(maxsize=10)
             Thread(target=self._dispatch, daemon=True).start()
 
     def __getstate__(self):
-        state = {'nodes': self.nodes, 'threaded': self._threaded}
+        state = {'nodes': self.nodes, 'threaded': self._threaded, 'dash_tiles': self.dash_tiles}
         log.debug('MsgBus.getstate %r', state)
         return state
 
     def __setstate__(self, state):
         log.debug('MsgBus.setstate %r', state)
         self.__init__(state['threaded'])
+        self.dash_tiles = state['dash_tiles']  # TODO prelim!
         for n in state['nodes']:
             n.plugin(self)
 

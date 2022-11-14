@@ -28,7 +28,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY='ToDo during installation',   # TODO !!
         DATABASE=os.path.join(app.instance_path, 'aquaPi.sqlite'),
-        NODES=os.path.join(app.instance_path, 'nodes.pickle')
+        CONFIG=os.path.join(app.instance_path, 'config.pickle')
     )
     if test_config:
         app.config.from_mapping(test_config)
@@ -64,10 +64,6 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
 
-    @app.context_processor
-    def inject_globals():
-        return dict(bus=app.bus)
-
     from .pages import home
     app.register_blueprint(home.bp)
 
@@ -95,7 +91,11 @@ def create_app(test_config=None):
         return app
 
     from . import machineroom
-    app.machineroom = machineroom.init(app.config['NODES'])
+    app.machineroom = machineroom.init(app.config['CONFIG'])
     app.bus = app.machineroom.bus
+
+    @app.context_processor
+    def inject_globals():
+        return dict(bus=app.bus)
 
     return app

@@ -32,15 +32,8 @@
 {% block footer_script %}
     {{ super() }}
 
-    <script>
-        function acceptConfig() {
-            // TODO: push to backend - REST or POST?
-            console.warn('Need to save the Dashboard config!')
-        }
-    </script>
-
     <script src="https://unpkg.com/vue@2.7/dist/vue.js"></script>
-    <!-- script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script -->
+    {# <script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script> #}
 
     <script src="{{ url_for('static', filename='v-comps.js') }}"></script>
     <script src="{{ url_for('static', filename='home.js') }}"></script>

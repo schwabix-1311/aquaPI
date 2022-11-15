@@ -85,7 +85,7 @@ class DriverDS1820(InDriver):
 
     def read(self):
         if not self._fake:
-            with open(self._temp, 'r') as temp:
+            with open(self._temp, 'r', encoding='ascii') as temp:
                 ln = temp.readline()
                 if self._temp[-8:] == 'w1_slave':
                     ln = temp.readline()

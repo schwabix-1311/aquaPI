@@ -5,8 +5,14 @@ import os
 from os import path
 import pickle
 import atexit
+
 from .msg_bus import MsgBus
-from .msg_nodes import *
+from .ctrl_nodes import *
+from .in_nodes import *
+from .out_nodes import *
+from .aux_nodes import *
+from .misc_nodes import *
+
 
 log = logging.getLogger('MachineRoom')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose

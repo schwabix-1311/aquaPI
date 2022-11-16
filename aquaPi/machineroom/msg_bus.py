@@ -8,6 +8,7 @@ from threading import (Condition, Thread)
 
 from .msg_types import (MsgInfra, MsgBorn, MsgBye, MsgReply, MsgReplyHello, MsgData, MsgFilter)
 
+
 log = logging.getLogger('MsgBus')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
@@ -229,7 +230,7 @@ class BusNode:
         The bus protocol (MsgBorn/MsgBye/MsgReplyHello)
         is handled internally. Overload if you need one of them,
         but don't forget to call super().listen(...)
-        The _inputs should always be None = listen to everbody!
+        The _inputs should always be None!
     """
     ROLE = None
 
@@ -322,11 +323,10 @@ class BusNode:
 
 class BusListener(BusNode):
     """ BusListener is an extension to BusNode.
-        Listeners usually filter the messages they listen to.
-        Bus protocol is handled internally.
-        Listening to MsgBorn/MsgBye allows to adjust MsgFilters.
-        A derived class must call BusListener.listen() to keep
-        protocol intact!
+        Listeners usually have one input they listen to
+        and react py posting messages.
+        A derived class must call super().listen(msg) to keep
+        protocol intact! Bus protocol is handled there.
     """
 
     def __init__(self, name, inputs=None, _cont=False):

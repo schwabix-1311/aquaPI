@@ -82,7 +82,9 @@ class MinimumCtrl(ControllerNode):
             hysteresis - a tolerance, to reduce switch frequency
 
         Output:
-            posts a single 100 when input < (threshold-hysteresis), 0 when input >= /thgreshold+hysteresis)
+            posts a single
+              100 when input < (thr. - hyst./2),
+              0 when input >= (thr. + hyst./2)
     """
 
     # TODO: some controllers could have a threshold for max. active time -> warning
@@ -109,16 +111,16 @@ class MinimumCtrl(ControllerNode):
     def listen(self, msg):
         if isinstance(msg, MsgData):
             new_val = self.data
-            if float(msg.data) < (self.threshold - self.hysteresis):
+            if float(msg.data) < (self.threshold - self.hysteresis / 2):
                 new_val = 100.0
-            elif float(msg.data) >= (self.threshold + self.hysteresis):
+            elif float(msg.data) >= (self.threshold + self.hysteresis / 2):
                 new_val = 0.0
 
             if self.data != new_val:
                 log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
 
-                if msg.data < (self.threshold - self.hysteresis) * 0.95:
+                if msg.data < (self.threshold - self.hysteresis / 2) * 0.95:
                     self.alert = ('LOW', 'err')
                     log.brief('MinimumCtrl %s: output %f - alert %r', self.id, self.data, self.alert)
                 elif self.data:
@@ -153,7 +155,9 @@ class MaximumCtrl(ControllerNode):
             hysteresis - a tolerance, to reduce switch frequency
 
         Output:
-            posts a single 100 when input > (threshold-hysteresis), 0 when input <= /thgreshold+hysteresis)
+            posts a single
+              100 when input > (thr. - hyst./2),
+              0 when input <= (thr. + hyst./2)
     """
 
     def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
@@ -178,16 +182,16 @@ class MaximumCtrl(ControllerNode):
     def listen(self, msg):
         if isinstance(msg, MsgData):
             new_val = self.data
-            if float(msg.data) > (self.threshold + self.hysteresis):
+            if float(msg.data) > (self.threshold + self.hysteresis / 2):
                 new_val = 100.0
-            elif float(msg.data) <= (self.threshold - self.hysteresis):
+            elif float(msg.data) <= (self.threshold - self.hysteresis / 2):
                 new_val = 0.0
 
             if self.data != new_val:
                 log.debug('MaximumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
 
-                if msg.data < (self.threshold - self.hysteresis) * 0.95:
+                if msg.data < (self.threshold - self.hysteresis / 2) * 0.95:
                     self.alert = ('HIGH', 'err')
                     log.brief('MaximumCtrl %s: output %f - alert %r', self.id, self.data, self.alert)
                 elif self.data:

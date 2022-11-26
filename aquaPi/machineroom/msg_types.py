@@ -45,10 +45,10 @@ class MsgData(MsgPayload):
 
 
 # TODO further Msg types
-# class MsgCommand(MasgPayload): # for ctrl parameters, in contrast to data values
-# class MsgLog(MasPayload):  # needed? anything should be loggable -> MsgData
-# class MsgWarning(MasPayload):
-# class MsgError(MasPayload):
+# class MsgCommand(MsgPayload): # for ctrl parameters, in contrast to data values
+# class MsgLog(MsgPayload):  # needed? anything should be loggable -> MsgData
+# class MsgWarning(MsgPayload):
+# class MsgError(MsgPayload):
 
 
 # infrastructure messages

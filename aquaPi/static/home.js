@@ -11,7 +11,7 @@
 const App = {
     el: '#vm',
     delimiters: ['[[', ']]'],
-    data () {
+    data: function () {
         return {
             nodes: {},
         }

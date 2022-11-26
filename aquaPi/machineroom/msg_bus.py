@@ -22,6 +22,7 @@ class BusRole(Flag):
     OUT_ENDP = auto()  # output: relays, logs, mails
     CTRL = auto()  # the core of a controller: process IN -> OUT
     AUX = auto()  # helper func: 2:1/n:1, e.g. avg, delay, or
+    HISTORY = auto()  # nodes recording the output of other nodes
 
 
 # This may help to fill selection lists/combos with the appropriate node types

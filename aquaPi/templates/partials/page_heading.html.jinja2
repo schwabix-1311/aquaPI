@@ -1,17 +1,15 @@
 <!doctype html>
 {% if page_heading %}
     {% block page_heading %}
-    <div uk-grid>
-        <div class="uk-width-expand@m">
-            <h1 class="uk-heading-large uk-heading-line uk-heading-bullet">
-                {{ page_heading }}
-            </h1>
-        </div>
-        <div class="uk-width-auto@m">
+    <div class="uk-width-expand@m">
+        <h1 class="uk-heading-large uk-heading-bullet">
+            {{ page_heading }}
             {% if page_modal_config %}
-                <a href="{{ page_modal_config }}" uk-icon="icon: grid" uk-toggle></a>
+                <div class="uk-align-right">
+                    <a href="{{ page_modal_config }}" uk-icon="icon: grid" uk-toggle></a>
+                </div>
             {% endif %}
-        </div>
+        </h1>
     </div>
     {% endblock %}
 {% endif %}

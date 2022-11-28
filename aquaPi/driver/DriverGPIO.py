@@ -5,7 +5,7 @@ import random
 
 try:
     import RPi.GPIO as GPIO
-except RuntimeError:
+except (RuntimeError, ModuleNotFoundError):
     # make lint happy with minimal non-funct facade
     class GPIOdummy:
         BCM = None

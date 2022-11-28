@@ -351,11 +351,21 @@ class MinimumCtrl(ControllerNode):
         super().__init__(name, inputs, _cont=_cont)
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
+        # experimental: PID
+        self.pid_p = .5
+        self.pid_i = .1
+        self.pid_d = .1
+        self.ta = 1  # ??
+        self._err_sum = 0
+        self._err_prev = 0
 
     def __getstate__(self):
         state = super().__getstate__()
         state.update(threshold=self.threshold)
         state.update(hysteresis=self.hysteresis)
+        state.update(pid_p=self.pid_p)
+        state.update(pid_i=self.pid_i)
+        state.update(pid_d=self.pid_d)
 
         for inp in self.get_inputs(True):
             self.unit = inp.unit
@@ -372,11 +382,23 @@ class MinimumCtrl(ControllerNode):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            new_val = self.data
-            if float(msg.data) < (self.threshold - self.hysteresis):
-                new_val = 100.0
-            elif float(msg.data) >= (self.threshold + self.hysteresis):
-                new_val = 0.0
+
+            if self.pid_p:  # experimental
+                err = self.threshold - float(msg.data)
+                self._err_sum += err
+                new_val = self.pid_p * err \
+                        + self.pid_i * self.ta * self._err_sum \
+                        + (err - self._err_prev) / self.ta
+                self._err_prev = err
+                log.brief('PID: err %f, e_sum %f, y %f', err, self._err_prev, new_val)
+                new_val = 100.0  if new_val < self.threshold else 0.0
+
+            else:
+                new_val = self.data
+                if float(msg.data) < (self.threshold - self.hysteresis):
+                    new_val = 100.0
+                elif float(msg.data) >= (self.threshold + self.hysteresis):
+                    new_val = 0.0
 
             if self.data != new_val:
                 log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
@@ -405,6 +427,9 @@ class MinimumCtrl(ControllerNode):
             ('threshold', 'Minimum [%s]' % self.unit, self.threshold, 'type="number" %s step="0.1"' % limits))
         settings.append(
             ('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('pid_p', 'PID Kp [%]', self.pid_p, 'type="number" min="0" max="1" step="0.01"'))
+        settings.append(('pid_i', 'PID Ki [%]', self.pid_i, 'type="number" min="0" max="1" step="0.01"'))
+        settings.append(('pid_d', 'PID Kd [%]', self.pid_d, 'type="number" min="0" max="1" step="0.01"'))
         return settings
 
 

@@ -125,7 +125,7 @@ class AnalogInput(InputNode):
                     val = (val + self.data * (self.avg - 1)) / self.avg
                     val = round(val, 2)
                     self.alert = None
-                if self.data != val:
+                if self.data != val:  ## or self.continuous:  # PID needs all measurements!
                     self.data = val
                     log.brief('AnalogInput %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
@@ -352,12 +352,13 @@ class MinimumCtrl(ControllerNode):
         self.threshold = float(threshold)
         self.hysteresis = float(hysteresis)
         # experimental: PID
-        self.pid_p = .5
-        self.pid_i = .1
-        self.pid_d = .1
-        self.ta = 1  # ??
+        self.pid_p = 1.0
+        self.pid_i = .2
+        self.pid_d = 1.0
+        ## self._prev = time.time()
         self._err_sum = 0
         self._err_prev = 0
+        self.data = -1
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -379,32 +380,41 @@ class MinimumCtrl(ControllerNode):
         log.debug('MinimumCtrl.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'], _cont=True)
+        self.pid_p = state['pid_p']
+        self.pid_i = state['pid_i']
+        self.pid_d = state['pid_d']
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
 
             if self.pid_p:  # experimental
-                err = self.threshold - float(msg.data)
-                self._err_sum += err
-                new_val = self.pid_p * err \
-                        + self.pid_i * self.ta * self._err_sum \
-                        + (err - self._err_prev) / self.ta
+                err = float(msg.data) - self.threshold
+                ta = 1  ## time.time() - self._prev
+                self._err_sum = self._err_sum * 0.99 + err
+                pid = self.pid_p * err \
+                    + self.pid_i * self._err_sum * ta \
+                    + self.pid_d * (err - self._err_prev) / ta
+                new_val = 100.0  if pid < 0.0  else 0.0
+                log.debug('PID: e %f * %f, sm %f * %f, tr %f * %f > %f' \
+                         , round(self.pid_p, 2), round(err, 3) \
+                         , round(self.pid_i, 2), round(self.ta * self._err_sum, 3) \
+                         , round(self.pid_d, 2), round((err - self._err_prev) / self.ta, 3)
+                         , pid)
                 self._err_prev = err
-                log.brief('PID: err %f, e_sum %f, y %f', err, self._err_prev, new_val)
-                new_val = 100.0  if new_val < self.threshold else 0.0
+                ## self._prev = time.time()
 
             else:
                 new_val = self.data
-                if float(msg.data) < (self.threshold - self.hysteresis):
+                if float(msg.data) < (self.threshold - self.hysteresis / 2):
                     new_val = 100.0
-                elif float(msg.data) >= (self.threshold + self.hysteresis):
+                elif float(msg.data) >= (self.threshold + self.hysteresis / 2):
                     new_val = 0.0
 
             if self.data != new_val:
                 log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
 
-                if msg.data < (self.threshold - self.hysteresis) * 0.95:
+                if msg.data < (self.threshold - self.hysteresis / 2) * 0.95:
                     self.alert = ('LOW', 'err')
                     log.brief('MinimumCtrl %s: output %f - alert %r', self.id, self.data, self.alert)
                 elif self.data:
@@ -427,9 +437,9 @@ class MinimumCtrl(ControllerNode):
             ('threshold', 'Minimum [%s]' % self.unit, self.threshold, 'type="number" %s step="0.1"' % limits))
         settings.append(
             ('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
-        settings.append(('pid_p', 'PID Kp [%]', self.pid_p, 'type="number" min="0" max="1" step="0.01"'))
-        settings.append(('pid_i', 'PID Ki [%]', self.pid_i, 'type="number" min="0" max="1" step="0.01"'))
-        settings.append(('pid_d', 'PID Kd [%]', self.pid_d, 'type="number" min="0" max="1" step="0.01"'))
+        settings.append(('pid_p', 'PID Kp [%]', self.pid_p, 'type="number" min="0" max="10" step="0.1"'))
+        settings.append(('pid_i', 'PID Ki [%]', self.pid_i, 'type="number" min="0" max="10" step="0.1"'))
+        settings.append(('pid_d', 'PID Kd [%]', self.pid_d, 'type="number" min="0" max="10" step="0.1"'))
         return settings
 
 

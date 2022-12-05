@@ -172,13 +172,13 @@ class AnalogDevice(DeviceNode):
         out_val = float(percent)
         log.debug('%s set to %f %%', self.name, round(out_val, 4))
         if out_val > 0:
+            if self.percept:
+                out_val = (out_val ** 2) / (100 ** 2) * 100
+                log.debug('  percept to %f %%', out_val)
             out_range = self.maximum - self.minimum
             out_val = out_val / 100 * out_range
             log.debug('  scale to %f %% [%f]', out_val, out_range)
             out_val += self.minimum
-            if self.percept:
-                out_val = (out_val ** 2) / (100 ** 2) * 100
-                log.debug('  percept to %f %%', out_val)
         log.debug('    finally %f %%', out_val)
         self.data = out_val
 

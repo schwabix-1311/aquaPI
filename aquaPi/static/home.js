@@ -25,9 +25,11 @@ const App = {
             if (id != null) {
                 if ((id in this.nodes) || addNew) {
                     // TODO: error handler - might loose connection
+                    // console.debug(`fetch ${id} ${addNew} ...`)
                     const response = await fetch('/api/node/' + id)
                     const node = await response.json()
                     this.setNode(id, node)
+                    // console.debug(`... fetch ${id} ${addNew} done`)
                 }
             }
         },
@@ -39,6 +41,12 @@ const Dashboard = {
     props: [ 'all_tiles' ],
     data: function() {
         return { tiles: this.all_tiles }
+    },
+    // Preload all nodes, not required, but looks nicer
+    created: async function () {
+        for (t of this.all_tiles) {
+          await this.$root.updateNode(t.id, true)
+        }
     },
     methods: {
         acceptConfig() {

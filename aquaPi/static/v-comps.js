@@ -44,14 +44,28 @@ const AnyNode = {
     props: {
         id: String
     },
-    async beforeMount() {
+    created: async function () {
+        this.in_ids = []
+        // console.debug(`AnyNode: create ${this.id} ...`)
         await this.$root.updateNode(this.id, true)
+        // console.debug(`... Any create ${this.id} done`)
+        if (this.node.inputs?.sender != null) {
+            this.in_ids = this.node.inputs.sender
+            if (this.in_ids == '*')
+                this.in_ids = []
+            // console.debug(`... INs of ${this.id}:  ${this.in_ids}`)
+            for (let in_id of this.in_ids)
+                await this.$root.updateNode(in_id, true)
+        }
     },
     computed: {
         node() {
-            if (this.id in this.$root.nodes)
+            // console.debug(`get node(${this.id})`)
+            if (this.id in this.$root.nodes) {
+            // console.debug(`  .. got node(${this.id})`)
                 return this.$root.nodes[this.id]
-            // may be undefined beforeMount
+            }
+            //  console.debug(`  .. NO node(${this.id})`)
             return undefined
         },
         label() {
@@ -86,6 +100,7 @@ const DebugNode = {
     `
 };
 Vue.component('DebugNode', DebugNode);
+
 
 const BusNode = {
     extends: AnyNode,
@@ -133,21 +148,7 @@ Vue.component('BusNode', BusNode);
 
 const ControllerNode = {
     extends: BusNode,
-    async beforeMount() {
-        this.in_id = undefined
-        await this.$root.updateNode(this.id, true)
-
-        // recurse all inputs? Advanced Ctrl have a chain and/or auxiliaries with n:1 inputs
-        this.in_id = this.node.inputs.sender[0]
-        await this.$root.updateNode(this.in_id, true)
-    },
     computed: {
-        label() {
-            if (this.decoration === '')
-                return 'Status'
-            else
-                return '<img style="width:24px">Status'
-        },
         value() {
             return this.node?.data ? 'Ein' : 'Aus'
         },
@@ -168,8 +169,8 @@ const ControllerNode = {
                 <div class="uk-width-2-3" v-html="label"></div>
                 <div class="uk-width-expand" v-html="value"></div>
               </div>
-              <div v-if="in_id in $root.nodes">
-                <component :is="$root.nodes[in_id].cls" :id="in_id" ></component>
+              <div v-if="in_ids[0] in $root.nodes">
+                <component :is="$root.nodes[in_ids[0]].cls" :id="in_ids[0]" ></component>
               </div>
             </div>
           </div>
@@ -311,15 +312,6 @@ Vue.component('AnalogDevice', AnalogDevice);
 
 const AuxNode = {
     extends: BusNode,
-    async beforeMount() {
-        this.in_ids = undefined
-        await this.$root.updateNode(this.id, true)
-
-        this.in_ids = this.node.inputs.sender
-        for (let in_id of this.in_ids) {
-            await this.$root.updateNode(in_id, true)
-        }
-    },
     template: `
           <div class="uk-card uk-card-small uk-card-default uk-card-body">
             <h2 class="uk-card-title uk-margin-remove-bottom">
@@ -371,3 +363,117 @@ const MaxAux = {
     },
 };
 Vue.component('MaxAux', MaxAux);
+
+
+const History = {
+    extends: AnyNode,
+    created: function() {
+      this.chart = null;
+      this.cd = {
+        type: "scatter", //"line",
+        data: {
+          labels: [],
+          datasets: [],
+        },
+        options: {
+          responsive: true,
+          //aspectRatio: 1,
+          maintainAspectRatio: true, 
+          showLine: true,
+          borderWidth: 1,
+          lineTension: 0,
+          stepped: true, //false,
+          pointRadius: 0,
+          legend: { labels: { boxWidth: 2, }, position: "top", },
+          animation: { duration: 1500, easing: "easeInOutQuart", },
+          scales: {
+//            x: {type: 'time', time: {unit: 'second'} },
+//            y: [ {ticks: {beginAtZero: true, padding: 25}} ],
+          }
+        }
+      };
+    },
+    destroyed: function() {
+      if (this.chart != null)
+        this.chart.destroy();
+      this.chart = null;
+    },
+    beforeUpdate: function() {
+      if (this.chart == null) {
+        const el = document.querySelector("canvas");
+        if (el != null) {
+
+          this.chart = new Chart(el, this.chartData);
+        }
+      } else {
+        this.chartData;
+        this.chart.update();
+      }
+    },
+    computed: {
+      chartData() {
+        let store = this.$root.nodes[this.id]?.store;
+        if (store != null) {
+          ds_index = 0;
+          for (let series in store) {
+            if (ds_index >= this.cd.data.datasets.length) {
+              this.cd.data.datasets.push( {
+                label: this.$root.nodes[series].name,
+                data:  [],
+                backgroundColor: "rgba(224, 248, 255, 0.4)",  // -> table
+                borderColor: "#5cddff",
+                pointBackgroundColor: "#5cddff",
+              });
+              if (this.$root.nodes[series].unit == '')  //TODO replace with node.OUT_TYPE!=ANALOG
+                this.cd.data.datasets[ds_index].stepped = true;
+            }
+
+            const now = new Date().getTime() / 1000;
+
+        //FIXME: indices shift
+
+            this.cd.data.datasets[ds_index].data = []
+            for (let val of store[series]) {
+              this.cd.data.datasets[ds_index].data.push({ x: val[0], y: val[1]});
+              if (ds_index == 0) {
+                let d = (now - val[0]).toFixed(0);
+                if (d < 60) {
+                  this.cd.data.labels.push(`-${d}s`);
+                } else if (d < 60*60) {
+                  d = (d / 60).toFixed(1);
+                  this.cd.data.labels.push(`-${d}m`);
+                } else if (d < 60*60*24) {
+                  d = (d / (60*60)).toFixed(1);
+                  this.cd.data.labels.push(`-${d}m`);
+                } else {
+                  d = (d / (60*60*24)).toFixed(2);
+                  this.cd.data.labels.push(`-${d}d`);
+                }
+              }
+            }
+            ds_index += 1
+          }
+          //this.refreshed = new Date().toLocaleString()
+        }
+console.warn("Update")
+console.debug(this.cd);        
+        return this.cd;
+      },
+    },
+    template: `
+          <div class="uk-card uk-card-small uk-card-default">
+            <div class="uk-card-header">
+              <h2 class="uk-card-title uk-margin-remove-bottom">
+              <span v-if="node != null">[[ node.name ]]</span>
+              <span v-else>[[ id ]] loading ...</span>
+              </h2>
+            </div>
+            <div v-if="node != null" class="uk-padding-remove">
+              <div class="uk-grid-collapse" uk-grid>
+                <canvas></canvas>
+              </div>
+            </div>
+          </div>
+    `
+};
+Vue.component('History', History);

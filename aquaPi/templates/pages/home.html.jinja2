@@ -32,8 +32,10 @@
 {% block footer_script %}
     {{ super() }}
 
-    <script src="https://unpkg.com/vue@2.7/dist/vue.js"></script>
-    {# <script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script> #}
+    {# <script src="https://unpkg.com/vue@2.7/dist/vue.js"></script> #}
+    <script src="https://unpkg.com/vue@2.7/dist/vue.min.js"></script>
+
+    <script src="https://unpkg.com/chart.js@3.9/dist/chart.js"></script>
 
     <script src="{{ url_for('static', filename='v-comps.js') }}"></script>
     <script src="{{ url_for('static', filename='home.js') }}"></script>

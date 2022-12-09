@@ -36,11 +36,11 @@ class History(BusListener):
             - nothing -
     """
     ROLE = BusRole.HISTORY
-    HIST_DEPTH = 60 * 60 #!! * 24
 
-    def __init__(self, name, inputs, _cont=False):
+    def __init__(self, name, inputs, duration=24, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self._store = {}
+        self.duration = duration
         self.data = 0  # just anything for MsgBorn
         self._nextrefresh = time()
 
@@ -60,11 +60,11 @@ class History(BusListener):
             now = int(time())
             if msg.sender not in self._store:
                 log.debug('%s: new history for %s', self.name, msg.sender)
-                self._store[msg.sender] = deque(maxlen=self.HIST_DEPTH)
+                self._store[msg.sender] = deque(maxlen=self.duration * 60 * 60) # limit to 1/sec for one day
             curr = self._store[msg.sender]
             if not curr or (curr[-1][0] != now):  #TODO preliminary: only store 1st value for each second
                 curr.append((now, msg.data))
-            while curr[0][0] < now - self.HIST_DEPTH:
+            while curr[0][0] < now - self.duration * 60 * 60:
                 curr.popleft()
             log.debug('%s: append %r for %s, %d ent., %d Byte', self.name, msg.data, msg.sender, len(self._store[msg.sender]), sys.getsizeof(self._store[msg.sender]))
             if time() >= self._nextrefresh:
@@ -73,6 +73,6 @@ class History(BusListener):
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append(('length', 'Einträge', self.length,
-                         'type="number" min="0" max="3600"'))
+        settings.append(('duration', 'max. Dauer', self.duration,
+                         'type="number" min="0" max="%d"' % 24*60*60))
         return settings

@@ -3,7 +3,7 @@
 import logging
 from flask import (Blueprint, current_app, flash, json, redirect, request)
 
-from ..machineroom import (MsgBus, BusRole)
+from ..machineroom import BusRole
 from .sse_util import render_sse_template
 
 log = logging.getLogger('/home')

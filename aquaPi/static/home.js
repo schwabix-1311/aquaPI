@@ -97,7 +97,7 @@ if (!!window.EventSource) {
     const source = new EventSource(document.URL);
 
     source.onmessage = function(e) {
-        console.debug(`EventSource sent: ${e.data}`);
+        //console.debug(`EventSource sent: ${e.data}`);
         // this is an array of node ids that were modified
         const obj = JSON.parse(e.data);
         for (const i in obj) {

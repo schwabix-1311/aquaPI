@@ -53,7 +53,7 @@ class AnalogInput(InputNode):
     def __init__(self, name, port, interval=10.0, unit='°C', avg=0, _cont=False):
         super().__init__(name, _cont=_cont)
         self._driver = None
-        self.interval = min(1., float(interval))
+        self.interval = max(1., float(interval))
         self.unit = unit
         self.avg = min(max(1, avg), 5)
         self._reader_thread = None
@@ -128,6 +128,7 @@ class AnalogInput(InputNode):
         settings.append(('unit', 'Einheit', self.unit, 'type="text"'))
         settings.append(('avg', 'Mittelwert [1=direkt]', self.avg, 'type="number" min="1" max="5" step="1"'))
         settings.append(('port', 'Input', self.port, 'type="text"'))
+        settings.append(('interval', 'Messintervall [s]', self.interval, 'type="number" min="1" max="60" step="1"'))
         return settings
 
 

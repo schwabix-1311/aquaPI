@@ -121,6 +121,9 @@ class MachineRoom:
             light_c.plugin(self.bus)
             light_pwm.plugin(self.bus)
 
+            history = History('Licht', [light_schedule.id, light_c.id,light_pwm.id])
+            history.plugin(self.bus)
+
             # single temp sensor, switched relays
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
@@ -128,6 +131,11 @@ class MachineRoom:
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
+
+            wasser_i2 = AnalogInput('Wasser 2', 'DS1820 x7A71E')
+
+            t_history = History('Temperaturen', [wasser_i.id, w2_temp.id, wasser.id, wasser_o.id])
+            t_history.plugin(self.bus)
             return
 
         if SINGLE_LIGHT:
@@ -148,6 +156,9 @@ class MachineRoom:
                 light_max.plugin(self.bus)
                 light_pwm = AnalogDevice('Dimmer', light_max.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
+
+                history = History('Licht', [light_schedule.id, dawn_schedule.id, light_c.id, dawn_c.id, light_pwm.id])
+                history.plugin(self.bus)
 
         if SINGLE_TEMP:
             # single temp sensor -> temp ctrl -> relay
@@ -181,3 +192,6 @@ class MachineRoom:
 
             w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 1')
             w_cool.plugin(self.bus)
+
+            t_history = History('Temperaturen', [w1_temp.id, w2_temp.id, w_temp.id, w_heat.id, w_cool.id])
+            t_history.plugin(self.bus)

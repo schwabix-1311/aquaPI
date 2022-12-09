@@ -62,7 +62,7 @@ const AnyNode = {
         node() {
             // console.debug(`get node(${this.id})`)
             if (this.id in this.$root.nodes) {
-            // console.debug(`  .. got node(${this.id})`)
+                //console.debug(`  .. got node(${this.id})`)
                 return this.$root.nodes[this.id]
             }
             //  console.debug(`  .. NO node(${this.id})`)
@@ -369,29 +369,6 @@ const History = {
     extends: AnyNode,
     created: function() {
       this.chart = null;
-      this.cd = {
-        type: "scatter", //"line",
-        data: {
-          labels: [],
-          datasets: [],
-        },
-        options: {
-          responsive: true,
-          //aspectRatio: 1,
-          maintainAspectRatio: true, 
-          showLine: true,
-          borderWidth: 1,
-          lineTension: 0,
-          stepped: true, //false,
-          pointRadius: 0,
-          legend: { labels: { boxWidth: 2, }, position: "top", },
-          animation: { duration: 1500, easing: "easeInOutQuart", },
-          scales: {
-//            x: {type: 'time', time: {unit: 'second'} },
-//            y: [ {ticks: {beginAtZero: true, padding: 25}} ],
-          }
-        }
-      };
     },
     destroyed: function() {
       if (this.chart != null)
@@ -400,65 +377,109 @@ const History = {
     },
     beforeUpdate: function() {
       if (this.chart == null) {
-        const el = document.querySelector("canvas");
+        const el = document.getElementById(this.id);
         if (el != null) {
-
           this.chart = new Chart(el, this.chartData);
         }
       } else {
-        this.chartData;
+        this.chartData;  // trigger a re-compute, $data wasn't touched
         this.chart.update();
+      }
+    },
+    data: function() {
+      return {
+        duration: (60 * 60 * 1000) * 1, //hour(s)
+        cd: {
+          type: "scatter",
+          data: {
+            labels: [],
+            datasets: [],
+          },
+          options: {
+            //locale: "de-DE",
+            responsive: true,
+            //aspectRatio: 1,
+            maintainAspectRatio: true,
+            showLine: true,
+            borderWidth: 1,
+            lineTension: 0,
+            stepped: true, //false,
+            pointRadius: 0,
+            plugins: {
+              legend: {display: true, labels: {boxWidth: 3}, position: "top"},
+              tooltip: {caretPadding: 24},
+            },  //top"},
+            animation: {duration: 1500, easing: "easeInOutBack"},
+            interaction: {mode: "x", axis: "x", intersect: false},
+            scales: {
+              x: {
+                type: "time",
+                min: Date.now() - this.duration, max: Date.now(),
+                time: {
+                  //unit: "minutes",
+                  //unit: "hours",
+                  displayFormats: {seconds: "H:mm:ss", minutes: "H:mm", hours: "H:mm"},
+                  tooltipFormat: "TT"
+                },
+              },
+              y: {display: 'auto', axis: 'y', ticks: {beginAtZero: true}},
+              yAnalog: {display: 'auto', axis: 'y', position: 'right'},
+            }
+          }
+        },
       }
     },
     computed: {
       chartData() {
         let store = this.$root.nodes[this.id]?.store;
         if (store != null) {
+          const now = Date.now();
           ds_index = 0;
           for (let series in store) {
             if (ds_index >= this.cd.data.datasets.length) {
               this.cd.data.datasets.push( {
                 label: this.$root.nodes[series].name,
                 data:  [],
-                backgroundColor: "rgba(224, 248, 255, 0.4)",  // -> table
-                borderColor: "#5cddff",
-                pointBackgroundColor: "#5cddff",
               });
-              if (this.$root.nodes[series].unit == '')  //TODO replace with node.OUT_TYPE!=ANALOG
-                this.cd.data.datasets[ds_index].stepped = true;
-            }
-
-            const now = new Date().getTime() / 1000;
-
-        //FIXME: indices shift
-
-            this.cd.data.datasets[ds_index].data = []
-            for (let val of store[series]) {
-              this.cd.data.datasets[ds_index].data.push({ x: val[0], y: val[1]});
-              if (ds_index == 0) {
-                let d = (now - val[0]).toFixed(0);
-                if (d < 60) {
-                  this.cd.data.labels.push(`-${d}s`);
-                } else if (d < 60*60) {
-                  d = (d / 60).toFixed(1);
-                  this.cd.data.labels.push(`-${d}m`);
-                } else if (d < 60*60*24) {
-                  d = (d / (60*60)).toFixed(1);
-                  this.cd.data.labels.push(`-${d}m`);
-                } else {
-                  d = (d / (60*60*24)).toFixed(2);
-                  this.cd.data.labels.push(`-${d}d`);
-                }
+              if (this.$root.nodes[series].unit != "" &&
+                  "°C°FpHrHGHKHµSuS".includes(this.$root.nodes[series].unit)) {  //?? replace with node.OUT_TYPE!=ANALOG
+                this.cd.data.datasets[ds_index].stepped = false;
+                this.cd.data.datasets[ds_index].yAxisID = "yAnalog";
               }
             }
-            ds_index += 1
+
+//FIXME: indices shift
+
+            this.cd.data.datasets[ds_index].data = [];
+            for (let val of store[series]) {
+              this.cd.data.datasets[ds_index].data.push({x: val[0] * 1000, y: val[1]});
+            }
+            ds_index += 1;
           }
-          //this.refreshed = new Date().toLocaleString()
+          this.cd.options.scales.x.min = now - this.duration;
+          this.cd.options.scales.x.max = now;
         }
-console.warn("Update")
-console.debug(this.cd);        
         return this.cd;
       },
+    },
+    methods: {
+      toggle_duration() {
+        const dur = this.duration / 60 / 1000; //mins
+        if (dur < 60)
+          this.duration = 60;
+        else if (dur < 24 * 60)
+          this.duration = 24 * 60;
+        else
+          this.duration = 15;
+        this.duration *= 60 * 1000;
+      },
+      human_duration() {
+        let dur = this.duration / 60 / 1000; // mins
+        if (dur < 60)
+          return `${dur}min`
+        dur /= 60;
+        return `${dur}h`
+      }
     },
     template: `
           <div class="uk-card uk-card-small uk-card-default">
@@ -466,11 +487,12 @@ console.debug(this.cd);
               <h2 class="uk-card-title uk-margin-remove-bottom">
               <span v-if="node != null">[[ node.name ]]</span>
               <span v-else>[[ id ]] loading ...</span>
+              <button class="uk-align-right" @click="toggle_duration">Dauer [[ human_duration() ]]</button>
               </h2>
             </div>
             <div v-if="node != null" class="uk-padding-remove">
               <div class="uk-grid-collapse" uk-grid>
-                <canvas></canvas>
+                <canvas :id="id"></canvas>
               </div>
             </div>
           </div>

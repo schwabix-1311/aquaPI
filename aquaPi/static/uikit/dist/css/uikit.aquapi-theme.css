@@ -2213,8 +2213,8 @@ select.uk-form-width-xsmall {
 /* Desktop and bigger */
 @media (min-width: 960px) {
   .uk-section {
-    padding-top: 70px;
-    padding-bottom: 70px;
+    padding-top: 50px;
+    padding-bottom: 50px;
   }
 }
 /*
@@ -7804,10 +7804,10 @@ iframe[data-uk-cover] {
  */
 [class*='uk-align'] {
   display: block;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
 }
 * + [class*='uk-align'] {
-  margin-top: 30px;
+  margin-top: 20px;
 }
 /*
  * Center

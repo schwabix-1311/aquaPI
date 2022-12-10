@@ -467,6 +467,8 @@ const History = {
         const dur = this.duration / 60 / 1000; //mins
         if (dur < 60)
           this.duration = 60;
+        else if (dur < 8 * 60)
+          this.duration = 8 * 60;
         else if (dur < 24 * 60)
           this.duration = 24 * 60;
         else
@@ -481,19 +483,22 @@ const History = {
         return `${dur}h`
       }
     },
-    template: `
-          <div class="uk-card uk-card-small uk-card-default">
-            <div class="uk-card-header">
-              <h2 class="uk-card-title uk-margin-remove-bottom">
-              <span v-if="node != null">[[ node.name ]]</span>
-              <span v-else>[[ id ]] loading ...</span>
-              <button class="uk-align-right" @click="toggle_duration">Dauer [[ human_duration() ]]</button>
-              </h2>
-            </div>
-            <div v-if="node != null" class="uk-padding-remove">
+/*            <div v-if="node != null" class="uk-padding-remove">
               <div class="uk-grid-collapse" uk-grid>
                 <canvas :id="id"></canvas>
               </div>
+            </div> */
+    template: `
+          <div class="uk-card uk-card-small uk-card-default">
+            <div class="uk-card-header">
+              <h2 class="uk-card-title">
+                <span v-if="node != null">[[ node.name ]]</span>
+                <span v-else>[[ id ]] loading ...</span>
+                <button class="uk-align-right" @click="toggle_duration">Dauer [[ human_duration() ]]</button>
+                <div v-if="node != null" class="uk-padding-remove">
+                  <canvas :id="id"></canvas>
+                </div>
+              </h2>
             </div>
           </div>
     `

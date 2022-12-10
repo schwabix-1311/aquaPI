@@ -72,7 +72,8 @@ class History(BusListener):
                 self._nextrefresh = now + 60
 
     def get_settings(self):
-        settings = super().get_settings()
-        settings.append(('duration', 'max. Dauer', self.duration,
-                         'type="number" min="0" max="%d"' % 24*60*60))
-        return settings
+        return []
+##        settings = super().get_settings()
+##        settings.append(('duration', 'max. Dauer', self.duration,
+##                         'type="number" min="0" max="%d"' % (24*60*60)))
+##        return settings

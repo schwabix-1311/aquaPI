@@ -7,7 +7,7 @@ import logging
 # import sys
 
 from flask import (
-    Blueprint, current_app, json, Response
+    Blueprint, current_app, json, Response, request
 )
 from http import HTTPStatus
 
@@ -22,7 +22,7 @@ log.setLevel(logging.WARNING)
 bp = Blueprint('api', __name__)
 
 
-@bp.route('/api/node/<node_id>')
+@bp.route('/api/nodes/<node_id>')
 def api_node(node_id):
     bus = current_app.bus
     node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
@@ -55,3 +55,59 @@ def api_nodes():
         return json.dumps(node_ids)
     else:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+
+@bp.route('/api/config/dashboard', methods=['GET', 'POST'])
+def api_dashboard():
+    if request.method == 'POST':
+        data = request.json
+
+        visible_tiles = []
+        for item in data:
+            if bool(item['vis']):
+                visible_tiles.append(item['comp'] + '.' + item['id'])
+
+        bus = current_app.bus
+        mr = current_app.machineroom
+
+        try:
+            log.debug('DEBUG: find the current route in request')
+            for tile in bus.dash_tiles:
+                key = tile['comp'] + '.' + tile['id']
+                # vis = int(False)
+                # if key in request.form:
+                #     vis = bool(request.form[key])
+                #     log.debug('  found tile %s: %r', key, vis)
+                # log.debug('-> set tile %s to %r', key, vis)
+                # tile['vis'] = int(vis)
+                tile['vis'] = int(key in visible_tiles)
+
+            mr.save_nodes(bus)
+            log.brief('Saved changes')
+            # return ('OK', 204)  # Success, no content
+
+            body = json.dumps({'result': 'SUCCESS', 'resultMsg': 'Saved dashboard configuration', 'data': data}, sort_keys=True)
+            return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
+
+        except Exception as ex:
+            log.exception('Received invalid dashboard configuration, ignoring.')
+            # flash(str(ex), 'error')
+            # return redirect('/')
+            body = json.dumps({'result': 'ERROR', 'resultMsg': 'Could not save dashboard configuration!', 'data': data}, sort_keys=True)
+            return Response(status=HTTPStatus.NOT_ACCEPTABLE, response=body, mimetype='application/json')
+
+    elif request.method == 'GET':
+        bus = current_app.bus
+        items = []
+        for node in bus.get_nodes():
+            # TODO: adapt / complete
+            items.append({
+                'nodeType': node.__class__.__qualname__
+                , 'id': node.id
+                , 'name': node.name
+                , 'data': node.data
+            })
+        body = json.dumps({'result': 'SUCCESS', 'data': items}, sort_keys=True)
+        return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
+    else:
+        return Response(status=HTTPStatus.METHOD_NOT_ALLOWED)

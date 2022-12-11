@@ -25,11 +25,9 @@ const App = {
             if (id != null) {
                 if ((id in this.nodes) || addNew) {
                     // TODO: error handler - might loose connection
-                    // console.debug(`fetch ${id} ${addNew} ...`)
-                    const response = await fetch('/api/node/' + id)
+                    const response = await fetch('/api/nodes/' + id)
                     const node = await response.json()
                     this.setNode(id, node)
-                    // console.debug(`... fetch ${id} ${addNew} done`)
                 }
             }
         },
@@ -38,9 +36,12 @@ const App = {
 
 const Dashboard = {
     delimiters: ['[[', ']]'],
-    props: [ 'all_tiles' ],
+    props: ['all_tiles'],
     data: function() {
-        return { tiles: this.all_tiles }
+        return {
+            tiles: this.all_tiles,
+            apiEndpoint: '/api/config/dashboard'
+        };
     },
     // Preload all nodes, not required, but looks nicer
     created: async function () {
@@ -49,21 +50,56 @@ const Dashboard = {
         }
     },
     methods: {
-        acceptConfig() {
-            const form = document.getElementById("home_config");
-            form.submit()
-            // in case of error, the POST handler redirects away
-            UIkit.notification({message: 'Konfiguration gespeichert!', status: 'success'})
+        persistConfig: async function() {
+            const vm = this;
+            const response = await fetch(this.apiEndpoint, {
+                method: 'post',
+                mode: 'same-origin',
+                cache: 'no-cache',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                redirect: 'follow',
+                body: JSON.stringify(vm.tiles)
+            });
+
+            const body = await response.json();
+            if (response.status == 200) {
+                UIkit.modal(vm.$refs.modal).hide();
+                UIkit.notification({message: `<span uk-icon=\'icon: check\'></span> ${body.resultMsg}`, status: 'success'});
+            } else {
+                UIkit.modal(vm.$refs.modal).hide();
+                UIkit.notification({message: `<span uk-icon=\'icon: warning\'></span> ${body.resultMsg}`, status: 'danger'});
+            }
         },
+        fetchConfig: async function() {
+            const response = await fetch(this.apiEndpoint, {
+                method: 'get',
+                mode: 'same-origin',
+                cache: 'no-cache',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                redirect: 'follow'
+            });
+            const body = await response.json();
+            if (response.status == 200) {
+                UIkit.notification({message: `<span uk-icon=\'icon: info\'></span> Test: fetched dashboard configuration`, status: 'primary'});
+            }
+            // console.log('response body:', body);
+        }
     },
     template: `
         <div class="uk-child-width-1-2@s uk-grid-small" uk-grid="masonry: true">
             <div v-for="t in tiles" :hidden="(!t.vis)" >
                 <component :is="t.comp" :id="t.id" ></component>
             </div>
-            <div id="modal-config" uk-modal>
+            <div id="modal-config" uk-modal ref="modal">
                 <div class="uk-modal-dialog uk-modal-body">
-                    <form action="/" method="post" id="home_config" class="uk-form-horizontal">
+                    <form id="frm_dashboard_config" name="frm_dashboard_config" action="/" method="post" @submit.prevent="persistConfig" class="uk-form-horizontal">
                         <div class="uk-modal-header">
                             <h2 class="uk-modal-title">Dashboard Konfiguration</h2>
                         </div>
@@ -71,13 +107,14 @@ const Dashboard = {
                             <p>Which tiles should be shown?</p>
                             <div v-for="t in tiles">
                                 <label>
-                                    <input type="checkbox" v-model="t.vis" :name="t.comp+'.'+t.id" class="uk-checkbox uk-margin-small-right">
+                                    <input :key="t.comp+'.'+t.id" type="checkbox" :id="t.comp+'.'+t.id" v-model="t.vis" :name="t.comp+'.'+t.id" class="uk-checkbox uk-margin-small-right">
                                     [[ t.name ]]
                                 </label>
                             </div>
                         </div>
                         <div class="uk-modal-footer uk-text-right">
-                            <input type="submit" value="Übernehmen" class="uk-button uk-button-default uk-modal-close" @click="acceptConfig">
+                            <button type="button" class="uk-button uk-button-secondary" @click="fetchConfig">TEST GET</button>
+                            <button type="submit" class="uk-button uk-button-default YYuk-YYmodal-close">Übernehmen</button>
                         </div>
                     </form>
                 </div>
@@ -91,7 +128,6 @@ Vue.component('Dashboard', Dashboard);
 const vm = new Vue(App);
 
 //vm.config.errorHandler = (err) => { /*TODO*/ }
-
 
 if (!!window.EventSource) {
     const source = new EventSource(document.URL);

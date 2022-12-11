@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-# import time
+import time
 # import os
 # from resource import *
 # import sys
@@ -18,9 +18,9 @@ from .pages.sse_util import send_sse_events
 log = logging.getLogger('API')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
-# log.setLevel(logging.WARNING)
+log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
-log.setLevel(logging.DEBUG)
+# log.setLevel(logging.DEBUG)
 
 
 bp = Blueprint('api', __name__)
@@ -35,28 +35,10 @@ def api_node(node_id):
     node = bus.get_node(node_id)
 
     if node:
-        # state = {}
-        # state.update(id=node.id)
-        # state.update(cls=type(node).__name__)
-        # state.update(node.__getstate__())
-        #
-        # # FIXME: node.name shows some non-ascii chars incorrectly, this started with node.id containing xmlcharrefs
-        # # ?? state['name'] = str(state['name'], encodingerrors='xmlcharrefreplace')
-        #
-        # if hasattr(node, 'alert') and node.alert:
-        #     state.update(alert=node.alert)
-        #
-        # log.brief('node id:' + node.id)
-        # log.brief('===================')
-        # log.debug(state)
-        #
-        # log.debug('vars:')
-        # log.debug(vars)
-        # log.debug('locals:')
-        # log.debug(locals())
-        #
-        # return json.dumps(state, default=vars)
-
+        state = {}
+        state.update(id=node.id)
+        state.update(cls=type(node).__name__)
+        state.update(node.__getstate__())
 
         item = node.__getstate__()
         item['type'] = type(node).__name__
@@ -64,17 +46,6 @@ def api_node(node_id):
 
         if with_history is False and 'store' in node.__getstate__():
             del item['store']
-
-        # if 'inputs' in item and isinstance(item['inputs'], MsgFilter):
-        # log.brief(type(item['inputs']))
-        # inputs = item['inputs'].__getstate__()
-        # log.brief(item['inputs'])
-        # log.brief(type(node.get_inputs()))
-        # test = [ for node.get_inputs()]
-        # test = [n.__getstate__() for n in node.get_inputs()]
-        # log.brief('====================== test:')
-        # log.brief(test)
-        # items.append(item)
 
         body = jsonpickle.encode({'result': 'SUCCESS', 'data': item}, unpicklable=False, keys=True)
 

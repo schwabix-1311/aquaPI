@@ -19,15 +19,9 @@ const App = {
     template: '#vueHome',
     methods: {
         setNode(id, node) {
-            console.log('>>> setNode id and node', id, node)
             Vue.set(this.nodes, id, node)
-            let nodes = this.nodes
-            console.log('nodes:', nodes)
         },
         async updateNode(id, addNew=false) {
-            console.log('### updateNode, id and addnNew:', id, addNew)
-            console.log('.. this.nodes:', this.nodes)
-
             if (id != null) {
                 if ((id in this.nodes) || addNew) {
                     // TODO: error handler - might loose connection
@@ -115,14 +109,13 @@ const Dashboard = {
                             <p>Which tiles should be shown?</p>
                             <div v-for="t in tiles">
                                 <label>
-                                    <input :key="t.identifier" type="checkbox" :id="t.identifier" v-model="t.vis" :name="t.identifier" class="uk-checkbox uk-margin-small-right">
+                                    <input type="checkbox" v-model="t.vis" :name="t.comp+'.'+t.id" class="uk-checkbox uk-margin-small-right">
                                     [[ t.name ]]
                                 </label>
                             </div>
                         </div>
                         <div class="uk-modal-footer uk-text-right">
-                            <!-- <button type="button" class="uk-button uk-button-secondary" @click="fetchConfig">TEST GET</button> -->
-                            <button type="submit" class="uk-button uk-button-default">Übernehmen</button>
+                            <input type="submit" value="Übernehmen" class="uk-button uk-button-default uk-modal-close" @click="acceptConfig">
                         </div>
                     </form>
                 </div>
@@ -141,10 +134,9 @@ if (!!window.EventSource) {
     const source = new EventSource(document.URL);
 
     source.onmessage = function(e) {
-        console.debug(`EventSource sent: ${e.data}`);
+        //console.debug(`EventSource sent: ${e.data}`);
         // this is an array of node ids that were modified
         const obj = JSON.parse(e.data);
-        console.log('obj:', obj)
         for (const i in obj) {
             vm.updateNode(obj[i])
         }

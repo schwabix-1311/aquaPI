@@ -5,6 +5,7 @@ import logging
 # import os
 # from resource import *
 # import sys
+import jsonpickle
 
 from flask import (
     Blueprint, current_app, json, Response, request
@@ -46,10 +47,15 @@ def api_node(node_id):
         return Response(status=HTTPStatus.NOT_FOUND)
 
 
-@bp.route('/api/nodes/')
+@bp.route('/api/nodes/', methods=['GET'])
 def api_nodes():
     bus = current_app.bus
     node_ids = [node.id for node in bus.get_nodes()]
+
+    # is_ajax_request = request.headers.get('X-Requested-With') and request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    # if not is_ajax_request:
+    #     return Response(status=HTTPStatus.NOT_IMPLEMENTED)
 
     if node_ids:
         return json.dumps(node_ids)
@@ -59,6 +65,11 @@ def api_nodes():
 
 @bp.route('/api/config/dashboard', methods=['GET', 'POST'])
 def api_dashboard():
+    is_ajax_request = request.headers.get('X-Requested-With') and request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    if not is_ajax_request:
+        return Response(status=HTTPStatus.NOT_IMPLEMENTED)
+
     if request.method == 'POST':
         data = request.json
 
@@ -100,14 +111,14 @@ def api_dashboard():
         bus = current_app.bus
         items = []
         for node in bus.get_nodes():
-            # TODO: adapt / complete
-            items.append({
-                'nodeType': node.__class__.__qualname__
-                , 'id': node.id
-                , 'name': node.name
-                , 'data': node.data
-            })
-        body = json.dumps({'result': 'SUCCESS', 'data': items}, sort_keys=True)
+            log.brief('node:', node)
+            items.append(node)
+
+        body = jsonpickle.encode({'result': 'SUCCESS', 'data': items}, unpicklable=False, keys=True)
+
+        # log.brief('body')
+        # log.brief(body)
+
         return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
     else:
         return Response(status=HTTPStatus.METHOD_NOT_ALLOWED)

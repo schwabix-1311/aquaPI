@@ -107,7 +107,7 @@ const Dashboard = {
                             <p>Which tiles should be shown?</p>
                             <div v-for="t in tiles">
                                 <label>
-                                    <input :key="t.comp+'.'+t.id" type="checkbox" :id="t.comp+'.'+t.id" v-model="t.vis" :name="t.comp+'.'+t.id" class="uk-checkbox uk-margin-small-right">
+                                    <input :key="t.identifier" type="checkbox" :id="t.identifier" v-model="t.vis" :name="t.identifier" class="uk-checkbox uk-margin-small-right">
                                     [[ t.name ]]
                                 </label>
                             </div>

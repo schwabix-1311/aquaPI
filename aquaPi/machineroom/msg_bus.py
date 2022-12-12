@@ -247,6 +247,7 @@ class BusNode:
         self.id = self.id.replace('-', '_').replace('ß', 'ss')
         # this is a bit of abuse: replace all non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
+        self.identifier = self.__class__.__qualname__ + '.' + self.id
         log.debug(self.id)
 
         self._inputs = None
@@ -258,6 +259,7 @@ class BusNode:
 
     def __getstate__(self):
         state = {'name': self.name}
+        state.update(identifier=self.identifier)
         state.update(inputs=self._inputs)
         state.update(data=self.data)
         state.update(unit=self.unit)

@@ -59,11 +59,6 @@ def api_nodes():
     bus = current_app.bus
     node_ids = [node.id for node in bus.get_nodes()]
 
-    # is_ajax_request = request.headers.get('X-Requested-With', '') == 'XMLHttpRequest'
-
-    # if not is_ajax_request:
-    #     return Response(status=HTTPStatus.NOT_IMPLEMENTED)
-
     if node_ids:
         return json.dumps(node_ids)
     else:
@@ -125,16 +120,6 @@ def api_dashboard():
 
             if with_history is False and 'store' in node.__getstate__():
                 del item['store']
-
-            # if 'inputs' in item and isinstance(item['inputs'], MsgFilter):
-                # log.brief(type(item['inputs']))
-                # inputs = item['inputs'].__getstate__()
-                # log.brief(item['inputs'])
-                # log.brief(type(node.get_inputs()))
-                # test = [ for node.get_inputs()]
-                # test = [n.__getstate__() for n in node.get_inputs()]
-                # log.brief('====================== test:')
-                # log.brief(test)
 
             items.append(item)
 

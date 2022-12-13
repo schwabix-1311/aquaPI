@@ -73,10 +73,7 @@ def api_dashboard():
     if request.method == 'POST':
         data = request.json
 
-        visible_tiles = []
-        for item in data:
-            if bool(item['vis']):
-                visible_tiles.append(item['comp'] + '.' + item['id'])
+        visible_tiles = [item['comp'] + '.' + item['id']  for item in data if bool(item['vis'])]
 
         bus = current_app.bus
         mr = current_app.machineroom

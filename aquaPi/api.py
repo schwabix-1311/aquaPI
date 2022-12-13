@@ -108,13 +108,9 @@ def api_dashboard():
         bus = current_app.bus
         items = []
         for node in bus.get_nodes():
-            log.brief('node:', node)
             items.append(node)
 
         body = jsonpickle.encode({'result': 'SUCCESS', 'data': items}, unpicklable=False, keys=True)
-
-        # log.brief('body')
-        # log.brief(body)
 
         return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
     else:

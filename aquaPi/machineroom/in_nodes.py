@@ -6,7 +6,7 @@ from datetime import datetime
 from croniter import croniter
 from threading import Thread
 
-from .msg_bus import (BusNode, BusRole, MsgData)
+from .msg_bus import (BusNode, BusRole, DataRange, MsgData)
 from ..driver import (PortFunc, io_registry, DriverReadError)
 
 
@@ -34,45 +34,23 @@ class InputNode(BusNode):
     #    self.__init__(state, _cont=True)
 
 
-class AnalogInput(InputNode):
-    """ An analog input for anything read from a port driver.
-        Just name and labels auto-adjust to unit (for the known ones).
-        Measurements taken in a worker thread$.
-
-        Options:
-            name     - unique name of this input node in UI
-            port     - name of a IoRegistry port driver to read input
-            interval - delay of reader loop, reader conversion time adds to this!
-            unit     - unit of measurement for labels
-            avg      - floating average, with 1=no average, 2..5=depth of averaging
-
-        Output:
-            float - posts stream of measurement in driver units, unchanged measurements are suppressed
+class AsyncInputNode(InputNode):
+    """" Input node with a reader thread reading from IoRegistry port
+         Semantically abstract - do not instantiate!
     """
-
-    def __init__(self, name, port, interval=10.0, unit='°C', avg=0, _cont=False):
+    def __init__(self, name, port, interval=0.5, _cont=False):
         super().__init__(name, _cont=_cont)
         self._driver = None
-        self.interval = max(1., float(interval))
-        self.unit = unit
-        self.avg = min(max(1, avg), 5)
+        self.interval = max(0.1, float(interval))
         self._reader_thread = None
         self._reader_stop = False
         self.port = port
-        self.data = self._driver.read()
 
     def __getstate__(self):
         state = super().__getstate__()
         state.update(port=self.port)
         state.update(interval=self.interval)
-        state.update(avg=self.avg)
-        log.debug('< AnalogInput.getstate %r', state)
         return state
-
-    def __setstate__(self, state):
-        log.debug('AnalogInput.setstate %r', state)
-        self.__init__(state['name'], state['port'], interval=state['interval'], unit=state['unit'], avg=state['avg'],
-                      _cont=True)
 
     def __str__(self):
         return '{}({})'.format(type(self).__name__, self.port)
@@ -85,7 +63,8 @@ class AnalogInput(InputNode):
     def port(self, port):
         if self._driver:
             io_registry.driver_release(self.port)
-        self._driver = io_registry.driver_factory(port, PortFunc.ADC)
+        port_func = PortFunc.ADC  if self.data_range == DataRange.ANALOG else PortFunc.IN
+        self._driver = io_registry.driver_factory(port, port_func)
         self._port = port
 
     def plugin(self, bus):
@@ -100,35 +79,122 @@ class AnalogInput(InputNode):
             self._reader_thread = None
         super().pullout()
 
+    def read(self):
+        raise NotImplementedError()
+
     def _reader(self):
-        log.debug('AnalogInput.reader started')
-        self.data = 0  # ? None
+        log.debug('AsyncInputNode.reader started')
         while not self._reader_stop:
-            log.debug('AnalogInput.reader looping %r', self.data)
             try:
-                val = self.data
-                if self._driver:
-                    val = self._driver.read()
-                    val = (val + self.data * (self.avg - 1)) / self.avg
-                    val = round(val, 2)
-                    self.alert = None
+                val = self.read()
+                self.alert = None
                 if self.data != val:
                     self.data = val
-                    log.brief('AnalogInput %s: output %f', self.id, self.data)
+                    log.brief('AsyncInputNode %s: post %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
             except DriverReadError:
                 self.alert = ('Read error!', 'err')
-
             time.sleep(self.interval)
+
         self._reader_thread = None
         self._reader_stop = False
 
     def get_settings(self):
         settings = super().get_settings()
+        settings.append(('port', 'Input', self.port, 'type="text"'))
+        settings.append(('interval', 'Leseintervall [s]', self.interval, 'type="number" min="0.1" max="60" step="0.1"'))
+        return settings
+
+
+class SwitchInput(AsyncInputNode):
+    """ A binary input from a port driver like GPIO.
+        Driver is read in a worker thread.
+
+        Options:
+            name     - unique name of this input node in UI
+            port     - name of a IoRegistry port driver to read input
+            interval - delay of reader loop
+            inverted - swap the boolean interpretation of input
+            unit     - unit of measurement for labels
+
+        Output:
+            bool - posts state changes only
+    """
+    data_range = DataRange.BINARY
+
+    def __init__(self, name, port, interval=0.5, inverted=0, _cont=False):
+        super().__init__(name, port, interval, _cont=_cont)
+        self.inverted = int(inverted)
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(inverted=self.inverted)
+        return state
+
+    def __setstate__(self, state):
+        self.data = state['data']
+        self.__init__(state['name'], state['port'], interval=state['interval'], inverted=state['inverted'],
+                      _cont=True)
+
+    def read(self):
+        val = self.data
+        # TODO: allow interrupt-driven IO, either here or in DriverGPIO
+        if self._driver:
+            val = bool(self._driver.read())
+        if self.inverted:
+            val = not val
+        return val
+
+    def get_settings(self):
+        settings = super().get_settings()
+        settings.append(('inverted', 'Invertiert', self.inverted))
+        return settings
+
+
+class AnalogInput(AsyncInputNode):
+    """ An analog input for anything read from a port driver.
+        Name and labels auto-adjust to unit (for the known ones).
+        Measurements read in a worker thread.
+
+        Options:
+            name     - unique name of this input node in UI
+            port     - name of a IoRegistry port driver to read input
+            interval - delay of reader loop, reader conversion time adds to this!
+            unit     - unit of measurement for labels
+            avg      - floating average, with 1=no average, 2..5=depth of averaging
+
+        Output:
+            float - posts stream of measurement in driver units, unchanged measurements are suppressed
+    """
+    data_range = DataRange.ANALOG
+
+    def __init__(self, name, port, interval=10.0, unit='°C', avg=0, _cont=False):
+        super().__init__(name, port, interval, _cont=_cont)
+        self.unit = unit
+        self.avg = min(max(1, avg), 5)
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(avg=self.avg)
+        return state
+
+    def __setstate__(self, state):
+        self.data = state['data']
+        self.__init__(state['name'], state['port'], interval=state['interval'], unit=state['unit'], avg=state['avg'],
+                      _cont=True)
+
+    def read(self):
+        val = self.data
+        if self._driver:
+            val = float(self._driver.read())
+        val = (val + self.data * (self.avg - 1)) / self.avg
+        val = round(val, 2)
+        return val
+
+    def get_settings(self):
+        settings = super().get_settings()
         settings.append(('unit', 'Einheit', self.unit, 'type="text"'))
         settings.append(('avg', 'Mittelwert [1=direkt]', self.avg, 'type="number" min="1" max="5" step="1"'))
-        settings.append(('port', 'Input', self.port, 'type="text"'))
-        settings.append(('interval', 'Messintervall [s]', self.interval, 'type="number" min="1" max="60" step="1"'))
         return settings
 
 
@@ -153,6 +219,8 @@ class ScheduleInput(BusNode):
     # TODO: since cron specs are not always intuitive, and require more than 1 cron line to start or end long events at an odd minute (not yet supported!), this class should get simple start/end/repeat options.
 
     ROLE = BusRole.IN_ENDP
+    data_range = DataRange.BINARY
+
     # time [s] to stop the scheduler thread
     STOP_DURATION = 2
     # This limits CPU usage to find rare events with long gaps,
@@ -172,13 +240,14 @@ class ScheduleInput(BusNode):
     def __getstate__(self):
         state = super().__getstate__()
         state.update(cronspec=self.cronspec)
-        log.debug('ScheduleInput.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('ScheduleInput.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], state['cronspec'], _cont=True)
+
+    def __str__(self):
+        return '{}({})'.format(type(self).__name__, self.cronspec)
 
     @property
     def cronspec(self):
@@ -202,9 +271,6 @@ class ScheduleInput(BusNode):
     def pullout(self):
         self._stop_thread()
         return super().pullout()
-
-    def __str__(self):
-        return '{}({})'.format(type(self).__name__, self.cronspec)
 
     def _start_thread(self):
         if self._bus:

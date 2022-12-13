@@ -18,9 +18,6 @@ log.setLevel(logging.WARNING)
 
 def create_app(test_config=None):
     logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s', datefmt='%I:%M:%S', stream=sys.stdout, level=logging.WARNING)
-    log = logging.getLogger('aquaPi')
-    log.setLevel(logging.WARNING)
-    # log.setLevel(logging.DEBUG)
 
 # TODO wrap in try/catch, but how should exceptions be handled?
 

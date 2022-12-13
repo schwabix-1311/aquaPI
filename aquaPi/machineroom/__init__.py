@@ -133,6 +133,7 @@ class MachineRoom:
             wasser_o.plugin(self.bus)
 
             wasser_i2 = AnalogInput('Wasser 2', 'DS1820 x7A71E')
+            wasser_i2.plugin(self.bus)
 
             t_history = History('Temperaturen', [wasser_i.id, wasser_i2.id, wasser.id, wasser_o.id])
             t_history.plugin(self.bus)

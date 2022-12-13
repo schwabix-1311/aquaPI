@@ -2,7 +2,7 @@
 
 import logging
 
-from .msg_bus import (BusListener, BusRole, MsgData)
+from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
 from ..driver import (PortFunc, io_registry)
 
 
@@ -45,6 +45,7 @@ class SwitchDevice(DeviceNode):
         Output:
             drive output with bool(input), possibly inverted
     """
+    data_range = DataRange.BINARY
 
     def __init__(self, name, inputs, port, inverted=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
@@ -122,6 +123,7 @@ class AnalogDevice(DeviceNode):
         Output:
             drive analog output with minimum...maximum, optional perceptive correction
     """
+    data_range = DataRange.PERCENT
 
     def __init__(self, name, inputs, port, percept=False, minimum=0, maximum=100, _cont=False):
         super().__init__(name, inputs, _cont=_cont)

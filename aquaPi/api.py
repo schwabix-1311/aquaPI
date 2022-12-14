@@ -68,7 +68,7 @@ def api_dashboard():
     is_ajax_request = request.headers.get('X-Requested-With') and request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if not is_ajax_request:
-        return Response(status=HTTPStatus.NOT_IMPLEMENTED)
+        return Response('Only AJAX request is implemented', status=HTTPStatus.BAD_REQUEST)
 
     if request.method == 'POST':
         data = request.json

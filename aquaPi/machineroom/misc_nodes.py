@@ -6,8 +6,6 @@ from collections import deque
 from time import time
 
 from .msg_bus import (BusListener, BusRole, MsgData)
-
-#from .msg_bus import (BusNode, BusListener, BusRole, MsgData)
 #from ..driver import (PortFunc, io_registry, DriverReadError)
 
 

@@ -38,6 +38,11 @@ const severity_map = {
     'std': 'uk-label-default'
 };
 
+const RangeAnalog = 1;
+const RangeBinary = 2;
+const RangePercent = 3;
+const RangePerc_3 = 4;
+
 
 const AnyNode = {
     delimiters: ['[[', ']]'],
@@ -441,8 +446,9 @@ const History = {
                 label: this.$root.nodes[series].name,
                 data:  [],
               });
-              if (this.$root.nodes[series].unit != "" &&
-                  "°C°FpHrHGHKHµSuS".includes(this.$root.nodes[series].unit)) {  //?? replace with node.OUT_TYPE!=ANALOG
+//              if (this.$root.nodes[series].unit != "" &&
+//                  "°C°FpHrHGHKHµSuS".includes(this.$root.nodes[series].unit)) {  //?? replace with node.OUT_TYPE!=ANALOG
+              if (this.$root.nodes[series].data_range == "ANALOG") {
                 this.cd.data.datasets[ds_index].stepped = false;
                 this.cd.data.datasets[ds_index].yAxisID = "yAnalog";
               }
@@ -454,6 +460,7 @@ const History = {
             for (let val of store[series]) {
               this.cd.data.datasets[ds_index].data.push({x: val[0] * 1000, y: val[1]});
             }
+            this.cd.data.datasets[ds_index].data.push({x: now, y: this.$root.nodes[series].data});
             ds_index += 1;
           }
           this.cd.options.scales.x.min = now - this.duration;

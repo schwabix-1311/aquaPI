@@ -28,9 +28,17 @@ class AuxNode(BusListener):
         self.data = -1
         self.values = {}
 
+    def __getstate__(self):
+        state = super().__getstate__()
+        for inp in self.get_inputs(True):
+            self.unit = inp.unit
+            self.data_range = inp.data_range  # depends on inputs
+            break
+        state.update(unit=self.unit)
+        return state
+
     # def get_settings(self):
     #     settings = super().get_settings()
-    #     settings.append((None, 'Inputs', ';'.join(MsgBus.to_names(self.get_inputs())), 'type="text"'))
     #     return settings
 
 
@@ -50,7 +58,6 @@ class AvgAux(AuxNode):
         Output:
             float - posts changes of arithmetic average of inputs
     """
-
     def __init__(self, name, inputs, unfair_avg=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.unfair_avg = unfair_avg
@@ -58,17 +65,10 @@ class AvgAux(AuxNode):
     def __getstate__(self):
         state = super().__getstate__()
         state.update(unfair_avg=self.unfair_avg)
-
-        for inp in self.get_inputs(True):
-            self.unit = inp.unit
-            break
-        state.update(unit=self.unit)
-
-        log.debug('AvgAux.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('AvgAux.setstate %r', state)
+        self.data = state['data']
         self.__init__(state['name'], state['inputs'], unfair_avg=state['unfair_avg'], _cont=True)
 
     def listen(self, msg):
@@ -114,15 +114,9 @@ class MaxAux(AuxNode):
         Output:
             float - posts changes of maximum value of all inputs
     """
-
-    def __getstate__(self):
-        state = super().__getstate__()
-        for inp in self.get_inputs(True):
-            self.unit = inp.unit
-            break
-        state.update(unit=self.unit)
-        log.debug('MaxAux.getstate %r', state)
-        return state
+    # def __getstate__(self):
+    #     state = super().__getstate__()
+    #     return state
 
     # def __setstate__(self, state):
     #     self.data = state['data']

@@ -25,11 +25,13 @@ class BusRole(Flag):
     HISTORY = auto()  # nodes recording the output of other nodes
 
 
-# This may help to fill selection lists/combos with the appropriate node types
-# class PayloadType
-# TUPEL = auto()      # operates on data tupels, e.g. RGB light
-# ANALOG = auto()     # the receiver interprets MsgData according to his capabilites
-# BINARY = auto()     # interprets MsgData in a binary way (on/off)
+class DataRange(Enum):
+    UNDEF = 0
+    ANALOG = 1  # float, any range, typically input sensors
+    BINARY = 2  # hard on=100 / off=0
+    PERCENT = 3 # normalized 0..100%, the bulk of data
+    PERC_3 = 4  # tupel of 3 percentages, e.g. RGB light
+
 
 #############################
 
@@ -234,6 +236,7 @@ class BusNode:
         The _inputs should always be None!
     """
     ROLE = None
+    data_range = DataRange.UNDEF
 
     def __init__(self, name, _cont=False):
         self.name = name
@@ -256,12 +259,14 @@ class BusNode:
         self.alert = None
 
     def __getstate__(self):
-        state = {'identifier': self.identifier, 'id': self.id, 'name': self.name, 'inputs': self._inputs, 'data': self.data, 'unit': self.unit}
-        log.debug('< BusNode.getstate %r', state)
+        state = {'name': self.name, 'identifier': self.identifier, 'id': self.id}
+        state.update(inputs=self._inputs)
+        state.update(data=self.data)
+        state.update(unit=self.unit)
+        state.update(data_range=self.data_range.name)
         return state
 
     def __setstate__(self, state):
-        log.debug('BusNode.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], _cont=True)
 
@@ -341,14 +346,11 @@ class BusListener(BusNode):
             inputs = MsgFilter('*')
         self._inputs = inputs
 
-    def __getstate__(self):
-        state = super().__getstate__()
-        state.update(inputs=self._inputs)
-        log.debug('< BusListener.getstate %r', state)
-        return state
+    # def __getstate__(self):
+    #     state = super().__getstate__()
+    #     return state
 
     def __setstate__(self, state):
-        log.debug('BusListener.setstate %r', state)
         self.data = state['data']
         self.__init__(state['name'], inputs=state['inputs'], _cont=True)
 

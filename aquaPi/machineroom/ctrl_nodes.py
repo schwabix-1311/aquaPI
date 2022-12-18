@@ -5,7 +5,7 @@ import time
 from datetime import timedelta
 from threading import Thread
 
-from .msg_bus import (BusListener, BusRole, MsgData)
+from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
 
 
 log = logging.getLogger('CtrlNodes')
@@ -34,8 +34,9 @@ def get_unit_limits(unit):
 
 
 class ControllerNode(BusListener):
-    """ The base class of all controllers, i.e. BusNodes that connect
-        1 input with output(s)he required core of each controller chain.
+    """ The base class of all controllers, i.e. nodes that connect
+        1 input to output(s).
+        The required core of each controller chain.
     """
     ROLE = BusRole.CTRL
 
@@ -86,6 +87,7 @@ class MinimumCtrl(ControllerNode):
               100 when input < (thr. - hyst./2),
               0 when input >= (thr. + hyst./2)
     """
+    data_range = DataRange.BINARY
 
     # TODO: some controllers could have a threshold for max. active time -> warning
 
@@ -159,6 +161,7 @@ class MaximumCtrl(ControllerNode):
               100 when input > (thr. - hyst./2),
               0 when input <= (thr. + hyst./2)
     """
+    data_range = DataRange.BINARY
 
     def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
@@ -229,6 +232,7 @@ class LightCtrl(ControllerNode):
         Output:
             float - posts series of percentages after input state change
     """
+    data_range = DataRange.PERCENT
 
     # TODO: add random variation, other profiles
     # TODO: overheat reduction driven from temperature - separate nodes!

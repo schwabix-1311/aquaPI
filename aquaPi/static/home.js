@@ -109,13 +109,14 @@ const Dashboard = {
                             <p>Which tiles should be shown?</p>
                             <div v-for="t in tiles">
                                 <label>
-                                    <input :key="t.comp+'.'+t.id" type="checkbox" :id="t.comp+'.'+t.id" v-model="t.vis" :name="t.comp+'.'+t.id" class="uk-checkbox uk-margin-small-right">
+                                    <input :key="t.identifier" type="checkbox" :id="t.identifier" v-model="t.vis" :name="t.identifier" class="uk-checkbox uk-margin-small-right">
                                     [[ t.name ]]
                                 </label>
                             </div>
                         </div>
                         <div class="uk-modal-footer uk-text-right">
-                            <input type="submit" value="Übernehmen" class="uk-button uk-button-default uk-modal-close" @click="acceptConfig">
+                            <button type="button" class="uk-button uk-button-secondary" @click="fetchConfig">TEST GET</button>
+                            <button type="submit" class="uk-button uk-button-default">Übernehmen</button>
                         </div>
                     </form>
                 </div>

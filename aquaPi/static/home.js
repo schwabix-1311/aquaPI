@@ -113,7 +113,7 @@ const Dashboard = {
                             </div>
                         </div>
                         <div class="uk-modal-footer uk-text-right">
-                            <button type="button" class="uk-button uk-button-secondary" @click="fetchConfig">TEST GET</button>
+                            <!-- <button type="button" class="uk-button uk-button-secondary" @click="fetchConfig">TEST GET</button> -->
                             <button type="submit" class="uk-button uk-button-default">Übernehmen</button>
                         </div>
                     </form>

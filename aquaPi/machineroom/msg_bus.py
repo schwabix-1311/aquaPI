@@ -3,7 +3,7 @@
 import logging
 import time
 from queue import Queue
-from enum import (Flag, auto)
+from enum import (Enum, Flag, auto)
 from threading import (Condition, Thread)
 
 from .msg_types import (MsgInfra, MsgBorn, MsgBye, MsgReply, MsgReplyHello, MsgData, MsgFilter)

@@ -90,7 +90,7 @@ class AsyncInputNode(InputNode):
                 self.alert = None
                 if self.data != val:
                     self.data = val
-                    log.brief('AsyncInputNode %s: post %f', self.id, self.data)
+                    log.brief('%s: post %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
             except DriverReadError:
                 self.alert = ('Read error!', 'err')

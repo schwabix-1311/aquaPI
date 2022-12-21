@@ -115,7 +115,7 @@ class MachineRoom:
         if REAL_CONFIG:
             # single LED bar, dawn & dusk 15mins, perceptive corr.
             light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
-            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=15 * 60)
+            light_c = FadeCtrl('Beleuchtung', light_schedule.id, fade_time=15 * 60)
             light_pwm = AnalogDevice('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=85)
             light_schedule.plugin(self.bus)
             light_c.plugin(self.bus)
@@ -142,7 +142,7 @@ class MachineRoom:
         if SINGLE_LIGHT:
             light_schedule = ScheduleInput('Zeitplan 1', '* 14-21 * * *')
             light_schedule.plugin(self.bus)
-            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
+            light_c = FadeCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
             light_c.plugin(self.bus)
             if not DAWN_LIGHT:
                 light_pwm = AnalogDevice('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=80)
@@ -150,7 +150,7 @@ class MachineRoom:
             else:
                 dawn_schedule = ScheduleInput('Zeitplan 2', '* 22 * * *')
                 dawn_schedule.plugin(self.bus)
-                dawn_c = LightCtrl('Dämmerlicht', dawn_schedule.id, fade_time=30 * 60)
+                dawn_c = FadeCtrl('Dämmerlicht', dawn_schedule.id, fade_time=30 * 60)
                 dawn_c.plugin(self.bus)
 
                 light_max = MaxAux('Max Licht', [light_c.id, dawn_c.id])

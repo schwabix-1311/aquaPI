@@ -217,17 +217,19 @@ class MaximumCtrl(ControllerNode):
         return settings
 
 
-class LightCtrl(ControllerNode):
-    """ A single channel light controller with fader (dust/dawn).
-        When input goes to >0, a fader will post a series of
-        increasing values over the period of fade_time,
-        to finally reach the target level. When input goes to 0
-        the same fading period is appended (!) to reach 0.
+class FadeCtrl(ControllerNode):
+    """ A single channel linear fading controller, usable for light (dust/dawn).
+        A change of input value will start a ramp from current to new
+        percentage. The duration of this ramp is deltaPerc / 100 * fade_time.
+        Durations for fade-in and fade-out can be different and may be 0 for
+        hard switches.
+        The ramp steps by 0.1%, or more to keep step duration >= 100 ms.
 
         Options:
             name       - unique name of this controller node in UI
             inputs     - id of a single (!) input to receive measurements from
             fade_time  - time span in secs to transition to the target state
+            fade_out   - optional time, defaults to fade_time
 
         Output:
             float - posts series of percentages after input state change
@@ -237,12 +239,15 @@ class LightCtrl(ControllerNode):
     # TODO: add random variation, other profiles
     # TODO: overheat reduction driven from temperature - separate nodes!
 
-    def __init__(self, name, inputs, fade_time=None, _cont=False):
+    def __init__(self, name, inputs, fade_time=None, fade_out=None, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.unit = '%'
         self.fade_time = fade_time
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
+        self.fade_out = fade_out if fade_out else fade_time
+        if fade_out and isinstance(fade_out, timedelta):
+            self.fade_out = fade_out.total_seconds()
         self._fader_thread = None
         self._fader_stop = False
         if not _cont:
@@ -252,59 +257,68 @@ class LightCtrl(ControllerNode):
     def __getstate__(self):
         state = super().__getstate__()
         state.update(fade_time=self.fade_time)
-        log.debug('LightCtrl.getstate %r', state)
+        state.update(fade_out=self.fade_out)
+        log.debug('FadeCtrl.getstate %r', state)
         return state
 
     def __setstate__(self, state):
-        log.debug('LightCtrl.setstate %r', state)
+        log.debug('FadeCtrl.setstate %r', state)
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], fade_time=state['fade_time'], _cont=True)
+        self.__init__(state['name'], state['inputs'], fade_time=state['fade_time'], fade_out=state['fade_out'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            log.info('LightCtrl: got %f', msg.data)
-            if self.data != float(msg.data):
-                if not self.fade_time:
-                    self.data = float(msg.data)
-                    log.brief('LightCtrl %s: output %f', self.id, self.data)
+            log.info('FadeCtrl: got %f', msg.data)
+            self.target = float(msg.data)
+            if self.data != self.target:
+                # our fade direction want's a hard switch
+                if (self.data < self.target and not self.fade_time) \
+                or (self.data > self.target and not self.fade_out):
+                    self.data = self.target
+                    log.brief('FadeCtrl %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
                     if self._fader_thread:
                         self._fader_stop = True
                         self._fader_thread.join()
-                    self.target = float(msg.data)
                     log.debug('_fader %f', self.target)
+                    log.error('_fader %f -> %f', self.data, self.target)
                     self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
                     self._fader_thread.start()
 
     def _fader(self):
-        # TODO: adjust the calculation, short fade_times need longer or show steps
-        INCR = 0.1 if self.fade_time >= 30 else 1.0 if self.fade_time >= 2.9 else 2.0
         if self.target != self.data:
-            step = (self.fade_time / abs(self.target - self.data) * INCR)
-            log.brief('CtrLight %s: fading in %f s from %f -> %f, change every %f s', self.id, self.fade_time,
-                      self.data, self.target, step)
-            while abs(self.target - self.data) > INCR:
-                if self.target >= self.data:
-                    self.data += INCR
-                else:
-                    self.data -= INCR
+            f_time = self.fade_time  if self.data < self.target else self.fade_out
+            delta_d = self.target - self.data      # total change
+            delta_t = abs(delta_d) / 100 * f_time  # total time for this change
+            step_t = max(delta_t / 1000, 0.1)      # try 1000 steps, at most 10 steps per sec
+            step_d = delta_d * step_t / delta_t
+            log.brief('CtrLight %s: fading in %f s from %f -> %f, change by %f every %f s'
+                     , self.id, delta_t, self.data, self.target, step_d, step_t)
+
+            next_t = time.time() + step_t
+            while abs(self.target - self.data) > abs(step_d):
+                self.data += step_d
                 log.debug('_fader %f ...', self.data)
 
                 self.alert = ('+' if self.target > self.data else '-', 'act')
                 self.post(MsgData(self.id, round(self.data, 3)))
-                time.sleep(step)
+                time.sleep(next_t - time.time())
+                next_t += step_t
                 if self._fader_stop:
+                    log.brief('FadeCtrl %s: fader stopped', self.id)
                     break
-            if self.data != self.target:
-                self.data = self.target
+            else:
+                if self.data != self.target:
+                    self.data = self.target
+                    self.post(MsgData(self.id, self.data))
                 self.alert = None
-                self.post(MsgData(self.id, self.data))
-        log.brief('LightCtrl %s: fader DONE', self.id)
+                log.brief('FadeCtrl %s: fader DONE', self.id)
         self._fader_thread = None
         self._fader_stop = False
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append(('fade_time', 'Fade time [s]', self.fade_time, 'type="number" min="0"'))
+        settings.append(('fade_time', 'Fade-In time [s]', self.fade_time, 'type="number" min="0"'))
+        settings.append(('fade_out', 'Fade-Out time [s]', self.fade_out, 'type="number" min="0"'))
         return settings

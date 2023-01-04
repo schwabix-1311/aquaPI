@@ -412,9 +412,9 @@ class SunCtrl(ControllerNode):
                 self.clouds.remove(cl)
             else:
                 # factor in a cloud = (start, duration, darkness)
-                shadow = self._halfsine(now - cl[0], cl[1], cl[2])
-                log.brief('SunCtrl %s: cloud %d = %f%%', self.id, i, shadow)
-                new_data -= shadow
+                sh = self._halfsine(now - cl[0], cl[1], cl[2])
+                log.debug('SunCtrl %s: cloud %d = %f%%', self.id, i, sh)
+                shadow -= sh
             i += 1
         return shadow
 

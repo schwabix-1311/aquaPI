@@ -315,6 +315,8 @@ class BusNode:
         outputs = []
         if self._bus:
             for node in self._bus.nodes:
+                if node.ROLE == BusRole.HISTORY:
+                    continue
                 if node._inputs and self.id in node._inputs.sender:
                     outputs.append(node)
                     if recurse:

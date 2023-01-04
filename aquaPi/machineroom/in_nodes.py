@@ -312,7 +312,8 @@ class ScheduleInput(BusNode):
                     log.brief('ScheduleInput %s: output 0 for %f s', self.id, sec_next - sec_now)
                     self.post(MsgData(self.id, self.data))
 
-                    while (sec_next > time.time()):
+                    # while (sec_next > time.time()):
+                    while (sec_next - time.time() > self.STOP_DURATION):
                         time.sleep(self.STOP_DURATION)
                         if self._scheduler_stop:
                             return  # cleanup is done in finally!
@@ -331,7 +332,7 @@ class ScheduleInput(BusNode):
                     return  # cleanup is done in finally!
 
                 self.data = 100
-                log.brief('ScheduleInput %s: output 100 for %f s', self.id, sec_next - sec_now)
+                log.brief('ScheduleInput %s: output 100 for %f s', self.id, sec_next - time.time())
                 self.post(MsgData(self.id, self.data))
 
                 while (sec_next > time.time()):

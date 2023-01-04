@@ -229,7 +229,7 @@ const FadeCtrl = {
         },
     },
 };
-Vue.component('LightCtrl', FadeCtrl);  // temporary alias
+Vue.component('SunCtrl', FadeCtrl);  // temporary alias
 Vue.component('FadeCtrl', FadeCtrl);
 
 

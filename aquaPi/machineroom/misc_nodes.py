@@ -45,7 +45,7 @@ class History(BusListener):
     def __getstate__(self):
         state = super().__getstate__()
         to_dict = {}
-        for snd in self._store:
+        for snd in self._store.copy():
             to_dict[snd] = [(v[0], v[1]) for v in self._store[snd]]
         state.update(store=to_dict)
         return state

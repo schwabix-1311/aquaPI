@@ -108,9 +108,9 @@ class MachineRoom:
         """
         REAL_CONFIG = False
         SINGLE_LIGHT = True
-        DAWN_LIGHT = SINGLE_LIGHT and True
+        DAWN_LIGHT = SINGLE_LIGHT and False  # True
         SINGLE_TEMP = False
-        COMPLEX_TEMP = True
+        COMPLEX_TEMP = False  #True
 
         if REAL_CONFIG:
             # single LED bar, dawn & dusk 15mins, perceptive corr.
@@ -142,11 +142,15 @@ class MachineRoom:
         if SINGLE_LIGHT:
             light_schedule = ScheduleInput('Zeitplan 1', '* 14-21 * * *')
             light_schedule.plugin(self.bus)
-            light_c = FadeCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
+            # light_c = FadeCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
+            light_c = SunCtrl('Beleuchtung', light_schedule.id)  # 30*60)
             light_c.plugin(self.bus)
             if not DAWN_LIGHT:
                 light_pwm = AnalogDevice('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
+
+                history = History('Licht', [light_schedule.id, light_c.id, light_pwm.id])
+                history.plugin(self.bus)
             else:
                 dawn_schedule = ScheduleInput('Zeitplan 2', '* 22 * * *')
                 dawn_schedule.plugin(self.bus)

@@ -44,7 +44,7 @@ class IoRegistry(object):
     "ShellyDim":  { PWM, DriverShelly, {ip: '192..', ch:X} } - Ambilight
 
     "Sens 1":     { ADC, DriverOneWr,  {id:'28-xx'} }        - Wassertemperatur"
-    "ADC 3":      { ADC, DriverAD1115, {addr:0x7E, ch:3} }   - pH Sonde"
+    "ADC 3":      { ADC, DriverADS1115, {addr:0x7E, ch:3} }   - pH Sonde"
 
     Initial enumeration fills this map via static driver functions.
     GPIO has 3 functions: IO (=undetermined), IN, OUT. or 4th: S-PWM?

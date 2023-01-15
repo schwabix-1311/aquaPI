@@ -304,7 +304,7 @@ class FadeCtrl(ControllerNode):
                 self.data += step_d
                 log.debug('_fader %f ...', self.data)
 
-                self.alert = ('+' if self.target > self.data else '-', 'act')
+                self.alert = ('\u2197' if self.target > self.data else '\u2198', 'act')
                 self.post(MsgData(self.id, round(self.data, 3)))
                 time.sleep(next_t - time.time())
                 next_t += step_t
@@ -407,14 +407,15 @@ class SunCtrl(ControllerNode):
         i = 0
         shadow = 0
         for cl in self.clouds.copy():
-            self.alert = ('~', 'act')
+            self.alert = ('\u219d', 'act')  # rightwards wave arrow
+
             if cl[0] + cl[1] < now:
                 self.clouds.remove(cl)
             else:
                 # factor in a cloud = (start, duration, darkness)
                 sh = self._halfsine(now - cl[0], cl[1], cl[2])
                 log.debug('SunCtrl %s: cloud %d = %f%%', self.id, i, sh)
-                shadow -= sh
+                shadow += sh
             i += 1
         return shadow
 
@@ -456,7 +457,7 @@ class SunCtrl(ControllerNode):
            (40	21429,0837	267,8635)
         """
         xscend = self.xscend * 60 * 60
-        self.alert = ('+', 'act')
+        self.alert = ('\u2197', 'act')  # north east arrow
         start = now = time.time()
         while now - start < xscend:
             new_data = self._halfsine(now - start, xscend * 2, self.target)
@@ -465,10 +466,10 @@ class SunCtrl(ControllerNode):
 
         cloudiness = int(random.random() * 5.9)
         log.brief('SunCtrl %s: highnoon %f for %fh, cloudiness %d', self.id, self.target, self.highnoon, cloudiness)
+        self.alert = None
         self.data = self.target
         self.post(MsgData(self.id, self.data))
         if not cloudiness:
-            self.alert = None
             time.sleep(self.highnoon * 60 * 60)
         else:
             while now - start < self.highnoon * 60 * 60:
@@ -478,7 +479,7 @@ class SunCtrl(ControllerNode):
                 now = time.time()
 
         xscend = self.xscend * 60 * 60
-        self.alert = ('-', 'act')
+        self.alert = ('\u2198', 'act')  # south east arrow
         start = now = time.time()
         while now - start < xscend:
             new_data = self._halfsine(now - start + xscend, xscend * 2, self.target)

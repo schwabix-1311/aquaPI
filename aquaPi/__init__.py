@@ -62,6 +62,9 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
 
+    from . import api
+    app.register_blueprint(api.bp)
+
     from .pages import home
     app.register_blueprint(home.bp)
 
@@ -74,8 +77,8 @@ def create_app(test_config=None):
     from .pages import about
     app.register_blueprint(about.bp)
 
-    from . import api
-    app.register_blueprint(api.bp)
+    from .pages import spa
+    app.register_blueprint(spa.bp)
 
     # from . import auth
     # app.register_blueprint(auth.bp)

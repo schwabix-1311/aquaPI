@@ -121,7 +121,7 @@ class MachineRoom:
             light_c.plugin(self.bus)
             light_pwm.plugin(self.bus)
 
-            history = History('Licht', [light_schedule.id, light_c.id,light_pwm.id])
+            history = History('Licht', [light_schedule.id, light_c.id, light_pwm.id])
             history.plugin(self.bus)
 
             # single temp sensor, switched relays

@@ -48,3 +48,14 @@ def render_sse_template(html, read, delay=1, **context):
 
         return Response(events(), content_type='text/event-stream')
     return render_template(html, **context, now=time.asctime())
+
+
+def send_sse_events(read, delay=1):
+    # if request.headers.get('accept') == 'text/event-stream':
+    def events():
+        while True:
+            yield format_msg(read())
+            if delay:
+                time.sleep(delay)
+
+    return Response(events(), content_type='text/event-stream')

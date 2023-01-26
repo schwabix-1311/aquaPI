@@ -61,23 +61,25 @@ const AnyNode = {
         // console.debug(`AnyNode: create ${this.id} ...`)
         await this.$root.updateNode(this.id, true)
         // console.debug(`... Any create ${this.id} done`)
+
+        // console.log(this.node.inputs.sender)
         if (this.node.inputs?.sender != null) {
             this.in_ids = this.node.inputs.sender
             if (this.in_ids == '*')
                 this.in_ids = []
-            // console.debug(`... INs of ${this.id}:  ${this.in_ids}`)
+            console.debug(`... INs of ${this.id}:  ${this.in_ids}`)
             for (let in_id of this.in_ids)
                 await this.$root.updateNode(in_id, true)
         }
     },
     computed: {
         node() {
-            // console.debug(`get node(${this.id})`)
+            console.debug(`get node(${this.id})`)
             if (this.id in this.$root.nodes) {
-                //console.debug(`  .. got node(${this.id})`)
+                console.debug(`  .. got node(${this.id})`)
                 return this.$root.nodes[this.id]
             }
-            //  console.debug(`  .. NO node(${this.id})`)
+             console.debug(`  .. NO node(${this.id})`)
             return undefined
         },
         label() {

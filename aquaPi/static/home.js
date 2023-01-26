@@ -19,9 +19,15 @@ const App = {
     template: '#vueHome',
     methods: {
         setNode(id, node) {
+            console.log('>>> setNode id and node', id, node)
             Vue.set(this.nodes, id, node)
+            let nodes = this.nodes
+            console.log('nodes:', nodes)
         },
         async updateNode(id, addNew=false) {
+            console.log('### updateNode, id and addnNew:', id, addNew)
+            console.log('.. this.nodes:', this.nodes)
+
             if (id != null) {
                 if ((id in this.nodes) || addNew) {
                     // TODO: error handler - might loose connection
@@ -135,9 +141,10 @@ if (!!window.EventSource) {
     const source = new EventSource(document.URL);
 
     source.onmessage = function(e) {
-        //console.debug(`EventSource sent: ${e.data}`);
+        console.debug(`EventSource sent: ${e.data}`);
         // this is an array of node ids that were modified
         const obj = JSON.parse(e.data);
+        console.log('obj:', obj)
         for (const i in obj) {
             vm.updateNode(obj[i])
         }

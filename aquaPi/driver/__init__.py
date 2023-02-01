@@ -24,42 +24,45 @@ class IoRegistry(object):
     """
     example
 
-    "GPIO 0..xx": { IO,  DriverGPIO,   {pin: 0..x} }         - unused, func IO -> OUT/IN, x entries
-    "IOext 1..7": { IO,  DriverPCFxx,  {addr: 0x47, ch: x} } - unused, x entries
+    "GPIO 0..xx in":  { Bin,  DriverGPIO,   {pin: 0..x} }         - unused, func IN, x entries
+    "GPIO 0..xx out": { Bout, DriverGPIO,   {pin: 0..x} }         - unused, func IN, x entries
+    "IOext 1..7 in":  { Bin,  DriverPCFxx,  {adr: 0x47, ch: x} }  - unused, x entries
 
-    "GPIO 12":    { OUT, DriverGPIO,   {pin: 12} }           - Relays
-    "IOext 0":    { OUT, DriverPCFxx,  {addr: 0x47, ch: 0} } - CO2 Ventil
-    "ShellyPlug1":{ OUT, DriverShelly, {ip: '192..', ch:0} } - S.Plug - Heizer
-    "H-Bridge 1": { OUT, Drivermotor,  {pins: (21,22)} }     - Dosierpumpe
+    "GPIO 12 out":    { Bout, DriverGPIO,   {pin: 12} }           - Relays
+    "IOext 0 out":    { Bout, DriverPCFxx,  {adr: 0x47, ch: 0} }  - CO2 Ventil
+    "ShellyPlug1":    { Bout, DriverShelly, {ip: '192..', ch:0} } - S.Plug - Heizer
+    "H-Bridge 1":     { Bout, DriverMotor,  {pins: (21,22)} }     - Dosierpumpe
 
-    "GPIO 20":    { IN,  DriverGPIO,   {pin: 20} }           - Taster
-    "ShellyTemp1":{ IN,  DriverShelly, {ip: '192..', ch:2} } - S.Temp1
+    "GPIO 20 in":     { Bin,  DriverGPIO,   {pin: 20} }           - Taster
+    "ShellyTemp1":    { Bin,  DriverShelly, {ip: '192..', ch:2} } - S.Temp1
 
-    "PWM 0":      { PWM, DriverPWM,    {ch: 0, pin: 18} }    - Licht"
-    "PWM 1":      { PWM, DriverPWM,    {ch: 1, pin: 19} }    -
-    "S-PWM 2":    { IO/PWM, DriverGPIO, {pin: 24} }          - Lüfter"   GPIO conflict!
-    "PWMext 0-15":{ PWM, DriverPA9685, {addr:0x7F, ch:0..} } -
-    "TC420 1":    { PWM, DriverTC420,  {usb:id, ch:1} }      - Mondlicht
-    "TC420 2":    { PWM, DriverTC420,  {usb:id, ch:(3,4,5)}} - RGB Licht
-    "ShellyDim":  { PWM, DriverShelly, {ip: '192..', ch:X} } - Ambilight
+    "PWM 0":          { Aout, DriverPWM,    {ch: 0, pin: 18} }    - Licht"
+    "PWM 1":          { Aout, DriverPWM,    {ch: 1, pin: 19} }    -
+    "S-PWM 2":        { Aout, DriverGPIO,   {pin: 24} }           - Lüfter"
+    "PWMext 0-15":    { Aout, DriverPA9685, {addr:0x7F, ch:0..} } -
+    "TC420 1":        { Aout, DriverTC420,  {usb:id, ch:1} }      - Mondlicht
+    "TC420 2":        { Aout, DriverTC420,  {usb:id, ch:(3,4,5)}} - RGB Licht
+    "ShellyDim":      { Aout, DriverShelly, {ip: '192..', ch:X} } - Ambilight
 
-    "Sens 1":     { ADC, DriverOneWr,  {id:'28-xx'} }        - Wassertemperatur"
-    "ADC 3":      { ADC, DriverADS1115, {addr:0x7E, ch:3} }   - pH Sonde"
+    "Sens 1":         { Ain,  DriverOneWr,  {id:'28-xx'} }        - Wassertemperatur"
+    "ADC 3":          { Ain,  DriverADS1115,{addr:0x7E, ch:3} }   - pH Sonde"
 
-    Initial enumeration fills this map via static driver functions.
-    GPIO has 3 functions: IO (=undetermined), IN, OUT. or 4th: S-PWM?
-    Drivers can provide entries for more than one function if they implement all their methods.
-    Each channel/port/pin is one entry. Dict cfg is driver's private property!
-    Creation of a driver instance reserves the entry, in case of GPIO (or soft-PWM) this may change function!
-    get_ports_by_function() returns a view on available or used IoPorts.
-    driver_factory(key,func) creates a driver for specified port and function.
-    driver_destruct(key) returns IoPort to unused. This must restore initial function.
+    Constructor calls each driver's find_ports() to fill io_registry with io_ports.
+    Each io_port is defined by a unique name, a driver class and its cfg dictionary,
+    plus a list of dependants by name, if applicable.
+    Drivers may support more than one function if they implement all their methods.
+    Dict cfg is driver's private property!
+    Instantiation of a port/pin driver via driver_factory reserves the io_port, and
+    the listed dependants, e.g. PWM may use a std GPIO pin; in this case GPIO pin
+    is marked used as long as PWM is in use.
+    driver_destruct(key) returns IoPort to unused. List of deps is released unless
+    still used by some other port.
 
-    Multi-port drivers (RGB, motor) will need a dedicated factory method; very likely getting a higher level driver and a tupel of IoPorts.
+    Multi-port drivers (RGB, Motor) may need a dedicated factory method.
+    Very likely getting a higher level driver and a tupel of IoPorts.  TBD!
     """
 
     _map = {}
-    _inuse = {}
 
     def __init__(self):
         # iterate all class imports from a module, then call each class' port enumerator
@@ -67,7 +70,7 @@ class IoRegistry(object):
         # https://stackoverflow.com/questions/4821104/dynamic-instantiation-from-string-name-of-a-class-in-dynamically-imported-module
 
         # This may be a hack, although it is documented on python.org for importlib.
-        # We load all modules Driver*.py in specific folders, then lookup all
+        # We load all modules Driver*.py from specific folders, then lookup all
         # descendants of class Driver found in the module dicts.
         # Those with a method find_ports() can report "their" IoPorts to IoRegistry.
         # Maybe there's a much simpler ways to achieve the same though.
@@ -90,48 +93,60 @@ class IoRegistry(object):
             if hasattr(drv, 'find_ports'):
                 drv_ports = drv.find_ports()
                 log.debug('driver %r reported %r', drv, drv_ports)
-                # TODO should reject duplicate ports, same port should in theory not be reported
-                #      by multiple drivers, but better play safe
+
+                # TODO: reject duplicate ports, same port should in theory not be reported
+                #      by multiple drivers, but better play safe: len(_map.keys() & drv_ports.keys()) > 0
                 IoRegistry._map.update(drv_ports)
+
         print('%r', IoRegistry._map)
 
-    def get_ports_by_function(self, funcs, free=True):
-        mp = IoRegistry._map if free else IoRegistry._inuse
-        # return [key for key in mp if mp[key].function in funcs]
-        return {key: mp[key] for key in mp if mp[key].function in funcs}
+    def get_ports_by_function(self, funcs, in_use=False):
+        """ returns a view of free or used IoPorts filtered by iterable funcs.
+        """
+        mp = IoRegistry._map
+        return {key: mp[key] for key in mp if mp[key].func in funcs and bool(mp[key].used) == in_use}
 
-    def driver_factory(self, port, func):
-        """ Create a driver for a single port.
-            Parameter func requests the function for ports that support alternatives, e.g. IO -> In or OUT
+    def driver_factory(self, port):
+        """ Create a driver for a port found in io_ports.keys().
             Drivers that use >1 port are created by a dedicated factory (later)
         """
-        log.debug('create a driver for %r - %r', port, func)
-        if port in IoRegistry._inuse.keys():
-            raise DriverPortInuseError(port=port)
-        if port not in IoRegistry._map.keys():
+        log.debug('create a driver for %r', port)
+        breakpoint()
+        if port not in IoRegistry._map:
             raise DriverParamError('There is no port named %s' % port)
 
+        io_port = IoRegistry._map[port]
+        if io_port.used:
+            raise DriverPortInuseError(port=port)
+
         try:
-            io_port = IoRegistry._map[port]
-            driver = io_port.driver(func, io_port.cfg)
+            driver = io_port.driver(io_port.func, io_port.cfg)
+            # same as io_port.used += 1
+            IoRegistry._map[port] = io_port._replace(used=io_port.used + 1)
 
-            IoRegistry._inuse.update({port: IoPort(io_port.function, driver, io_port.cfg)})
-            del IoRegistry._map[port]
+            for dep in io_port.deps:
+                # same as IoRegistry._map[dep].used += 1
+                dep_port = IoRegistry._map[dep]
+                IoRegistry._map[dep] = dep_port._replace(used=dep_port.used + 1)
+
+            return driver
         except Exception:
-            #TODO report error, e.g.
             log.exception('Failed to create driver: %s', port)
-        return driver
 
-    def driver_release(self, port):
-        log.debug('release driver for %r', port)
-        if port not in IoRegistry._inuse.keys():
-            raise DriverParamError('There is driver open for port %s' % port)
+    def driver_destruct(self, port, driver):
+        log.debug('destruct driver for %r', port)
+        if port not in IoRegistry._map:
+            raise DriverParamError('There is no driver for port %s' % port)
 
-        io_port = IoRegistry._inuse[port]
-        io_port.driver.close()
+        io_port = IoRegistry._map[port]
+        driver.close()
+        # same as io_port.used = 0
+        IoRegistry._map[port]= io_port._replace(used=0)
 
-        IoRegistry._map.update({port: IoPort(io_port.function, type(io_port.driver), io_port.cfg)})
-        del IoRegistry._inuse[port]
+        for dep in io_port.deps:
+            # same as IoRegistry._map[dep].used -= 1
+            dep_port = IoRegistry._map[dep]
+            IoRegistry._map[dep] = dep_port._replace(used=dep_port.used - 1)
 
 
 # ========== IoRegistry is a singleton -> 1 global instance ==========

@@ -7,7 +7,7 @@ from croniter import croniter
 from threading import Thread
 
 from .msg_bus import (BusNode, BusRole, DataRange, MsgData)
-from ..driver import (PortFunc, io_registry, DriverReadError)
+from ..driver import (io_registry, DriverReadError)
 
 
 log = logging.getLogger('InNodes')
@@ -41,6 +41,7 @@ class AsyncInputNode(InputNode):
     def __init__(self, name, port, interval=0.5, _cont=False):
         super().__init__(name, _cont=_cont)
         self._driver = None
+        self._port = None
         self.interval = max(0.1, float(interval))
         self._reader_thread = None
         self._reader_stop = False
@@ -62,9 +63,9 @@ class AsyncInputNode(InputNode):
     @port.setter
     def port(self, port):
         if self._driver:
-            io_registry.driver_release(self.port)
-        port_func = PortFunc.ADC  if self.data_range == DataRange.ANALOG else PortFunc.IN
-        self._driver = io_registry.driver_factory(port, port_func)
+            io_registry.driver_destruct(self._port, self._driver)
+        if port:
+            self._driver = io_registry.driver_factory(port)
         self._port = port
 
     def plugin(self, bus):
@@ -77,6 +78,7 @@ class AsyncInputNode(InputNode):
             self._reader_stop = True
             self._reader_thread.join(timeout=5)
             self._reader_thread = None
+        self.port = None
         super().pullout()
 
     def read(self):

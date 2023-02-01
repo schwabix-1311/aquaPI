@@ -127,7 +127,7 @@ class MachineRoom:
             # single temp sensor, switched relays
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12', inverted=True)
+            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12 out', inverted=True)
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
@@ -168,9 +168,8 @@ class MachineRoom:
         if SINGLE_TEMP:
             # single temp sensor -> temp ctrl -> relay
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
-            # wasser_i = AnalogInput('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12')
+            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12 out')
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
             wasser_i.plugin(self.bus)
@@ -192,10 +191,10 @@ class MachineRoom:
             w2_ctrl = MaximumCtrl('W-Kühlung', w2_temp.id, 26.5)
             w2_ctrl.plugin(self.bus)
 
-            w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 0')
+            w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 0 out')
             w_heat.plugin(self.bus)
 
-            w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 1')
+            w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 1 out')
             w_cool.plugin(self.bus)
 
             t_history = History('Temperaturen', [w1_temp.id, w2_temp.id, w_temp.id, w_heat.id, w_cool.id])

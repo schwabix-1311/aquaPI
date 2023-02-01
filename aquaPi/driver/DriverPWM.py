@@ -16,7 +16,7 @@ except (RuntimeError, ModuleNotFoundError):
 
     GPIO = GPIOdummy
 
-from .base import (OutDriver, IoPort, PortFunc, PinFunc, is_raspi, DriverParamError)
+from .base import (OutDriver, IoPort, PortFunc, PinFunc, is_raspi)
 
 log = logging.getLogger('DriverPWM')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -34,9 +34,6 @@ class DriverPWMbase(OutDriver):
     """
 
     def __init__(self, func, cfg):
-        if func not in [PortFunc.PWM]:
-            raise DriverParamError('This driver supports PWM, nothing else.')
-
         super().__init__(func, cfg)
         self._channel = int(cfg['channel'])
         self._pin = int(cfg['pin'])
@@ -48,21 +45,29 @@ class DriverPWM(DriverPWMbase):
 
     @staticmethod
     def find_ports():
+        io_ports = {}
         if not is_raspi():
-            # name: IoPort('function', 'driver', 'cfg')
+            # name: IoPort('function', 'driver', 'cfg', 'dependants')
             io_ports = {
-                'PWM 0': IoPort(PortFunc.PWM, DriverPWM, {'pin': 18, 'channel': 0, 'fake': True}),
-                'PWM 1': IoPort(PortFunc.PWM, DriverPWM, {'pin': 19, 'channel': 1, 'fake': True})
+                'PWM 0': IoPort( PortFunc.Aout, DriverPWM,
+                                 {'pin': 18, 'channel': 0, 'fake': True},
+                                 ['GPIO 18 in', 'GPIO 18 out'] ),
+                'PWM 1': IoPort( PortFunc.Aout, DriverPWM,
+                                 {'pin': 19, 'channel': 1, 'fake': True},
+                                 ['GPIO 19 in', 'GPIO 19 out'] )
             }
         else:
-            io_ports = {}
             cnt = 0
             for pin in range(28):
                 try:
                     func = PinFunc(GPIO.gpio_function(pin))
-                    if func in [PinFunc.PWM]:
+                    if func == PinFunc.PWM:
+                        deps = ['GPIO %d in' % pin, 'GPIO %d out' % pin]
                         port_name = 'PWM %d' % cnt
-                        io_ports[port_name] = IoPort(PortFunc.PWM, DriverPWM, {'pin': pin, 'channel': cnt})
+                        io_ports[port_name] = IoPort( PortFunc.Aout,
+                                                      DriverPWM,
+                                                      {'pin': pin, 'channel': cnt},
+                                                      deps )
                         cnt += 1
                     else:
                         log.debug('pin %d is in use as %s', pin, func.name)
@@ -107,6 +112,7 @@ class DriverPWM(DriverPWMbase):
 
 
 dummy = '''if False:
+ This needs review to use IoPorts.dependants which solves implicit use of a different io_port
     class DriverSoftPWM(DriverPWMbase):
         """ one PWM channel, hardware PWM
             This is problematic, as it uses GPIO ports, thus should be handled by DriverGPIO, but then
@@ -125,7 +131,7 @@ dummy = '''if False:
                     try:
                         func = PinFunc(GPIO.gpio_function(pin))
                         if func in [PinFunc.PWM]:
-                            port_name = 'PWM %d' % cnt
+                            port_name = 'softPWM %d' % cnt
                             io_ports[port_name] = IoPort(PortFunc.PWM, DriverPWM, {'pin': pin, 'channel': cnt})
                             cnt += 1
                         else:

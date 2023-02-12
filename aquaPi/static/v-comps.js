@@ -150,7 +150,6 @@ const BusNode = {
           </div>
     `
 };
-Vue.component('BusNode', BusNode);
 
 
 const ControllerNode = {
@@ -216,7 +215,7 @@ const MaximumCtrl = {
 };
 Vue.component('MaximumCtrl', MaximumCtrl);
 
-const LightCtrl = {
+const FadeCtrl = {
     extends: ControllerNode,
     computed: {
         decoration() {
@@ -232,7 +231,8 @@ const LightCtrl = {
         },
     },
 };
-Vue.component('LightCtrl', LightCtrl);
+Vue.component('SunCtrl', FadeCtrl);  // temporary alias
+Vue.component('FadeCtrl', FadeCtrl);
 
 
 const SwitchInput = {

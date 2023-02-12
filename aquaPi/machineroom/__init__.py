@@ -108,14 +108,14 @@ class MachineRoom:
         """
         REAL_CONFIG = False
         SINGLE_LIGHT = True
-        DAWN_LIGHT = SINGLE_LIGHT and True
+        DAWN_LIGHT = SINGLE_LIGHT and False  # True
         SINGLE_TEMP = False
-        COMPLEX_TEMP = True
+        COMPLEX_TEMP = False  #True
 
         if REAL_CONFIG:
             # single LED bar, dawn & dusk 15mins, perceptive corr.
             light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
-            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=15 * 60)
+            light_c = FadeCtrl('Beleuchtung', light_schedule.id, fade_time=15 * 60)
             light_pwm = AnalogDevice('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=85)
             light_schedule.plugin(self.bus)
             light_c.plugin(self.bus)
@@ -127,7 +127,7 @@ class MachineRoom:
             # single temp sensor, switched relays
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12', inverted=True)
+            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12 out', inverted=True)
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
@@ -142,15 +142,19 @@ class MachineRoom:
         if SINGLE_LIGHT:
             light_schedule = ScheduleInput('Zeitplan 1', '* 14-21 * * *')
             light_schedule.plugin(self.bus)
-            light_c = LightCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
+            # light_c = FadeCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
+            light_c = SunCtrl('Beleuchtung', light_schedule.id)  # 30*60)
             light_c.plugin(self.bus)
             if not DAWN_LIGHT:
                 light_pwm = AnalogDevice('Dimmer', light_c.id, 'PWM 0', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
+
+                history = History('Licht', [light_schedule.id, light_c.id, light_pwm.id])
+                history.plugin(self.bus)
             else:
                 dawn_schedule = ScheduleInput('Zeitplan 2', '* 22 * * *')
                 dawn_schedule.plugin(self.bus)
-                dawn_c = LightCtrl('Dämmerlicht', dawn_schedule.id, fade_time=30 * 60)
+                dawn_c = FadeCtrl('Dämmerlicht', dawn_schedule.id, fade_time=30 * 60)
                 dawn_c.plugin(self.bus)
 
                 light_max = MaxAux('Max Licht', [light_c.id, dawn_c.id])
@@ -164,9 +168,8 @@ class MachineRoom:
         if SINGLE_TEMP:
             # single temp sensor -> temp ctrl -> relay
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
-            # wasser_i = AnalogInput('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12')
+            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12 out')
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
             wasser_i.plugin(self.bus)
@@ -188,10 +191,10 @@ class MachineRoom:
             w2_ctrl = MaximumCtrl('W-Kühlung', w2_temp.id, 26.5)
             w2_ctrl.plugin(self.bus)
 
-            w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 0')
+            w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 0 out')
             w_heat.plugin(self.bus)
 
-            w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 1')
+            w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 1 out')
             w_cool.plugin(self.bus)
 
             t_history = History('Temperaturen', [w1_temp.id, w2_temp.id, w_temp.id, w_heat.id, w_cool.id])

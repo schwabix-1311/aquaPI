@@ -1,20 +1,25 @@
-<svg version="1.2" width="80.06mm" height="80.06mm" viewBox="0 0 8006 8006" preserveAspectRatio="xMidYMid" fill-rule="evenodd" stroke-width="28.222" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" xml:space="preserve">
+<svg version="1.2" width="80.32mm" height="80.32mm" viewBox="0 0 8032 8032" preserveAspectRatio="xMidYMid" fill-rule="evenodd" stroke-width="28.222" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" xml:space="preserve">
     <defs class="ClipPathGroup">
         <clipPath id="a" clipPathUnits="userSpaceOnUse">
-            <path d="M0 0h8006v8006H0z"/>
+            <path d="M0 0h8032v8032H0z"/>
         </clipPath>
     </defs>
     <g class="SlideGroup">
         <g class="Slide" clip-path="url(#a)">
             <g class="Page">
-                <g class="Graphic">
-                    <path class="BoundingBox" fill="none" d="M0 0h8006v8006H0z"/>
-                    <path d="M6280 1028v340H4962v-340h1318Zm-553 741h-765v340h765v-340Zm-765 1082h1318v-340H4962v340Zm765 401h-765v340h765v-340Zm-765 1081h1318v-340H4962v340Zm206 1937c0 950-772 1722-1722 1722-949 0-1721-772-1721-1722 0-615 323-1174 850-1483V885c0-481 391-872 871-872 481 0 872 391 872 872v3902c527 309 850 868 850 1483Zm-340 0c0-522-290-993-757-1231l-93-47V885c0-293-239-532-532-532s-531 239-531 532v4107l-93 47c-467 238-757 710-757 1231 0 762 620 1382 1381 1382 762 0 1382-620 1382-1382Zm-284 0c0 606-492 1098-1098 1098-605 0-1098-492-1098-1098 0-496 336-932 816-1059l63-17V3097h439v2097l63 17c480 127 815 563 815 1059Zm-1043-732c-26-116-143-192-263-165-416 94-706 458-706 885 0 121 98 219 219 219s219-98 219-219c0-217 154-409 365-457 118-27 192-145 166-263Z"/>
-                </g>
-                <g class="com.sun.star.drawing.LineShape">
-                    <path class="BoundingBox" fill="none" d="M572 1328h1515v3408H572z"/>
-                    <path fill="none" stroke="#000" stroke-width="811" d="M1329 4329v-75"/>
-                    <path d="m573 4355 756-3026 757 3026H573Z"/>
+                <g class="Group">
+                    <g class="com.sun.star.drawing.ClosedBezierShape">
+                        <path class="BoundingBox" fill="none" d="M1737 25h4556v7980H1737z"/>
+                        <path d="M6291 1041v340H4973v-340h1318Zm-553 741h-765v340h765v-340Zm-765 1082h1318v-340H4973v340Zm765 401h-765v340h765v-340Zm-765 1079h1318v-338H4973v338Zm206 1937c0 950-772 1722-1720 1722-949 0-1721-772-1721-1722 0-615 323-1174 850-1483V898c0-481 391-872 871-872 481 0 870 391 870 872v3900c527 309 850 868 850 1483Zm-340 0c0-522-290-993-757-1231l-91-47V898c0-293-239-532-532-532s-531 239-531 532v4105l-93 47c-467 238-757 710-757 1231 0 762 620 1382 1381 1382 760 0 1380-620 1380-1382Zm-284 0c0 606-492 1098-1096 1098-605 0-1098-492-1098-1098 0-496 336-932 816-1059l63-17V3110h439v2095l63 17c478 127 813 563 813 1059Zm-1041-732c-26-116-143-192-263-165-416 94-706 458-706 885 0 121 98 219 219 219s219-98 219-219c0-217 154-409 365-457 118-27 192-145 166-263Z"/>
+                    </g>
+                    <g fill="none" class="com.sun.star.drawing.LineShape">
+                        <path class="BoundingBox" d="M936 3859h813v888H936z"/>
+                        <path stroke="#000" stroke-width="811" d="M1342 4340v-75"/>
+                    </g>
+                    <g class="com.sun.star.drawing.PolyPolygonShape">
+                        <path class="BoundingBox" fill="none" d="M585 1341h1515v3027H585z"/>
+                        <path fill="red" d="m586 4366 756-3024 757 3024H586Z"/>
+                    </g>
                 </g>
             </g>
         </g>

@@ -46,7 +46,7 @@ except (RuntimeError, ModuleNotFoundError):
 
     GPIO = GPIOdummy
 
-from .base import (InDriver, OutDriver, IoPort, PortFunc, PinFunc, is_raspi, DriverParamError, DriverWriteError)
+from .base import (InDriver, OutDriver, IoPort, PortFunc, PinFunc, is_raspi, DriverWriteError)
 
 log = logging.getLogger('DriverGPIO')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -70,40 +70,48 @@ class DriverGPIO(OutDriver, InDriver):
 
     @staticmethod
     def find_ports():
-        if not is_raspi():
-            # name: IoPort('function', 'driver', 'cfg')
-            io_ports = {
-                'GPIO 0': IoPort(PortFunc.IO, DriverGPIO, {'pin': 0, 'fake': True}),
-                'GPIO 1': IoPort(PortFunc.IO, DriverGPIO, {'pin': 1, 'fake': True}),
-                'GPIO 12': IoPort(PortFunc.IO, DriverGPIO, {'pin': 12, 'fake': True})
-            }
-        else:
-            io_ports = {}
+        io_ports = {}
+        if is_raspi():
             for pin in range(28):
                 try:
+                    # the dependants list would allow to offer GPIOs that are not yet in use by their other function
                     func = PinFunc(GPIO.gpio_function(pin))
                     if func in [PinFunc.IN, PinFunc.OUT]:
-                        port_name = 'GPIO %d' % pin
-                        io_ports[port_name] = IoPort(PortFunc.IO, DriverGPIO, {'pin': pin})
+                        port_name = 'GPIO %d ' % pin
+                        io_ports[port_name + 'in'] = IoPort( PortFunc.Bin,
+                                                             DriverGPIO,
+                                                             {'pin': pin},
+                                                             [] )
+                        io_ports[port_name + 'out'] = IoPort( PortFunc.Bout,
+                                                              DriverGPIO,
+                                                              {'pin': pin},
+                                                              [] )
                     else:
                         log.debug('pin %d is in use as %s', pin, func.name)
                 except KeyError:
                     log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
+        else:
+            # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
+            io_ports = {
+                'GPIO 0 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 0, 'fake': True}, []),
+                'GPIO 0 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 0, 'fake': True}, []),
+                'GPIO 1 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 1, 'fake': True}, []),
+                'GPIO 1 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 1, 'fake': True}, []),
+                'GPIO 18 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 18, 'fake': True}, []),
+                'GPIO 18 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 18, 'fake': True}, [])
+            }
         return io_ports
 
     def __init__(self, func, cfg):
-        if func not in [PortFunc.IN, PortFunc.OUT]:
-            raise DriverParamError('This driver supports IN or OUT, nothing else.')
-
         super().__init__(func, cfg)
         self.func = func
         self._pin = int(cfg['pin'])
-        self.name = 'GPIO %s @ %d' % (func.name, self._pin)
-        if self._fake:
-            self.name = '!' + self.name
+        self.name = 'GPIO %d %s' % (self._pin, 'in' if func==PortFunc.Bin else 'out')
 
         if not self._fake:
-            GPIO.setup(self._pin, GPIO.IN if self.func == PortFunc.IN else GPIO.OUT)
+            GPIO.setup(self._pin, GPIO.IN if func==PortFunc.Bin else GPIO.OUT)
+        else:
+            self.name = '!' + self.name
 
     def __del__(self):
         self.close()
@@ -115,7 +123,7 @@ class DriverGPIO(OutDriver, InDriver):
             self._pin = None
 
     def write(self, value):
-        if self.func == PortFunc.IN:
+        if self.func == PortFunc.Bin:
             raise DriverWriteError()
 
         if not self._fake:
@@ -128,7 +136,7 @@ class DriverGPIO(OutDriver, InDriver):
         if not self._fake:
             val = GPIO.input(self._pin)
         else:
-            if self.func == PortFunc.IN:
+            if self.func == PortFunc.Bin:
                 val = False if random.random() <= 0.5 else True
             else:
                 val = self._val

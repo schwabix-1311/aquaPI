@@ -70,11 +70,11 @@ class DriverWriteError(Exception):
 # ========== common types ==========
 
 
-IoPort = namedtuple('IoPort', ['function', 'driver', 'cfg'])
+IoPort = namedtuple('IoPort', 'func driver cfg deps used', defaults=([], 0))
 
 
 class PortFunc(Enum):
-    IO, IN, OUT, PWM, ADC = range(1, 6)
+    Bin, Bout, Ain, Aout = range(1, 5)
 
 
 class PinFunc(Enum):

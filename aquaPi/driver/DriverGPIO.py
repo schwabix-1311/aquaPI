@@ -76,7 +76,7 @@ class DriverGPIO(OutDriver, InDriver):
                 try:
                     # the dependants list would allow to offer GPIOs that are not yet in use by their other function
                     func = PinFunc(GPIO.gpio_function(pin))
-                    if func in [PinFunc.IN, PinFunc.OUT]:
+                    if True:  # func in [PinFunc.IN, PinFunc.OUT]:  dependencies!
                         port_name = 'GPIO %d ' % pin
                         io_ports[port_name + 'in'] = IoPort( PortFunc.Bin,
                                                              DriverGPIO,

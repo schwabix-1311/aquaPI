@@ -33,59 +33,14 @@ class DriverADC(InDriver):
         You should not need to interact explicitly with derived classes,
         auto-detection returns appropriate objects in IoPorts
     """
-    @staticmethod
-    def find_ports():
-        io_ports = {}
-        if not SIMULATED:
-            # autodetect of I²C is undefined and risky, as some chips may react
-            # on read as if it was a write! We're on a pretty well defined HW though.
-            cnt = 0
-            i2c = busio.I2C(board.SCL, board.SDA)
-            deps = ['GPIO %d in' % board.SCL, 'GPIO %d out' % board.SCL
-                   , 'GPIO %d in' % board.SDA, 'GPIO %d out' % board.SDA]
-
-            # one loop for each chip type
-            for adr in DriverADS1115.ADDRESSES:
-                try:
-                    log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
-                    ads = ADS.ADS1115(i2c, address=adr)
-                    if DriverADS1115.is_ads111x(ads):
-                        cnt += 1
-#           for ch in DriverADS1115.CHANNELS:
-                        for ch in [ ADS.P0, ADS.P1, ADS.P2, ADS.P3 ]:
-                            port_name = 'ADC #%d ch %d' % (cnt, ch)
-                            io_ports[port_name] = IoPort( PortFunc.Ain,
-                                                          DriverADS1115,
-                                                          {'adr': adr, 'cnt': cnt, 'ch': ch},
-                                                          deps )
-                    else:
-                        log.brief('I²C device at 0x%02X seems not to be an ADS1x15, probably a different device, or already in use.', adr)
-                except Exception as ex:
-                    log.debug('%r', ex)
-                    #pass  # whatever it is, ignore this device
-        else:
-            deps = ['GPIO 2 in', 'GPIO 2 out']
-            # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
-            io_ports = {
-                'ADC #1 ch 0': IoPort(PortFunc.Ain, DriverADC, {'cnt': 1, 'ch': 0, 'fake': True}, deps),
-                'ADC #1 ch 1': IoPort(PortFunc.Ain, DriverADC, {'cnt': 1, 'ch': 1, 'fake': True}, deps),
-                'ADC #1 ch 2': IoPort(PortFunc.Ain, DriverADC, {'cnt': 1, 'ch': 2, 'fake': True}, deps),
-                'ADC #1 ch 3': IoPort(PortFunc.Ain, DriverADC, {'cnt': 1, 'ch': 3, 'fake': True}, deps)
-            }
-        return io_ports
+    adc_count = 0
 
     def __init__(self, func, cfg):
         super().__init__(func, cfg)
         self.func = func
-        self.name = 'ADC #%d ch %d' % (cfg['cnt'], cfg['ch'])
+        self.name = 'ADC #%d in %d' % (cfg['cnt'], cfg['in'])
         if self._fake:
             self.name = '!' + self.name
-
-        if not self._fake:
-            self.gain = cfg['gain'] or 0
-            i2c = busio.I2C(board.SCL, board.SDA)
-            self._ads = ADS.ADS1115(i2c, address=cfg['adr'], gain=(self.gain or 2))
-            self._ana_in = AnalogIn(self._ads, cfg['pga'])
 
     def __del__(self):  # ??
         self.close()
@@ -110,7 +65,7 @@ class DriverADS1115(DriverADC):
     """
 
     ADDRESSES = [ 0x48, 0x49, 0x4A, 0x4B ]
-    #CHANNELS = [ P0, P1, P2, P3 ]  # currently only grounded, no differential channels
+    CHANNELS = [ ADS.P0, ADS.P1, ADS.P2, ADS.P3 ]  # currently only grounded, no differential channels
 
     @staticmethod
     def is_ads111x(ads):
@@ -123,26 +78,68 @@ class DriverADS1115(DriverADC):
                 device.write_then_readinto(bytearray([1]), buf, in_start=2, in_end=4)
                 device.write_then_readinto(bytearray([2]), buf, in_start=4, in_end=6)
                 device.write_then_readinto(bytearray([3]), buf, in_start=6, in_end=8)
-                # default is: ch 0-1 differential, gain 2, 1 shot, 128SPS, comp low, no latch, disable comp
-                if buf[2:7] == [0x85, 0x83, 0x80, 0x00, 0x7F, 0xFF]:
+                # default is: in 0-1 differential, gain 2, 1 shot, 128SPS, comp low, no latch, disable comp
+                if buf[2:8] == bytearray.fromhex('8583 8000 7FFF'):
                     return True
-                log.debug('I²C device @ 0x%02X returns 0x%04X 0x%04X 0x%04X from reg 1..3, probably a different device, or already in use.'
-                         , device.device_address, buf[2:3], buf[4:5], buf[6:7] )
+                if buf[3:8] == bytearray.fromhex('83 8000 7FFF'):   # TODO: DBG REMOVE_ME!
+                    return True
+                log.debug('I²C device @ 0x%02X returns 0x%s 0x%s 0x%s from reg 1..3, probably a different device, or already in use.'
+                         , device.device_address, bytes(buf[2:4]).hex(), bytes(buf[4:6]).hex(), bytes(buf[6:8]).hex() )
         except Exception as ex:
             log.debug('Exception %r', ex)
             #pass  # whatever it is, ignore device @ this adr!
         return False
 
+    @staticmethod
+    def find_ports():
+        io_ports = {}
+        if not SIMULATED:
+            # autodetect of I²C is undefined and risky, as some chips may react
+            # on read as if it was a write! We're on a pretty well defined HW though.
+            i2c = busio.I2C(board.SCL, board.SDA)
+            deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id
+                   , 'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
+
+            # one loop for each chip type
+            log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
+            for adr in DriverADS1115.ADDRESSES:
+                try:
+                    ads = ADS.ADS1115(i2c, address=adr)
+                    if DriverADS1115.is_ads111x(ads):
+                        DriverADC.adc_count += 1
+                        for ch in DriverADS1115.CHANNELS:
+                            port_name = 'ADC #%d in %d' % (DriverADC.adc_count, ch)
+                            io_ports[port_name] = IoPort( PortFunc.Ain,
+                                                          DriverADS1115,
+                                                          {'adr': adr, 'cnt': DriverADC.adc_count, 'in': ch},
+                                                          deps )
+                    else:
+                        log.brief('I²C device at 0x%02X seems not to be an ADS1x15, probably a different device, or already in use.', adr)
+                except Exception as ex:
+                    log.debug('%r', ex)
+                    #pass  # whatever it is, ignore this device
+        else:  # SIMULATED
+            deps = ['GPIO 2 in', 'GPIO 2 out']
+            DriverADC.adc_count += 1
+            port_name = 'ADC #%d in ' % DriverADC.adc_count
+            # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
+            io_ports = {
+                port_name + '0': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 0, 'fake': True}, deps),
+                port_name + '1': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 1, 'fake': True}, deps),
+                port_name + '2': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 2, 'fake': True}, deps),
+                port_name + '3': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 3, 'fake': True}, deps)
+            }
+        return io_ports
 
     def __init__(self, func, cfg):
         super().__init__(func, cfg)
-        self.name = 'ADC #%d (ADS1115 @0x%02X) ch %d' % (cfg['cnt'], cfg['adr'], cfg['ch'])
+        self.name = 'ADC #%d (ADS1115 @0x%02X) in %d' % (cfg['cnt'], cfg['adr'], cfg['in'])
         self.cfg = cfg
 
-        self.gain = cfg['gain'] or -16
+        self.gain = cfg.get('gain', -16)
         i2c = busio.I2C(board.SCL, board.SDA)
         self._ads = ADS.ADS1115(i2c, address=cfg['adr'], gain=(abs(self.gain)))
-        self._ana_in = AnalogIn(self._ads, cfg['pga'])
+        self._ana_in = AnalogIn(self._ads, cfg['in'])
 
     def close(self):
         # return chip to power-on defaults to allow future auto-detect
@@ -172,3 +169,4 @@ class DriverADS1115(DriverADC):
                 ads.gain = h_gain[0]
                 val = self._ana_in.value
             self.gain = -ads.gain
+            log.debug('ADS gain %d (%d), digits %f', ads.gain, self.gain, val)

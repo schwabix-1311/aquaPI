@@ -107,11 +107,11 @@ class MachineRoom:
               "fish" is plural, "fishes" is several species of fish
         """
         REAL_CONFIG = False
-        SINGLE_LIGHT = True
+        SINGLE_LIGHT = False  #True
         DAWN_LIGHT = SINGLE_LIGHT and False  # True
-        SINGLE_TEMP = True  # False
-        COMPLEX_TEMP = False  # True
-        TEST_PH = False  # True
+        SINGLE_TEMP = False
+        COMPLEX_TEMP = False  #True
+        TEST_PH = True
 
         if REAL_CONFIG:
             # single LED bar, dawn & dusk 15mins, perceptive corr.
@@ -130,7 +130,7 @@ class MachineRoom:
             # single temp sensor, switched relays
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', avg=2, interval=30)
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12 out', inverted=1)
+            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12', inverted=1)
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
@@ -143,12 +143,12 @@ class MachineRoom:
             return
 
         if TEST_PH:
-            adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', unit='pH', avg=3, interval=60)
-            ph = MaximumCtrl('pH', adc_ph.id, 2.50)  # TODO: calibration option: shift & scale
+            adc_ph = AnalogInput('pH Sonde', 'ADC 1', avg=2, interval=30)
+            ph = MaximumCtrl('pH', adc_ph.id, 7.0)
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
-            out_ph.plugin(self.bus)
-            ph.plugin(self.bus)
-            adc_ph.plugin(self.bus)
+            # out_ph.plugin(self.bus)
+            # ph.plugin(self.bus)
+            # adc_ph.plugin(self.bus)
 
         if SINGLE_LIGHT:
             light_schedule = ScheduleInput('Zeitplan 1', '* 14-21 * * *')

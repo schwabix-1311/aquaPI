@@ -41,6 +41,7 @@ class AsyncInputNode(InputNode):
     def __init__(self, name, port, interval=0.5, _cont=False):
         super().__init__(name, _cont=_cont)
         self._driver = None
+        self._port = None
         self._reader_thread = None
         self._reader_stop = False
         self.interval = max(0.1, float(interval))

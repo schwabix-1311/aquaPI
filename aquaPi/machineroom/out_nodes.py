@@ -50,6 +50,7 @@ class SwitchDevice(DeviceNode):
     def __init__(self, name, inputs, port, inverted=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self._driver = None
+        self._port = None
         self._inverted = int(inverted)
         self.port = port
         self.switch(self.data if _cont else 0)
@@ -129,6 +130,7 @@ class AnalogDevice(DeviceNode):
     def __init__(self, name, inputs, port, percept=False, minimum=0, maximum=100, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self._driver = None
+        self._port = None
         self.percept = bool(percept)
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)

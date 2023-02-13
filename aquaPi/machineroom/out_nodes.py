@@ -3,7 +3,7 @@
 import logging
 
 from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
-from ..driver import (PortFunc, io_registry)
+from ..driver import (io_registry)
 
 
 log = logging.getLogger('OutNodes')
@@ -50,8 +50,9 @@ class SwitchDevice(DeviceNode):
     def __init__(self, name, inputs, port, inverted=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self._driver = None
+        self._port = None
+        self._inverted = int(inverted)
         self.port = port
-        self.inverted = int(inverted)
         self.switch(self.data if _cont else 0)
         log.info('%s init to %r|%f|%f', self.name, _cont, self.data, inverted)
 
@@ -72,8 +73,9 @@ class SwitchDevice(DeviceNode):
     @port.setter
     def port(self, port):
         if self._driver:
-            io_registry.driver_release(self.port)
-        self._driver = io_registry.driver_factory(port, PortFunc.OUT)
+            io_registry.driver_destruct(self._port, self._driver)
+        if port:
+            self._driver = io_registry.driver_factory(port)
         self._port = port
 
     @property
@@ -128,14 +130,13 @@ class AnalogDevice(DeviceNode):
     def __init__(self, name, inputs, port, percept=False, minimum=0, maximum=100, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self._driver = None
+        self._port = None
         self.percept = bool(percept)
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)
-        if not _cont:
-            self.data = 0
         self.unit = '%'
         self.port = port
-        self.set_percent(self.data)
+        self.set_percent(self.data if _cont else 0)
         log.info('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
 
     def __getstate__(self):
@@ -160,8 +161,9 @@ class AnalogDevice(DeviceNode):
     @port.setter
     def port(self, port):
         if self._driver:
-            io_registry.driver_release(self.port)
-        self._driver = io_registry.driver_factory(port, PortFunc.PWM)
+            io_registry.driver_destruct(self._port, self._driver)
+        if port:
+            self._driver = io_registry.driver_factory(port)
         self._port = port
 
     def listen(self, msg):

@@ -191,7 +191,7 @@ class AnalogInput(AsyncInputNode):
             val = float(self._driver.read())
             log.debug('DBG Ain.read %f', val)
         val = (val + self.data * (self.avg - 1)) / self.avg
-        val = round(val, 3)
+        val = round(val, 4)
         return val
 
     def get_settings(self):

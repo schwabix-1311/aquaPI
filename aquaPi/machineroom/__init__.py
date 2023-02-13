@@ -106,12 +106,15 @@ class MachineRoom:
             Distraction: interesting fact on English:
               "fish" is plural, "fishes" is several species of fish
         """
-        REAL_CONFIG = False
-        SINGLE_LIGHT = True
-        DAWN_LIGHT = SINGLE_LIGHT and False  # True
-        SINGLE_TEMP = True  # False
-        COMPLEX_TEMP = False  # True
+        REAL_CONFIG = False  # exclusive
+
         TEST_PH = False  # True
+
+        SIM_LIGHT = True
+        DAWN_LIGHT = SIM_LIGHT and False  # True
+
+        SIM_TEMP = True
+        COMPLEX_TEMP = SIM_TEMP and True
 
         if REAL_CONFIG:
             # single LED bar, dawn & dusk 15mins, perceptive corr.
@@ -150,7 +153,7 @@ class MachineRoom:
             ph.plugin(self.bus)
             adc_ph.plugin(self.bus)
 
-        if SINGLE_LIGHT:
+        if SIM_LIGHT:
             light_schedule = ScheduleInput('Zeitplan 1', '* 14-21 * * *')
             light_schedule.plugin(self.bus)
             # light_c = FadeCtrl('Beleuchtung', light_schedule.id, fade_time=30 * 60)  # 30*60)
@@ -176,38 +179,39 @@ class MachineRoom:
                 history = History('Licht', [light_schedule.id, dawn_schedule.id, light_c.id, dawn_c.id, light_pwm.id])
                 history.plugin(self.bus)
 
-        if SINGLE_TEMP:
-            # single temp sensor -> temp ctrl -> relay
-            wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
-            # wasser_i = AnalogInput('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
-            wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-            wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12')
-            wasser.plugin(self.bus)
-            wasser_o.plugin(self.bus)
-            wasser_i.plugin(self.bus)
+        if SIM_TEMP:
+            if not COMPLEX_TEMP:
+                # single temp sensor -> temp ctrl -> relay
+                wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C')
+                # wasser_i = AnalogInput('Wasser', DriverDS1820({'address': '28-0119383a2e9c', 'fake': True, 'delay': 2 }))  # '28-01193867a71e0x1234'
+                wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
+                wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12 out')
+                wasser.plugin(self.bus)
+                wasser_o.plugin(self.bus)
+                wasser_i.plugin(self.bus)
 
-        elif COMPLEX_TEMP:
-            # 2 temp sensors -> average -> temp ctrl -> relay
-            w1_temp = AnalogInput('T-Sensor 1', 'DS1820 xA2E9C')
-            w1_temp.plugin(self.bus)
+            else:
+                # 2 temp sensors -> average -> temp ctrl -> relay
+                w1_temp = AnalogInput('T-Sensor 1', 'DS1820 xA2E9C')
+                w1_temp.plugin(self.bus)
 
-            w2_temp = AnalogInput('T-Sensor 2', 'DS1820 x7A71E')
-            w2_temp.plugin(self.bus)
+                w2_temp = AnalogInput('T-Sensor 2', 'DS1820 x7A71E')
+                w2_temp.plugin(self.bus)
 
-            w_temp = AvgAux('T-Mittel', [w1_temp.id, w2_temp.id])
-            w_temp.plugin(self.bus)
+                w_temp = AvgAux('T-Mittel', [w1_temp.id, w2_temp.id])
+                w_temp.plugin(self.bus)
 
-            w1_ctrl = MinimumCtrl('W-Heizung', w_temp.id, 25.0)
-            w1_ctrl.plugin(self.bus)
+                w1_ctrl = MinimumCtrl('W-Heizung', w_temp.id, 25.0)
+                w1_ctrl.plugin(self.bus)
 
-            w2_ctrl = MaximumCtrl('W-Kühlung', w2_temp.id, 26.5)
-            w2_ctrl.plugin(self.bus)
+                w2_ctrl = MaximumCtrl('W-Kühlung', w2_temp.id, 26.5)
+                w2_ctrl.plugin(self.bus)
 
-            w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 0')
-            w_heat.plugin(self.bus)
+                w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 12 out')
+                w_heat.plugin(self.bus)
 
-            w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 1')
-            w_cool.plugin(self.bus)
+                w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 13 out')
+                w_cool.plugin(self.bus)
 
-            t_history = History('Temperaturen', [w1_temp.id, w2_temp.id, w_temp.id, w_heat.id, w_cool.id])
-            t_history.plugin(self.bus)
+                t_history = History('Temperaturen', [w1_temp.id, w2_temp.id, w_temp.id, w_heat.id, w_cool.id])
+                t_history.plugin(self.bus)

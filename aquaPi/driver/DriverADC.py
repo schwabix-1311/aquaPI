@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from enum import Enum
 import logging
 import random
 
@@ -13,6 +14,9 @@ try:
     SIMULATED = False
 except NotImplementedError:
     SIMULATED = True
+
+    class ADS(Enum):
+        P0, P1, P2, P3 = range(0, 4)
 
 from .base import (InDriver, IoPort, PortFunc)
 

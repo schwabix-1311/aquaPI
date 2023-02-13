@@ -302,7 +302,7 @@ class FadeCtrl(ControllerNode):
                 log.debug('_fader %f ...', self.data)
 
                 self.alert = ('\u2197' if self.target > self.data else '\u2198', 'act')
-                self.post(MsgData(self.id, round(self.data, 3)))
+                self.post(MsgData(self.id, round(self.data, 4)))
                 time.sleep(next_t - time.time())
                 next_t += step_t
                 if self._fader_stop:

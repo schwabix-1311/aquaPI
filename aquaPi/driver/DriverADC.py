@@ -53,9 +53,17 @@ class DriverADC(InDriver):
         log.debug('Closing %r', self)
 
     def read(self):
-        val = False if random.random() <= 0.5 else True
+        val = random.random()
         log.info('%s = %d', self.name, val)
         return val
+#       rnd = random.random()
+#       if rnd < .1:
+#           self._dir = math.copysign(1, self._initval - self._val)  # *= -1
+#       elif rnd > .7:
+#           self._val += 0.05 * self._dir
+#       self._val = round(min(max(self._initval - 1, self._val), self._initval + 1), 2)
+#       log.info('%s = %s', self.name, self._val)
+#       return float(self._val)
 
 
 class DriverADS1115(DriverADC):

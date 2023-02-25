@@ -2,33 +2,41 @@
 
 # Sorry for the inconvenience, but since this script has to be
 # sourced it can't determine its own home (AFAIK)
-MyHome=~/aquaPI
+MyHome=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
 
-# 'basename $0' produces '-bash' on Debian/Rasberry OS ! why?? Skip the check!
-if [[ ! "grep -i debian /usr/lib/os-release" ]]
+if [[ $(basename "$0") = "init" ]]
 then
-  if [[ `basename $0` = "init" ]]
-  then
-    echo "ERROR: this script must be sourced: '. ${MyHome}/init'"
-    fi
-fi
+  echo "ERROR: this script must be sourced: '. ${MyHome}/init'"
+  exit 10
+  fi
+
+if [ -n "$ZSH_VERSION" ]
+then
+  echo "ERROR: this script supports _bash_ only, sorry"
+  return 11
+  fi
 
 if [[ ! -d ${MyHome}/venv ]]
 then
   echo "First time init of aquaPi development env."
-  read -p "CR to continue / Ctrl-C to cancel" dummy
-  cd ${MyHome}
+  read -pr "CR to continue / Ctrl-C to cancel" dummy
+  cd "${MyHome}" || return 12
+
   # Debian derivatives don't come with py3 venv by default
   grep -i debian /usr/lib/os-release && sudo apt-get install python3-venv
+
+  # NOTE: You can append --system-site-packages to inherit all
+  #       packages installed globally, e.g. your vim's jedi. The
+  #       release environment should not, to ensure requirments are complete.
   python3 -m venv venv
 fi
 
 echo "Activate aquaPi development env."
-cd ${MyHome}
+cd "${MyHome}" || return 12
 . ./venv/bin/activate
-echo ===== get all python modules
+echo "===== get all python modules"
 pip3 install -r requirements.txt
-echo =====
+echo "====="
 
 echo "There are two scripts to run the development server:"
 echo "  './run' should be used to start the software in a SSH"

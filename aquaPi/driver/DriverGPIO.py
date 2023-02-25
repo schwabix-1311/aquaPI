@@ -43,10 +43,9 @@ except (RuntimeError, ModuleNotFoundError):
             pin = not pin
             value = not value
 
-
     GPIO = GPIOdummy
 
-from .base import (InDriver, OutDriver, IoPort, PortFunc, PinFunc, is_raspi, DriverWriteError)
+from .base import (InDriver, OutDriver, IoPort, PortFunc, is_raspi, DriverWriteError)
 
 log = logging.getLogger('DriverGPIO')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -74,22 +73,19 @@ class DriverGPIO(OutDriver, InDriver):
         if is_raspi():
             for pin in range(28):
                 try:
-                    # the dependants list would allow to offer GPIOs that are not yet in use by their other function
-                    func = PinFunc(GPIO.gpio_function(pin))
-                    if True:  # func in [PinFunc.IN, PinFunc.OUT]:  dependencies!
-                        port_name = 'GPIO %d ' % pin
-                        io_ports[port_name + 'in'] = IoPort( PortFunc.Bin,
-                                                             DriverGPIO,
-                                                             {'pin': pin},
-                                                             [] )
-                        io_ports[port_name + 'out'] = IoPort( PortFunc.Bout,
-                                                              DriverGPIO,
-                                                              {'pin': pin},
-                                                              [] )
-                    else:
-                        log.debug('pin %d is in use as %s', pin, func.name)
+                    # func = PinFunc(GPIO.gpio_function(pin))
+                    port_name = 'GPIO %d ' % pin
+                    io_ports[port_name + 'in'] = IoPort(PortFunc.Bin,
+                                                        DriverGPIO,
+                                                        {'pin': pin},
+                                                        [])
+                    io_ports[port_name + 'out'] = IoPort(PortFunc.Bout,
+                                                         DriverGPIO,
+                                                         {'pin': pin},
+                                                         [])
                 except KeyError:
-                    log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
+                    log.debug('Unknown function on pin %d = %d',
+                              pin, GPIO.gpio_function(pin))
         else:
             # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
             io_ports = {  # need all that are simulated somewhere - as devices or dependencies
@@ -97,13 +93,15 @@ class DriverGPIO(OutDriver, InDriver):
                 'GPIO 0 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 0, 'fake': True}, []),
                 'GPIO 1 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 1, 'fake': True}, []),
                 'GPIO 1 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 1, 'fake': True}, []),
+                'GPIO 2 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 2, 'fake': True}, []),
+                'GPIO 2 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 2, 'fake': True}, []),
                 'GPIO 4 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 4, 'fake': True}, []),     # 1-wire
                 'GPIO 4 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 4, 'fake': True}, []),   # 1-wire
-                'GPIO 12 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 12, 'fake': True}, []), # Heater relay
-                'GPIO 13 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 13, 'fake': True}, []), # (Cooler relay)
+                'GPIO 12 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 12, 'fake': True}, []),  # Heater relay
+                'GPIO 13 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 13, 'fake': True}, []),  # (Cooler relay)
                 'GPIO 18 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 18, 'fake': True}, []),
-                'GPIO 18 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 18, 'fake': True}, []), # PWM 0
-                'GPIO 19 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 19, 'fake': True}, []), # PWM 1
+                'GPIO 18 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 18, 'fake': True}, []),  # PWM 0
+                'GPIO 19 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 19, 'fake': True}, []),  # PWM 1
                 'GPIO 20 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 20, 'fake': True}, [])  # CO2 vent
             }
         return io_ports
@@ -112,10 +110,10 @@ class DriverGPIO(OutDriver, InDriver):
         super().__init__(func, cfg)
         self.func = func
         self._pin = int(cfg['pin'])
-        self.name = 'GPIO %d %s' % (self._pin, 'in' if func==PortFunc.Bin else 'out')
+        self.name = 'GPIO %d %s' % (self._pin, 'in' if func == PortFunc.Bin else 'out')
 
         if not self._fake:
-            GPIO.setup(self._pin, GPIO.IN if func==PortFunc.Bin else GPIO.OUT)
+            GPIO.setup(self._pin, GPIO.IN if func == PortFunc.Bin else GPIO.OUT)
         else:
             self.name = '!' + self.name
 

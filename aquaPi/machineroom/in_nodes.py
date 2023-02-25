@@ -3,6 +3,8 @@
 import logging
 import time
 from datetime import datetime
+# import-error
+# pylint: disable-next: E0401
 from croniter import croniter
 from threading import Thread
 

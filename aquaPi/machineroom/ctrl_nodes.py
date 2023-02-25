@@ -272,7 +272,7 @@ class FadeCtrl(ControllerNode):
             if self.data != self.target:
                 # our fade direction want's a hard switch
                 if (self.data < self.target and not self.fade_time) \
-                or (self.data > self.target and not self.fade_out):
+                 or (self.data > self.target and not self.fade_out):
                     self.data = self.target
                     log.brief('FadeCtrl %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
@@ -293,8 +293,8 @@ class FadeCtrl(ControllerNode):
             delta_t = abs(delta_d) / 100 * f_time  # total time for this change
             step_t = max(delta_t / 1000, 0.1)      # try 1000 steps, at most 10 steps per sec
             step_d = delta_d * step_t / delta_t
-            log.brief('FadeCtrl %s: fading in %f s from %f -> %f, change by %f every %f s'
-                     , self.id, delta_t, self.data, self.target, step_d, step_t)
+            log.brief('FadeCtrl %s: fading in %f s from %f -> %f, change by %f every %f s',
+                      self.id, delta_t, self.data, self.target, step_d, step_t)
 
             next_t = time.time() + step_t
             while abs(self.target - self.data) > abs(step_d):
@@ -422,7 +422,6 @@ class SunCtrl(ControllerNode):
             log.brief('SunCtrl %s: %s %f%%', self.id, phase, self.data)
             self.post(MsgData(self.id, self.data))
         time.sleep(max( 1, new_data/30))  # shorten steps for low values
-
 
     def _fader(self):
         """ This fader uses smaller increments for low bightness to

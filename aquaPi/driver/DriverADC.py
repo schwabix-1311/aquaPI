@@ -8,7 +8,7 @@ try:
     import board
     import busio
     import adafruit_ads1x15.ads1115 as ADS
-    #import adafruit_ads1x15.ads1015 as ADSxx
+    # import adafruit_ads1x15.ads1015 as ADSxx
     from adafruit_ads1x15.analog_in import AnalogIn
 
     SIMULATED = False
@@ -26,7 +26,6 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
-
 
 
 # ========== ADC inputs ==========
@@ -76,8 +75,8 @@ class DriverADS1115(DriverADC):
         Sample rate and continuous mode are not supported. Differential is not yet ...
     """
 
-    ADDRESSES = [ 0x48, 0x49, 0x4A, 0x4B ]
-    CHANNELS = [ ADS.P0, ADS.P1, ADS.P2, ADS.P3 ]  # currently only grounded, no differential channels
+    ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
+    CHANNELS = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]  # currently only grounded, no differential channels
 
     @staticmethod
     def is_ads111x(ads):
@@ -95,11 +94,16 @@ class DriverADS1115(DriverADC):
                     return True
                 if buf[3:8] == bytearray.fromhex('83 8000 7FFF'):   # TODO: DBG REMOVE_ME!
                     return True
-                log.debug('I²C device @ 0x%02X returns 0x%s 0x%s 0x%s from reg 1..3, probably a different device, or already in use.'
-                         , device.device_address, bytes(buf[2:4]).hex(), bytes(buf[4:6]).hex(), bytes(buf[6:8]).hex() )
+                log.debug('I²C device @ 0x%02X returns 0x%s 0x%s 0x%s' +
+                          ' from reg 1..3, probably a different device,' +
+                          ' or already in use.',
+                          device.device_address,
+                          bytes(buf[2:4]).hex(),
+                          bytes(buf[4:6]).hex(),
+                          bytes(buf[6:8]).hex())
         except Exception as ex:
             log.debug('Exception %r', ex)
-            #pass  # whatever it is, ignore device @ this adr!
+            # pass  # whatever it is, ignore device @ this adr!
         return False
 
     @staticmethod
@@ -109,8 +113,8 @@ class DriverADS1115(DriverADC):
             # autodetect of I²C is undefined and risky, as some chips may react
             # on read as if it was a write! We're on a pretty well defined HW though.
             i2c = busio.I2C(board.SCL, board.SDA)
-            deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id
-                   , 'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
+            deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id,
+                    'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
 
             # one loop for each chip type
             log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
@@ -121,15 +125,16 @@ class DriverADS1115(DriverADC):
                         DriverADC.adc_count += 1
                         for ch in DriverADS1115.CHANNELS:
                             port_name = 'ADC #%d in %d' % (DriverADC.adc_count, ch)
-                            io_ports[port_name] = IoPort( PortFunc.Ain,
-                                                          DriverADS1115,
-                                                          {'adr': adr, 'cnt': DriverADC.adc_count, 'in': ch},
-                                                          deps )
+                            port_opt = {'adr': adr, 'cnt': DriverADC.adc_count, 'in': ch}
+                            io_ports[port_name] = IoPort(PortFunc.Ain,
+                                                         DriverADS1115,
+                                                         port_opt,
+                                                         deps)
                     else:
                         log.brief('I²C device at 0x%02X seems not to be an ADS1x15, probably a different device, or already in use.', adr)
                 except Exception as ex:
                     log.debug('%r', ex)
-                    #pass  # whatever it is, ignore this device
+                    # pass  # whatever it is, ignore this device
         else:  # SIMULATED
             deps = ['GPIO 2 in', 'GPIO 2 out']
             DriverADC.adc_count += 1

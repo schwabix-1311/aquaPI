@@ -147,12 +147,12 @@ class MachineRoom:
 
         if TEST_PH:
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', unit='pH', avg=3, interval=60)
-            calib_ph = CalibrationAux('pH Kalibrierung', adc_ph.id, [(2.4 6.6),(2.5 7.0)])
+            calib_ph = CalibrationAux('pH Kalibrierung', adc_ph.id, [(2.4, 6.6),(2.5, 7.0)])
             ph = MaximumCtrl('pH', calib_ph.id, 2.50)  # TODO: calibration option: shift & scale
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
             out_ph.plugin(self.bus)
             ph.plugin(self.bus)
-            clib_ph.plugin(self.bus)
+            calib_ph.plugin(self.bus)
             adc_ph.plugin(self.bus)
 
         if SIM_LIGHT:

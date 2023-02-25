@@ -6,7 +6,7 @@ from collections import deque
 from time import time
 
 from .msg_bus import (BusListener, BusRole, MsgData)
-#from ..driver import (PortFunc, io_registry, DriverReadError)
+# from ..driver import (PortFunc, io_registry, DriverReadError)
 
 
 log = logging.getLogger('MiscNodes')
@@ -20,7 +20,7 @@ log.setLevel(logging.WARNING)
 # ========== miscellaneous ==========
 
 
-#IDEA: this could use BusRoles to define inputs
+# IDEA: this could use BusRoles to define inputs
 
 class History(BusListener):
     """ A multi-input node, recording all inputs with timestamps.
@@ -58,9 +58,9 @@ class History(BusListener):
             now = int(time())
             if msg.sender not in self._store:
                 log.debug('%s: new history for %s', self.name, msg.sender)
-                self._store[msg.sender] = deque(maxlen=self.duration * 60 * 60) # limit to 1/sec for one day
+                self._store[msg.sender] = deque(maxlen=self.duration * 60 * 60)  # limit to 1/sec for one day
             curr = self._store[msg.sender]
-            if not curr or (curr[-1][0] != now):  #TODO preliminary: only store 1st value for each second
+            if not curr or (curr[-1][0] != now):  # TODO preliminary: only store 1st value for each second
                 curr.append((now, msg.data))
             while curr[0][0] < now - self.duration * 60 * 60:
                 curr.popleft()

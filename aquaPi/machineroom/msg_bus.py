@@ -27,10 +27,10 @@ class BusRole(Flag):
 
 class DataRange(Enum):
     UNDEF = 0
-    ANALOG = 1  # float, any range, typically input sensors
-    BINARY = 2  # hard on=100 / off=0
-    PERCENT = 3 # normalized 0..100%, the bulk of data
-    PERC_3 = 4  # tupel of 3 percentages, e.g. RGB light
+    ANALOG = 1   # float, any range, typically input sensors
+    BINARY = 2   # hard on=100 / off=0
+    PERCENT = 3  # normalized 0..100%, the bulk of data
+    PERC_3 = 4   # tupel of 3 percentages, e.g. RGB light
 
 
 #############################
@@ -55,7 +55,7 @@ class MsgBus:
         self._changed = Condition()
         self._queue = None
 
-        #FIXME: Terrible place to store this, but we have no better place YET!
+        # FIXME: Terrible place to store this, but we have no better place YET!
         #       Having it here is the least effort. Add a global config later.
         self.dash_tiles = []  # TODO prelim!!
 

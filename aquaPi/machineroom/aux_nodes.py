@@ -52,8 +52,8 @@ class CalibrationAux(AuxNode):
             points - alternate way to define offset and factor
                       by 2 points as [(in1 out1),(in2 out2)]
     """
-    def __init__(self, name, inputs, _cont=False):
-        super().__init__(name, inputs, offset=0, factor=1.0, points=None, _cont=_cont)
+    def __init__(self, name, inputs, offset=0, factor=1.0, points=None, _cont=False):
+        super().__init__(name, inputs, _cont=_cont)
         try:
             dX = points[1][0] - points[0][0]
             dY = points[1][1] - points[0][1]
@@ -77,7 +77,7 @@ class CalibrationAux(AuxNode):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            val = self.factor * flaot(msg.data) + self.offset
+            val = self.factor * float(msg.data) + self.offset
             # log.brief('CalibrationAux %s: output %f', self.id, val)
             self.post(MsgData(self.id, val))
         return super().listen(msg)
@@ -93,7 +93,7 @@ class CalibrationAux(AuxNode):
 class MultiInAux(AuxNode):
     """ subtype of AuxNodes listening to more than 1 input
     """
-    def __init__(self, name, inputs, unfair_avg=0, _cont=False):
+    def __init__(self, name, inputs, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.values = {}
 

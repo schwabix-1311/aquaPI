@@ -76,7 +76,7 @@ class DriverGPIO(OutDriver, InDriver):
                 try:
                     # the dependants list would allow to offer GPIOs that are not yet in use by their other function
                     func = PinFunc(GPIO.gpio_function(pin))
-                    if func in [PinFunc.IN, PinFunc.OUT]:
+                    if True:  # func in [PinFunc.IN, PinFunc.OUT]:  dependencies!
                         port_name = 'GPIO %d ' % pin
                         io_ports[port_name + 'in'] = IoPort( PortFunc.Bin,
                                                              DriverGPIO,
@@ -92,13 +92,19 @@ class DriverGPIO(OutDriver, InDriver):
                     log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
         else:
             # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
-            io_ports = {
+            io_ports = {  # need all that are simulated somewhere - as devices or dependencies
                 'GPIO 0 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 0, 'fake': True}, []),
                 'GPIO 0 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 0, 'fake': True}, []),
                 'GPIO 1 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 1, 'fake': True}, []),
                 'GPIO 1 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 1, 'fake': True}, []),
+                'GPIO 4 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 4, 'fake': True}, []),     # 1-wire
+                'GPIO 4 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 4, 'fake': True}, []),   # 1-wire
+                'GPIO 12 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 12, 'fake': True}, []), # Heater relay
+                'GPIO 13 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 13, 'fake': True}, []), # (Cooler relay)
                 'GPIO 18 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 18, 'fake': True}, []),
-                'GPIO 18 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 18, 'fake': True}, [])
+                'GPIO 18 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 18, 'fake': True}, []), # PWM 0
+                'GPIO 19 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 19, 'fake': True}, []), # PWM 1
+                'GPIO 20 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 20, 'fake': True}, [])  # CO2 vent
             }
         return io_ports
 

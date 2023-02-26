@@ -42,9 +42,9 @@ class AsyncInputNode(InputNode):
         super().__init__(name, _cont=_cont)
         self._driver = None
         self._port = None
-        self.interval = max(0.1, float(interval))
         self._reader_thread = None
         self._reader_stop = False
+        self.interval = max(0.1, float(interval))
         self.port = port
 
     def __getstate__(self):
@@ -189,8 +189,9 @@ class AnalogInput(AsyncInputNode):
         val = self.data
         if self._driver:
             val = float(self._driver.read())
+            log.debug('DBG Ain.read %f', val)
         val = (val + self.data * (self.avg - 1)) / self.avg
-        val = round(val, 2)
+        val = round(val, 4)
         return val
 
     def get_settings(self):

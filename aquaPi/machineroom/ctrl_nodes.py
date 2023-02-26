@@ -20,13 +20,14 @@ log.setLevel(logging.WARNING)
 
 def get_unit_limits(unit):
     if unit in ('°C'):
-        limits = 'min="15" max="33"'
+        limits = 'min="15" max="33" step="0.1"'
     elif unit in ('°F'):
-        limits = 'min="59" max="90"'
+        limits = 'min="59" max="90" step="0.2"'
     elif unit in ('pH'):
-        limits = 'min="6.0" max="8.0"'
+        limits = 'min="6.0" max="8.0" step="0.05"'
+        limits = 'min="2.0" max="8.0" step="0.01"'
     elif unit in ('%'):
-        limits = 'min="0" max="100"'
+        limits = 'min="0" max="100" step="1"'
     else:
         limits = ''
     return limits
@@ -120,17 +121,15 @@ class MinimumCtrl(ControllerNode):
             elif float(msg.data) >= (self.threshold + self.hysteresis / 2):
                 new_val = 0.0
 
-            if self.data != new_val:
+            if (self.data != new_val) or True:  # WAR a startup problem
                 log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
 
                 if msg.data < (self.threshold - self.hysteresis / 2) * 0.95:
                     self.alert = ('LOW', 'err')
                     log.brief('MinimumCtrl %s: output %f - alert %r', self.id, self.data, self.alert)
-                elif self.data:
-                    self.alert = ('*', 'act')
                 else:
-                    self.alert = None
+                    self.alert = ('*', 'act')  if self.data else None
                     log.brief('MinimumCtrl %s: output %f', self.id, self.data)
 
                 self.post(MsgData(self.id, self.data))  # only on data change? or 1 level outdented?
@@ -141,7 +140,7 @@ class MinimumCtrl(ControllerNode):
 
         settings = super().get_settings()
         settings.append(
-            ('threshold', 'Minimum [%s]' % self.unit, self.threshold, 'type="number" %s step="0.1"' % limits))
+            ('threshold', 'Minimum [%s]' % self.unit, self.threshold, 'type="number" %s' % limits))
         settings.append(
             ('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
@@ -192,17 +191,15 @@ class MaximumCtrl(ControllerNode):
             elif float(msg.data) <= (self.threshold - self.hysteresis / 2):
                 new_val = 0.0
 
-            if self.data != new_val:
+            if (self.data != new_val) or True:  # WAR a startup problem
                 log.debug('MaximumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
 
-                if msg.data < (self.threshold - self.hysteresis / 2) * 0.95:
+                if msg.data > (self.threshold + self.hysteresis / 2) * 1.05:
                     self.alert = ('HIGH', 'err')
                     log.brief('MaximumCtrl %s: output %f - alert %r', self.id, self.data, self.alert)
-                elif self.data:
-                    self.alert = ('*', 'act')
                 else:
-                    self.alert = None
+                    self.alert = ('*', 'act')  if self.data else None
                     log.brief('MaximumCtrl %s: output %f', self.id, self.data)
 
                 self.post(MsgData(self.id, self.data))  # only on data change? or 1 level outdented?
@@ -213,7 +210,7 @@ class MaximumCtrl(ControllerNode):
 
         settings = super().get_settings()
         settings.append(
-            ('threshold', 'Maximum [%s]' % self.unit, self.threshold, 'type="number" %s step="0.1"' % limits))
+            ('threshold', 'Maximum [%s]' % self.unit, self.threshold, 'type="number" %s' % limits))
         settings.append(
             ('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
@@ -305,7 +302,7 @@ class FadeCtrl(ControllerNode):
                 log.debug('_fader %f ...', self.data)
 
                 self.alert = ('\u2197' if self.target > self.data else '\u2198', 'act')
-                self.post(MsgData(self.id, round(self.data, 3)))
+                self.post(MsgData(self.id, round(self.data, 4)))
                 time.sleep(next_t - time.time())
                 next_t += step_t
                 if self._fader_stop:

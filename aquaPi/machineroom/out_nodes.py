@@ -51,7 +51,7 @@ class SwitchDevice(DeviceNode):
         super().__init__(name, inputs, _cont=_cont)
         self._driver = None
         self._port = None
-        self.inverted = int(inverted)
+        self._inverted = int(inverted)
         self.port = port
         self.switch(self.data if _cont else 0)
         log.info('%s init to %r|%f|%f', self.name, _cont, self.data, inverted)
@@ -134,11 +134,9 @@ class AnalogDevice(DeviceNode):
         self.percept = bool(percept)
         self.minimum = min(max(0, minimum), 90)
         self.maximum = min(max(minimum + 1, maximum), 100)
-        if not _cont:
-            self.data = 0
         self.unit = '%'
         self.port = port
-        self.set_percent(self.data)
+        self.set_percent(self.data if _cont else 0)
         log.info('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
 
     def __getstate__(self):

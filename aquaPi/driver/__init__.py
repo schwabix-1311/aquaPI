@@ -92,13 +92,14 @@ class IoRegistry(object):
         for drv in drv_classes:
             if hasattr(drv, 'find_ports'):
                 drv_ports = drv.find_ports()
-                log.debug('driver %r reported %r', drv, drv_ports)
+                log.info('Driver %s reported ports %r', drv.__name__, [k for k in drv_ports])
 
                 # TODO: reject duplicate ports, same port should in theory not be reported
                 #      by multiple drivers, but better play safe: len(_map.keys() & drv_ports.keys()) > 0
                 IoRegistry._map.update(drv_ports)
 
-        print('%r', IoRegistry._map)
+        log.brief('Port drivers found for:')
+        log.brief('%r', [k for k in IoRegistry._map])
 
     def get_ports_by_function(self, funcs, in_use=False):
         """ returns a view of free or used IoPorts filtered by iterable funcs.
@@ -111,7 +112,6 @@ class IoRegistry(object):
             Drivers that use >1 port are created by a dedicated factory (later)
         """
         log.debug('create a driver for %r', port)
-        breakpoint()
         if port not in IoRegistry._map:
             raise DriverParamError('There is no port named %s' % port)
 

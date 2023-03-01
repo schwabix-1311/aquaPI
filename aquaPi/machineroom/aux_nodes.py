@@ -2,11 +2,11 @@
 
 import logging
 
-from .msg_bus import (BusListener, BusRole, MsgData)
+from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
 
 
 log = logging.getLogger('AuxNodes')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
@@ -27,19 +27,6 @@ class AuxNode(BusListener):
         super().__init__(name, inputs, _cont=_cont)
         self.data = -1
 
-    def __getstate__(self):
-        state = super().__getstate__()
-        for inp in self.get_inputs(True):
-            self.unit = inp.unit
-            self.data_range = inp.data_range  # depends on inputs
-            break
-        state.update(unit=self.unit)
-        return state
-
-    # def get_settings(self):
-    #     settings = super().get_settings()
-    #     return settings
-
 
 class CalibrationAux(AuxNode):
     """ A 1:1 node changing data range via offset and factor,
@@ -52,40 +39,53 @@ class CalibrationAux(AuxNode):
             points - alternate way to define offset and factor
                       by 2 points as [(in1 out1),(in2 out2)]
     """
-    def __init__(self, name, inputs, offset=0, factor=1.0, points=None, _cont=False):
+    data_range = DataRange.ANALOG
+
+    def __init__(self, name, inputs,
+                 offset=0, factor=1.0, points=None, unit='pH',
+                 _cont=False):
         super().__init__(name, inputs, _cont=_cont)
+        self.unit = unit
         try:
             dX = points[1][0] - points[0][0]
             dY = points[1][1] - points[0][1]
             self.factor = dY / dX
             self.offset = points[0][1] - self.factor * points[0][0]
-        except:
-            log.info('No valid calibrations points found')
+        except TypeError:
+            log.info('No valid calibration points found')
             self.offset = offset
             self.factor = factor
-        log.info('Calibration %s: factor %f, offset %f', name, self.factor, self.offset)
+        log.info('CalibrationAux %s: factor %f, offset %f',
+                 name, self.factor, self.offset)
 
     def __getstate__(self):
         state = super().__getstate__()
+        state.update(unit=self.unit)
         state.update(offset=self.offset)
         state.update(factor=self.factor)
         return state
 
     def __setstate__(self, state):
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], offset=state['offset'], factor=state['factor'], _cont=True)
+        self.__init__(state['name'], state['inputs'], unit=state['unit'],
+                      offset=state['offset'], factor=state['factor'],
+                      _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            val = self.factor * float(msg.data) + self.offset
-            # log.brief('CalibrationAux %s: output %f', self.id, val)
-            self.post(MsgData(self.id, val))
+            self.data = self.factor * float(msg.data) + self.offset
+            log.brief('CalibrationAux %s: output %f', self.id, self.data)
+            self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append(('offset', 'Offset', self.offset, 'type="number"'))
-        settings.append(('factor', 'Skalierfaktor', self.factor, 'type="number"'))
+        settings.append(('unit', 'Einheit',
+                         self.unit, 'type="text"'))
+        settings.append(('offset', 'Offset',
+                         self.offset, 'type="number" step="0.01"'))
+        settings.append(('factor', 'Skalierfaktor',
+                         self.factor, 'type="number" step="0.01"'))
         # TODO frontend should also offer 2-point calibration, this is most practical for pH
         return settings
 
@@ -96,6 +96,15 @@ class MultiInAux(AuxNode):
     def __init__(self, name, inputs, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.values = {}
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        for inp in self.get_inputs(True):
+            self.unit = inp.unit
+            self.data_range = inp.data_range  # depends on inputs
+            break
+        state.update(unit=self.unit)
+        return state
 
 
 class AvgAux(MultiInAux):
@@ -126,7 +135,8 @@ class AvgAux(MultiInAux):
 
     def __setstate__(self, state):
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], unfair_avg=state['unfair_avg'], _cont=True)
+        self.__init__(state['name'], state['inputs'],
+                      unfair_avg=state['unfair_avg'], _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -136,7 +146,9 @@ class AvgAux(MultiInAux):
                     # log.brief('AvgAux %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
-                    val = (float(msg.data) + (self.unfair_avg - 1) * self.data) / self.unfair_avg
+                    # unfair_avg-1 is the amount (count) of old data to keep
+                    old_data = self.data * (self.unfair_avg - 1)
+                    val = (float(msg.data) + old_data) / self.unfair_avg
                     if (self.data != val):
                         self.data = val
                         # log.brief('AvgAux %s: output %f', self.id, self.data)
@@ -155,7 +167,8 @@ class AvgAux(MultiInAux):
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append(('unfair_avg', 'Unweighted avg.', self.unfair_avg, 'type="number" min="0" step="1"'))
+        settings.append(('unfair_avg', 'Unweighted avg.',
+                         self.unfair_avg, 'type="number" min="0" step="1"'))
         return settings
 
 

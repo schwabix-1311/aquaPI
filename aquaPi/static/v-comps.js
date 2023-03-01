@@ -22,11 +22,19 @@ const unit2icon = {
     'pH': 'gas.svg',
     'pH.min': 'gas_min.svg',
     'pH.max': 'gas_max.svg',
+    ' pH': 'gas.svg',
+    ' pH.min': 'gas_min.svg',
+    ' pH.max': 'gas_max.svg',
     'rH': 'faucet.svg',
     'rH.min': 'faucet.svg',
     'rH.max': 'faucet.svg',
+    ' rH': 'faucet.svg',
+    ' rH.min': 'faucet.svg',
+    ' rH.max': 'faucet.svg',
     '%.min': 'min.',
     '%.max': 'max.svg',
+    ' %.min': 'min.',
+    ' %.max': 'max.svg',
     '.min': 'min.',
     '.max': 'max.svg'
 };
@@ -42,7 +50,6 @@ const RangeAnalog = 1;
 const RangeBinary = 2;
 const RangePercent = 3;
 const RangePerc_3 = 4;
-
 
 const AnyNode = {
     delimiters: ['[[', ']]'],
@@ -368,6 +375,19 @@ const MaxAux = {
     },
 };
 Vue.component('MaxAux', MaxAux);
+
+const CalibrationAux = {
+    extends: AuxNode,
+    computed: {
+        label() {
+            if (this.decoration === '')
+                return 'Calibration'
+            else
+                return '<img style="width:24px">Max'
+        },
+    },
+};
+Vue.component('CalibrationAux', CalibrationAux);
 
 
 const History = {

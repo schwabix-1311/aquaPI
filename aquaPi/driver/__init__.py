@@ -3,10 +3,10 @@
 import logging
 import importlib.util
 import sys
-import os
 from os import path
 import glob
 
+from .base import Driver, DriverParamError, DriverPortInuseError
 from .base import *
 
 log = logging.getLogger('Driver Base')
@@ -105,9 +105,10 @@ class IoRegistry(object):
         """ returns a view of free or used IoPorts filtered by iterable funcs.
         """
         mp = IoRegistry._map
-        return {key: mp[key] for key in mp if mp[key].func in funcs and bool(mp[key].used) == in_use}
+        return {key: mp[key] for key in mp
+                if mp[key].func in funcs and bool(mp[key].used) == in_use}
 
-    def driver_factory(self, port):
+    def driver_factory(self, port, drv_options=None):
         """ Create a driver for a port found in io_ports.keys().
             Drivers that use >1 port are created by a dedicated factory (later)
         """
@@ -120,8 +121,10 @@ class IoRegistry(object):
             raise DriverPortInuseError(port=port)
 
         try:
-            driver = io_port.driver(io_port.func, io_port.cfg)
-            # same as io_port.used += 1
+            if drv_options:
+                io_port.cfg.update(drv_options)
+            driver = io_port.driver(io_port.cfg, io_port.func)
+            # same as io_port.used += 1 - on immutable
             IoRegistry._map[port] = io_port._replace(used=io_port.used + 1)
 
             for dep in io_port.deps:
@@ -141,7 +144,7 @@ class IoRegistry(object):
         io_port = IoRegistry._map[port]
         driver.close()
         # same as io_port.used = 0
-        IoRegistry._map[port]= io_port._replace(used=0)
+        IoRegistry._map[port] = io_port._replace(used=0)
 
         for dep in io_port.deps:
             # same as IoRegistry._map[dep].used -= 1
@@ -162,7 +165,6 @@ for drv_path in __path__:
     for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
         log.debug('Found driver file %s', drv_file)
 
-        # drv_name = path.basename(drv_file).removeprefix(DRIVER_FILE_PREFIX).removesuffix('.py')
         drv_name = path.basename(drv_file)
         if drv_name.startswith(DRIVER_FILE_PREFIX):
             drv_name = drv_name[len(DRIVER_FILE_PREFIX):]

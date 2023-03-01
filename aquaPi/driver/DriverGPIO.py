@@ -88,7 +88,8 @@ class DriverGPIO(OutDriver, InDriver):
                               pin, GPIO.gpio_function(pin))
         else:
             # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
-            io_ports = {  # need all that are simulated somewhere - as devices or dependencies
+            # need all that are simulated somewhere - devices or dependencies
+            io_ports = {
                 'GPIO 0 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 0, 'fake': True}, []),
                 'GPIO 0 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 0, 'fake': True}, []),
                 'GPIO 1 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 1, 'fake': True}, []),
@@ -106,19 +107,19 @@ class DriverGPIO(OutDriver, InDriver):
             }
         return io_ports
 
-    def __init__(self, func, cfg):
-        super().__init__(func, cfg)
-        self.func = func
+    def __init__(self, cfg, func):
+        super().__init__(cfg, func)
         self._pin = int(cfg['pin'])
-        self.name = 'GPIO %d %s' % (self._pin, 'in' if func == PortFunc.Bin else 'out')
+        inout = 'in' if self._is_input_driver() else 'out'
+        self.name = 'GPIO %d %s' % (self._pin, inout)
 
         if not self._fake:
-            GPIO.setup(self._pin, GPIO.IN if func == PortFunc.Bin else GPIO.OUT)
+            GPIO.setup(self._pin, GPIO.IN if inout == 'in' else GPIO.OUT)
         else:
             self.name = '!' + self.name
 
-    def __del__(self):
-        self.close()
+    def _is_input_driver(self):
+        return self.func == PortFunc.Bin
 
     def close(self):
         log.debug('Closing %r', self)
@@ -127,7 +128,7 @@ class DriverGPIO(OutDriver, InDriver):
             self._pin = None
 
     def write(self, value):
-        if self.func == PortFunc.Bin:
+        if self._is_input_driver():
             raise DriverWriteError()
 
         if not self._fake:
@@ -140,7 +141,7 @@ class DriverGPIO(OutDriver, InDriver):
         if not self._fake:
             val = GPIO.input(self._pin)
         else:
-            if self.func == PortFunc.Bin:
+            if self._is_input_driver():
                 val = False if random.random() <= 0.5 else True
             else:
                 val = self._val

@@ -75,6 +75,7 @@ aquaPi ToDo list
   logging/email alerts for virtually anything,
   over-temperature could dim the light (aux nodes to limit light level
   from inverted|scaled temp)
+  too low pH could turn on light (if plants are present)
 
 - unique feature would be a driver interface to a TC420 light controller,
   wallneradam/tc420 on github is a Linux shell tool to interact with TC429

@@ -4,9 +4,11 @@ import logging
 from os import path
 from enum import Enum
 from collections import namedtuple
+import math
+import random
 
 log = logging.getLogger('Driver Base')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
@@ -97,16 +99,22 @@ class Driver:
     """
 
     # TODO this persistance approach could be transferred to MsgNodes!
-    def __init__(self, func, cfg):
+    def __init__(self, cfg, func):
         self.name = '!abstract'
-        self.func = func
         self.cfg = cfg
+        self.func = func
         self._fake = not is_raspi()
         if 'fake' in cfg:
             self._fake |= bool(cfg['fake'])
 
+    def __del__(self):  # ??
+        self.close()
+
     def __str__(self):
         return '{}({})'.format(type(self).__name__, self.cfg)
+
+    def close(self):
+        log.debug('Closing %r', self)
 
 
 class InDriver(Driver):
@@ -114,8 +122,8 @@ class InDriver(Driver):
         InDriver can be read, e.g. a temperature sensor.
     """
 
-    def __init__(self, func, cfg):
-        super().__init__(func, cfg)
+    def __init__(self, cfg, func):
+        super().__init__(cfg, func)
         self.name = '!abstract IN'
         self._interval = 0
 
@@ -123,13 +131,34 @@ class InDriver(Driver):
         return 0.0
 
 
+class AInDriver(InDriver):
+    """ Base class for all AnalogDigitalConverters (ADC)
+    """
+    def __init__(self, cfg, func):
+        super().__init__(cfg, func)
+        self.name = '!ADC in'
+        self.initval = cfg.get('initval', None)
+        self._val = self.initval
+        self._dir = 1
+
+    def read(self):
+        rnd = random.random()
+        if rnd < .1:
+            self._dir = math.copysign(1, self.initval - self._val)
+        elif rnd > .7:
+            self._val += 0.05 * self._dir
+        self._val = round(min(max(self.initval - 1, self._val), self.initval + 1), 2)
+        log.info('%s = %f', self.name, self._val)
+        return float(self._val)
+
+
 class OutDriver(Driver):
     """ base of all output drivers
         OutDriver can be written, the last written value can be read.
     """
 
-    def __init__(self, func, cfg):
-        super().__init__(func, cfg)
+    def __init__(self, cfg, func):
+        super().__init__(cfg, func)
         self.name = '!abstract OUT'
         self._val = 0
 

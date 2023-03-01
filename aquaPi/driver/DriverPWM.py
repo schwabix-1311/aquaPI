@@ -32,8 +32,8 @@ class DriverPWMbase(OutDriver):
     """ abstrract base of PWM drivers
     """
 
-    def __init__(self, func, cfg):
-        super().__init__(func, cfg)
+    def __init__(self, cfg, func):
+        super().__init__(cfg, func)
         self._channel = int(cfg['channel'])
         self._pin = int(cfg['pin'])
 
@@ -74,8 +74,8 @@ class DriverPWM(DriverPWMbase):
                     log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
         return io_ports
 
-    def __init__(self, func, cfg):
-        super().__init__(func, cfg)
+    def __init__(self, cfg, func):
+        super().__init__(cfg, func)
 
         self.name = 'PWM %d @ pin %d' % (self._channel, self._pin)
         if not self._fake:
@@ -89,9 +89,6 @@ class DriverPWM(DriverPWMbase):
             self.name = '!' + self.name
 
         self.write(0)
-
-    def __del__(self):
-        self.close()
 
     def close(self):
         log.debug('Closing %r', self)
@@ -139,8 +136,8 @@ dummy = '''if False:
                         log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
             return io_ports
 
-        def __init__(self, func, cfg):
-            super().__init__(func, cfg)
+        def __init__(self, cfg, func):
+            super().__init__(cfg, func)
 
             self.name = 'SoftPWM %d @ pin %d' % (self._channel, self._pin)
             if not self._fake:

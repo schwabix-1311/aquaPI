@@ -11,7 +11,7 @@ from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
 
 
 log = logging.getLogger('CtrlNodes')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
@@ -19,14 +19,14 @@ log.setLevel(logging.WARNING)
 
 
 def get_unit_limits(unit):
-    if unit in ('°C'):
+    if ('°C') in unit:
         limits = 'min="15" max="33" step="0.1"'
-    elif unit in ('°F'):
+    elif ('°F') in unit:
         limits = 'min="59" max="90" step="0.2"'
-    elif unit in ('pH'):
+    elif ('pH') in unit:
         limits = 'min="6.0" max="8.0" step="0.05"'
         limits = 'min="2.0" max="8.0" step="0.01"'
-    elif unit in ('%'):
+    elif ('%') in unit:
         limits = 'min="0" max="100" step="1"'
     else:
         limits = ''
@@ -54,7 +54,7 @@ class ControllerNode(BusListener):
     #    self.__init__(state, _cont=True)
 
     def find_source_unit(self):
-        for inp in self.get_inputs(True):
+        for inp in self.get_inputs():
             self.unit = inp.unit
             break
         return self.unit
@@ -92,7 +92,7 @@ class MinimumCtrl(ControllerNode):
     """
     data_range = DataRange.BINARY
 
-    # TODO: some controllers could have a threshold for max. active time -> warning
+    # TODO: could have a threshold for max. active time -> warning
 
     def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
@@ -111,7 +111,9 @@ class MinimumCtrl(ControllerNode):
     def __setstate__(self, state):
         log.debug('MinimumCtrl.setstate %r', state)
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'], _cont=True)
+        self.__init__(state['name'], state['inputs'],
+                      state['threshold'], hysteresis=state['hysteresis'],
+                      _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -127,22 +129,24 @@ class MinimumCtrl(ControllerNode):
 
                 if msg.data < (self.threshold - self.hysteresis / 2) * 0.95:
                     self.alert = ('LOW', 'err')
-                    log.brief('MinimumCtrl %s: output %f - alert %r', self.id, self.data, self.alert)
+                    log.brief('MinimumCtrl %s: output %f - alert %r',
+                              self.id, self.data, self.alert)
                 else:
                     self.alert = ('*', 'act')  if self.data else None
                     log.brief('MinimumCtrl %s: output %f', self.id, self.data)
 
-                self.post(MsgData(self.id, self.data))  # only on data change? or 1 level outdented?
+                # only on data change? or always = 1 level outdented?
+                self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_settings(self):
         limits = get_unit_limits(self.find_source_unit())
 
         settings = super().get_settings()
-        settings.append(
-            ('threshold', 'Minimum [%s]' % self.unit, self.threshold, 'type="number" %s' % limits))
-        settings.append(
-            ('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('threshold', 'Minimum [%s]' % self.unit,
+                         self.threshold, 'type="number" %s' % limits))
+        settings.append(('hysteresis', 'Hysteresis [%s]' % self.unit,
+                         self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
@@ -181,7 +185,9 @@ class MaximumCtrl(ControllerNode):
     def __setstate__(self, state):
         log.debug('MaximumCtrl.setstate %r', state)
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], state['threshold'], hysteresis=state['hysteresis'], _cont=True)
+        self.__init__(state['name'], state['inputs'],
+                      state['threshold'], hysteresis=state['hysteresis'],
+                      _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -197,27 +203,29 @@ class MaximumCtrl(ControllerNode):
 
                 if msg.data > (self.threshold + self.hysteresis / 2) * 1.05:
                     self.alert = ('HIGH', 'err')
-                    log.brief('MaximumCtrl %s: output %f - alert %r', self.id, self.data, self.alert)
+                    log.brief('MaximumCtrl %s: output %f - alert %r',
+                              self.id, self.data, self.alert)
                 else:
                     self.alert = ('*', 'act')  if self.data else None
                     log.brief('MaximumCtrl %s: output %f', self.id, self.data)
 
-                self.post(MsgData(self.id, self.data))  # only on data change? or 1 level outdented?
+                # only on data change? or always = 1 level outdented?
+                self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
     def get_settings(self):
         limits = get_unit_limits(self.find_source_unit())
 
         settings = super().get_settings()
-        settings.append(
-            ('threshold', 'Maximum [%s]' % self.unit, self.threshold, 'type="number" %s' % limits))
-        settings.append(
-            ('hysteresis', 'Hysteresis [%s]' % self.unit, self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('threshold', 'Maximum [%s]' % self.unit,
+                         self.threshold, 'type="number" %s' % limits))
+        settings.append(('hysteresis', 'Hysteresis [%s]' % self.unit,
+                         self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
 class FadeCtrl(ControllerNode):
-    """ A single channel linear fading controller, usable for light (dusk/dawn).
+    """ Single channel linear fading controller, usable for light (dusk/dawn).
         A change of input value will start a ramp from current to new
         percentage. The duration of this ramp is deltaPerc / 100 * fade_time.
         Durations for fade-in and fade-out can be different and may be 0 for
@@ -238,7 +246,8 @@ class FadeCtrl(ControllerNode):
     # TODO: add random variation, other profiles
     # TODO: overheat reduction driven from temperature - separate nodes!
 
-    def __init__(self, name, inputs, fade_time=None, fade_out=None, _cont=False):
+    def __init__(self, name, inputs,
+                 fade_time=None, fade_out=None, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.unit = '%'
         self.fade_time = fade_time
@@ -263,7 +272,9 @@ class FadeCtrl(ControllerNode):
     def __setstate__(self, state):
         log.debug('FadeCtrl.setstate %r', state)
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], fade_time=state['fade_time'], fade_out=state['fade_out'], _cont=True)
+        self.__init__(state['name'], state['inputs'],
+                      fade_time=state['fade_time'], fade_out=state['fade_out'],
+                      _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -319,8 +330,10 @@ class FadeCtrl(ControllerNode):
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append(('fade_time', 'Fade-In time [s]', self.fade_time, 'type="number" min="0"'))
-        settings.append(('fade_out', 'Fade-Out time [s]', self.fade_out, 'type="number" min="0"'))
+        settings.append(('fade_time', 'Fade-In time [s]',
+                         self.fade_time, 'type="number" min="0"'))
+        settings.append(('fade_out', 'Fade-Out time [s]',
+                         self.fade_out, 'type="number" min="0"'))
         return settings
 
 
@@ -370,7 +383,9 @@ class SunCtrl(ControllerNode):
     def __setstate__(self, state):
         log.debug('SunCtrl.setstate %r', state)
         self.data = state['data']
-        self.__init__(state['name'], state['inputs'], highnoon=state['highnoon'], xscend=state['xscend'], _cont=True)
+        self.__init__(state['name'], state['inputs'],
+                      highnoon=state['highnoon'], xscend=state['xscend'],
+                      _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -421,23 +436,21 @@ class SunCtrl(ControllerNode):
             self.data = new_data
             log.brief('SunCtrl %s: %s %f%%', self.id, phase, self.data)
             self.post(MsgData(self.id, self.data))
-        time.sleep(max( 1, new_data/30))  # shorten steps for low values
+        time.sleep(max(1, new_data/30))  # shorten steps for low values
 
     def _fader(self):
         """ This fader uses smaller increments for low bightness to
-            avoid visible steps. For higher brightness steps may be larger.
+            avoid visible steps. For higher brightness steps are larger.
 
             For a more realistic transition from dark night to daylight,
-            https://de.wikipedia.org/wiki/Sonnenaufgang may offer a quite simple formula
-            "Zeitabhängigkeit der Helligkeit" as current approach ignores twilight
-            before sunrise and after sunset completely - that's the most
-            interesting time to watch some fish!
+            https://de.wikipedia.org/wiki/Sonnenaufgang offers a quite simple
+            formula "Zeitabhängigkeit der Helligkeit".
             The formula is E = 80*POWER(1,15; (t [min])), aproximating
-            -60 ... 30 min for Germany.
-            This would need a trigger 60min before sunrise, counter-intuitive!
-            Should we ignore this effect for sunrise, but implement it for sunset??
-            This is a limitation of our node concept, where schedule and light profile
-            know nothing about each other.
+            -60 ... +30 min of sun rise for Germany.
+            This does not work well with our Scheduler trigger, as at
+            "sun rise" time the brightness is not 0.
+            A trigger 60min before sunrise would be unexpected. Should we
+            ignore this effect for sunrise, but implement it for sunset??
             t	E           1.15^t
            (-70	0,0045      0,0001)
             -60	0,0182      0,0002
@@ -446,11 +459,12 @@ class SunCtrl(ControllerNode):
             -30	1,2082      0,0151
             -20	4,8880      0,0611
             -10	19,7748     0,2472
-            0	80,0000     1,0000
+            0	80,0000     1,0000 (sun rise!)
             10	323,6446	4,0456
             20	1309,3230	16,3665
             30	5296,9418	66,2118
            (40	21429,0837	267,8635)
+            And how is this related to max brightness?
         """
         xscend = self.xscend * 60 * 60
         self.alert = ('\u2197', 'act')  # north east arrow
@@ -461,7 +475,8 @@ class SunCtrl(ControllerNode):
             now = time.time()
 
         cloudiness = int(random.random() * 5.9)
-        log.brief('SunCtrl %s: highnoon %f for %fh, cloudiness %d', self.id, self.target, self.highnoon, cloudiness)
+        log.brief('SunCtrl %s: highnoon %f for %fh, cloudiness %d',
+                  self.id, self.target, self.highnoon, cloudiness)
         self.alert = None
         self.data = self.target
         self.post(MsgData(self.id, self.data))
@@ -491,6 +506,8 @@ class SunCtrl(ControllerNode):
 
     def get_settings(self):
         settings = super().get_settings()
-        settings.append(('highnoon', 'High noon hours [h]', self.highnoon, 'type="number" min="0" step="0.1"'))
-        settings.append(('xscend', 'Ascend/descend hours [h]', self.xscend, 'type="number" min="0.1" max="5" step="0.1"'))
+        settings.append(('highnoon', 'High noon hours [h]',
+                         self.highnoon, 'type="number" min="0" step="0.1"'))
+        settings.append(('xscend', 'Ascend/descend hours [h]',
+                         self.xscend, 'type="number" min="0.1" max="5" step="0.1"'))
         return settings

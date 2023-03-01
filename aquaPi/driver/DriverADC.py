@@ -2,7 +2,6 @@
 
 from enum import Enum
 import logging
-import random
 
 try:
     import board
@@ -18,10 +17,10 @@ except NotImplementedError:
     class ADS(Enum):
         P0, P1, P2, P3 = range(0, 4)
 
-from .base import (InDriver, IoPort, PortFunc)
+from .base import (AInDriver, IoPort, PortFunc)
 
 log = logging.getLogger('DriverADS111x')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
@@ -31,52 +30,21 @@ log.setLevel(logging.WARNING)
 # ========== ADC inputs ==========
 
 
-class DriverADC(InDriver):
-    """ Base class for all AnalogDigitalConverters (ADC)
-        You should not need to interact explicitly with derived classes,
-        auto-detection returns appropriate objects in IoPorts
-    """
-    adc_count = 0
-
-    def __init__(self, func, cfg):
-        super().__init__(func, cfg)
-        self.func = func
-        self.name = 'ADC #%d in %d' % (cfg['cnt'], cfg['in'])
-        if self._fake:
-            self.name = '!' + self.name
-
-    def __del__(self):  # ??
-        self.close()
-
-    def close(self):
-        log.debug('Closing %r', self)
-
-    def read(self):
-        val = random.random()
-        log.info('%s = %d', self.name, val)
-        return val
-#       rnd = random.random()
-#       if rnd < .1:
-#           self._dir = math.copysign(1, self._initval - self._val)  # *= -1
-#       elif rnd > .7:
-#           self._val += 0.05 * self._dir
-#       self._val = round(min(max(self._initval - 1, self._val), self._initval + 1), 2)
-#       log.info('%s = %s', self.name, self._val)
-#       return float(self._val)
+adc_count = 0
 
 
-class DriverADS1115(DriverADC):
+class DriverADS1115(AInDriver):
     """ A driver for TI's 16bit ADC ADS1113/4/5, and 12bit ADS1013/4/5
         # back to defaults to enable our auto-datect
         Chip variants:
             ADS1x13 1 channel, no comparator
             ADS1x14 1 channel, gain adjustable
             ADS1x15 4 channel or 2 differential, gain adjustable
-        Sample rate and continuous mode are not supported. Differential is not yet ...
+        Sample rate and continuous mode not supported. Differential isn't yet.
     """
 
     ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
-    CHANNELS = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]  # currently only grounded, no differential channels
+    CHANNELS = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]  # ATM no differential channels
 
     @staticmethod
     def is_ads111x(ads):
@@ -108,6 +76,8 @@ class DriverADS1115(DriverADC):
 
     @staticmethod
     def find_ports():
+        global adc_count
+
         io_ports = {}
         if not SIMULATED:
             # autodetect of I²C is undefined and risky, as some chips may react
@@ -122,13 +92,13 @@ class DriverADS1115(DriverADC):
                 try:
                     ads = ADS.ADS1115(i2c, address=adr)
                     if DriverADS1115.is_ads111x(ads):
-                        DriverADC.adc_count += 1
+                        adc_count += 1
                         for ch in DriverADS1115.CHANNELS:
-                            port_name = 'ADC #%d in %d' % (DriverADC.adc_count, ch)
-                            port_opt = {'adr': adr, 'cnt': DriverADC.adc_count, 'in': ch}
+                            port_name = 'ADC #%d in %d' % (adc_count, ch)
+                            port_cfg = {'adr': adr, 'cnt': adc_count, 'in': ch}
                             io_ports[port_name] = IoPort(PortFunc.Ain,
                                                          DriverADS1115,
-                                                         port_opt,
+                                                         port_cfg,
                                                          deps)
                     else:
                         log.brief('I²C device at 0x%02X seems not to be an ADS1x15, probably a different device, or already in use.', adr)
@@ -137,19 +107,19 @@ class DriverADS1115(DriverADC):
                     # pass  # whatever it is, ignore this device
         else:  # SIMULATED
             deps = ['GPIO 2 in', 'GPIO 2 out']
-            DriverADC.adc_count += 1
-            port_name = 'ADC #%d in ' % DriverADC.adc_count
+            adc_count += 1
+            port_name = 'ADC #%d in ' % adc_count
             # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
             io_ports = {
-                port_name + '0': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 0, 'fake': True}, deps),
-                port_name + '1': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 1, 'fake': True}, deps),
-                port_name + '2': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 2, 'fake': True}, deps),
-                port_name + '3': IoPort(PortFunc.Ain, DriverADC, {'cnt': DriverADC.adc_count, 'in': 3, 'fake': True}, deps)
+                port_name + '0': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 0, 'fake': True}, deps),
+                port_name + '1': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 1, 'fake': True}, deps),
+                port_name + '2': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 2, 'fake': True}, deps),
+                port_name + '3': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 3, 'fake': True}, deps)
             }
         return io_ports
 
-    def __init__(self, func, cfg):
-        super().__init__(func, cfg)
+    def __init__(self, cfg, func):
+        super().__init__(cfg, func)
         self.name = 'ADC #%d (ADS1115 @0x%02X) in %d' % (cfg['cnt'], cfg['adr'], cfg['in'])
         self.cfg = cfg
 
@@ -159,11 +129,17 @@ class DriverADS1115(DriverADC):
         self._ana_in = AnalogIn(self._ads, cfg['in'])
 
     def close(self):
+        if self._fake:
+            return super().close()
+
         # return chip to power-on defaults to allow future auto-detect
         self._ads.gain = 2
         self._ads.read(0, is_differential=True)
 
     def read(self):
+        if self._fake:
+            return super().read()
+
         self._adjust_gain()
         val = self._ana_in.voltage
         return val

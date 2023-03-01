@@ -9,7 +9,17 @@ import logging
 
 
 log = logging.getLogger('werkzeug')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
+logging.addLevelName(logging.WARN, 'LOG')  # this makes log.warn kind of useless
+# better:
+#  logging.BRIEF = logging.INFO + 1
+#  logging.addLevelName(logging.BRIEF, 'LOG')
+#  log.brief = log.log( ...  need to implant a methods into logging for this
+# or:
+#  logging.VERBOSE = logging.INFO - 1
+#  logging.addLevelName(logging.VERBOSE, 'LOG')
+#  log.verbose = log.log( ...  need to implant a methods into logging for this
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)

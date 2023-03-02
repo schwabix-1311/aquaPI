@@ -19,7 +19,7 @@ then
 if [[ ! -d ${MyHome}/venv ]]
 then
   echo "First time init of aquaPi development env."
-  read -pr "CR to continue / Ctrl-C to cancel" dummy
+  read -p "CR to continue / Ctrl-C to cancel" dummy
   cd "${MyHome}" || return 12
 
   # Debian derivatives don't come with py3 venv by default

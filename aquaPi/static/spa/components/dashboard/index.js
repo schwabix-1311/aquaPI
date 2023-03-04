@@ -185,6 +185,25 @@ const AquapiDashboard = {
 			></aquapi-page-heading>
 	
 			<v-card-text>
+				<v-row justify="center">
+					<v-col :cols="12" :md="6"
+						v-if="!(widgets.length)"
+					>
+						<v-alert
+							elevation="0"
+							type="info"
+							text
+							:icon="'mdi-alert'"
+							YYcolor="'orange'"
+						>
+							... dashboard noch nicht konfiguriert<br>
+							<div class="d-flex justify-end"> 
+								<v-btn color="primary" class="mt-2" @click="showConfigurator">Widgets konfigurieren</v-btn>
+							</div>
+						</v-alert>     
+					</v-col>
+				</v-row>
+			
 				<v-row justify="start">
 					<v-col :cols="12" :md="6"
 						v-for="item in widgets"

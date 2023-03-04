@@ -136,9 +136,6 @@ const mutations = {
 	},
 	setNode(state, payload) {
 		try {
-			console.log('#### store dashboard setNode, payload:')
-			console.log(payload);
-
 			let nodes = state.nodes
 			nodes[payload.id] = payload
 			state.nodes = nodes

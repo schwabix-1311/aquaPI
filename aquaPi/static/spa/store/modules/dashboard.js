@@ -33,7 +33,17 @@ const actions = {
 	async loadConfig(context) {
 		try {
 			let config = window.localStorage.getItem('aquapi.dashboard')
-			// config = await JSON.parse(config)
+			if (null === config) {
+				// Fetch (default) dashboard config
+				let items = await context.dispatch('fetchDashboard');
+				if (items) {
+					items.forEach((item) => {
+						item.visible = false
+					})
+					context.dispatch('persistConfig', items)
+					config = JSON.stringify(items)
+				}
+			}
 			return await JSON.parse(config)
 		} catch(e) {
 			console.error('ERROR loading dashboard config: ' + e.message)
@@ -41,7 +51,29 @@ const actions = {
 		}
 	},
 
-	async loadNodes(context, addHistory=false) {
+	async fetchDashboard(context, addHistory= false) {
+		const fetchResult = await fetch('/api/config/dashboard' + '?add_history=' + (addHistory ? 'true' : 'false'), {
+			method: 'get',
+			mode: 'same-origin',
+			cache: 'no-cache',
+			headers: {
+				'X-Requested-With': 'XMLHttpRequest',
+				'Accept': 'application/json'
+			},
+			redirect: 'follow'
+		});
+
+		if (fetchResult.status == 200) {
+			let response = await fetchResult.json()
+			if (response.result == 'SUCCESS' && response.data) {
+				return response.data
+			}
+		}
+
+		return null
+	},
+
+	async loadNodes(context, addHistory= false) {
 		let nodes = {}
 
 		function fetchNode(nodeId) {
@@ -66,7 +98,7 @@ const actions = {
 			return nodePromise
 		}
 
-		// Fetch all nodes (returns array if node id)
+		// Fetch all nodes (returns array of node id)
 		const response = await fetch('/api/nodes/' + '?add_history=' + (addHistory ? 'true' : 'false'), {
 			method: 'get',
 			mode: 'same-origin',

@@ -259,6 +259,7 @@ class BusNode:
 
     def __getstate__(self):
         state = {'name': self.name}
+        state.update(id=self.id)
         state.update(identifier=self.identifier)
         state.update(inputs=self._inputs)
         state.update(data=self.data)

@@ -134,6 +134,11 @@ const LightCtrl = {
 }
 Vue.component('LightCtrl', LightCtrl)
 
+const SunCtrl = {
+    extends: ControllerNode,
+}
+Vue.component('SunCtrl', SunCtrl)
+
 
 const SwitchInput = {
     extends: BusNode,

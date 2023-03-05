@@ -181,10 +181,21 @@ const AvgAux = {
 }
 Vue.component('AvgAux', AvgAux);
 
+const MinAux = {
+    extends: AuxNode,
+}
+Vue.component('MinAux', MinAux)
+
 const MaxAux = {
     extends: AuxNode,
 }
 Vue.component('MaxAux', MaxAux)
+
+const CalibrationAux = {
+    extends: AuxNode,
+}
+Vue.component('CalibrationAux', CalibrationAux)
+
 
 const History = {
     extends: AnyNode,

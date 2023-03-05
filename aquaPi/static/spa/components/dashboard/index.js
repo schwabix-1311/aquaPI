@@ -59,7 +59,7 @@ const AquapiDashboardConfigurator = {
 									></v-text-field>
 								</v-col>
 								<v-col>
-									<div class="YYYtext-subtitle-2 grey--text text--darken-1">
+									<div class="grey--text text--darken-1">
 										<v-icon small class="grey--text mr-1">{{ typeIcon(item) }}</v-icon>
 										<span>{{ typeLabel(item) }}</span>
 									</div>
@@ -136,12 +136,29 @@ const AquapiDashboardWidget = {
 	template: `
 		<v-card elevation="3" :loading="false">
 			<v-card-title>
+				<template v-if="widgetTitleIcon">
+					<v-img
+						v-if="(widgetTitleIcon.match(/\.svg$/))"
+						:src="'static/' + widgetTitleIcon"
+						max-height="24"
+						max-width="24"
+						class="mr-2"
+					/>
+					<v-icon
+					    v-else 
+						:color="'blue-grey'" 
+						:class="($vuetify.theme.dark ? 'text--darken-2' : 'text--lighten-4')"
+						left
+					>
+						{{ widgetTitleIcon }}
+					</v-icon>
+				</template>
 				{{ item.name }}
 			</v-card-title>
 			
 			<div style="border:1px solid lime">
-				item: {{ item }}<br>
-				node: {{ node }}
+				<strong>item:</strong> {{ item }}<br>
+				<strong>node:</strong> {{ node }}
 			</div>
 			
 			
@@ -156,9 +173,52 @@ const AquapiDashboardWidget = {
 			required: true
 		},
 	},
+	data() {
+		return {
+			typeIcons: {
+				AUX: 'mdi-merge',
+				CTRL: 'mdi-speedometer',
+				HISTORY: 'mdi-chart-line',
+				IN_ENDP: 'mdi-location-enter',
+				OUT_ENDP: 'mdi-location-exit',
+
+				'CTRL#MinimumCtrl': '', // 'min.svg'
+				'CTRL#MaximumCtrl': '', // 'max.svg'
+				'MinimumCtrl#pH': 'gas_max.svg', // 'gas_min.svg'
+				'MaximumCtrl#pH': 'gas_min.svg', // 'gas_max.svg'
+
+				'°C': 'thermo.svg',
+				'MinimumCtrl#°C': 'thermo_min.svg',
+				'MaximumCtrl#°C': 'thermo_max.svg',
+				'°F': 'thermo.svg',
+				'MinimumCtrl#°F': 'thermo_min.svg',
+				'MaximumCtrl#°F': 'thermo_max.svg',
+				// 'pH': 'gas.svg',
+				// 'pH.min': 'gas_min.svg',
+				// 'pH.max': 'gas_max.svg',
+				// ' pH': 'gas.svg',
+				// ' pH.min': 'gas_min.svg',
+				// ' pH.max': 'gas_max.svg',
+				'rH': 'faucet.svg',
+				'MinimumCtrl#rH': 'faucet.svg',
+				'MaximumCtrl#rH': 'faucet.svg',
+				// ' rH': 'faucet.svg',
+				// ' rH.min': 'faucet.svg',
+				// ' rH.max': 'faucet.svg',
+				'MinimumCtrl#%': 'min.svg',
+				'MaximumCtrl#%': 'max.svg',
+				// '%.min': 'min.',
+				// '%.max': 'max.svg',
+				// ' %.min': 'min.',
+				// ' %.max': 'max.svg',
+				'.min': 'min.svg',
+				'.max': 'max.svg'
+			}
+		}
+	},
 	computed: {
 		node() {
-			return this.nodes[this.item.id]
+			return this.$store.getters['dashboard/node'](this.item.id)
 		},
 		nodes: {
 			get() {
@@ -167,6 +227,51 @@ const AquapiDashboardWidget = {
 			set(items) {
 				this.$store.commit('dashboard/setNodes', items)
 			}
+		},
+		widgetTitleIcon() {
+			let icon = null
+			let keys = []
+			keys.push(this.item.role)
+			if (this.item.role != 'HISTORY') {
+				keys.push(this.item.type)
+			}
+
+			if (this.node) {
+				let unit = this.node.unit ? this.node.unit.trim() : ''
+				if (unit.length) {
+					keys.push(unit)
+				}
+			}
+
+			let key = keys.join('#')
+			if (this.$data.typeIcons[key]) {
+				return this.$data.typeIcons[key]
+			}
+			if (keys.length > 2) {
+				key = [keys[1], keys[2]].join('#')
+				if (this.$data.typeIcons[key]) {
+					return this.$data.typeIcons[key]
+				}
+
+				key = [keys[0], keys[2]].join('#')
+				if (this.$data.typeIcons[key]) {
+					return this.$data.typeIcons[key]
+				}
+			}
+
+			key = keys[0]
+			if (this.$data.typeIcons[key]) {
+				return this.$data.typeIcons[key]
+			}
+
+			if (keys.length > 2) {
+				key = keys[2]
+				if (this.$data.typeIcons[key]) {
+					return this.$data.typeIcons[key]
+				}
+			}
+
+			return icon
 		}
 	}
 }
@@ -209,7 +314,6 @@ const AquapiDashboard = {
 						v-for="item in widgets"
 						:key="item.identifier"
 					>
-					
 						<aquapi-dashboard-widget
 							:item="item"
 						>

@@ -1,7 +1,6 @@
 import {AuthLayout} from '../layouts/Auth.vue.js'
 import {DefaultLayout} from '../layouts/Default.vue.js'
 import {AquapiLoginForm} from '../components/auth/AquapiLoginForm.vue.js'
-// import {AquapiDashboard} from '../components/dashboard/index.js'
 import {AquapiDummy} from '../components/app/index.js'
 
 import {Settings} from '../pages/Settings.vue.js'

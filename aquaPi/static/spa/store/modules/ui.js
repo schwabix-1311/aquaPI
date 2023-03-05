@@ -32,9 +32,7 @@ const state = () => ({
 	},
 	activeDialogs: {
 		AquapiLoginDialog: false,
-		// TestDialog1: false,
-		// TestDialog2: true,
-	}
+	},
 })
 
 const getters = {

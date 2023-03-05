@@ -82,10 +82,10 @@ class CalibrationAux(AuxNode):
         settings = super().get_settings()
         settings.append(('unit', 'Einheit',
                          self.unit, 'type="text"'))
-        settings.append(('offset', 'Offset',
-                         self.offset, 'type="number" step="0.01"'))
-        settings.append(('factor', 'Skalierfaktor',
-                         self.factor, 'type="number" step="0.01"'))
+        settings.append(('offset', 'Offset', round(self.offset, 4),
+                         'type="number" step="0.0001"'))
+        settings.append(('factor', 'Skalierfaktor', round(self.factor, 4),
+                         'type="number" step="0.0001"'))
         # TODO frontend should also offer 2-point calibration, this is most practical for pH
         return settings
 

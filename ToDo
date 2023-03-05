@@ -33,15 +33,15 @@ aquaPi ToDo list
 - Nodes:
     controller: null (out=in), delay
     input: schedule analog?, random
-    aux: min, limiter, scaler
-    misc: email, telegram, history, cloud telemetry, macro
+    aux: min, limiter
+    misc: email, telegram (pyTelegramBotAPI), history, cloud telemetry, macro
 
 - macros!?! = scheduled/triggered sender of msgs on the bus? wait for msgs?
   This will require affected nodes to supended their listening to avoid conflicts.
   Not fully clear how this can work.
 
 - input/output drivers, auto-detect where possible:
-    ADC AD1115, File in, Shelly?
+    ADC ADS1115, File in, Shelly?
     PWM pca9685, TC420, Shelly Relay, File, shell script
 
 - user authentication: use Flask.redirect() & session
@@ -75,10 +75,14 @@ aquaPi ToDo list
   logging/email alerts for virtually anything,
   over-temperature could dim the light (aux nodes to limit light level
   from inverted|scaled temp)
-  too low pH could turn on light (if plants are present)
+  too low pH could turn on light (to let plants consume CO2)
+  heuristics to recommend filter cleaning, based on reduced flow ->
+    temperature diffs, rotating wave?
+  utilization -> heater dimension, CO2 valve setting/empty
+  luxmeter??
 
 - unique feature would be a driver interface to a TC420 light controller,
-  wallneradam/tc420 on github is a Linux shell tool to interact with TC429
+  wallneradam/tc420 on github is a Linux shell tool to interact with TC420
 
 
 THOUGHTS
@@ -92,11 +96,24 @@ THOUGHTS
 DONE
 ====
 
+- manually, global: pip pip install pylint, vim-jedi, jedi-language-server, vim-ale
+- manually modify .vimrc:
+        let g:ale_linters = {
+                \ 'python': ['flake8', 'pylint', 'jedils'],
+                \ 'javascript': ['eslint'],
+                \}
+        let g:ale_fixers = {
+                \ 'python': ['autoflake', 'autopep8', 'black'],
+                \}
+        nmap gd :ALEGoToDefinition<CR> " because I prefer tabs
+        nmap gr :ALEFindReferences<CR>
+        nmap K :ALEHover<CR>
+        let g:ale_completion_enabled = 1
+        set omnifunc=ale#completion#OmniFunc
 - init
         python -m venv venv
         . ./venv/bin/activate
-        pip install Flask sseclient
-        ? pip install pylint
+        pip install Flask sseclient ...
 - run
         export FLASK_APP=aquaPi
         export FLASK_ENV=development
@@ -133,11 +150,11 @@ DONE
   with werkzeug's neat auto-reload
 - explore Flask.flash() - for input validation message
 - input/output drivers, auto-detect where possible:
-    DS1820, GPIOin switch
-    GPIO switch, PWM intern
+    GPIOin switch, DS1820, ADS1115
+    GPIOout switch, internal PWM
 - Nodes:
-    controller: minimum, maximum, fader
+    controller: minimum, maximum, fader, sun
     input: switch, analog, schedule switch
     output: switch, analog
-    aux: max, average
+    aux: max, average, calibration (scaler)
 - OS Sleep/Resume disturbs scheduler - fixed

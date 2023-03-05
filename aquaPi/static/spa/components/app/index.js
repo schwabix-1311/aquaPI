@@ -7,8 +7,8 @@ const AquapiPageHeading = {
 				<v-icon 
 					v-if="icon" 
 					color="blue-grey" 
-					class="mr-2" 
 					:class="($vuetify.theme.dark ? 'text--darken-2' : 'text--lighten-4')"
+					left
 				>
 					{{ icon }}
 				</v-icon>

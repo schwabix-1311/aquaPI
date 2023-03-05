@@ -1,11 +1,11 @@
+import {EventBus, AQUAPI_EVENTS} from '../components/app/EventBus.js'
+import '../components/settings/index.js'
+
 const Settings = {
     template: `
-		<v-card elevation="0" tile>
-			<aquapi-page-heading 
-				:heading="$t('pages.settings.heading')" 
-				icon="mdi-tune"
-			></aquapi-page-heading>	        
-		</v-card>
+   		<div>
+			<aquapi-settings></aquapi-settings>
+		</div>
     `
 };
 

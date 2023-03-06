@@ -27,7 +27,7 @@ const AquapiDashboardConfigurator = {
 				<v-divider></v-divider>
 	
 				<v-card-text class="pa-2">
-					<draggable v-model="widgets" handle=".handle" direction="horizontal">
+					<draggable v-model="widgets" handle=".handle" direction="vertical">
 						<v-card 
 							v-for="(item, idx) in widgets"
 							:key="item.identifier"
@@ -134,7 +134,7 @@ Vue.component('AquapiDashboardConfigurator', AquapiDashboardConfigurator)
 
 const AquapiDashboardWidget = {
 	template: `
-		<v-card elevation="3" :loading="false">
+		<v-card tile elevation="3" :loading="false">
 			<v-card-title>
 				<template v-if="widgetTitleIcon">
 					<v-img
@@ -156,15 +156,19 @@ const AquapiDashboardWidget = {
 				{{ item.name }}
 			</v-card-title>
 			
-			<div style="border:1px solid lime">
-				<strong>item:</strong> {{ item }}<br>
-				<strong>node:</strong> {{ node }}
-			</div>
+			<template v-if="(999 == 111)">
+				<div style="border:1px solid lime">
+					<strong>item:</strong> {{ item }}<br>
+					<strong>node:</strong> {{ node }}
+				</div>
+			</template>
 			
-			
-			<div v-if="node" style="border:1px dotted grey; padding: 0.25rem; margin: 0.25rem;">
+			<template v-if="node">
+				<div v-if="(999 == 111)">
+					[node.type: {{ node.type}} | node.name: {{ node.name}} | node.id: {{ node.id }} | node.identifier: {{ node.identifier }}]
+				</div>	
 				<component :is="node.type" :id="node.identifier" :node="node"></component>
-			</div> 
+			</template>					
 		</v-card>
 	`,
 	props: {
@@ -182,10 +186,12 @@ const AquapiDashboardWidget = {
 				IN_ENDP: 'mdi-location-enter',
 				OUT_ENDP: 'mdi-location-exit',
 
-				'CTRL#MinimumCtrl': '', // 'min.svg'
-				'CTRL#MaximumCtrl': '', // 'max.svg'
+				'CTRL#MinimumCtrl': 'min.svg', // 'min.svg'
+				'CTRL#MaximumCtrl': 'max.svg', // 'max.svg'
 				'MinimumCtrl#pH': 'gas_max.svg', // 'gas_min.svg'
 				'MaximumCtrl#pH': 'gas_min.svg', // 'gas_max.svg'
+				'SunCtrl#%': 'light.svg',
+				'FadeCtrl#%': 'light.svg',
 
 				'°C': 'thermo.svg',
 				'MinimumCtrl#°C': 'thermo_min.svg',
@@ -299,9 +305,8 @@ const AquapiDashboard = {
 							type="info"
 							text
 							:icon="'mdi-alert'"
-							YYcolor="'orange'"
 						>
-							... dashboard noch nicht konfiguriert<br>
+							# TODO: translation #  dashboard noch nicht konfiguriert<br>
 							<div class="d-flex justify-end"> 
 								<v-btn color="primary" class="mt-2" @click="showConfigurator">Widgets konfigurieren</v-btn>
 							</div>

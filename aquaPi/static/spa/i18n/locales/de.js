@@ -74,7 +74,6 @@ export default
 			btnSave: {
 				label: 'Speichern'
 			}
-
 		}
 	},
 
@@ -85,6 +84,35 @@ export default
 			history: 'Diagramm',
 			in_endp: 'Eingang',
 			out_endp: 'Ausgang',
+		},
+		dataRange: {
+			default: {
+				label: 'Wert'
+			},
+			analog: {
+				label: 'Messwert'
+			},
+			binary: {
+				label: 'Status',
+				value: {
+					on: 'An',
+					off: 'Aus'
+				}
+			},
+			percent: {
+				label: 'Status',
+				value: {
+					on: 'An',
+					off: 'Aus'
+				}
+			},
+			cronspec: {
+				label: 'Schaltzustand',
+				value: {
+					on: 'An',
+					off: 'Aus'
+				}
+			}
 		}
 	}
 }

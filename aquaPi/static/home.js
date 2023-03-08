@@ -26,7 +26,7 @@ const App = {
                 if ((id in this.nodes) || addNew) {
                     // TODO: error handler - might loose connection
                     // console.debug(`fetch ${id} ${addNew} ...`)
-                    const response = await fetch('/api/node/' + id)
+                    const response = await fetch('/api/nodes/' + id)
                     const node = await response.json()
                     this.setNode(id, node)
                     // console.debug(`... fetch ${id} ${addNew} done`)

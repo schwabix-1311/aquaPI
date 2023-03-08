@@ -12,7 +12,7 @@ from flask import (
 from http import HTTPStatus
 
 log = logging.getLogger('API')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
@@ -22,11 +22,13 @@ log.setLevel(logging.WARNING)
 bp = Blueprint('api', __name__)
 
 
-@bp.route('/api/node/<node_id>')
+@bp.route('/api/nodes/<node_id>')
 def api_node(node_id):
     bus = current_app.bus
     node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
     node = bus.get_node(node_id)
+
+    log.error(str(node))
 
     if node:
         state = {}

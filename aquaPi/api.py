@@ -35,6 +35,8 @@ def api_node(node_id):
     node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
     node = bus.get_node(node_id)
 
+    log.error(str(node))
+
     if node:
         item = node.__getstate__()
         item['type'] = type(node).__name__

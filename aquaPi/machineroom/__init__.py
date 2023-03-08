@@ -14,7 +14,7 @@ from .misc_nodes import History
 
 
 log = logging.getLogger('MachineRoom')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)

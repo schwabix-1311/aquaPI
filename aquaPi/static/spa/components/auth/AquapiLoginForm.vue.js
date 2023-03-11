@@ -61,8 +61,8 @@ const AquapiLoginForm = {
 				password: null,
 			},
 			usernameRules: [
-        		v => !!v || this.$t('auth.login.form.username.errors.empty')
-      		],
+			v => !!v || this.$t('auth.login.form.username.errors.empty')
+		],
 			passwordRules: [
 				v => !!v || this.$t('auth.login.form.password.errors.empty')
 			],
@@ -94,3 +94,5 @@ const AquapiLoginForm = {
 
 Vue.component('AquapiLoginForm', AquapiLoginForm)
 export {AquapiLoginForm}
+
+// vim: set noet ts=4 sw=4:

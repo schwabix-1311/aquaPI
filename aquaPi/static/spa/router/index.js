@@ -29,8 +29,9 @@ const routes = [
         ],
     },
     {
-        // TODO: maybe change /app to / when 'old app' is not use any longer
-        path: '/app',
+        // TODO: maybe change /app to / when 'old app' is not used any longer
+        // partly DONE: old app is now /home, and / redirects to /#/
+        path: '/',
         // name: 'app',
         component: DefaultLayout,
         children: [
@@ -69,7 +70,7 @@ const routes = [
 ];
 
 const router =  new VueRouter({
-    // TODO: maybe switch to mode 'history', when we do not need old URL paths any longer
+    // TODO: switch to mode 'history', when we do not need old URL paths any longer
     mode: 'hash', //'history',
     // base: process.env.BASE_URL,
     routes,

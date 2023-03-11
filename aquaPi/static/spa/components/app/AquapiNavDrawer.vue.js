@@ -122,3 +122,5 @@ const AquapiNavDrawer = {
 
 // export {AquapiNavDrawer}
 Vue.component('AquapiNavDrawer', AquapiNavDrawer)
+
+// vim: set noet ts=4 sw=4:

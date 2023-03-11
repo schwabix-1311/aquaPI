@@ -2,9 +2,9 @@ import {EventBus, AQUAPI_EVENTS} from './components/app/EventBus.js'
 
 const App = {
 	template: `
-    <v-app>
-        <router-view></router-view>
-    </v-app>
+	<v-app>
+		<router-view></router-view>
+	</v-app>
   `,
 	name: 'App',
 	data: () => ({
@@ -12,10 +12,10 @@ const App = {
 
 	methods: {
 		initEventListeners() {
-		 	this.initSSEListener()
+			this.initSSEListener()
 		},
 		detachEventListeners() {
-		 	EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
+			EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
 			// EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 		},
 		initSSEListener() {
@@ -77,3 +77,5 @@ const App = {
 };
 
 export default App;
+
+// vim: set noet ts=4 sw=4:

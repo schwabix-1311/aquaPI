@@ -2,7 +2,7 @@ export default
 {
 	app: {
 		name: 'aquaPi',
-		subtitle: 'the one and only aquarium control center',
+		subtitle: 'Your fish love it',
 		loading: {
 			message: 'Loading<br>Data',
 		}
@@ -18,7 +18,7 @@ export default
 		dashboard: {
 			label: 'Dashboard',
 			title: 'Dashboard',
-			heading: 'AquaPi Dashboard'
+			heading: 'aquaPi Dashboard'
 		},
 		settings: {
 			label: 'Settings'
@@ -52,7 +52,7 @@ export default
 
 	misc: {
 		nodeTypes: {
-			aux: 'Auxiliary / Connection',
+			aux: 'Connection',
 			ctrl: 'Control',
 			history: 'Diagram',
 			in_endp: 'Input',

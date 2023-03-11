@@ -31,7 +31,7 @@ const About = {
 
 	methods: {
 		donate() {
-			window.alert('Spenden bitte an schwabix... auf das Konto ...')
+			window.alert('Lob bitte an tkuhn, Bugs darfst du behalten.')
 		}
 	}
 

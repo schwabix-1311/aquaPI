@@ -154,11 +154,25 @@ class MachineRoom:
                                 [wasser_i.id, wasser_i2.id,
                                  wasser.id, wasser_o.id])
             t_history.plugin(self.bus)
+
+            adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
+                                 avg=1, interval=30)
+            calib_ph = CalibrationAux('pH Kalibrierung', adc_ph.id, unit=' pH',
+                                      points=[(2.99, 4.0), (2.51, 6.9)])
+            ph = MaximumCtrl('pH', calib_ph.id, 7.0)
+            out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
+            out_ph.plugin(self.bus)
+            ph.plugin(self.bus)
+            calib_ph.plugin(self.bus)
+            adc_ph.plugin(self.bus)
+            ph_history = History('pH Verlauf',
+                                 [adc_ph.id, calib_ph.id, ph.id, out_ph.id])
+            ph_history.plugin(self.bus)
             return
 
         if TEST_PH:
-            adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.45, 'V',
-                                 avg=3, interval=60)
+            adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
+                                 avg=1, interval=30)
             calib_ph = CalibrationAux('pH Kalibrierung', adc_ph.id, unit=' pH',
                                       points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH', calib_ph.id, 7.0)

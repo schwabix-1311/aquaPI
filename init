@@ -1,12 +1,14 @@
 #!/usr/bin/bash
 
-# Sorry for the inconvenience, but since this script has to be
-# sourced it can't determine its own home (AFAIK)
-MyHome=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+# Raspi OS (Debian) and Manjaro (Arch) differ in $0 for sourced scripts
+# BASH_SOURCE is always the script, sourced or executed
+# BASH_ARGV0 is the script or "-bash" (when sourced)
+MySelf=$(realpath "$BASH_SOURCE")
+MyHome=$(dirname "$MySelf")
 
-if [[ $(basename "$0") = "init" ]]
+if [[ $(basename -- "$BASH_ARGV0") = $(basename -- "${MySelf}") ]]
 then
-  echo "ERROR: this script must be sourced: '. ${MyHome}/init'"
+  echo "ERROR: this script must be sourced: '. ${MySelf}/init'"
   exit 10
   fi
 
@@ -16,7 +18,7 @@ then
   return 11
   fi
 
-if [[ ! -d ${MyHome}/venv ]]
+if [[ ! -d "${MyHome}/venv" ]]
 then
   echo "First time init of aquaPi development env."
   read -p "CR to continue / Ctrl-C to cancel" dummy

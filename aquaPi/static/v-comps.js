@@ -31,11 +31,11 @@ const unit2icon = {
     ' rH': 'faucet.svg',
     ' rH.min': 'faucet.svg',
     ' rH.max': 'faucet.svg',
-    '%.min': 'min.',
+    '%.min': 'min.svg',
     '%.max': 'max.svg',
-    ' %.min': 'min.',
+    ' %.min': 'min.svg',
     ' %.max': 'max.svg',
-    '.min': 'min.',
+    '.min': 'min.svg',
     '.max': 'max.svg'
 };
 

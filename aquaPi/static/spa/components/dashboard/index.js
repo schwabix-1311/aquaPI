@@ -155,7 +155,7 @@ const AquapiDashboardWidget = {
 				</template>
 				{{ item.name }}
 			</v-card-title>
-			
+
 			<template v-if="(999 == 111)">
 				<div style="border:1px solid lime">
 					<strong>item:</strong> {{ item }}<br>
@@ -166,9 +166,9 @@ const AquapiDashboardWidget = {
 			<template v-if="node">
 				<div v-if="(999 == 111)">
 					[node.type: {{ node.type}} | node.name: {{ node.name}} | node.id: {{ node.id }} | node.identifier: {{ node.identifier }}]
-				</div>	
+				</div>
 				<component :is="node.type" :id="node.identifier" :node="node"></component>
-			</template>					
+			</template>
 		</v-card>
 	`,
 	props: {
@@ -286,7 +286,7 @@ Vue.component('AquapiDashboardWidget', AquapiDashboardWidget)
 const AquapiDashboard = {
 	template: `
 		<v-card elevation="0" tile>
-		
+
 			<aquapi-dashboard-configurator></aquapi-dashboard-configurator>
 			
 			<aquapi-page-heading 
@@ -294,7 +294,7 @@ const AquapiDashboard = {
 				:icon="'mdi-view-dashboard'"
 				:buttons="[{icon: 'mdi-apps', action: showConfigurator}]"
 			></aquapi-page-heading>
-	
+
 			<v-card-text>
 				<v-row justify="center">
 					<v-col :cols="12" :md="6"
@@ -313,7 +313,7 @@ const AquapiDashboard = {
 						</v-alert>     
 					</v-col>
 				</v-row>
-			
+
 				<v-row justify="start">
 					<v-col :cols="12" :md="6"
 						v-for="item in widgets"
@@ -323,7 +323,7 @@ const AquapiDashboard = {
 							:item="item"
 						>
 						</aquapi-dashboard-widget>
-					
+
 						<v-card v-if="999 == 111" elevation="3" :loading="false">
 							{{ nodes[item.id] }}
 

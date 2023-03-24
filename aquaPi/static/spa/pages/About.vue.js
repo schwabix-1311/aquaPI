@@ -26,7 +26,7 @@ const About = {
 				</v-row>
 			</v-card-text>
 		</v-card>
-    `,
+	`,
 
 	methods: {
 		donate() {
@@ -37,3 +37,6 @@ const About = {
 };
 
 export { About };
+
+// vim: set noet ts=4 sw=4:
+

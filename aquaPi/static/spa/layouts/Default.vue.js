@@ -77,7 +77,7 @@ const DefaultLayout = {
 
 			<aquapi-login-dialog></aquapi-login-dialog>
 		</v-app>
-    `,
+	`,
 
 	data: () => ({
 		// navDrawerVisible: false,
@@ -145,7 +145,8 @@ const DefaultLayout = {
 	destroyed() {
 		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.showSSESignal)
 	}
-
 }
 
 export {DefaultLayout};
+
+// vim: set noet ts=4 sw=4:

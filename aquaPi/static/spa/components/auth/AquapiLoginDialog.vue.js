@@ -7,14 +7,14 @@ const AquapiLoginDialog = {
 		AquapiLoginForm
 	},
 	template: `
-	<v-dialog
-		v-model="active"
-		persistent
-		max-width="400px"
-		:overlay-opacity="$store.state.ui.overlay.opacity"
-	>
-		<aquapi-login-form :addCancel="true"></aquapi-login-form>
-	</v-dialog>
+		<v-dialog
+			v-model="active"
+			persistent
+			max-width="400px"
+			:overlay-opacity="$store.state.ui.overlay.opacity"
+		>
+			<aquapi-login-form :addCancel="true"></aquapi-login-form>
+		</v-dialog>
   `,
 
 	data() {

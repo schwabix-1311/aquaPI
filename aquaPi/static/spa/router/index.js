@@ -103,3 +103,5 @@ router.beforeEach((to, from, next) => {
 });
 
 export default router;
+
+// vim: set noet ts=4 sw=4:

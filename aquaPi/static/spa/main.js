@@ -116,3 +116,4 @@ const app = new Vue({
 
 }).$mount('#app');
 
+// vim: set noet ts=4 sw=4:

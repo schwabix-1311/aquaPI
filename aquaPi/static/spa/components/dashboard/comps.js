@@ -1,4 +1,3 @@
-
 // TODO: complete labels for different node types / data_range
 // TODO: complete values for different node types / data_range
 // TODO: implement charts from uikit instance
@@ -85,7 +84,7 @@ const DebugNode = {
 				{{ node }}
 			</div>
 		</div>
-    `
+	`
 }
 Vue.component('DebugNode', DebugNode)
 
@@ -294,7 +293,7 @@ const AquapiNodeData = {
 				</slot>
 			</v-col>
 		</v-row>
-    `,
+	`,
 
 	computed: {}
 }

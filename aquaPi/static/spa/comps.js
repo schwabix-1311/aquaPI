@@ -15,3 +15,5 @@ const AppFooComp = {
 };
 
 export {AppBarComp, AppFooComp};
+
+// vim: set noet ts=4 sw=4:

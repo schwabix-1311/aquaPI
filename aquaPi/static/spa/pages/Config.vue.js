@@ -93,3 +93,5 @@ const Config = {
 };
 
 export { Config };
+
+// vim: set noet ts=4 sw=4:

@@ -22,7 +22,7 @@ const AquapiSettings = {
 				</v-row>
 			</v-card-text>
 		</v-card>
-    `,
+	`,
 
 	data: function() {
 		return {

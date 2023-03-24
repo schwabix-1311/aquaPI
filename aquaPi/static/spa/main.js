@@ -18,8 +18,8 @@ const app = new Vue({
 	i18n,
 	vuetify: new Vuetify({
 		icons: {
-    		iconfont: 'mdi', // 'mdi' || 'mdiSvg' || 'md' || 'fa' || 'fa4' || 'faSvg'
-  		},
+			iconfont: 'mdi', // 'mdi' || 'mdiSvg' || 'md' || 'fa' || 'fa4' || 'faSvg'
+		},
 		theme: {
 			themes: {
 				light: {

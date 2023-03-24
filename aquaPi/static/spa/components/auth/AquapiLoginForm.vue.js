@@ -15,7 +15,7 @@ const AquapiLoginForm = {
 						required
 						:error-messages="errorMessages.email"
 					></v-text-field>
-		
+
 					<v-text-field
 						:label="$t('auth.login.form.password.label')"
 						prepend-icon="mdi-lock"
@@ -27,7 +27,7 @@ const AquapiLoginForm = {
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
-					
+
 					<v-btn v-if="addCancel"
 						@click="cancelLogin"
 						text
@@ -61,8 +61,8 @@ const AquapiLoginForm = {
 				password: null,
 			},
 			usernameRules: [
-        		v => !!v || this.$t('auth.login.form.username.errors.empty')
-      		],
+				v => !!v || this.$t('auth.login.form.username.errors.empty')
+			],
 			passwordRules: [
 				v => !!v || this.$t('auth.login.form.password.errors.empty')
 			],

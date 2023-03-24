@@ -5,8 +5,8 @@ const Config = {
 				:heading="$t('pages.config.heading')" 
 				icon="mdi-cog-outline"
 			></aquapi-page-heading>
-			
-		    <v-card-text>
+
+			<v-card-text>
 				<v-row justify="start">
 					<v-col :cols="12">
 						<v-alert
@@ -25,13 +25,13 @@ const Config = {
 							</div>
 						</v-alert>     
 					</v-col>
-				</v-row>	
-				
+				</v-row>
+
 				<v-sheet 
-				    v-for="node in nodes"
-				    :key="node.id"
-				    outlined
-				    class="my-1"
+					v-for="node in nodes"
+					:key="node.id"
+					outlined
+					class="my-1"
 				>
 <!--					{{ node }}		-->
 					<div class="d-flex flex-row flex-nowrap justify-space-between">
@@ -46,7 +46,7 @@ const Config = {
 									| data: {{ node.data}} {{ node.unit}} {{ node.data_range }}
 								</span>
 							</h3>
-	
+
 							<template v-if="node.inputs">
 								<v-sheet outlined class="ba-1 ml-7">
 									<h5>INPUTS:</h5>
@@ -63,19 +63,17 @@ const Config = {
 													| data: {{ nodeItem(item).data}} {{ nodeItem(item).unit}} {{ nodeItem(item).data_range }}
 												</span>
 											</h3>
-<!--											{{ $store.getters['dashboard/node'](item) }}								-->
+<!--											{{ $store.getters['dashboard/node'](item) }}	-->
 										</li>
 									</ul>
 								</v-sheet>
 							</template>
 						</div>
 					</div>
-                </v-sheet>
-				
+				</v-sheet>
 			</v-card-text>
-				        
 		</v-card>
-    `,
+	`,
 
 	computed: {
 		nodes() {

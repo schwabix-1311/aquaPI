@@ -48,20 +48,20 @@ Vue.component('AquapiPageHeading', AquapiPageHeading)
 
 const AquapiDummy = {
 	template: `
-      <v-hover
-        v-slot="{ hover }"
-      >
-        <v-card
-          :elevation="hover ? 8 : 2"
-          :color="hover ? 'yellow' : 'orange lighten-3'"
-          class="mx-auto text--black"
-          max-width="350"
-        >
-          <v-card-text class="my-4 text-center text-h6">
-            Einfach nur 'ne Dummy-Komponente für Testzwecke
-          </v-card-text>
-        </v-card>
-      </v-hover>
+		<v-hover
+			v-slot="{ hover }"
+		>
+			<v-card
+				:elevation="hover ? 8 : 2"
+				:color="hover ? 'yellow' : 'orange lighten-3'"
+				class="mx-auto text--black"
+				max-width="350"
+			>
+				<v-card-text class="my-4 text-center text-h6">
+					Einfach nur 'ne Dummy-Komponente für Testzwecke
+				</v-card-text>
+			</v-card>
+		</v-hover>
 	`
 }
 Vue.component('AquapiDummy', AquapiDummy)

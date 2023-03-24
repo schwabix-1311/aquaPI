@@ -6,7 +6,7 @@ const Home = {
 		<div>
 			<aquapi-dashboard></aquapi-dashboard>
 		</div>
-    `,
+	`,
 
 	methods: {
 		// async handleSSE(payload) {

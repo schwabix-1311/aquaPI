@@ -162,7 +162,7 @@ const AquapiDashboardWidget = {
 					<strong>node:</strong> {{ node }}
 				</div>
 			</template>
-			
+
 			<template v-if="node">
 				<div v-if="(999 == 111)">
 					[node.type: {{ node.type}} | node.name: {{ node.name}} | node.id: {{ node.id }} | node.identifier: {{ node.identifier }}]
@@ -288,7 +288,7 @@ const AquapiDashboard = {
 		<v-card elevation="0" tile>
 
 			<aquapi-dashboard-configurator></aquapi-dashboard-configurator>
-			
+
 			<aquapi-page-heading 
 				:heading="$t('pages.dashboard.heading')" 
 				:icon="'mdi-view-dashboard'"

@@ -53,7 +53,7 @@ const DefaultLayout = {
 						<v-icon>mdi-login</v-icon>
 					</v-btn>
 				</template>
-				
+
 				<v-btn icon class="white--text" @click="$root.toggleDarkMode">
 					<v-icon>mdi-circle-half-full</v-icon>
 				</v-btn>
@@ -74,10 +74,9 @@ const DefaultLayout = {
 				<v-spacer></v-spacer>
 				<v-icon ref="sse_signal" :color="sseSignalColor">{{ sseSignalIcon }}</v-icon>
 			</v-footer>
-			
+
 			<aquapi-login-dialog></aquapi-login-dialog>
-            
-        </v-app>
+		</v-app>
     `,
 
 	data: () => ({

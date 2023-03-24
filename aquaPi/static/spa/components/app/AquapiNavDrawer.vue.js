@@ -50,9 +50,9 @@ const AquapiNavDrawer = {
 						</v-list-item-title>
 					</v-list-item-content>
 				</v-list-item>
-				
+
 				<v-divider class="mb-1"></v-divider>
-				
+
 				<template v-if="authenticated">
 					<v-list-item
 						link
@@ -68,7 +68,7 @@ const AquapiNavDrawer = {
 								{{ $t('pages.logout.label') }}
 							</v-list-item-title>
 						</v-list-item-content>
-					</v-list-item>						
+					</v-list-item>
 				</template>
 				<template v-else>
 					<v-list-item
@@ -85,10 +85,10 @@ const AquapiNavDrawer = {
 								{{ $t('pages.login.label') }}
 							</v-list-item-title>
 						</v-list-item-content>
-					</v-list-item>						
+					</v-list-item>
 				</template>
 			</v-list>
-		</v-navigation-drawer>	
+		</v-navigation-drawer>
 	`,
 	props: ['items'],
 

@@ -6,7 +6,7 @@ const About = {
 				icon="mdi-information-outline"
 				:buttons="[{icon: 'mdi-gift', action: donate}]"
 			></aquapi-page-heading>	   
-			
+
 			<v-card-text>
 				<v-row justify="start">
 					<v-col :cols="12">
@@ -23,9 +23,8 @@ const About = {
 							... and a link to REST API documentation.
 						</v-alert>     
 					</v-col>
-				</v-row>	
+				</v-row>
 			</v-card-text>
-			
 		</v-card>
     `,
 

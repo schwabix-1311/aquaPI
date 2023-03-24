@@ -76,14 +76,14 @@ Vue.component('AnyNode', AnyNode)
 const DebugNode = {
 	extends: AnyNode,
 	template: `
-    <div style="border: 1px solid red;">
-        <h2>
-            {{ id }} - raw:
-        </h2>
-        <div class="pa-2">
-            {{ node }}
-        </div>
-    </div>
+		<div style="border: 1px solid red;">
+			<h2>
+				{{ id }} - raw:
+			</h2>
+			<div class="pa-2">
+				{{ node }}
+			</div>
+		</div>
     `
 }
 Vue.component('DebugNode', DebugNode)
@@ -92,22 +92,22 @@ Vue.component('DebugNode', DebugNode)
 const BusNode = {
 	extends: AnyNode,
 	template: `
-        <v-card-text>
-            <div v-if="(999 == 111)">
-                <strong>node:</strong> {{ node }}
-            </div>
+		<v-card-text>
+			<div v-if="(999 == 111)">
+				<strong>node:</strong> {{ node }}
+			</div>
 
-            <aquapi-node-data
-                :item="node"
-            >
-                <template v-slot:label>
-                  <span>{{ label }}</span>
-                </template>
-                <template v-slot:value>
-                    <span>{{ value }}</span>
-                </template>
-            </aquapi-node-data>
-        </v-card-text>
+			<aquapi-node-data
+				:item="node"
+			>
+				<template v-slot:label>
+				  <span>{{ label }}</span>
+				</template>
+				<template v-slot:value>
+					<span>{{ value }}</span>
+				</template>
+			</aquapi-node-data>
+		</v-card-text>
 
 <!--      <div class="uk-card uk-card-small uk-card-default uk-card-body" style="border: 1px solid blue;">-->
 <!--        <h2 class="uk-card-title uk-margin-remove-bottom">-->
@@ -277,22 +277,22 @@ const AquapiNodeData = {
 		},
 	},
 	template: `
-        <v-row no-gutters>
-            <div v-if="(999 == 111)">
-                {{ item }}
-            </div>
-            <v-col cols="3"">
-                <slot name="label">
-                    Label
-                </slot>
-            </v-col>
-            
-            <v-col cols="9">
-                <slot name="value">
-                    Value
-                </slot>
-            </v-col>
-        </v-row>
+		<v-row no-gutters>
+			<div v-if="(999 == 111)">
+				{{ item }}
+			</div>
+			<v-col cols="3"">
+				<slot name="label">
+					Label
+				</slot>
+			</v-col>
+			
+			<v-col cols="9">
+				<slot name="value">
+					Value
+				</slot>
+			</v-col>
+		</v-row>
     `,
 
 	computed: {}

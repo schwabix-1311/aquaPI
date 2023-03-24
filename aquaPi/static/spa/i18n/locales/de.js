@@ -2,7 +2,7 @@ export default
 {
 	app: {
 		name: 'aquaPi',
-		subtitle: 'the one and only aquarium control center',
+		subtitle: 'Deine Fische lieben es!',
 		loading: {
 			message: 'Lade<br>Daten',
 		}
@@ -70,7 +70,7 @@ export default
 	dashboard: {
 		configurator: {
 			headline: 'Dashboard Konfiguration',
-			hint: 'Welche Widgets sollen angezeigt werden?',
+			hint: 'Welche Elemente sollen angezeigt werden?',
 			btnSave: {
 				label: 'Speichern'
 			}

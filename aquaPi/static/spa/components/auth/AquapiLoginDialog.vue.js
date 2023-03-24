@@ -36,15 +36,17 @@ const AquapiLoginDialog = {
 	},
 
 	// created() {
-	// 	EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_IN, () => {
-	// 		this.$store.dispatch('ui/hideDialog', this.dialogName)
-	// 	})
+	//	EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_IN, () => {
+	//		this.$store.dispatch('ui/hideDialog', this.dialogName)
+	//	})
 	// },
 	//
 	// destroyed() {
-	// 	EventBus.$off(AQUAPI_EVENTS.AUTH_LOGGED_IN)
+	//	EventBus.$off(AQUAPI_EVENTS.AUTH_LOGGED_IN)
 	// }
 }
 
 // Vue.component('AquapiLoginDialog', AquapiLoginDialog)
 export {AquapiLoginDialog}
+
+// vim: set noet ts=4 sw=4:

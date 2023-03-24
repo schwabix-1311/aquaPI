@@ -1,3 +1,4 @@
+
 // TODO: complete labels for different node types / data_range
 // TODO: complete values for different node types / data_range
 // TODO: implement charts from uikit instance
@@ -109,22 +110,22 @@ const BusNode = {
 			</aquapi-node-data>
 		</v-card-text>
 
-<!--      <div class="uk-card uk-card-small uk-card-default uk-card-body" style="border: 1px solid blue;">-->
-<!--        <h2 class="uk-card-title uk-margin-remove-bottom">-->
-<!--          <span v-if="node != undefined">-->
-<!--            <span v-html="decoration"></span>{{ node.name }}-->
-<!--          </span>-->
-<!--          <span v-else>{{ id }} loading ...</span>-->
-<!--        </h2>-->
-<!--        <div v-html="getAlert" v-bind:class="getAlertClass" :hidden="!getAlert"></div>-->
-<!--        <div v-if="node != undefined" class="uk-padding-remove">-->
-<!--          <div class="uk-grid-collapse" uk-grid>-->
-<!--            <div class="uk-width-2-3" v-html="label"></div>-->
-<!--            <div class="uk-width-expand" v-html="value"></div>-->
-<!--          </div>-->
-<!--        </div>-->
-<!--      </div>-->
-    `,
+	<!--	  <div class="uk-card uk-card-small uk-card-default uk-card-body" style="border: 1px solid blue;">-->
+	<!--		<h2 class="uk-card-title uk-margin-remove-bottom">-->
+	<!--		  <span v-if="node != undefined">-->
+	<!--		<span v-html="decoration"></span>{{ node.name }}-->
+	<!--		  </span>-->
+	<!--		  <span v-else>{{ id }} loading ...</span>-->
+	<!--		</h2>-->
+	<!--		<div v-html="getAlert" v-bind:class="getAlertClass" :hidden="!getAlert"></div>-->
+	<!--		<div v-if="node != undefined" class="uk-padding-remove">-->
+	<!--		  <div class="uk-grid-collapse" uk-grid>-->
+	<!--		<div class="uk-width-2-3" v-html="label"></div>-->
+	<!--		<div class="uk-width-expand" v-html="value"></div>-->
+	<!--		  </div>-->
+	<!--		</div>-->
+	<!--	  </div>-->
+	`,
 
 	computed: {
 		decoration() {
@@ -298,3 +299,5 @@ const AquapiNodeData = {
 	computed: {}
 }
 Vue.component('AquapiNodeData', AquapiNodeData)
+
+// vim: set noet ts=4 sw=4:

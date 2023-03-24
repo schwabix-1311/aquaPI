@@ -19,13 +19,13 @@ const AquapiDashboardConfigurator = {
 							mdi-close
 						</v-icon>
 					</v-btn>
-				</v-card-title>				
+				</v-card-title>
 				<v-card-subtitle class="pa-2">
 					{{ $t('dashboard.configurator.hint') }}
 				</v-card-subtitle>
-				
+
 				<v-divider></v-divider>
-	
+
 				<v-card-text class="pa-2">
 					<draggable v-model="widgets" handle=".handle" direction="vertical">
 						<v-card 
@@ -48,13 +48,13 @@ const AquapiDashboardConfigurator = {
 							</v-btn>
 							<v-row class="ml-1 justify-space-between align-center">
 								<v-col cols="7">
-									<v-text-field 
-										v-model="item.name" 
-										solo 
-										flat 
-										dense 
-										hide-details="auto" 
-										:background-color="($vuetify.theme.dark ? 'grey darken-4' : 'grey lighten-5')" 
+									<v-text-field
+										v-model="item.name"
+										solo
+										flat
+										dense
+										hide-details="auto"
+										:background-color="($vuetify.theme.dark ? 'grey darken-4' : 'grey lighten-5')"
 										class="pa-0 ma-0"
 									></v-text-field>
 								</v-col>
@@ -67,9 +67,9 @@ const AquapiDashboardConfigurator = {
 							</v-row>
 						</v-card>
 					</draggable>
-	
-				</v-card-text>	
-				
+
+				</v-card-text>
+
 				<v-divider></v-divider>
 				<v-card-actions>
 					<v-btn block color="primary" @click.stop="persistConfig">
@@ -83,6 +83,7 @@ const AquapiDashboardConfigurator = {
 	data: function() {
 		return {
 			dialogName: 'AquapiDashboardConfigurator',
+			// FIXME: could be shared with DashboardWidgets.typeIcons
 			typeIcons: {
 				AUX: 'mdi-merge',
 				CTRL: 'mdi-speedometer',
@@ -145,8 +146,8 @@ const AquapiDashboardWidget = {
 						class="mr-2"
 					/>
 					<v-icon
-					    v-else 
-						:color="'blue-grey'" 
+					    v-else
+						:color="'blue-grey'"
 						:class="($vuetify.theme.dark ? 'text--darken-2' : 'text--lighten-4')"
 						left
 					>
@@ -179,46 +180,40 @@ const AquapiDashboardWidget = {
 	},
 	data() {
 		return {
-			typeIcons: {
+			typeIcons: {	// <ES2015 would need a Map to keep the order
+				// Order must be: most specialized to most generic!
+				//
+				// specialized controllers, unit doesn't matter
+				'SunCtrl': 'sun.svg',
+				'FadeCtrl': 'light.svg',
+
+				// Min/Max, common units
+				'MinimumCtrl.°C': 'thermo_min.svg',
+				'MaximumCtrl.°C': 'thermo_max.svg',
+				'MinimumCtrl.°F': 'thermo_min.svg',
+				'MaximumCtrl.°F': 'thermo_max.svg',
+				'MinimumCtrl.rH': 'faucet.svg',
+				'MaximumCtrl.rH': 'faucet.svg',
+				'MinimumCtrl.pH': 'gas_min.svg',
+				'MaximumCtrl.pH': 'gas_max.svg',
+
+				// Min/Max, uncommon/undef unit
+				'MinimumCtrl': 'min.svg',
+				'MaximumCtrl': 'max.svg',
+
+				// ?? unit, controller type doesn't matter
+				'°C': 'thermo.svg',
+				'°F': 'thermo.svg',
+				'pH': 'gas.svg',
+				'rH': 'faucet.svg',
+				//'V': 'probe.png', -> svg
+
+				// generic by role
 				AUX: 'mdi-merge',
 				CTRL: 'mdi-speedometer',
 				HISTORY: 'mdi-chart-line',
 				IN_ENDP: 'mdi-location-enter',
 				OUT_ENDP: 'mdi-location-exit',
-
-				'CTRL#MinimumCtrl': 'min.svg', // 'min.svg'
-				'CTRL#MaximumCtrl': 'max.svg', // 'max.svg'
-				'MinimumCtrl#pH': 'gas_max.svg', // 'gas_min.svg'
-				'MaximumCtrl#pH': 'gas_min.svg', // 'gas_max.svg'
-				'SunCtrl#%': 'light.svg',
-				'FadeCtrl#%': 'light.svg',
-
-				'°C': 'thermo.svg',
-				'MinimumCtrl#°C': 'thermo_min.svg',
-				'MaximumCtrl#°C': 'thermo_max.svg',
-				'°F': 'thermo.svg',
-				'MinimumCtrl#°F': 'thermo_min.svg',
-				'MaximumCtrl#°F': 'thermo_max.svg',
-				// 'pH': 'gas.svg',
-				// 'pH.min': 'gas_min.svg',
-				// 'pH.max': 'gas_max.svg',
-				// ' pH': 'gas.svg',
-				// ' pH.min': 'gas_min.svg',
-				// ' pH.max': 'gas_max.svg',
-				'rH': 'faucet.svg',
-				'MinimumCtrl#rH': 'faucet.svg',
-				'MaximumCtrl#rH': 'faucet.svg',
-				// ' rH': 'faucet.svg',
-				// ' rH.min': 'faucet.svg',
-				// ' rH.max': 'faucet.svg',
-				'MinimumCtrl#%': 'min.svg',
-				'MaximumCtrl#%': 'max.svg',
-				// '%.min': 'min.',
-				// '%.max': 'max.svg',
-				// ' %.min': 'min.',
-				// ' %.max': 'max.svg',
-				'.min': 'min.svg',
-				'.max': 'max.svg'
 			}
 		}
 	},
@@ -236,47 +231,19 @@ const AquapiDashboardWidget = {
 		},
 		widgetTitleIcon() {
 			let icon = null
-			let keys = []
-			keys.push(this.item.role)
-			if (this.item.role != 'HISTORY') {
-				keys.push(this.item.type)
-			}
+			let w_key = this.item.role + '.' + this.item.type
 
 			if (this.node) {
-				let unit = this.node.unit ? this.node.unit.trim() : ''
-				if (unit.length) {
-					keys.push(unit)
+				w_key += '.' + this.node.unit.trim()
+			}
+			//w_key = w_key.replace('HISTORY', '')
+
+			for (const k in this.$data.typeIcons) {
+				if (w_key.includes(k)) {
+					icon = this.$data.typeIcons[k];
+					break
 				}
 			}
-
-			let key = keys.join('#')
-			if (this.$data.typeIcons[key]) {
-				return this.$data.typeIcons[key]
-			}
-			if (keys.length > 2) {
-				key = [keys[1], keys[2]].join('#')
-				if (this.$data.typeIcons[key]) {
-					return this.$data.typeIcons[key]
-				}
-
-				key = [keys[0], keys[2]].join('#')
-				if (this.$data.typeIcons[key]) {
-					return this.$data.typeIcons[key]
-				}
-			}
-
-			key = keys[0]
-			if (this.$data.typeIcons[key]) {
-				return this.$data.typeIcons[key]
-			}
-
-			if (keys.length > 2) {
-				key = keys[2]
-				if (this.$data.typeIcons[key]) {
-					return this.$data.typeIcons[key]
-				}
-			}
-
 			return icon
 		}
 	}
@@ -289,8 +256,8 @@ const AquapiDashboard = {
 
 			<aquapi-dashboard-configurator></aquapi-dashboard-configurator>
 
-			<aquapi-page-heading 
-				:heading="$t('pages.dashboard.heading')" 
+			<aquapi-page-heading
+				:heading="$t('pages.dashboard.heading')"
 				:icon="'mdi-view-dashboard'"
 				:buttons="[{icon: 'mdi-apps', action: showConfigurator}]"
 			></aquapi-page-heading>
@@ -307,10 +274,10 @@ const AquapiDashboard = {
 							:icon="'mdi-alert'"
 						>
 							# TODO: translation #  dashboard noch nicht konfiguriert<br>
-							<div class="d-flex justify-end"> 
+							<div class="d-flex justify-end">
 								<v-btn color="primary" class="mt-2" @click="showConfigurator">Widgets konfigurieren</v-btn>
 							</div>
-						</v-alert>     
+						</v-alert>
 					</v-col>
 				</v-row>
 
@@ -346,7 +313,7 @@ const AquapiDashboard = {
 				</v-row>
 			</v-card-text>
 		</v-card>
-    `,
+	`,
 
 	data: function() {
 		return {
@@ -394,3 +361,4 @@ const AquapiDashboard = {
 Vue.component('AquapiDashboard', AquapiDashboard)
 export {AquapiDashboard, AquapiDashboardConfigurator}
 
+// vim: set noet ts=4:

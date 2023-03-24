@@ -7,3 +7,5 @@ const AQUAPI_EVENTS = {
 	APP_LOADING: 'app:loading',
 }
 export {EventBus, AQUAPI_EVENTS}
+
+// vim: set noet ts=4 sw=4:

@@ -67,3 +67,5 @@ const AquapiDummy = {
 Vue.component('AquapiDummy', AquapiDummy)
 
 export {AquapiPageHeading, AquapiDummy}
+
+// vim: set noet ts=4 sw=4:

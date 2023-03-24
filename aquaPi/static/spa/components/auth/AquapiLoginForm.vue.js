@@ -94,3 +94,5 @@ const AquapiLoginForm = {
 
 Vue.component('AquapiLoginForm', AquapiLoginForm)
 export {AquapiLoginForm}
+
+// vim: set noet ts=4 sw=4:

@@ -25,11 +25,11 @@ const About = {
 					</v-col>
 				</v-row>
 			</v-card-text>
-			<!-- FIXME ?? v-card-text :class="text-h5" :text="$t('pages.about.copyright')">
+			<v-card-text>
+				{{ $t('pages.about.copyright') }}
 			</v-card-text -->
 			<v-card-text>
 				<div class="text-h5">Copyrights</div>
-
 				This software is released under GNU GPL v.3
 			</v-card-text>
 			<v-card-text>

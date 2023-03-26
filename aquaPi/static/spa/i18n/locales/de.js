@@ -13,10 +13,10 @@ export default
 			label: 'Registrierung'
 		},
 		login: {
-			label: 'Login'
+			label: 'Anmelden'
 		},
 		logout: {
-			label: 'Logout'
+			label: 'Abmelden'
 		},
 		home: {
 			label: 'Start'
@@ -24,19 +24,20 @@ export default
 		dashboard: {
 			label: 'Dashboard',
 			title: 'Dashboard',
-			heading: 'aquaPi Dashboard'
+			heading: 'aquaPi Dashboard',
 		},
 		settings: {
 			label: 'Einstellungen',
-			heading: 'Einstellungen'
+			heading: 'Einstellungen',
 		},
 		config: {
 			label: 'Konfiguration',
-			heading: 'Konfiguration'
+			heading: 'Konfiguration',
 		},
 		about: {
 			label: 'Über aquaPi',
-			heading: 'Über aquaPi'
+			heading: 'Über aquaPi',
+                        copyright: 'Copyright',
 		}
 	},
 

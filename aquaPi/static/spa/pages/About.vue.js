@@ -19,14 +19,25 @@ const About = {
 							:icon="'mdi-clock'"
 							YYcolor="'orange'"
 						>
-							Someday this page will show version, copyright, system state.<br>
+							Someday this page will show version, copyright, system state, etc.<br>
 							... and a link to REST API documentation.
 						</v-alert>     
 					</v-col>
 				</v-row>
 			</v-card-text>
+			<!-- FIXME ?? v-card-text :class="text-h5" :text="$t('pages.about.copyright')">
+			</v-card-text -->
+			<v-card-text>
+				<div class="text-h5">Copyrights</div>
+
+				This software is released under GNU GPL v.3
+			</v-card-text>
+			<v-card-text>
+					Part of this software is based on Adam Wallner's excellent library for the TC420 LED Controller.<br>
+					(c) 2020 Adam Wallner, released under GNU GPL v.3
+			</v-card-text>
 		</v-card>
-	`,
+    `,
 
 	methods: {
 		donate() {

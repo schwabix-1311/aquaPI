@@ -58,11 +58,11 @@ const AnyNode = {
 	},
 	created: async function () {
 		this.in_ids = []
-		// console.debug(`AnyNode: create ${this.id} ...`)
+		console.debug(`AnyNode: create ${this.id} ...`)
 		await this.$root.updateNode(this.id, true)
-		// console.debug(`... Any create ${this.id} done`)
+		console.debug(`... Any create ${this.id} done`)
 
-		// console.log(this.node.inputs.sender)
+		console.log(this.node.inputs?.sender)
 		if (this.node.inputs?.sender != null) {
 			this.in_ids = this.node.inputs.sender
 			if (this.in_ids == '*')

@@ -37,6 +37,9 @@ const AnyNode = {
 		// // }
 	},
 	computed: {
+		descript() {
+			return ''  // just a sample
+		},
 		label() {
 			let node = this.node
 			switch (node.data_range) {
@@ -97,6 +100,9 @@ const BusNode = {
 				<strong>node:</strong> {{ node }}
 			</div>
 
+			<div v-if="descript">
+				<span>{{ descript }}</span>
+			</div>
 			<aquapi-node-data
 				:item="node"
 			>
@@ -159,12 +165,22 @@ Vue.component('ControllerNode', ControllerNode)
 
 const MinimumCtrl = {
 	extends: ControllerNode,
+	computed: {
+		descript() {
+			return 'Sollwert: >= ' + this.node.threshold.toString() // just a sample
+		},
+	},
 }
 Vue.component('MinimumCtrl', MinimumCtrl)
 
 
 const MaximumCtrl = {
 	extends: ControllerNode,
+	computed: {
+		descript() {
+			return 'Sollwert: <= ' + this.node.threshold.toString() // just a sample
+		},
+	},
 }
 Vue.component('MaximumCtrl', MaximumCtrl)
 
@@ -172,15 +188,20 @@ Vue.component('MaximumCtrl', MaximumCtrl)
 const SunCtrl = {
 	extends: ControllerNode,
 	computed: {
+		descript() {
+			return this.node.xscend.toString() + ' h_/ '
+			     + this.node.highnoon.toString() + ' h \\_'
+				 + this.node.xscend.toString() + ' h'
+		},
 		value() {
 			let node = this.node
 			switch (node.data) {
-				case 100:
-					return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.on')
-				case 0:
-					return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.off')
-				default:
-					return node.data.toFixed(2).toString() + (node.unit ? ' ' + node.unit : '')
+			case 100:
+				return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.on')
+			case 0:
+				return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.off')
+			default:
+				return node.data.toFixed(2).toString() + (node.unit ? ' ' + node.unit : '')
 			}
 		}
 	}

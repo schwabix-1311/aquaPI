@@ -2,15 +2,21 @@ export default
 {
 	app: {
 		name: 'aquaPi',
-		subtitle: 'Your fish love it',
+		subtitle: 'Your fish will love it!',
 		loading: {
 			message: 'Loading<br>Data',
 		}
 	},
 
 	pages: {
+		register: {
+			label: 'Register'
+		},
 		login: {
 			label: 'Login'
+		},
+		logout: {
+			label: 'Logout'
 		},
 		home: {
 			label: 'Start'
@@ -18,13 +24,20 @@ export default
 		dashboard: {
 			label: 'Dashboard',
 			title: 'Dashboard',
-			heading: 'aquaPi Dashboard'
+			heading: 'aquaPi Dashboard',
 		},
 		settings: {
-			label: 'Settings'
+			label: 'Settings',
+			heading: 'Settings',
+		},
+		config: {
+			label: 'Configuration',
+			heading: 'Configuration',
 		},
 		about: {
-			label: 'About'
+			label: 'About',
+                        heading: 'About',
+                        copyright: 'Copyright',
 		}
 	},
 

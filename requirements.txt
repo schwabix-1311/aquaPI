@@ -16,3 +16,4 @@ python-dateutil==2.8.2
 RPi.GPIO==0.7.1
 Adafruit-Blinka==8.11.0
 adafruit-circuitpython-ads1x15==2.2.21
+pyusb==1.2.1

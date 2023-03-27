@@ -64,6 +64,11 @@ aquaPi ToDo list
 - more references - collection of extensions I might need
   ref: https://github.com/humiaozuzu/awesome-flask
 
+- TODO: in wallneradam/tc420 track PRs 11/12/13 or fork and apply there
+- TC420 lib installation once PRs are released:
+    pip install tc420 (->requirements.txt); (addgroup plugdev); adduser <user> plugdev; cp 99-7c420.rules /etc/udev/rules.d/
+  adapter µUSB->USB A plus cable USB A -> USB B
+
 - Telegram bot in Python:
   https://thepythoncorner.com/posts/2021-01-16-how-create-telegram-bot-in-python/
 

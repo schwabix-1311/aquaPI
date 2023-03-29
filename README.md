@@ -8,7 +8,9 @@ On the technical side - for those who like to understand the inner workings, or 
 The project is based on Python/Flask as backend, plus Vuetify as reactive frontend. The Raspberry runs "headless", meaning the user interface is your mobile, tablet, or PC.
 
 To explain the building blocks, lets start with a simple temperature controller:
+
 you select an analog input node (reading values through a configurable driver), connect it to a threshold node (switching on/off depending on the reading), which then is connected to a relay output node (writing to a configurable driver). That's all.
+
 Later, for improved reliability you might want to have redundant sensors; you would simply add another input node reading a 2nd sensor, plus an averaging node to combine both readings. Finally you would reconnect your threshold node to use the average instead of the initial input.
 
 AquaPi is designed to work completely offline, not cloud! Network is required to allow the user interaface on your mobile or PC shown in a browser, but the coomunication stays in your WiFi zone unless you decide to expose it through VPN or similar.

@@ -1,30 +1,26 @@
 # aquaPi
 A fish tank controller for Raspberry PI - in implementation phase
 
-The project is based on Python/Flask as backend, plus Vue as reactive frontend.
-The controller machinery (the "machine room") uses a highly modular architecture of simple nodes that are chained to build the controller functions.
+Using small functional blocks this software can build the controller functions for your fish tank in a highly modular way. The result is minmal hardware requirements and a UI showing exacly your desired functions, whether it is a simple light dimmer or a complex setup with redundant temperature sensors, many lights, pH controller and dosers. Based on a Raspberyy Pi (Model zero or better) you can get a powerful solution including diagrams, email or Telegram alarms, multi-channel dimmers, etc. for a competitive price.
+Some experience with hardware setup is required. We're working in it to reduce this part, e.g. the common TC420 LED controller can be integrated and thus eliminates the need for recabling or to get new power drivers (MOSFET). 
 
-As an example, a basic temperature controller is built from an analog input node (reading values through a configurable driver), plus a minimum threshold node (switching on/off depending on the reading), and a binary output node (writing to a configurable driver). Then, for improved reliability you might want to have redundant sensors; you would simply add another input node reading a 2nd sensor and add an averaging node to combine both readings, finally the threshold would be reconnected to listen to the average instead of the 1st input.
+On the technical side - for those who like to understand the inner workings, or to contribute:
+The project is based on Python/Flask as backend, plus Vuetify as reactive frontend. The Raspberry runs "headless", meaning the user interface is you mobile, tablet, or PC.
 
-All these nodes communicate in the background on a bus. Any type of listener (or sender) can easily be added to the bus to implement new functionality, e.g. a node to remember history for diagrams, or a node to send emails when alerting conditions are met.
+As an example for the building blocks, lests start with simple temperature controller: you select an analog input node (reading values through a configurable driver), plus a minimum threshold node (switching on/off depending on the reading), and a relay output node (writing to a configurable driver). Later, for improved reliability you might want to have redundant sensors; you would simply add another input node reading a 2nd sensor, plus an averaging node to combine both readings. Finally you would reconnect your threshold node to use the average instead of the initial input.
 
-The backend is designed to work completely offline (you lose time synchronizstion though). The user interface depends on a browser that can run on the same Raspberry system; typically it will be a smart phone or computer and therefore both sides need a network ocnnection, but no cloud services.
+AquaPi is designed to work completely offline, not cloud! Network is required to allow the user interaface on your mobile or PC shown in a browser, but the coomunication stays in your WiFi zone unless you decide to expose it through VPN or similar.
 
 **What is working so far?**
 
-The backend meanwhile can reliably control temperatures (plural!) using DS1820 sensors and relay outputs. Any binary hardware connected to GPIO pins (MOSFETS, relay PCBs) is usable as output. Light controllers work off cron schedules (this will change to a more user friendly calendar later), with smooth fading on both Raspberry PWM channels. 
-The count of controllers of any type is only limited by CPU and memory. ATO (water refill) should be doable with float switch and relay output, but this is unusual for fresh water aquariums where my focus lies. CO<sub>2</sub>/pH (ADC input) is close to complete.
-
-On the frontend a configurable Dashboard monitors state of backend in real time through any modern browser, including a first implementation of charts.
-Operation parameters have a preliminary settings page.
-The configuration of controller chains has no user interface yet; you need to edit (simple!) python source to define the nodes described above.
+The backend is complete to allow running my :-) aquarium with dimmed light, temperature and pH/CO2. The UI is basically working for monitoring. Drivers for relays, on-board PWM, TC420, temp. sensor DS1820 and ADC AD1115 (pH probe!) are working, more to follow.
+The configuration of controller blocks has no user interface yet; you need to edit (simple!) python source to define the nodes described above.
 
 **What is needed?**
-- Several drivers for I²C chips need to be implemented. A driver for the pouplar TC420/421 PWM controller is required.
-- The basic configuration of nodes and controllers needs to be implemented as reactive Vue page(s).
-- The front end needs a reactive settings page, dynamically offering all adjustable settings of the configured nodes. 
-- Frontend and backend needs modifications to allow i18n.
-- Reporting functions in various ways (email alerts, logging page).
+- More drivers for I²C chips need to be implemented.
+- The intial UI, based on Flask & Jinja is beeing converted to a modern SPA using Vuetify.
+- Frontend and backend need translations.
+- Reporting functions in various ways (email/Telegram alerts, logging page).
 - Documentataion. Testing. Translation.
 - Packaging and installation (ATM this project has no build step, and may ship in this form)
 
@@ -35,4 +31,4 @@ To get started, clone the repository to e.g.  ~/aquaPI  on your Linux system, th
 
 Windows is not actively supported as a development environment (currently it seems to work) - in lack of a Windows PC fixing Windows-only issues has no priority. The target system is limited to Raspberry OS anyways. My development environment is Manjaro Linux. All drivers support a simulation mode, so no Raspberry is needed for development.
 
-Markus Kuhn, 2022-12-09
+Markus Kuhn, 2023-03-29

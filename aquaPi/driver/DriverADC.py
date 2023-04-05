@@ -24,7 +24,7 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log.setLevel(logging.DEBUG)
 
 
 # ========== ADC inputs ==========
@@ -144,10 +144,12 @@ class DriverADS1115(AInDriver):
         # val = self._ana_in.voltage
         median = [self._ana_in.voltage,
                   self._ana_in.voltage,
+                  self._ana_in.voltage,
+                  self._ana_in.voltage,
                   self._ana_in.voltage]
         median.sort()
-        log.debug('median %f %f %f', median[0], median[1], median[2])
-        val = median[1]
+        log.debug('median %f %f %f', median[0], median[2], median[4])
+        val = median[2]
 
         return val
 

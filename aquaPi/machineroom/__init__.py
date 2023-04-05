@@ -139,7 +139,7 @@ class MachineRoom:
 
             # single temp sensor, switched relays
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
-                                   avg=2, interval=30)
+                                   avg=1, interval=30)
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
             wasser_o = SwitchDevice('Heizstab', wasser.id,
                                     'GPIO 12 out', inverted=1)
@@ -159,7 +159,7 @@ class MachineRoom:
                                  avg=1, interval=30)
             calib_ph = CalibrationAux('pH Kalibrierung', adc_ph.id, unit=' pH',
                                       points=[(2.99, 4.0), (2.51, 6.9)])
-            ph = MaximumCtrl('pH', calib_ph.id, 7.0)
+            ph = MaximumCtrl('pH', calib_ph.id, 6.5)
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
             out_ph.plugin(self.bus)
             ph.plugin(self.bus)

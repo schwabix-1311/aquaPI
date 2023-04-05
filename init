@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 # Raspi OS (Debian) and Manjaro (Arch) differ in $0 for sourced scripts
 # BASH_SOURCE is always the script, sourced or executed

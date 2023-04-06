@@ -40,9 +40,17 @@ aquaPi ToDo list
   This will require affected nodes to supended their listening to avoid conflicts.
   Not fully clear how this can work.
 
+- DB for history: InfluxDB, 2.6 is current, Raspi OS offers 1.6.4, should suffice,
+  most prominent changes are optional TSI (on disk index), CQ -> tasks,
+  Unlikely we need this with our very low utilization
+  BTW, 1.6 is the release used in my (old) openHAB, allowing to test external
+  InfluxDB instances
+
 - input/output drivers, auto-detect where possible:
     ADC ADS1115, File in, Shelly?
     PWM pca9685, TC420, Shelly Relay, File, shell script
+
+- pH probe: JBL describes aging of probes. A new probe has 0mV @ pH7 and 186mV @ pH4. When calibrating an offset of > +/-40mV or a voltage diff of < 90mV between pH7 and pH4 their controller rejects a probe.
 
 - user authentication: use Flask.redirect() & session
   three access levels: viewer / operator (e.g. temperature setpoints) / admin (full config)
@@ -63,6 +71,11 @@ aquaPi ToDo list
 
 - more references - collection of extensions I might need
   ref: https://github.com/humiaozuzu/awesome-flask
+
+- TODO: in wallneradam/tc420 track PRs 11/12/13 or fork and apply there
+- TC420 lib installation once PRs are released:
+    pip install tc420 (->requirements.txt); (addgroup plugdev); adduser <user> plugdev; cp 99-7c420.rules /etc/udev/rules.d/
+  adapter µUSB->USB A plus cable USB A -> USB B
 
 - Telegram bot in Python:
   https://thepythoncorner.com/posts/2021-01-16-how-create-telegram-bot-in-python/

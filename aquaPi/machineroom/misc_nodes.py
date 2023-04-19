@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import os
 from collections import deque
 from time import time
 
@@ -15,6 +16,56 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
+
+
+# ========== preliminary interface to InfluxDB ==========
+
+INFLUX_SRV = 'localhost'    # can be an IP
+INFLUX_PORT = 8086
+INFLUX_URL = f'http://{INFLUX_SRV}:{INFLUX_PORT}'
+
+def _curl_http(method, endpoint, data=None, option=None):
+    cmd = f'curl -i -{method} "{INFLUX_URL}/{endpoint}"'
+    if option:
+        cmd = f'curl -i -{method} "{INFLUX_URL}/{endpoint}?{option}"'
+    if data:
+        cmd += ' ' + data
+    os.system(cmd)
+
+def _curl_query(flux, option=None):
+    _curl_http('GET', 'query', data=f'--data-urlencode "q={flux}"', option=option)
+
+def _curl_post(flux, option=None):
+    _curl_http('XPOST', 'query', data=f'--data-urlencode "q={flux}"', option=option)
+
+def _curl_write(line, option=None):
+    _curl_http('XPOST', 'write', data=f'--data-binary "{line}"', option=option)
+
+
+def create_influx(db_name, node_id):
+    cmds = [f'CREATE DATABASE {db_name} WITH DURATION 1h'
+           ,f'CREATE RETENTION POLICY one_day ON {db_name} DURATION 1d REPLICATION 1'
+           ,f'CREATE RETENTION POLICY one_month ON {db_name} DURATION 31d REPLICATION 1'
+           ,f'CREATE CONTINUOUS QUERY qc_day_{node_id} ON {db_name} BEGIN' \
+             '  SELECT mean(*) INTO {db_name}.one_day.:MEASUREMENT'\
+             '  FROM {db_name}.autogen.{node_id} GROUP BY time(1m),*'\
+             'END'
+           # ,'CREATE CONTINUOUS QUERY qc_month_rp ON %s BEGIN SELECT mean(*),median(*) INTO %s.one_month.:MEASUREMENT FROM %s.one_day./.*/ GROUP BY time(1h),* END' % (db_name, db_name, db_name))
+           ]
+    if INFLUX_SRV == 'localhost':
+        os.system('influx -execute "' + '; '.join(cmds) + '"')
+    else:
+        for cmd in cmds:
+            _curl_post(cmd)
+
+def feed_influx(db_name, node_id, value):
+    data = f'{node_id} {value[0]}={value[1]}'
+
+    # shortcut for localhost, could be extended for post/query
+    if INFLUX_SRV == 'localhost':
+        os.system(f'influx -database={db_name} -precision=s  -execute "INSERT {data}"')
+    else:
+        _curl_write(data, option=f'db={db_name}&precision=s')
 
 
 # ========== miscellaneous ==========
@@ -42,6 +93,8 @@ class History(BusListener):
         self.data = 0  # just anything for MsgBorn
         self._nextrefresh = time()
 
+        create_influx('aquaPi', self.id)
+
     def __getstate__(self):
         state = super().__getstate__()
         to_dict = {}
@@ -56,6 +109,9 @@ class History(BusListener):
     def listen(self, msg):
         if isinstance(msg, MsgData):
             now = int(time())
+
+            feed_influx('aquaPi', self.id, (msg.sender, msg.data))
+
             if msg.sender not in self._store:
                 log.debug('%s: new history for %s', self.name, msg.sender)
                 self._store[msg.sender] = deque(maxlen=self.duration * 60 * 60)  # limit to 1/sec for one day

@@ -177,6 +177,8 @@ class History(BusListener):
         for snd in self._inputs.sender:
             self.db.add_field(snd)
 
+        create_influx('aquaPi', self.id)
+
     def __getstate__(self):
         state = super().__getstate__()
         hist = self.db.query(self._inputs.sender)

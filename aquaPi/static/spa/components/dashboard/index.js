@@ -9,6 +9,7 @@ const AquapiDashboardConfigurator = {
 			permanent
 			:overlay-opacity="0.8"
 			:style="'max-width:100vw;'"
+			id="dashboard_configurator"
 		>
 			<v-card elevation="0">
 				<v-card-title class="d-flex flex-row pa-2">
@@ -342,6 +343,9 @@ const AquapiDashboard = {
 	methods: {
 		showConfigurator() {
 			this.$store.dispatch('ui/showDialog', 'AquapiDashboardConfigurator')
+			this.$nextTick(() => {
+				document.querySelectorAll('#dashboard_configurator div.v-navigation-drawer__content')[0].scrollTo(0, 0)
+			})
 		},
 		hideConfigurator() {
 			this.$store.dispatch('ui/hideDialog', 'AquapiDashboardConfigurator')

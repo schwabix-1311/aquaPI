@@ -73,6 +73,19 @@ div.v-main__wrap > div.container {
     background-color: rgba(255, 255, 255, 0.05)
 }
 
+div.aquapi-dashboard div.v-expansion-panels {
+    border-radius: 0;
+}
+div.aquapi-dashboard div.v-expansion-panel:before {
+    box-shadow: inherit;
+}
+div.aquapi-dashboard div.v-expansion-panel--active > .v-expansion-panel-header {
+    min-height: 48px;
+}
+
+div.aquapi-dashboard div.v-expansion-panel-content__wrap {
+    padding: 0;
+}
 div::-webkit-scrollbar-track {
     background-color: rgba(100, 100, 100, 0.1);
 }

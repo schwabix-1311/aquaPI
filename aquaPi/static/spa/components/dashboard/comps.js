@@ -13,6 +13,11 @@ const AnyNode = {
 		addNodeTitle: {
 			type: Boolean,
 			default: true
+		},
+		level: {
+			type: Number,
+			default: 1,
+			required: true
 		}
 	},
 	template: `
@@ -27,19 +32,6 @@ const AnyNode = {
 		return {}
 	},
 
-	created: async function () {
-		// this.in_ids = []
-		//
-		// console.log('[AnyNode] CREATED | this:', this)
-		// // if (this.node.inputs?.sender != null) {
-		// //     this.in_ids = this.node.inputs.sender
-		// //     if (this.in_ids == '*')
-		// //         this.in_ids = []
-		// //     console.debug(`... INs of ${this.id}:  ${this.in_ids}`)
-		// //     for (let in_id of this.in_ids)
-		// //         await this.$root.updateNode(in_id, true)
-		// // }
-	},
 	computed: {
 		descript() {
 			return ''  // just a sample
@@ -85,6 +77,7 @@ const AnyNode = {
 					nodes.push(this.$store.getters['dashboard/node'](id))
 				})
 			}
+
 			return nodes
 		},
 	},
@@ -136,21 +129,57 @@ const BusNode = {
 			</v-card-text>
 			
 			<template
-				v-if="inputNodes"
+				v-if="inputNodes.length > 0"
 			>
-				<v-card
-					v-for="(item, index) in inputNodes"
-					:key="item.identifier"
-					outlined
-					tile
-					class="ma-3 mt-0"
+				<template
+					v-if="level == 1"
 				>
-					<component
-						:is="item.type"
-						:id="item.identifier"
-						:node="item"
-					></component>
-				</v-card>
+					<v-expansion-panels
+						tile
+					>
+						<v-expansion-panel>
+							<v-expansion-panel-header
+								class="py-0 px-4"
+							>
+								{{ $t('dashboard.widget.inputs.label') }}
+							</v-expansion-panel-header>
+							<v-expansion-panel-content>
+								<v-card
+									v-for="(item, index) in inputNodes"
+									:key="item.identifier"
+									outlined
+									tile
+									class="ma-3 mt-0"
+								>
+									<component
+										:is="item.type"
+										:id="item.identifier"
+										:node="item"
+										:level="(level + 1)"
+									></component>
+								</v-card>
+							</v-expansion-panel-content>
+						</v-expansion-panel>
+					</v-expansion-panels>
+				</template>
+				<template
+					v-else
+				>
+					<v-card
+						v-for="(item, index) in inputNodes"
+						:key="item.identifier"
+						outlined
+						tile
+						class="ma-3 mt-0"
+					>
+						<component
+							:is="item.type"
+							:id="item.identifier"
+							:node="item"
+							:level="(level + 1)"
+						></component>
+					</v-card>
+				</template>
 			</template>
 		</div>
 	`,

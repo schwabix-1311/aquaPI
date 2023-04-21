@@ -188,6 +188,7 @@ const AquapiDashboardWidget = {
 					:id="node.identifier" 
 					:node="node"
 					:addNodeTitle="false"
+					:level="1"
 				></component>
 			</template>
 		</v-card>
@@ -308,7 +309,7 @@ const AquapiDashboard = {
 				:buttons="[{icon: 'mdi-apps', action: showConfigurator}]"
 			></aquapi-page-heading>
 
-			<v-card-text>
+			<v-card-text class="aquapi-dashboard">
 				<v-row 
 					v-if="!(widgets.length)"
 					justify="center"

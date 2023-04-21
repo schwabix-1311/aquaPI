@@ -79,6 +79,11 @@ export default
 		configuration: {
 			hintEmpty: 'Es sind noch keine Elemente für das Dashboard ausgewählt',
 			btnSetup: 'Widgets konfigurieren'
+		},
+		widget: {
+			inputs: {
+				label: 'Eingänge'
+			}
 		}
 	},
 

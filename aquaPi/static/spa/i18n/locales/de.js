@@ -75,6 +75,10 @@ export default
 			btnSave: {
 				label: 'Speichern'
 			}
+		},
+		configuration: {
+			hintEmpty: 'Es sind noch keine Elemente für das Dashboard ausgewählt',
+			btnSetup: 'Widgets konfigurieren'
 		}
 	},
 

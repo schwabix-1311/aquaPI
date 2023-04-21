@@ -136,8 +136,16 @@ Vue.component('AquapiDashboardConfigurator', AquapiDashboardConfigurator)
 
 const AquapiDashboardWidget = {
 	template: `
-		<v-card tile elevation="3" :loading="false">
-			<v-card-title>
+		<v-card 
+			tile 
+			outlined
+			elevation="3" 
+			:loading="false"
+			class="pb-0"
+		>
+			<v-card-title
+				class="pb-1"
+			>
 				<template v-if="widgetTitleIcon">
 					<v-img
 						v-if="(widgetTitleIcon.match(/\.svg$/))"
@@ -156,20 +164,31 @@ const AquapiDashboardWidget = {
 					</v-icon>
 				</template>
 				{{ item.name }}
+				
+				<template
+					v-if="alert"
+				>
+					<v-spacer />
+					<v-chip
+						v-if="alert"
+						label
+						:ripple="false"
+						small
+						:color="alertColor"
+						text-color="white"
+					>
+						{{ alert }}
+					</v-chip>
+				</template>
 			</v-card-title>
 
-			<template v-if="(999 == 111)">
-				<div style="border:1px solid lime">
-					<strong>item:</strong> {{ item }}<br>
-					<strong>node:</strong> {{ node }}
-				</div>
-			</template>
-
 			<template v-if="node">
-				<div v-if="(999 == 111)">
-					[node.type: {{ node.type}} | node.name: {{ node.name}} | node.id: {{ node.id }} | node.identifier: {{ node.identifier }}]
-				</div>
-				<component :is="node.type" :id="node.identifier" :node="node"></component>
+				<component 
+					:is="node.type" 
+					:id="node.identifier" 
+					:node="node"
+					:addNodeTitle="false"
+				></component>
 			</template>
 		</v-card>
 	`,
@@ -215,6 +234,12 @@ const AquapiDashboardWidget = {
 				HISTORY: 'mdi-chart-line',
 				IN_ENDP: 'mdi-location-enter',
 				OUT_ENDP: 'mdi-location-exit',
+			},
+			severityMap: {
+				'act': 'success',
+				'wrn': 'warning',
+				'err': 'error',
+				'std': 'info lighten-1'
 			}
 		}
 	},
@@ -239,14 +264,34 @@ const AquapiDashboardWidget = {
 			}
 			//w_key = w_key.replace('HISTORY', '')
 
-			for (const k in this.$data.typeIcons) {
+			for (const k in this.typeIcons) {
 				if (w_key.includes(k)) {
-					icon = this.$data.typeIcons[k];
+					icon = this.typeIcons[k];
 					break
 				}
 			}
 			return icon
-		}
+		},
+
+		alert() {
+			if ((this.node == null) || !('alert' in this.node)) {
+				return ''
+			}
+			return this.node.alert[0]
+		},
+		alertColor() {
+			let ret = 'info lighten-1'
+			if ((this.node == null) || !('alert' in this.node)) {
+				return ret
+			}
+			const severity = this.node.alert[1]
+			if (severity in this.severityMap) {
+				ret = this.severityMap[severity]
+			} else {
+				console.warn('Unknown alert severity: "' + severity + '" used by ' + this.id)
+			}
+			return ret
+		},
 	}
 }
 Vue.component('AquapiDashboardWidget', AquapiDashboardWidget)
@@ -264,54 +309,43 @@ const AquapiDashboard = {
 			></aquapi-page-heading>
 
 			<v-card-text>
-				<v-row justify="center">
-					<v-col :cols="12" :md="6"
-						v-if="!(widgets.length)"
-					>
+				<v-row 
+					v-if="!(widgets.length)"
+					justify="center"
+					class="mb-3"
+				>
+					<v-col :cols="12" :md="6">
 						<v-alert
 							elevation="0"
 							type="info"
 							text
 							:icon="'mdi-alert'"
 						>
-							# TODO: translation #  dashboard noch nicht konfiguriert<br>
+							{{ $t('dashboard.configuration.hintEmpty') }}<br>
 							<div class="d-flex justify-end">
-								<v-btn color="primary" class="mt-2" @click="showConfigurator">Widgets konfigurieren</v-btn>
+								<v-btn color="primary" class="mt-2" @click="showConfigurator">
+									{{ $t('dashboard.configuration.btnSetup') }}
+								</v-btn>
 							</div>
 						</v-alert>
 					</v-col>
 				</v-row>
 
-				<v-row justify="start">
-					<v-col :cols="12" :md="6"
-						v-for="item in widgets"
-						:key="item.identifier"
+				<masonry
+					:cols="{default: 3, 1904: 4, 1264: 3, 960: 2, 600: 1}"
+					:gutter="24"
+				>
+					<div 
+						v-for="(item, index) in widgets" 
+						:key="index"
+						class="mb-6"
 					>
 						<aquapi-dashboard-widget
 							:item="item"
 						>
 						</aquapi-dashboard-widget>
-
-						<v-card v-if="999 == 111" elevation="3" :loading="false">
-							{{ nodes[item.id] }}
-
-							<v-card-title>
-								{{ item.name}}
-							</v-card-title>
-							<v-card-subtitle>
-								{{ item.identifier }}
-							</v-card-subtitle>
-							<v-card-text>
-								{{ item }}
-							</v-card-text>
-							<v-card-actions>
-								<v-btn small outlined>button 1</v-btn>
-								<v-spacer></v-spacer>
-								<v-btn color="primary">button 2</v-btn>
-							</v-card-actions>
-						</v-card>
-					</v-col>
-				</v-row>
+					</div>
+				</masonry>
 			</v-card-text>
 		</v-card>
 	`,

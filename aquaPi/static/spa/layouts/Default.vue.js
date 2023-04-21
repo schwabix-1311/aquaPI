@@ -96,7 +96,7 @@ const DefaultLayout = {
 			return this.$store.getters['auth/username']
 		},
 		navItems() {
-			console.log('[layout Default] computed navItems, this', this)
+			// console.log('[layout Default] computed navItems, this', this)
 			return [
 				{
 					name: 'home',

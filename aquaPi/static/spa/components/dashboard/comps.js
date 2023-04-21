@@ -9,6 +9,10 @@ const AnyNode = {
 		id: String,
 		node: {
 			type: Object
+		},
+		addNodeTitle: {
+			type: Boolean,
+			default: true
 		}
 	},
 	template: `
@@ -71,7 +75,18 @@ const AnyNode = {
 			}
 
 			return node.data
-		}
+		},
+		inputNodes() {
+			const node = this.node
+			let nodes = []
+
+			if (node.inputs?.sender) {
+				node.inputs.sender.forEach(id => {
+					nodes.push(this.$store.getters['dashboard/node'](id))
+				})
+			}
+			return nodes
+		},
 	},
 }
 Vue.component('AnyNode', AnyNode)
@@ -95,64 +110,52 @@ Vue.component('DebugNode', DebugNode)
 const BusNode = {
 	extends: AnyNode,
 	template: `
-		<v-card-text>
-			<div v-if="(999 == 111)">
-				<strong>node:</strong> {{ node }}
-			</div>
-
-			<div v-if="descript">
-				<span>{{ descript }}</span>
-			</div>
-			<aquapi-node-data
+		<div>
+			<v-card-title
+				v-if="addNodeTitle"
+			>
+				{{ node.name }}
+			</v-card-title>
+			<aquapi-node-description
 				:item="node"
 			>
-				<template v-slot:label>
-				  <span>{{ label }}</span>
-				</template>
-				<template v-slot:value>
-					<span>{{ value }}</span>
-				</template>
-			</aquapi-node-data>
-		</v-card-text>
-
-	<!--	  <div class="uk-card uk-card-small uk-card-default uk-card-body" style="border: 1px solid blue;">-->
-	<!--		<h2 class="uk-card-title uk-margin-remove-bottom">-->
-	<!--		  <span v-if="node != undefined">-->
-	<!--		<span v-html="decoration"></span>{{ node.name }}-->
-	<!--		  </span>-->
-	<!--		  <span v-else>{{ id }} loading ...</span>-->
-	<!--		</h2>-->
-	<!--		<div v-html="getAlert" v-bind:class="getAlertClass" :hidden="!getAlert"></div>-->
-	<!--		<div v-if="node != undefined" class="uk-padding-remove">-->
-	<!--		  <div class="uk-grid-collapse" uk-grid>-->
-	<!--		<div class="uk-width-2-3" v-html="label"></div>-->
-	<!--		<div class="uk-width-expand" v-html="value"></div>-->
-	<!--		  </div>-->
-	<!--		</div>-->
-	<!--	  </div>-->
+			</aquapi-node-description>
+			<v-card-text
+				class="text--secondary"
+			>
+				<aquapi-node-data
+					:item="node"
+				>
+					<template v-slot:label>
+						<span>{{ label }}</span>
+					</template>
+					<template v-slot:value>
+						<span>{{ value }}</span>
+					</template>
+				</aquapi-node-data>
+			</v-card-text>
+			
+			<template
+				v-if="inputNodes"
+			>
+				<v-card
+					v-for="(item, index) in inputNodes"
+					:key="item.identifier"
+					outlined
+					tile
+					class="ma-3 mt-0"
+				>
+					<component
+						:is="item.type"
+						:id="item.identifier"
+						:node="item"
+					></component>
+				</v-card>
+			</template>
+		</div>
 	`,
 
-	computed: {
-		decoration() {
-			return ''
-		},
-		getAlert() {
-			if ((this.node == null) || !('alert' in this.node))
-				return ''
-			return this.node.alert[0]
-		},
-		getAlertClass() {
-			if ((this.node == null) || !('alert' in this.node))
-				return ''
-			let ret = 'uk-card-badge uk-label '
-			let severity = this.node.alert[1]
-			if (severity in severity_map)
-				ret += severity_map[severity]
-			else
-				console.warn('Unknown alert severity: "' + severity + '" used by ' + this.id)
-			return ret
-		},
-	},
+	computed: {},
 }
 Vue.component('BusNode', BusNode)
 
@@ -290,6 +293,31 @@ const History = {
 Vue.component('History', History)
 
 
+const AquapiNodeDescription = {
+	props: {
+		item: {
+			type: Object,
+			required: true
+		}
+	},
+	template: `
+		<v-card-subtitle
+			v-if="descript"
+			class="pt-0"
+		>
+			{{ descript }}
+		</v-card-subtitle>
+	`,
+
+	computed: {
+		descript() {
+			return this.$parent?.descript ?? ''
+		}
+	}
+}
+Vue.component('AquapiNodeDescription', AquapiNodeDescription)
+
+
 const AquapiNodeData = {
 	props: {
 		item: {
@@ -299,16 +327,12 @@ const AquapiNodeData = {
 	},
 	template: `
 		<v-row no-gutters>
-			<div v-if="(999 == 111)">
-				{{ item }}
-			</div>
-			<v-col cols="3"">
+			<v-col cols="6">
 				<slot name="label">
 					Label
 				</slot>
 			</v-col>
-			
-			<v-col cols="9">
+			<v-col cols="6">
 				<slot name="value">
 					Value
 				</slot>

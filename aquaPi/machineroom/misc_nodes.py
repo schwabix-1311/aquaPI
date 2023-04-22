@@ -125,6 +125,13 @@ class History(BusListener):
                 self.post(MsgData(self.id, 0))
                 self._nextrefresh = now + 60
 
+    def get_history(self, start, step):
+        h = influx_query('aquaPi',
+                         'select time, %s from %s where time > %d'
+                         % (','.join(self._inputs.sender), self.id, start))
+        hist = []
+        return hist
+
     def get_settings(self):
         return []
 ##        settings = super().get_settings()

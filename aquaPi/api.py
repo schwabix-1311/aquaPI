@@ -12,8 +12,9 @@ from flask import (
 )
 from http import HTTPStatus
 
-from .machineroom import BusRole
+from .machineroom.misc_nodes import BusRole
 from .pages.sse_util import send_sse_events
+
 
 log = logging.getLogger('API')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
@@ -27,7 +28,7 @@ bp = Blueprint('api', __name__)
 
 
 @bp.route('/api/nodes/<node_id>')
-def api_node(node_id):
+def api_node(node_id: str):
 #TODO: remove 'with_history', use History APi instead
     with_history = request.args.get('add_history', False) in ['true', 'True', '1']
 

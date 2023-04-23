@@ -434,7 +434,7 @@ class SunCtrl(ControllerNode):
     def _make_next_step(self, phase, new_data):
         if abs(new_data - self.data) >= 0.1:
             self.data = new_data
-            log.brief('SunCtrl %s: %s %f%%', self.id, phase, self.data)
+            log.info('SunCtrl %s: %s %f%%', self.id, phase, self.data)
             self.post(MsgData(self.id, self.data))
         time.sleep(max(1, new_data/30))  # shorten steps for low values
 

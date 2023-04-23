@@ -21,23 +21,17 @@ const About = {
 						>
 							Someday this page will show version, copyright, system state, etc.<br>
 							... and a link to REST API documentation.
-						</v-alert>     
+						</v-alert>
 					</v-col>
 				</v-row>
-			</v-card-text>
-			<v-card-text>
-				{{ $t('pages.about.copyright') }}
-			</v-card-text -->
-			<v-card-text>
-				<div class="text-h5">Copyrights</div>
-				This software is released under GNU GPL v.3
-			</v-card-text>
-			<v-card-text>
-					Part of this software is based on Adam Wallner's excellent library for the TC420 LED Controller.<br>
-					(c) 2020 Adam Wallner, released under GNU GPL v.3
+				<p><div class="text-h5">{{ $t('pages.about.copyright') }}</div></p>
+				<p>This software is released under GNU GPL v.3</br>
+					(c) 2023 Markus Kuhn, released under GNU GPL v.3</p>
+				<p>Part of this software is based on Adam Wallner's excellent library for the TC420 LED Controller.<br>
+					(c) 2020 Adam Wallner, released under GNU GPL v.3</p>
 			</v-card-text>
 		</v-card>
-    `,
+	`,
 
 	methods: {
 		donate() {
@@ -50,4 +44,3 @@ const About = {
 export { About };
 
 // vim: set noet ts=4 sw=4:
-

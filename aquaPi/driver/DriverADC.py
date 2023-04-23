@@ -141,7 +141,16 @@ class DriverADS1115(AInDriver):
             return super().read()
 
         self._adjust_gain()
-        val = self._ana_in.voltage
+        # val = self._ana_in.voltage
+        median = [self._ana_in.voltage,
+                  self._ana_in.voltage,
+                  self._ana_in.voltage,
+                  self._ana_in.voltage,
+                  self._ana_in.voltage]
+        median.sort()
+        log.debug('median %f %f %f', median[0], median[2], median[4])
+        val = median[2]
+
         return val
 
     def _adjust_gain(self):

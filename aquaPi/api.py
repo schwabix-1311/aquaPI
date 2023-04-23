@@ -16,7 +16,7 @@ from .machineroom.msg_types import MsgFilter
 from .pages.sse_util import send_sse_events
 
 log = logging.getLogger('API')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
@@ -46,6 +46,10 @@ def api_node(node_id):
 
         if with_history is False and 'store' in node.__getstate__():
             del item['store']
+
+        if hasattr(node, 'alert') and node.alert:
+            item['alert'] = node.alert
+        log.debug(item)
 
         body = jsonpickle.encode({'result': 'SUCCESS', 'data': item}, unpicklable=False, keys=True)
 

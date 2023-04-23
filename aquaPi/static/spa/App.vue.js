@@ -16,16 +16,15 @@ const App = {
 		},
 		detachEventListeners() {
 			EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
-			// EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 		},
 		initSSEListener() {
 			if (typeof EventSource !== 'undefined') {
 				const urlSSE = `${window.location.protocol}//${window.location.host}/api/sse`
-				const source = new EventSource(urlSSE);
+				const source = new EventSource(urlSSE)
 
 				source.onmessage = function(e) {
 					// this is an array of node ids that were modified
-					const items = JSON.parse(e.data);
+					const items = JSON.parse(e.data)
 					if (items.length) {
 						items.forEach((item) => {
 							console.log('[App] >> emit event "sse:node_update" with item: ' + item)
@@ -41,8 +40,7 @@ const App = {
 			this.$store.dispatch('dashboard/loadNodes')
 		},
 		async handleSSE(payload) {
-			console.log('[App] listenSSE, payload:')
-			console.log(payload)
+			let addHistory = false
 
 			let nodeId = null
 			if (typeof payload == 'string') {
@@ -51,7 +49,13 @@ const App = {
 				nodeId = payload.id
 			}
 
-			const response = await fetch('/api/nodes/' + nodeId)
+			// TODO: adapt to new history API, if implemented
+			const visibleDashboardWidgets = this.$store.getters['dashboard/visibleWidgets']
+			if (visibleDashboardWidgets && Object.keys(visibleDashboardWidgets).includes(nodeId) && visibleDashboardWidgets[nodeId].role == 'HISTORY') {
+				addHistory = true
+			}
+
+			const response = await fetch('/api/nodes/' + nodeId + (addHistory ? '?add_history=true' : ''))
 
 			try {
 				const {result, data} = await response.json()

@@ -45,7 +45,34 @@ const AquapiPageHeading = {
 }
 Vue.component('AquapiPageHeading', AquapiPageHeading)
 
-
+const AquapiLoadingIndicator = {
+	template: `
+		<v-progress-circular
+			:size="size"
+			:width="width"
+			indeterminate
+			:color="color"
+		></v-progress-circular>
+	`,
+	props: {
+		size: {
+			type: Number,
+			default: 50,
+			required: false
+		},
+		width: {
+			type: Number,
+			default: 6,
+			required: false
+		},
+		color: {
+			type: String,
+			default: 'primary',
+			required: false
+		}
+	}
+}
+Vue.component('AquapiLoadingIndicator', AquapiLoadingIndicator)
 const AquapiDummy = {
 	template: `
 		<v-hover

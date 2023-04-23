@@ -37,7 +37,7 @@ export default
 		about: {
 			label: 'Über aquaPi',
 			heading: 'Über aquaPi',
-                        copyright: 'Copyright',
+			copyright: 'Copyright',
 		}
 	},
 
@@ -83,6 +83,11 @@ export default
 		widget: {
 			inputs: {
 				label: 'Eingänge'
+			},
+			history: {
+				period: {
+					label: 'Zeitraum %s'
+				}
 			}
 		}
 	},

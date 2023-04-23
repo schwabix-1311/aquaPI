@@ -36,8 +36,8 @@ export default
 		},
 		about: {
 			label: 'About',
-                        heading: 'About',
-                        copyright: 'Copyright',
+			heading: 'About',
+			copyright: 'Copyright',
 		}
 	},
 
@@ -45,10 +45,24 @@ export default
 		login: {
 			form: {
 				heading: 'Login',
-				username: 'Username',
-				password: 'Password',
-				btnSubmit: 'Login',
-				btnCancel: 'Cancel',
+				username: {
+					label: 'Username',
+					errors: {
+						empty: 'Username is required'
+					}
+				},
+				password: {
+					label: 'Password',
+					errors: {
+						empty: 'Password is required'
+					}
+				},
+				btnSubmit: {
+					label: 'Login'
+				},
+				btnCancel: {
+					label: 'Cancel'
+				},
 				hintMandatory: '* mandatory fields'
 			}
 		}
@@ -58,9 +72,25 @@ export default
 		configurator: {
 			headline: 'Dashboard Configuration',
 			hint: 'Which tiles should be shown?',
-			btnSave: 'Save'
-
+			btnSave: {
+				label: 'Save'
+			}
+		},
+		configuration: {
+			hintEmpty: 'No items are selected for the dashboard yet',
+			btnSetup: 'Configure widgets'
+		},
+		widget: {
+			inputs: {
+				label: 'Inputs'
+			},
+			history: {
+				period: {
+					label: 'Period %s'
+				}
+			}
 		}
+
 	},
 
 	misc: {
@@ -70,6 +100,35 @@ export default
 			history: 'Diagram',
 			in_endp: 'Input',
 			out_endp: 'Output',
+		},
+		dataRange: {
+			default: {
+				label: 'Value'
+			},
+			analog: {
+				label: 'Measurement'
+			},
+			binary: {
+				label: 'Status',
+				value: {
+					on: 'On',
+					off: 'Off'
+				}
+			},
+			percent: {
+				label: 'Status',
+				value: {
+					on: 'On',
+					off: 'Off'
+				}
+			},
+			cronspec: {
+				label: 'Switching status',
+				value: {
+					on: 'On',
+					off: 'Off'
+				}
+			}
 		}
 	}
 }

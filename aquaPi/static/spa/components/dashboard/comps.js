@@ -1,8 +1,9 @@
-// TODO: complete labels for different node types / data_range
-// TODO: complete values for different node types / data_range
-// TODO: implement charts from uikit instance
-// TODO: 'alert' badges?
-// TODO: ... more details on dashboard widget? Design/Layout? Colors? Icons? Edit settings?
+// TODO: more details on dashboard widget? Design/Layout? Colors? Icons? Edit settings?
+// TODO: adapt charts to new history API, when implemented
+// TODO: add 'zoom' / modal mode for charts
+// TODO: change masonry direction, if possible; maybe use other masonry plugin
+
+import {AQUAPI_EVENTS, EventBus} from '../app/EventBus.js';
 
 const AnyNode = {
 	props: {
@@ -318,6 +319,254 @@ Vue.component('CalibrationAux', CalibrationAux)
 
 const History = {
 	extends: AnyNode,
+
+	template: `
+		<div>
+			<v-card-title
+				v-if="addNodeTitle"
+			>
+				{{ node.name }}
+			</v-card-title>
+			<aquapi-node-description
+				:item="node"
+			>
+			</aquapi-node-description>
+			
+			<div
+				v-if="this.dataPrepared == false"
+				class="pa-10 text-center"
+			>
+				<aquapi-loading-indicator></aquapi-loading-indicator>
+			</div>
+			
+			<div 
+				v-else
+				class="pa-2"
+			>
+				<div 
+					class="d-flex justify-end px-0 py-2"
+				>
+					<v-menu 
+						offset-y
+						open-on-hover
+					>
+						<template v-slot:activator="{ on, attrs }">
+							<v-btn
+								v-bind="attrs"
+								v-on="on"
+								depressed
+								small
+								class="text-none"
+								:loading="isLoading"
+							>
+								{{ humanPeriod() }}
+							</v-btn>
+						</template>
+						<v-list
+							dense
+							class="py-0"
+						>
+							<v-list-item
+								v-for="(item, index) in periods"
+								:key="index"
+								@click="setPeriod(item.value)"
+							>
+								<v-list-item-title>
+									{{ item.label }}
+								</v-list-item-title>
+							</v-list-item>
+						</v-list>
+					</v-menu>
+				</div>
+				<div>
+					<canvas :id="'chart_' + id"></canvas>
+				</div>
+			</div>
+		</div>
+	`,
+
+	data() {
+		return {
+			chart: null,
+			dataPrepared: false,
+			isLoading: false,
+			currentPeriod: (60 * 60 * 1000),
+			cd: {
+				type: "scatter",
+				data: {
+					labels: [],
+					datasets: [],
+				},
+				options: {
+					//locale: "de-DE",
+					responsive: true,
+					//aspectRatio: 1,
+					maintainAspectRatio: true,
+					showLine: true,
+					borderWidth: 1,
+					lineTension: 0,
+					stepped: true, //false,
+					pointRadius: 0,
+					plugins: {
+						legend: {display: true, labels: {boxWidth: 3}, position: "top"},
+						tooltip: {position: 'nearest', xAlign: 'center', yAlign: 'bottom', caretPadding: 24},
+					},	//top"},
+					animation: {duration: 1500, easing: "easeInOutBack"},
+					interaction: {mode: "nearest", axis: "x", intersect: false},
+					scales: {
+						x: {
+							type: "time",
+							min: Date.now() - this.currentPeriod,
+							max: Date.now(),
+							time: {
+								//unit: "minutes"
+								// unit: "hours",
+								displayFormats: {seconds: "H:mm:ss", minutes: "H:mm", hours: "H:mm"},
+								tooltipFormat: "TT"
+							},
+						},
+						y: {display: 'auto', axis: 'y', ticks: {beginAtZero: true}},
+						yAnalog: {display: 'auto', axis: 'y', position: 'right'},
+					}
+				}
+			},
+		}
+	},
+
+	computed: {
+		periods() {
+			const vm = this
+			return [0.25, 1, 4, 8, 24].map((h) => {
+				const value = (h * 60 * 60 * 1000)
+				return { value: value, label: vm.humanPeriod(false, value) }
+			})
+		},
+
+		period: {
+			set(val) {
+				try {
+					const storage = window.localStorage
+					let config = storage.getItem('aquapi.history');
+					if (config) {
+						config = JSON.parse(config)
+					} else {
+						config = {}
+					}
+					config[this.node.id] = {period: val}
+					storage.setItem('aquapi.history', JSON.stringify(config))
+				} catch(e) {}
+
+				this.currentPeriod = val
+			},
+			get() {
+				try {
+					const storage = window.localStorage
+					let config = storage.getItem('aquapi.history')
+					if (config) {
+						config = JSON.parse(config)
+						if (config[this.node.id]?.period) {
+							this.currentPeriod = config[this.node.id].period
+						}
+					}
+				} catch(e) {}
+
+				return this.currentPeriod
+			}
+		}
+	},
+	methods: {
+		prepareChartData() {
+			const store = this.$store.getters['dashboard/history'](this.node.id)
+
+			if (store != null) {
+				const now = Date.now();
+				let dsIdx = 0;
+				for (let series in store) {
+					if (dsIdx >= this.cd.data.datasets.length) {
+						const node = this.$store.getters['dashboard/node'](series)
+						this.cd.data.datasets.push({
+							label: node.name,
+							data: [],
+						});
+
+						if (node.data_range === 'ANALOG') {
+							this.cd.data.datasets[dsIdx].stepped = false
+							this.cd.data.datasets[dsIdx].yAxisID = 'yAnalog'
+						}
+					}
+
+					this.cd.data.datasets[dsIdx].data = []
+					for (let val of store[series]) {
+						this.cd.data.datasets[dsIdx].data.push({x: val[0] * 1000, y: val[1]})
+					}
+					dsIdx++;
+				}
+				this.cd.options.scales.x.min = now - this.currentPeriod
+				this.cd.options.scales.x.max = now
+			}
+
+			this.dataPrepared = true
+		},
+
+		async loadHistory() {
+			this.isLoading = true
+			const result = await this.$store.dispatch('dashboard/loadNodeHistory', this.node)
+			if (result) {
+				this.prepareChartData()
+			}
+			this.isLoading = false
+		},
+		async setPeriod(val) {
+			if (val !== this.currentPeriod) {
+				this.period = val
+				if (this.chart) {
+					await this.loadHistory()
+					this.chart.update()
+				}
+			}
+		},
+		humanPeriod(addLabel = true, val = null) {
+			const label = this.$t('dashboard.widget.history.period.label')
+			let value = (val !== null ? (val / 60 / 1000) : (this.period / 60 / 1000))
+			let unit = 'h'
+			if (value < 60) {
+				unit = 'min'
+				return (addLabel ? label.replace('%s', `${value} ${unit}`) : `${value} ${unit}`)
+			}
+			value /= 60
+			return (addLabel ? label.replace('%s', `${value} ${unit}`) : `${value} ${unit}`)
+		}
+	},
+	async created() {
+		this.chart = null
+		this.currentPeriod = this.period
+		await this.loadHistory()
+
+		if (this.chart == null) {
+			const el = document.getElementById('chart_' + this.id)
+			if (el != null) {
+				this.chart = new Chart(el, this.cd)
+			}
+		}
+
+		// TODO: maybe listen to SSE_NODE_UPDATE for this node.inputs, not only for this node ?
+		EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, async (payload) => {
+			if (payload.id === this.node.id) {
+				await this.loadHistory()
+				if (this.chart !== null) {
+					this.chart.update()
+				}
+			}
+		})
+	},
+	destroyed() {
+		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
+
+		if (this.chart != null) {
+			this.chart.destroy()
+		}
+		this.chart = null
+	},
 }
 Vue.component('History', History)
 

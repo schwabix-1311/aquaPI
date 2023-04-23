@@ -2,17 +2,32 @@ import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 
 const state = () => ({
 	widgets: [],
-	nodes: {}
+	nodes: {},
+	histories: {}
 })
 const getters = {
 	widgets: (state) => {
 		return state.widgets
+	},
+	visibleWidgets: (state) => {
+		let items = {}
+		state.widgets.filter(item => item.visible == true)
+			.forEach(item => {
+				items[item.id] = item
+			})
+		return items
 	},
 	nodes: (state) => {
 		return state.nodes
 	},
 	node: (state) => (nodeId) => {
 		return state.nodes[nodeId]
+	},
+	histories: (state) => {
+		return state.histories
+	},
+	history: (state) => (nodeId) => {
+		return state.histories[nodeId]
 	}
 }
 
@@ -73,30 +88,31 @@ const actions = {
 		return null
 	},
 
-	async loadNodes(context, addHistory= false) {
+	fetchNode({state, getters, dispatch, commit}, payload) {
+		const { nodeId, addHistory } = payload
+
+		/** @type {Promise.<any>} */
+		let fetchPromise = fetch('/api/nodes/' + nodeId + '?add_history=' + (addHistory ? 'true' : 'false'), {
+			method: 'get',
+			mode: 'same-origin',
+			cache: 'no-cache',
+			headers: {
+				'X-Requested-With': 'XMLHttpRequest',
+				'Accept': 'application/json'
+			},
+			redirect: 'follow'
+		}).then(response => response.json())
+
+		let nodePromise = fetchPromise
+			.then(response => {
+				return (response.result == 'SUCCESS' ? response.data : null)
+			})
+			.catch((e) => { console.error(e.message) })
+		return nodePromise
+	},
+
+	async loadNodes({state, getters, dispatch, commit}, addHistory= false) {
 		let nodes = {}
-
-		function fetchNode(nodeId) {
-			/** @type {Promise.<any>} */
-			let fetchPromise = fetch('/api/nodes/' + nodeId + '?add_history=' + (addHistory ? 'true' : 'false'), {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-				redirect: 'follow'
-			}).then(response => response.json())
-
-			let nodePromise = fetchPromise
-				.then(response => {
-					// context.commit('setNode', response.data)
-					return (response.result == 'SUCCESS' ? response.data : null)
-				})
-				.catch((e) => { console.error(e.message) })
-			return nodePromise
-		}
 
 		// Fetch all nodes (returns array of node id)
 		const response = await fetch('/api/nodes/' + '?add_history=' + (addHistory ? 'true' : 'false'), {
@@ -114,7 +130,7 @@ const actions = {
 			let nodeIds = await response.json()
 
 			if (nodeIds.length) {
-				let promises = nodeIds.map(nodeId => fetchNode(nodeId))
+				let promises = nodeIds.map(nodeId => dispatch('fetchNode', {nodeId, addHistory}))
 
 				Promise.all(promises)
   					.then(values => {
@@ -122,11 +138,49 @@ const actions = {
 							nodes[item.id] = item
 						})
 
-						context.commit('setNodes', nodes)
+						commit('setNodes', nodes)
 						EventBus.$emit(AQUAPI_EVENTS.APP_LOADING, false)
 					})
 			}
 		}
+	},
+
+	// TODO: prelim. method for new history API
+	// async loadNodeHistory({state, getters, dispatch, commit}, node) {
+	// 	console.log('### loadNodesHistory')
+	// 	console.log('node:', node)
+	// 	const nodeIds = node.inputs?.sender
+	//
+	// 	let histories = {}
+	//
+	// 	if (nodeIds.length) {
+	// 		let promises = nodeIds.map(nodeId => dispatch('fetchNode', {nodeId, addHistory: true}))
+	//
+	// 		Promise.all(promises)
+	// 			.then(values => {
+	// 				values.forEach(item => {
+	// 					console.log('... item:', item)
+	// 					histories[item.id] = item
+	// 				})
+	//
+	// 				commit('setHistories', histories)
+	// 			})
+	// 	}
+	// },
+	async loadNodeHistory({state, getters, dispatch, commit}, node) {
+		const nodeId = node.id
+
+		const result = await dispatch('fetchNode', {nodeId, addHistory: true})
+
+		if (result?.store) {
+			commit('setHistory', {id: nodeId, data: result.store})
+
+			await Object.entries(result.store).forEach(([id, data]) => {
+				commit('setHistory', {id, data})
+			})
+		}
+
+		return state.histories[nodeId]
 	}
 }
 
@@ -146,6 +200,17 @@ const mutations = {
 	},
 	setNodes(state, payload) {
 		state.nodes = Object.assign({}, payload)
+	},
+	setHistories(state, payload) {
+		state.histories = Object.assign({}, state.histories, payload)
+	},
+	setHistory(state, payload) {
+		try {
+			state.histories[payload.id] = payload.data
+		} catch (e) {
+			console.log('ERROR mutating state.histories')
+			console.error(e)
+		}
 	}
 }
 

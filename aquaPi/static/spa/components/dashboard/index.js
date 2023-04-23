@@ -351,7 +351,7 @@ const AquapiDashboard = {
 		</v-card>
 	`,
 
-	data: function() {
+	data() {
 		return {
 		};
 	},
@@ -385,7 +385,7 @@ const AquapiDashboard = {
 		hideConfigurator() {
 			this.$store.dispatch('ui/hideDialog', 'AquapiDashboardConfigurator')
 		},
-		loadConfig: async function() {
+		async loadConfig() {
 			const result = await this.$store.dispatch('dashboard/loadConfig')
 			if (result) {
 				this.widgets = result
@@ -393,7 +393,7 @@ const AquapiDashboard = {
 		},
 	},
 
-	created: function() {
+	created() {
 		this.loadConfig()
 	},
 }

@@ -72,7 +72,7 @@ def api_history_nodes():
         return Response(status=HTTPStatus.NOT_FOUND)
 
 
-@bp.route('api/history/<node_id>')
+@bp.route('/api/history/<node_id>')
 def api_history(node_id: str):
     bus = current_app.bus
     node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')

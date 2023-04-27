@@ -2,7 +2,7 @@
 
 import logging
 import sys
-import os
+from shutil import which
 from collections import deque
 from time import time
 
@@ -20,9 +20,16 @@ log.setLevel(logging.WARNING)
 
 # ========== preliminary interface to InfluxDB ==========
 
-INFLUX_SRV = 'localhost'    # can be an IP
+INFLUX_CMD = 'influx'
+INFLUX_SRV = 'localhost'    # can be None for simulation, or an IP
 INFLUX_PORT = 8086
 INFLUX_URL = f'http://{INFLUX_SRV}:{INFLUX_PORT}'
+
+# if no Influx tool exists for localhost, simulate the DB,
+# but if you specify an IP, this must be a valid instance
+if INFLUX_SRV == "localhost" and not which(INFLUX_CMD):
+    INFLUX_SRV = None
+
 
 def _curl_http(method, endpoint, data=None, option=None):
     cmd = f'curl -i -{method} "{INFLUX_URL}/{endpoint}"'
@@ -43,16 +50,34 @@ def _curl_write(line, option=None):
 
 
 def create_influx(db_name, node_id):
+# bug / unexpected behaviour:
+# none of downsampling methods fills gaps in sparse data reliably, may even drop measurements completely if no value inside queried interval!
     cmds = [f'CREATE DATABASE {db_name} WITH DURATION 1h'
            ,f'CREATE RETENTION POLICY one_day ON {db_name} DURATION 1d REPLICATION 1'
            ,f'CREATE RETENTION POLICY one_month ON {db_name} DURATION 31d REPLICATION 1'
            ,f'CREATE CONTINUOUS QUERY qc_day_{node_id} ON {db_name} BEGIN' \
-             '  SELECT mean(*) INTO {db_name}.one_day.:MEASUREMENT'\
-             '  FROM {db_name}.autogen.{node_id} GROUP BY time(1m),*'\
+             '  SELECT mean(*)'\
+             '    RESAMPLE EVERY 1m'\
+             '    INTO {db_name}.one_day.:MEASUREMENT'\
+             '    FROM ('\
+             '      SELECT mean(*) FROM {db_name}.autogen.{node_id} GROUP BY time(1s),* FILL(previous)'\
+             '    )'\
+             '    GROUP BY time(1m),*'\
+             'END'
+           ,f'CREATE CONTINUOUS QUERY qc_month_{node_id} ON {db_name} BEGIN' \
+             '  SELECT mean(*)'\
+             '    RESAMPLE EVERY 1h'\
+             '    INTO {db_name}.one_month.:MEASUREMENT'\
+             '    FROM ('\
+             '      SELECT mean(*) FROM {db_name}.autogen.{node_id} GROUP BY time(1s),* FILL(previous)'\
+             '    )'\
+             '    GROUP BY time(1h),*'\
              'END'
            # ,'CREATE CONTINUOUS QUERY qc_month_rp ON %s BEGIN SELECT mean(*),median(*) INTO %s.one_month.:MEASUREMENT FROM %s.one_day./.*/ GROUP BY time(1h),* END' % (db_name, db_name, db_name))
            ]
-    if INFLUX_SRV == 'localhost':
+    if not INFLUX_SRV:
+        pass
+    elif INFLUX_SRV == 'localhost':
         os.system('influx -execute "' + '; '.join(cmds) + '"')
     else:
         for cmd in cmds:
@@ -62,10 +87,22 @@ def feed_influx(db_name, node_id, value):
     data = f'{node_id} {value[0]}={value[1]}'
 
     # shortcut for localhost, could be extended for post/query
-    if INFLUX_SRV == 'localhost':
-        os.system(f'influx -database={db_name} -precision=s  -execute "INSERT {data}"')
+    if not INFLUX_SRV:
+        pass
+    elif INFLUX_SRV == 'localhost':
+        os.system(f'influx -database={db_name} -precision=s -execute "INSERT {data}"')
     else:
         _curl_write(data, option=f'db={db_name}&precision=s')
+
+def query_influx(db_name, flux):
+    breakpoint()
+    if not INFLUX_SRV:
+        pass
+    elif INFLUX_SRV == 'localhost':
+        os.system(f'influx -database={db_name} -precision=s -execute "{flux}"')
+    else:
+        _curl_query(flux, option="db={db_name}&precision=s")
+    return []
 
 
 # ========== miscellaneous ==========
@@ -126,9 +163,10 @@ class History(BusListener):
                 self._nextrefresh = now + 60
 
     def get_history(self, start, step):
-        h = influx_query('aquaPi',
-                         'select time, %s from %s where time > %d'
-                         % (','.join(self._inputs.sender), self.id, start))
+        h = query_influx('aquaPi',
+                         f'SELECT time, * FROM {self.id} WHERE time > {start}'
+                         #'SELECT time, mean(*) FROM {self.id} WHERE time > {start}'
+                         #% (','.join(self._inputs.sender), self.id, start))
         hist = []
         return hist
 

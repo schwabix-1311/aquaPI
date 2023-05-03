@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import os
 from shutil import which
 from collections import deque
 from time import time

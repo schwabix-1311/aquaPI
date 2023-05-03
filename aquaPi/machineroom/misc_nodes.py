@@ -27,67 +27,12 @@ class TimeDb(ABC):
     """
     fields = []
 
-<<<<<<< HEAD
     def __init__(self):
-=======
-def _curl_query(flux, option=None):
-    _curl_http('GET', 'query', data=f'--data-urlencode "q={flux}"', option=option)
-
-def _curl_post(flux, option=None):
-    _curl_http('XPOST', 'query', data=f'--data-urlencode "q={flux}"', option=option)
-
-def _curl_write(line, option=None):
-    _curl_http('XPOST', 'write', data=f'--data-binary "{line}"', option=option)
-
-
-def create_influx(db_name, node_id):
-# with QuestDB, following downsample produces sensible data:
-# SELECT span,id,avg(value) from(
-#   SELECT ts span,n.node_id id,avg(value) value FROM value JOIN node n ON (node_id) SAMPLE BY 1s FILL (PREV)
-# )
-#   --where ts between '2023-04-29T09:00:00Z' and  '2023-04-29T09:30:00Z'
-#   --where id='ph'
-#  sample by 8h fill (prev) align to CALENDAR group by span, id;
-
-# bug / unexpected behaviour:
-# none of downsampling methods fills gaps in sparse data reliably, may even drop measurements completely if no value inside queried interval!
-    cmds = [f'CREATE DATABASE {db_name} WITH DURATION 1h'
-           ,f'CREATE RETENTION POLICY one_day ON {db_name} DURATION 1d REPLICATION 1'
-           ,f'CREATE RETENTION POLICY one_month ON {db_name} DURATION 31d REPLICATION 1'
-           ,f'CREATE CONTINUOUS QUERY qc_day_{node_id} ON {db_name} BEGIN' \
-             '  SELECT mean(*)'\
-             '    RESAMPLE EVERY 1m'\
-             '    INTO {db_name}.one_day.:MEASUREMENT'\
-             '    FROM ('\
-             '      SELECT mean(*) FROM {db_name}.autogen.{node_id} GROUP BY time(1s),* FILL(previous)'\
-             '    )'\
-             '    GROUP BY time(1m),*'\
-             'END'
-           ,f'CREATE CONTINUOUS QUERY qc_month_{node_id} ON {db_name} BEGIN' \
-             '  SELECT mean(*)'\
-             '    RESAMPLE EVERY 1h'\
-             '    INTO {db_name}.one_month.:MEASUREMENT'\
-             '    FROM ('\
-             '      SELECT mean(*) FROM {db_name}.autogen.{node_id} GROUP BY time(1s),* FILL(previous)'\
-             '    )'\
-             '    GROUP BY time(1h),*'\
-             'END'
-           # ,'CREATE CONTINUOUS QUERY qc_month_rp ON %s BEGIN SELECT mean(*),median(*) INTO %s.one_month.:MEASUREMENT FROM %s.one_day./.*/ GROUP BY time(1h),* END' % (db_name, db_name, db_name))
-           ]
-    if not INFLUX_SRV:
->>>>>>> 7f00786 (The downsampling query tested during evaluation)
         pass
 
-<<<<<<< HEAD
     def add_field(self, name):
         if name not in TimeDb.fields:
             TimeDb.fields.append(name)
-=======
-def feed_influx(db_name, node_id, value):
-# with QuestDB, this would work, although Influx LineProtocol is recommended (perf!):
-# curl -G --data-urlencode "query=INSERT INTO value VALUES(now(),'phsensor', 2.48),(now(),'phcalibration',6.47)" http://localhost:9000/exec
-    data = f'{node_id} {value[0]}={value[1]}'
->>>>>>> 7f00786 (The downsampling query tested during evaluation)
 
     @abstractmethod
     def feed(self, name, value):

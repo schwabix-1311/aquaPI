@@ -50,6 +50,14 @@ def _curl_write(line, option=None):
 
 
 def create_influx(db_name, node_id):
+# with QuestDB, following downsample produces sensible data:
+# SELECT span,id,avg(value) from(
+#   SELECT ts span,n.node_id id,avg(value) value FROM value JOIN node n ON (node_id) SAMPLE BY 1s FILL (PREV)
+# )
+#   --where ts between '2023-04-29T09:00:00Z' and  '2023-04-29T09:30:00Z'
+#   --where id='ph'
+#  sample by 8h fill (prev) align to CALENDAR group by span, id;
+
 # bug / unexpected behaviour:
 # none of downsampling methods fills gaps in sparse data reliably, may even drop measurements completely if no value inside queried interval!
     cmds = [f'CREATE DATABASE {db_name} WITH DURATION 1h'
@@ -84,6 +92,8 @@ def create_influx(db_name, node_id):
             _curl_post(cmd)
 
 def feed_influx(db_name, node_id, value):
+# with QuestDB, this would work, although Influx LineProtocol is recommended (perf!):
+# curl -G --data-urlencode "query=INSERT INTO value VALUES(now(),'phsensor', 2.48),(now(),'phcalibration',6.47)" http://localhost:9000/exec
     data = f'{node_id} {value[0]}={value[1]}'
 
     # shortcut for localhost, could be extended for post/query

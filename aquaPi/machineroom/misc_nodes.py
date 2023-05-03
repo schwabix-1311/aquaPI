@@ -194,10 +194,6 @@ class History(BusListener):
     def get_history(self, start, step):
         return self.db.query(self._inputs.sender, start, step)
 
-    def get_history(self, start, step):
-        hist = []
-        return hist
-
     def get_settings(self):
         return []
 ##        settings = super().get_settings()

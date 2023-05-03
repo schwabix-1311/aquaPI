@@ -177,6 +177,7 @@ class History(BusListener):
                          f'SELECT time, * FROM {self.id} WHERE time > {start}'
                          #'SELECT time, mean(*) FROM {self.id} WHERE time > {start}'
                          #% (','.join(self._inputs.sender), self.id, start))
+                        )
         hist = []
         return hist
 

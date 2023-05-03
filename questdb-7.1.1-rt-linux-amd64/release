@@ -1,0 +1,2 @@
+JAVA_VERSION="11.0.9.1"
+MODULES="java.base java.management jdk.unsupported io.questdb jdk.crypto.ec"

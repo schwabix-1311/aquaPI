@@ -16,11 +16,10 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log.setLevel(logging.DEBUG)
 
 
 # ========== interface to whisper (RRDB component of Graphite) ==========
-
 
 class TimeDb(ABC):
     """ Base class for time series storage
@@ -148,8 +147,6 @@ class TimeDbQuest(TimeDb):
 # ========== miscellaneous ==========
 
 
-# IDEA: this could use BusRoles to define inputs
-
 class History(BusListener):
     """ A multi-input node, recording all inputs with timestamps.
 
@@ -177,7 +174,14 @@ class History(BusListener):
         for snd in self._inputs.sender:
             self.db.add_field(snd)
 
-        create_influx('aquaPi', self.id)
+        try:
+            self.db = TimeDbQuest()
+            log.brief('Recording history in QuestDB')
+        except (NotImplementedError, ModuleNotFoundError):
+            self.db = TimeDbMemory(duration)
+            log.brief('Recording history in main memory with limited depth of %dh!', duration)
+        for snd in self._inputs.sender:
+            self.db.add_field(snd)
 
     def __getstate__(self):
         state = super().__getstate__()

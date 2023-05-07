@@ -11,7 +11,8 @@ from flask import (
 )
 from http import HTTPStatus
 
-from .machineroom.misc_nodes import History, BusRole
+from .machineroom.misc_nodes import BusRole
+
 
 log = logging.getLogger('API')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
@@ -22,6 +23,17 @@ log.setLevel(logging.WARNING)
 
 
 bp = Blueprint('api', __name__)
+
+
+@bp.route('/api/nodes/')
+def api_nodes():
+    bus = current_app.bus
+    node_ids = [node.id for node in bus.get_nodes()]
+
+    if node_ids:
+        return json.dumps(node_ids)
+    else:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 
 @bp.route('/api/nodes/<node_id>')
@@ -50,17 +62,6 @@ def api_node(node_id: str):
         return Response(status=HTTPStatus.NOT_FOUND)
 
 
-@bp.route('/api/nodes/')
-def api_nodes():
-    bus = current_app.bus
-    node_ids = [node.id for node in bus.get_nodes()]
-
-    if node_ids:
-        return json.dumps(node_ids)
-    else:
-        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
-
-
 @bp.route('/api/history/')
 def api_history_nodes():
     bus = current_app.bus
@@ -78,9 +79,10 @@ def api_history(node_id: str):
     node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
     node = bus.get_node(node_id)
 
-    start = request.args.get('start', 0)
-    step = request.args.get('stiep', 0)
+    start = int(request.args.get('start', 0))
+    step = int(request.args.get('stiep', 0))
 
+    log.debug('API %s', request.path)
     if node:
         if hasattr(node, 'get_history'):
             hist = node.get_history(start, step)

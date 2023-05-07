@@ -428,7 +428,7 @@ const History = {
             showLine: true,
             borderWidth: 1,
             lineTension: 0,
-            stepped: true, //false,
+            stepped: true,
             pointRadius: 0,
             plugins: {
               legend: {display: true, labels: {boxWidth: 3}, position: "top"},
@@ -466,8 +466,6 @@ const History = {
                 label: this.$root.nodes[series].name,
                 data:  [],
               });
-//              if (this.$root.nodes[series].unit != "" &&
-//                  "°C°FpHrHGHKHµSuS".includes(this.$root.nodes[series].unit)) {  //?? replace with node.OUT_TYPE!=ANALOG
               if (this.$root.nodes[series].data_range == "ANALOG") {
                 this.cd.data.datasets[ds_index].stepped = false;
                 this.cd.data.datasets[ds_index].yAxisID = "yAnalog";

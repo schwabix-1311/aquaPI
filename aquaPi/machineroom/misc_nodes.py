@@ -16,7 +16,7 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
-log.setLevel(logging.DEBUG)
+# log.setLevel(logging.DEBUG)
 
 
 # ========== interface to whisper (RRDB component of Graphite) ==========

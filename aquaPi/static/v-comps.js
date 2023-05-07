@@ -393,88 +393,86 @@ Vue.component('CalibrationAux', CalibrationAux);
 
 
 const History = {
-	extends: AnyNode,
-	created: function() {
-	  this.chart = null;
-	},
-	destroyed: function() {
-	  if (this.chart != null)
-		this.chart.destroy();
-	  this.chart = null;
-	},
-	beforeUpdate: function() {
-	  if (this.chart == null) {
-		const el = document.getElementById(this.id);
-		if (el != null) {
-		  this.chart = new Chart(el, this.chartData);
-		}
-	  } else {
-		this.chartData;  // trigger a re-compute, $data wasn't touched
-		this.chart.update();
-	  }
-	},
-	data: function() {
-	  return {
-		duration: (60 * 60 * 1000) * 1, //hour(s)
-		cd: {
-		  type: "scatter",
-		  data: {
-			labels: [],
-			datasets: [],
-		  },
-		  options: {
-			//locale: "de-DE",
-			responsive: true,
-			//aspectRatio: 1,
-			maintainAspectRatio: true,
-			showLine: true,
-			borderWidth: 1,
-			lineTension: 0,
-			stepped: true, //false,
-			pointRadius: 0,
-			plugins: {
-			  legend: {display: true, labels: {boxWidth: 3}, position: "top"},
-			  tooltip: {caretPadding: 24},
-			},	//top"},
-			animation: {duration: 1500, easing: "easeInOutBack"},
-			interaction: {mode: "x", axis: "x", intersect: false},
-			scales: {
-			  x: {
-				type: "time",
-				min: Date.now() - this.duration, max: Date.now(),
-				time: {
-				  //unit: "minutes",
-				  //unit: "hours",
-				  displayFormats: {seconds: "H:mm:ss", minutes: "H:mm", hours: "H:mm"},
-				  tooltipFormat: "TT"
-				},
-			  },
-			  y: {display: 'auto', axis: 'y', ticks: {beginAtZero: true}},
-			  yAnalog: {display: 'auto', axis: 'y', position: 'right'},
-			}
-		  }
-		},
-	  }
-	},
-	computed: {
-	  chartData() {
-		let store = this.$root.nodes[this.id]?.store;
-		if (store != null) {
-		  const now = Date.now();
-		  ds_index = 0;
-		  for (let series in store) {
-			if (ds_index >= this.cd.data.datasets.length) {
-			  this.cd.data.datasets.push( {
-				label: this.$root.nodes[series].name,
-				data:  [],
-			  });
-//				if (this.$root.nodes[series].unit != "" &&
-//					"°C°FpHrHGHKHµSuS".includes(this.$root.nodes[series].unit)) {  //?? replace with node.OUT_TYPE!=ANALOG
-			  if (this.$root.nodes[series].data_range == "ANALOG") {
-				this.cd.data.datasets[ds_index].stepped = false;
-				this.cd.data.datasets[ds_index].yAxisID = "yAnalog";
-			  }
-			}
+    extends: AnyNode,
+    created: function() {
+      this.chart = null;
+    },
+    destroyed: function() {
+      if (this.chart != null)
+        this.chart.destroy();
+      this.chart = null;
+    },
+    beforeUpdate: function() {
+      if (this.chart == null) {
+        const el = document.getElementById(this.id);
+        if (el != null) {
+          this.chart = new Chart(el, this.chartData);
+        }
+      } else {
+        this.chartData;  // trigger a re-compute, $data wasn't touched
+        this.chart.update();
+      }
+    },
+    data: function() {
+      return {
+        duration: (60 * 60 * 1000) * 1, //hour(s)
+        cd: {
+          type: "scatter",
+          data: {
+            labels: [],
+            datasets: [],
+          },
+          options: {
+            //locale: "de-DE",
+            responsive: true,
+            //aspectRatio: 1,
+            maintainAspectRatio: true,
+            showLine: true,
+            borderWidth: 1,
+            lineTension: 0,
+            stepped: true,
+            pointRadius: 0,
+            plugins: {
+              legend: {display: true, labels: {boxWidth: 3}, position: "top"},
+              tooltip: {caretPadding: 24},
+            },  //top"},
+            animation: {duration: 1500, easing: "easeInOutBack"},
+            interaction: {mode: "x", axis: "x", intersect: false},
+            scales: {
+              x: {
+                type: "time",
+                min: Date.now() - this.duration, max: Date.now(),
+                time: {
+                  //unit: "minutes",
+                  //unit: "hours",
+                  displayFormats: {seconds: "H:mm:ss", minutes: "H:mm", hours: "H:mm"},
+                  tooltipFormat: "TT"
+                },
+              },
+              y: {display: 'auto', axis: 'y', ticks: {beginAtZero: true}},
+              yAnalog: {display: 'auto', axis: 'y', position: 'right'},
+            }
+          }
+        },
+      }
+    },
+    computed: {
+      chartData() {
+        let store = this.$root.nodes[this.id]?.store;
+        if (store != null) {
+          const now = Date.now();
+          ds_index = 0;
+          for (let series in store) {
+            if (ds_index >= this.cd.data.datasets.length) {
+              this.cd.data.datasets.push( {
+                label: this.$root.nodes[series].name,
+                data:  [],
+              });
+              if (this.$root.nodes[series].data_range == "ANALOG") {
+                this.cd.data.datasets[ds_index].stepped = false;
+                this.cd.data.datasets[ds_index].yAxisID = "yAnalog";
+              }
+            }
 
 //FIXME: indices shift
 

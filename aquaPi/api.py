@@ -83,7 +83,6 @@ def api_history(node_id: str):
     step = int(request.args.get('step', 0))
 
     log.debug('API %s start %d step %d', request.path, start, step)
-
     if node:
         if hasattr(node, 'get_history'):
             hist = node.get_history(start, step)

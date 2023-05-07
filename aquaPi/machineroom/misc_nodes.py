@@ -311,16 +311,6 @@ class TimeDbQuest(TimeDb):
         log.debug('  done, overall %fs', time() - qry_begin)
         return result
 
-def query_influx(db_name, flux):
-    breakpoint()
-    if not INFLUX_SRV:
-        pass
-    elif INFLUX_SRV == 'localhost':
-        os.system(f'influx -database={db_name} -precision=s -execute "{flux}"')
-    else:
-        _curl_query(flux, option="db={db_name}&precision=s")
-    return []
-
 
 # ========== miscellaneous ==========
 
@@ -370,14 +360,6 @@ class History(BusListener):
 
     def get_history(self, start, step):
         return self.db.query(self._inputs.sender, start, step)
-
-    def get_history(self, start, step):
-        h = query_influx('aquaPi',
-                         f'SELECT time, * FROM {self.id} WHERE time > {start}'
-                         #'SELECT time, mean(*) FROM {self.id} WHERE time > {start}'
-                         #% (','.join(self._inputs.sender), self.id, start))
-        hist = []
-        return hist
 
     def get_settings(self):
         return []

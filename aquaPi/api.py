@@ -11,8 +11,8 @@ from flask import (
     Blueprint, current_app, json, Response, request
 )
 from http import HTTPStatus
+
 from .machineroom import BusRole
-from .machineroom.msg_types import MsgFilter
 from .pages.sse_util import send_sse_events
 
 log = logging.getLogger('API')
@@ -28,6 +28,7 @@ bp = Blueprint('api', __name__)
 
 @bp.route('/api/nodes/<node_id>')
 def api_node(node_id):
+#TODO: remove 'with_history', use History APi instead
     with_history = request.args.get('add_history', False) in ['true', 'True', '1']
 
     bus = current_app.bus
@@ -35,11 +36,6 @@ def api_node(node_id):
     node = bus.get_node(node_id)
 
     if node:
-        state = {}
-        state.update(id=node.id)
-        state.update(cls=type(node).__name__)
-        state.update(node.__getstate__())
-
         item = node.__getstate__()
         item['type'] = type(node).__name__
         item['role'] = str(node.ROLE).rsplit('.', 1)[1]
@@ -67,6 +63,37 @@ def api_nodes():
         return json.dumps(node_ids)
     else:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+
+@bp.route('/api/history/')
+def api_history_nodes():
+    bus = current_app.bus
+    node_ids = [node.id for node in bus.get_nodes(BusRole.HISTORY)]
+
+    if node_ids:
+        return json.dumps(node_ids)
+    else:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+
+@bp.route('/api/history/<node_id>')
+def api_history(node_id: str):
+    bus = current_app.bus
+    node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
+    node = bus.get_node(node_id)
+
+    start = int(request.args.get('start', 0))
+    step = int(request.args.get('stiep', 0))
+
+    log.debug('API %s', request.path)
+    if node:
+        if hasattr(node, 'get_history'):
+            hist = node.get_history(start, step)
+            return json.dumps(hist)
+        else:
+            return Response(status=HTTPStatus.BAD_REQUEST)
+    else:
+        return Response(status=HTTPStatus.NOT_FOUND)
 
 
 @bp.route('/api/config/dashboard', methods=['GET', 'POST'])
@@ -104,7 +131,7 @@ def api_dashboard():
                               sort_keys=True)
             return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
 
-        except Exception as ex:
+        except Exception:
             log.exception('Received invalid dashboard configuration, ignoring.')
             # flash(str(ex), 'error')
             # return redirect('/')
@@ -141,7 +168,6 @@ def api_sse():
 
     bus = current_app.bus
 
-    nodes = bus.get_nodes()
     if not bus.dash_tiles:
         # JS and checkbox binding does not work well for python
         # bool -> cast to int; on return python will interpret it correctly

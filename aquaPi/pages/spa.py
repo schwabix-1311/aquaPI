@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-import jsonpickle
-from flask import (Blueprint, current_app, flash, request, render_template)
-
-from ..machineroom import BusRole
+from flask import (Blueprint, render_template)
 
 
 log = logging.getLogger('/spa')

@@ -194,7 +194,8 @@ class MachineRoom:
             light_c.plugin(self.bus)
             if not DAWN_LIGHT:
                 light_pwm = AnalogDevice('Dimmer', light_c.id,
-                                         'PWM 0', percept=True, maximum=80)
+                                         #'PWM 0', percept=True, maximum=80)
+                                         'TC420 #1 CH1', percept=True, maximum=80)
                 light_pwm.plugin(self.bus)
 
                 history = History('Licht',

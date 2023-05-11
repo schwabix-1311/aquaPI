@@ -483,6 +483,7 @@ class SunCtrl(ControllerNode):
         if not cloudiness:
             time.sleep(self.highnoon * 60 * 60)
         else:
+            start = now = time.time()
             while now - start < self.highnoon * 60 * 60:
                 self.alert = None
                 new_data = self.target - self._calculate_clouds(cloudiness)

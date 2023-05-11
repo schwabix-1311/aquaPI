@@ -24,28 +24,28 @@ class IoRegistry(object):
     """
     example
 
-    "GPIO 0..xx in":  { Bin,  DriverGPIO,   {pin: 0..x} }         - unused, func IN, x entries
-    "GPIO 0..xx out": { Bout, DriverGPIO,   {pin: 0..x} }         - unused, func IN, x entries
-    "IOext 1..7 in":  { Bin,  DriverPCFxx,  {adr: 0x47, ch: x} }  - unused, x entries
+    "GPIO 0..xx in":  { Bin,  DriverGPIO,   {pin: 0..x} }           - unused, func IN, x entries
+    "GPIO 0..xx out": { Bout, DriverGPIO,   {pin: 0..x} }           - unused, func IN, x entries
+--    "IOext 1..7 in":  { Bin,  DriverPCFxx,  {adr: 0x47, ch: x} }    - unused, x entries
 
-    "GPIO 12 out":    { Bout, DriverGPIO,   {pin: 12} }           - Relays
-    "IOext 0 out":    { Bout, DriverPCFxx,  {adr: 0x47, ch: 0} }  - CO2 Ventil
-    "ShellyPlug1":    { Bout, DriverShelly, {ip: '192..', ch:0} } - S.Plug - Heizer
-    "H-Bridge 1":     { Bout, DriverMotor,  {pins: (21,22)} }     - Dosierpumpe
+    "GPIO 12 out":    { Bout, DriverGPIO,   {pin: 12} }             - Relays
+--    "IOext 0 out":    { Bout, DriverPCFxx,  {adr: 0x47, ch: 0} }    - CO2 Ventil
+--    "ShellyPlug1":    { Bout, DriverShelly, {ip: '192..', ch:0} }   - S.Plug - Heizer
+--    "H-Bridge 1":     { Bout, DriverMotor,  {pins: (21,22)} }       - Dosierpumpe
 
-    "GPIO 20 in":     { Bin,  DriverGPIO,   {pin: 20} }           - Taster
-    "ShellyTemp1":    { Bin,  DriverShelly, {ip: '192..', ch:2} } - S.Temp1
+    "GPIO 20 in":     { Bin,  DriverGPIO,   {pin: 20} }             - Taster
+--    "ShellyTemp1":    { Ain,  DriverShelly, {ip: '192..', ch:2} }   - S.Temp1
 
-    "PWM 0":          { Aout, DriverPWM,    {ch: 0, pin: 18} }    - Licht"
-    "PWM 1":          { Aout, DriverPWM,    {ch: 1, pin: 19} }    -
-    "S-PWM 2":        { Aout, DriverGPIO,   {pin: 24} }           - Lüfter"
-    "PWMext 0-15":    { Aout, DriverPA9685, {addr:0x7F, ch:0..} } -
-    "TC420 1":        { Aout, DriverTC420,  {usb:id, ch:1} }      - Mondlicht
-    "TC420 2":        { Aout, DriverTC420,  {usb:id, ch:(3,4,5)}} - RGB Licht
-    "ShellyDim":      { Aout, DriverShelly, {ip: '192..', ch:X} } - Ambilight
+    "PWM 0":          { Aout, DriverPWM,    {ch: 0, pin: 18} }      - Licht"
+    "PWM 1":          { Aout, DriverPWM,    {ch: 1, pin: 19} }      -
+--    "S-PWM 2":        { Aout, DriverGPIO,   {pin: 24} }             - Lüfter"
+--    "PWMext 0-15":    { Aout, DriverPA9685, {addr:0x7F, ch:0..} }   -
+    "TC420 #1 CH1":   { Aout, DriverTC420,  {device:0, ch:1} }      - Mondlicht
+--    "TC420 #1 CH3-5": { Aout, DriverTC420,  {device:0, ch:(3,4,5)}} - RGB Licht
+--    "ShellyDim":      { Aout, DriverShelly, {ip: '192..', ch:X} }   - Ambilight
 
-    "Sens 1":         { Ain,  DriverOneWr,  {id:'28-xx'} }        - Wassertemperatur"
-    "ADC 3":          { Ain,  DriverADS1115,{addr:0x7E, ch:3} }   - pH Sonde"
+    "DS1820 xABCDE":  { Ain,  DriverDS1820,  {adr:'28-..abcde'} }   - Wassertemperatur"
+    "ADC #1 in 3":    { Ain,  DriverADS1115,{adr:0x7E, cnt:1, ch:3} }   - pH Sonde"
 
     Constructor calls each driver's find_ports() to fill io_registry with io_ports.
     Each io_port is defined by a unique name, a driver class and its cfg dictionary,

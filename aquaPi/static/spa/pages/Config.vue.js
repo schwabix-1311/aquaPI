@@ -23,7 +23,7 @@ const Config = {
 								Will be a page to show and modify <strong>structure of nodes + drivers</strong>.<br>
 								Some of it should be protected by authentication.
 							</div>
-						</v-alert>     
+						</v-alert>
 					</v-col>
 				</v-row>
 

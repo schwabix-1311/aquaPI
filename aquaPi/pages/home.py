@@ -17,7 +17,6 @@ log.setLevel(logging.WARNING)
 bp = Blueprint('home', __name__)
 
 
-@bp.route('/')
 @bp.route('/home')
 def home():
     bus = current_app.bus

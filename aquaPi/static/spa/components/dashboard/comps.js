@@ -224,7 +224,7 @@ const SunCtrl = {
 		descript() {
 			return this.node.xscend.toString() + ' h_/ '
 			     + this.node.highnoon.toString() + ' h \\_'
-				 + this.node.xscend.toString() + ' h'
+			     + this.node.xscend.toString() + ' h'
 		},
 		value() {
 			let node = this.node

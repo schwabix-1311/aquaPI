@@ -18,7 +18,7 @@ const AquapiSettings = {
 						YYcolor="'orange'"
 					>
 						Hier denn die (CTRL) nodes mit einstellbaren Werten
-					</v-alert>     
+					</v-alert>
 				</v-row>
 			</v-card-text>
 		</v-card>

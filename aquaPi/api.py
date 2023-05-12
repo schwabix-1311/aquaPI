@@ -47,7 +47,7 @@ def api_node(node_id: str):
     node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
     node = bus.get_node(node_id)
 
-    #log.debug(str(node))
+    log.debug(str(node))
 
     if node:
         item = node.__getstate__()
@@ -59,8 +59,8 @@ def api_node(node_id: str):
 
         if hasattr(node, 'alert') and node.alert:
             item['alert'] = node.alert
-        log.debug(item)
 
+        log.debug(item)
         body = jsonpickle.encode({'result': 'SUCCESS', 'data': item}, unpicklable=False, keys=True)
 
         return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
@@ -68,7 +68,7 @@ def api_node(node_id: str):
         return Response(status=HTTPStatus.NOT_FOUND)
 
 
-@bp.route('/api/history/')
+@bp.route('/api/history/', methods=['GET'])
 def api_history_nodes():
     bus = current_app.bus
     node_ids = [node.id for node in bus.get_nodes(BusRole.HISTORY)]

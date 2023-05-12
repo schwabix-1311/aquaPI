@@ -155,7 +155,7 @@ const AquapiDashboardWidget = {
 						class="mr-2"
 					/>
 					<v-icon
-					    v-else
+						v-else
 						:color="'blue-grey'"
 						:class="($vuetify.theme.dark ? 'text--darken-2' : 'text--lighten-4')"
 						left

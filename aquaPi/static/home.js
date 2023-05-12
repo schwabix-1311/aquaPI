@@ -9,31 +9,31 @@
  */
 
 const App = {
-    el: '#vm',
-    delimiters: ['[[', ']]'],
-    data: function () {
-        return {
-            nodes: {},
-        }
-    },
-    template: '#vueHome',
-    methods: {
-        setNode(id, node) {
-            Vue.set(this.nodes, id, node)
-        },
-        async updateNode(id, addNew=false) {
-            if (id != null) {
-                if ((id in this.nodes) || addNew) {
-                    // TODO: error handler - might loose connection
-                    // console.debug(`fetch ${id} ${addNew} ...`)
-                    const response = await fetch('/api/nodes/' + id)
-                    const node = await response.json()
-                    this.setNode(id, node)
-                    // console.debug(`... fetch ${id} ${addNew} done`)
-                }
-            }
-        },
-    },
+	el: '#vm',
+	delimiters: ['[[', ']]'],
+	data: function () {
+		return {
+			nodes: {},
+		}
+	},
+	template: '#vueHome',
+	methods: {
+		setNode(id, node) {
+			Vue.set(this.nodes, id, node)
+		},
+		async updateNode(id, addNew=false) {
+			if (id != null) {
+				if ((id in this.nodes) || addNew) {
+					// TODO: error handler - might loose connection
+					// console.debug(`fetch ${id} ${addNew} ...`)
+					const response = await fetch('/api/nodes/' + id)
+					const node = await response.json()
+					this.setNode(id, node)
+					// console.debug(`... fetch ${id} ${addNew} done`)
+				}
+			}
+		},
+	},
 };
 
 const Dashboard = {

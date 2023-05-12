@@ -21,6 +21,7 @@ log.setLevel(logging.WARNING)
 
 # ========== interface to whisper (RRDB component of Graphite) ==========
 
+
 class TimeDb(ABC):
     """ Base class for time series storage
     """
@@ -165,15 +166,6 @@ class History(BusListener):
         self.duration = duration
         self.data = 0  # just anything for MsgBorn
         self._nextrefresh = time()
-        try:
-            self.db = TimeDbQuest()
-            log.brief('Recording history in QuestDB')
-        except (NotImplementedError, ModuleNotFoundError):
-            self.db = TimeDbMemory(duration)
-            log.brief('Recording history in main memory with limited depth of %dh!', duration)
-        for snd in self._inputs.sender:
-            self.db.add_field(snd)
-
         try:
             self.db = TimeDbQuest()
             log.brief('Recording history in QuestDB')

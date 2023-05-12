@@ -10,25 +10,25 @@ const Home = {
 
 	methods: {
 		// async handleSSE(payload) {
-		// 	console.log('[page Home] listenSSE, payload:')
-		// 	console.log(payload)
+		//	console.log('[page Home] listenSSE, payload:')
+		//	console.log(payload)
 		//
-		// 	let nodeId = null
-		// 	if (typeof payload == 'string') {
-		// 		nodeId = payload
-		// 	} else if (typeof payload == 'object') {
-		// 		nodeId = payload.id
-		// 	}
+		//	let nodeId = null
+		//	if (typeof payload == 'string') {
+		//		nodeId = payload
+		//	} else if (typeof payload == 'object') {
+		//		nodeId = payload.id
+		//	}
 		//
-		// 	const response = await fetch('/api/nodes/' + nodeId)
+		//	const response = await fetch('/api/nodes/' + nodeId)
 		//
-		// 	try {
-		// 		const {result, data} = await response.json()
-		// 		this.$store.commit('dashboard/setNode', data)
-		// 	} catch (e) {
-		// 		console.error(`Could not fetch node ${nodeId}`)
-		// 		console.log(e)
-		// 	}
+		//	try {
+		//		const {result, data} = await response.json()
+		//		this.$store.commit('dashboard/setNode', data)
+		//	} catch (e) {
+		//		console.error(`Could not fetch node ${nodeId}`)
+		//		console.log(e)
+		//	}
 		// }
 	},
 

@@ -133,7 +133,7 @@ const actions = {
 				let promises = nodeIds.map(nodeId => dispatch('fetchNode', {nodeId, addHistory}))
 
 				Promise.all(promises)
-  					.then(values => {
+					.then(values => {
 						values.forEach(item => {
 							nodes[item.id] = item
 						})
@@ -147,25 +147,25 @@ const actions = {
 
 	// TODO: prelim. method for new history API
 	// async loadNodeHistory({state, getters, dispatch, commit}, node) {
-	// 	console.log('### loadNodesHistory')
-	// 	console.log('node:', node)
-	// 	const nodeIds = node.inputs?.sender
+	//	console.log('### loadNodesHistory')
+	//	console.log('node:', node)
+	//	const nodeIds = node.inputs?.sender
 	//
-	// 	let histories = {}
+	//	let histories = {}
 	//
-	// 	if (nodeIds.length) {
-	// 		let promises = nodeIds.map(nodeId => dispatch('fetchNode', {nodeId, addHistory: true}))
+	//	if (nodeIds.length) {
+	//		let promises = nodeIds.map(nodeId => dispatch('fetchNode', {nodeId, addHistory: true}))
 	//
-	// 		Promise.all(promises)
-	// 			.then(values => {
-	// 				values.forEach(item => {
-	// 					console.log('... item:', item)
-	// 					histories[item.id] = item
-	// 				})
+	//		Promise.all(promises)
+	//			.then(values => {
+	//				values.forEach(item => {
+	//					console.log('... item:', item)
+	//					histories[item.id] = item
+	//				})
 	//
-	// 				commit('setHistories', histories)
-	// 			})
-	// 	}
+	//				commit('setHistories', histories)
+	//			})
+	//	}
 	// },
 	async loadNodeHistory({state, getters, dispatch, commit}, node) {
 		const nodeId = node.id

@@ -13,7 +13,7 @@ try:
     from psycopg import sql
     QUEST_DB = True
 except:
-# pylint: disable-next: E1129
+# pylint: disable: E1129
     QUEST_DB = False
 
 from .msg_bus import (BusListener, BusRole, MsgData)
@@ -141,27 +141,26 @@ class TimeDbQuest(TimeDb):
         #    raise ModuleNotFoundError()
 
         super().__init__()
-        if QUEST_DB:
-            try:
-                self.conn_str = 'host=localhost port=8812 ' \
-                              + 'user=admin password=quest ' \
-                              + 'dbname=aquaPi application_name=aquaPi'
-                self.timezone = self._get_local_tz()
-                with pg.connect(self.conn_str, autocommit=True) as conn:
-                    conn.execute("SET TIME ZONE %s", [self.timezone])
-                    conn.execute("""
-                      CREATE TABLE IF NOT EXISTS node
-                        ( node_id symbol CAPACITY 64 INDEX,
-                          linear_fill boolean );
-                      CREATE TABLE IF NOT EXISTS value
-                        ( ts timestamp,
-                          node_id symbol CAPACITY 64,
-                          value double )
-                        timestamp(ts) PARTITION BY HOUR;
-                      """)
-            except pg.OperationalError as ex:
-                log.warning('TimeQuestDB - %s', str(ex))
-                raise ModuleNotFoundError() from ex
+        try:
+            self.conn_str = 'host=localhost port=8812 ' \
+                          + 'user=admin password=quest ' \
+                          + 'dbname=aquaPi application_name=aquaPi'
+            self.timezone = self._get_local_tz()
+            with pg.connect(self.conn_str, autocommit=True) as conn:
+                conn.execute("SET TIME ZONE %s", [self.timezone])
+                conn.execute("""
+                  CREATE TABLE IF NOT EXISTS node
+                    ( node_id symbol CAPACITY 64 INDEX,
+                      linear_fill boolean );
+                  CREATE TABLE IF NOT EXISTS value
+                    ( ts timestamp,
+                      node_id symbol CAPACITY 64,
+                      value double )
+                    timestamp(ts) PARTITION BY HOUR;
+                  """)
+        except pg.OperationalError as ex:
+            log.warning('TimeQuestDB - %s', str(ex))
+            raise ModuleNotFoundError() from ex
 
     @staticmethod
     def _get_local_tz():
@@ -177,28 +176,26 @@ class TimeDbQuest(TimeDb):
 
     def add_field(self, name):
         super().add_field(name)
-        if QUEST_DB:
-            try:
-                with pg.connect(self.conn_str, autocommit=True) as conn:
-                    with conn.cursor() as curs:
-                        qry = sql.SQL("SELECT {node_id} FROM node WHERE {node_id}=%s").format(
-                                node_id=sql.Identifier('node_id'))
-                        curs.execute(qry, [name])
-                        rec = curs.fetchone()
-                        if not rec:
-                            qry = sql.SQL("INSERT INTO node VALUES (%s, true)")
-                            conn.execute(qry, [name])
-            except pg.OperationalError as ex:
-                log.warning('TimQuestDB.add_field - %s', str(ex))
+        try:
+            with pg.connect(self.conn_str, autocommit=True) as conn:
+                with conn.cursor() as curs:
+                    qry = sql.SQL("SELECT {node_id} FROM node WHERE {node_id}=%s").format(
+                            node_id=sql.Identifier('node_id'))
+                    curs.execute(qry, [name])
+                    rec = curs.fetchone()
+                    if not rec:
+                        qry = sql.SQL("INSERT INTO node VALUES (%s, true)")
+                        conn.execute(qry, [name])
+        except pg.OperationalError as ex:
+            log.warning('TimQuestDB.add_field - %s', str(ex))
 
     def feed(self, name, value):
-        if QUEST_DB:
-            try:
-                with pg.connect(self.conn_str, autocommit=True) as conn:
-                    qry = sql.SQL("INSERT INTO value VALUES (now(), %s, %s)")
-                    conn.execute(qry, [name, value])
-            except pg.OperationalError as ex:
-                log.warning('TimeQuestDB.feed - %s', str(ex))
+        try:
+            with pg.connect(self.conn_str, autocommit=True) as conn:
+                qry = sql.SQL("INSERT INTO value VALUES (now(), %s, %s)")
+                conn.execute(qry, [name, value])
+        except pg.OperationalError as ex:
+            log.warning('TimeQuestDB.feed - %s', str(ex))
 
     def _query(self, node_names, start, step):
         try:

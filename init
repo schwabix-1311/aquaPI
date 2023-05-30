@@ -26,6 +26,9 @@ then
   read -p "CR to continue / Ctrl-C to cancel" dummy
   cd "${MyHome}" || return 12
 
+  git submodule init
+  git submodule update
+
   # Debian derivatives don't come with py3 venv by default
   grep -i debian /usr/lib/os-release && sudo apt-get install python3-venv
 

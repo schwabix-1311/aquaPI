@@ -177,8 +177,8 @@ class TimeDbQuest(TimeDb):
     def add_field(self, name):
         super().add_field(name)
         try:
-# pylint: disable-next: E1129
-            with pg.connect(self.conn_str, autocommit=True) as conn:
+            conn = pg.connect(self.conn_str, autocommit=True)
+            with conn:
                 with conn.cursor() as curs:
                     qry = sql.SQL("SELECT {node_id} FROM node WHERE {node_id}=%s").format(
                             node_id=sql.Identifier('node_id'))
@@ -187,6 +187,7 @@ class TimeDbQuest(TimeDb):
                     if not rec:
                         qry = sql.SQL("INSERT INTO node VALUES (%s, true)")
                         conn.execute(qry, [name])
+            conn.close()
         except pg.OperationalError as ex:
             log.warning('TimQuestDB.add_field - %s', str(ex))
 

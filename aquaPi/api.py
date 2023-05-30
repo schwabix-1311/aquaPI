@@ -27,7 +27,7 @@ log.setLevel(logging.WARNING)
 bp = Blueprint('api', __name__)
 
 
-@bp.route('/api/nodes/', methods=['GET'])
+@bp.route('/api/nodes/')
 def api_nodes():
     bus = current_app.bus
     node_ids = [node.id for node in bus.get_nodes()]
@@ -68,7 +68,7 @@ def api_node(node_id: str):
         return Response(status=HTTPStatus.NOT_FOUND)
 
 
-@bp.route('/api/history/', methods=['GET'])
+@bp.route('/api/history/')
 def api_history_nodes():
     bus = current_app.bus
     node_ids = [node.id for node in bus.get_nodes(BusRole.HISTORY)]
@@ -86,9 +86,9 @@ def api_history(node_id: str):
     node = bus.get_node(node_id)
 
     start = int(request.args.get('start', 0))
-    step = int(request.args.get('stiep', 0))
+    step = int(request.args.get('step', 0))
 
-    log.debug('API %s', request.path)
+    log.debug('API %s start %d step %d', request.path, start, step)
     if node:
         if hasattr(node, 'get_history'):
             hist = node.get_history(start, step)

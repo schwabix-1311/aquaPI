@@ -6,6 +6,8 @@
 MySelf=$(realpath "$BASH_SOURCE")
 MyHome=$(dirname "$MySelf")
 
+QuestRel="7.1.3"
+
 if [[ $(basename -- "$BASH_ARGV0") = $(basename -- "${MySelf}") ]]
 then
   echo "ERROR: this script must be sourced: '. ${MySelf}/init'"
@@ -39,6 +41,27 @@ cd "${MyHome}" || return 12
 echo "===== get all python modules"
 pip3 install -r requirements.txt
 echo "====="
+
+if [ $(getconf LONG_BIT) == 64 ]
+then
+  if [ -z "$(ls -d ${MyHome}/questdb-${QuestRel}/ 2>/dev/null)" ]
+  then
+    if ( grep -i arm /proc/cpuinfo >/dev/null )
+    then
+      echo "===== install Quest DB & JRE 11"
+      tar -xvf questdb-${QuestRel}-no-jre-bin.tar.gz
+      mv questdb-${QuestRel}-no-jre-bin questdb-${QuestRel}
+      apt install default-jre
+    else
+      echo "===== install Quest DB incl. JRE for AMD64"
+      tar -xvf questdb-${QuestRel}-rt-linux-amd64.tar.gz
+      mv questdb-${QuestRel}-rt-linux-amd64 questdb-${QuestRel}
+    fi
+  fi
+  echo "===== ... and start QuestDB"
+  ${MyHome}/questdb-${QuestRel}/bin/questdb.sh start
+  echo "====="
+fi
 
 echo "There are two scripts to run the development server:"
 echo "  './run' should be used to start the software in a SSH"

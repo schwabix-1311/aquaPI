@@ -25,7 +25,7 @@ mr = None
 
 
 def init(storage):
-    global mr
+    global mr  # pylint: disable=W0603
 
     mr = MachineRoom(storage)
     return mr

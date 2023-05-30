@@ -139,3 +139,7 @@ _local/
 
 # JetBrains IDE
 .idea/
+
+# the installed instance of QuestDB
+questdb-7.1.3/
+!questdb-*-.tar.gz

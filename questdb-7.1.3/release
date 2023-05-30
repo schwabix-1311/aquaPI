@@ -1,0 +1,2 @@
+JAVA_VERSION="17.0.7"
+MODULES="java.base java.management jdk.unsupported io.questdb jdk.crypto.ec"

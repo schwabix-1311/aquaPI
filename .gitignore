@@ -139,3 +139,6 @@ _local/
 
 # JetBrains IDE
 .idea/
+
+# the installed instance of QuestDB
+questdb-?.?.?/

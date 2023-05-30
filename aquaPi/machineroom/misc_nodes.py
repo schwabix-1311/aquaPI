@@ -146,7 +146,8 @@ class TimeDbQuest(TimeDb):
                           + 'dbname=aquaPi application_name=aquaPi'
             self.timezone = self._get_local_tz()
 # pylint: disable-next: E1129
-            with pg.connect(self.conn_str, autocommit=True) as conn:
+            conn = pg.connect(self.conn_str, autocommit=True)
+            with conn:
                 conn.execute("SET TIME ZONE %s", [self.timezone])
                 conn.execute("""
                   CREATE TABLE IF NOT EXISTS node
@@ -158,6 +159,7 @@ class TimeDbQuest(TimeDb):
                       value double )
                     timestamp(ts) PARTITION BY HOUR;
                   """)
+            conn.close()
         except pg.OperationalError as ex:
             log.warning('TimeQuestDB - %s', str(ex))
             raise ModuleNotFoundError() from ex
@@ -193,18 +195,22 @@ class TimeDbQuest(TimeDb):
 
     def feed(self, name, value):
         try:
-            with pg.connect(self.conn_str, autocommit=True) as conn:
+            conn = pg.connect(self.conn_str, autocommit=True)
+            with conn:
                 qry = sql.SQL("INSERT INTO value VALUES (now(), %s, %s)")
                 conn.execute(qry, [name, value])
+            conn.close()
         except pg.OperationalError as ex:
             log.warning('TimeQuestDB.feed - %s', str(ex))
 
     def _query(self, node_names, start, step):
         try:
+            conn = None
             if start <= 0:
                 start = int(time()) - 24 * 60 * 60  # default to now-24h
 
-            with pg.connect(self.conn_str, autocommit=True) as conn:
+            conn = with pg.connect(self.conn_str, autocommit=True)
+            with conn:
                 with conn.cursor() as curs:
                     if step <= 0:
                         # unsampled = raw data
@@ -241,6 +247,9 @@ class TimeDbQuest(TimeDb):
                     recs = curs.fetchall()
 
                     return recs
+        finally:
+            if conn:
+                conn.close()
 
         except pg.OperationalError as ex:
             log.warning('TimeQuestDB.query - %s', str(ex))

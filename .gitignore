@@ -141,4 +141,5 @@ _local/
 .idea/
 
 # the installed instance of QuestDB
-questdb-?.?.?/
+/aquaPi/questdb-?.?.?/
+!/aquaPi/questdb-*-.tar.gz

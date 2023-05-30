@@ -209,7 +209,7 @@ class TimeDbQuest(TimeDb):
             if start <= 0:
                 start = int(time()) - 24 * 60 * 60  # default to now-24h
 
-            conn = with pg.connect(self.conn_str, autocommit=True)
+            conn = pg.connect(self.conn_str, autocommit=True)
             with conn:
                 with conn.cursor() as curs:
                     if step <= 0:

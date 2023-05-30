@@ -9,12 +9,11 @@ import regex
 from collections import deque
 from time import time
 
-# pylint: disable: E1129
 try:
     import psycopg as pg
     from psycopg import sql
     QUEST_DB = True
-except:
+except:  # pylint: disable=W0702
     QUEST_DB = False
 
 from .msg_bus import (BusListener, BusRole, MsgData)
@@ -147,7 +146,8 @@ class TimeDbQuest(TimeDb):
                           + 'user=admin password=quest ' \
                           + 'dbname=aquaPi application_name=aquaPi'
             self.timezone = self._get_local_tz()
-# pylint: disable-next: E1129
+
+# pylint: disable-next=E1129
             with pg.connect(self.conn_str, autocommit=True) as conn:
                 conn.execute("SET TIME ZONE %s", [self.timezone])
                 conn.execute("""
@@ -179,6 +179,7 @@ class TimeDbQuest(TimeDb):
     def add_field(self, name):
         super().add_field(name)
         try:
+# pylint: disable-next=E1129
             with pg.connect(self.conn_str, autocommit=True) as conn:
                 with conn.cursor() as curs:
                     qry = sql.SQL("SELECT {node_id} FROM node WHERE {node_id}=%s").format(
@@ -193,6 +194,7 @@ class TimeDbQuest(TimeDb):
 
     def feed(self, name, value):
         try:
+# pylint: disable-next=E1129
             with pg.connect(self.conn_str, autocommit=True) as conn:
                 qry = sql.SQL("INSERT INTO value VALUES (now(), %s, %s)")
                 conn.execute(qry, [name, value])
@@ -204,6 +206,7 @@ class TimeDbQuest(TimeDb):
             if start <= 0:
                 start = int(time()) - 24 * 60 * 60  # default to now-24h
 
+# pylint: disable-next=E1129
             with pg.connect(self.conn_str, autocommit=True) as conn:
                 with conn.cursor() as curs:
                     if step <= 0:

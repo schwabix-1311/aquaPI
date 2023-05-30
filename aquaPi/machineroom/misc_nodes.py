@@ -247,13 +247,13 @@ class TimeDbQuest(TimeDb):
                     recs = curs.fetchall()
 
                     return recs
-        finally:
-            if conn:
-                conn.close()
-
         except pg.OperationalError as ex:
             log.warning('TimeQuestDB.query - %s', str(ex))
             return {}
+
+        finally:
+            if conn:
+                conn.close()
 
     def query(self, node_names, start=0, step=0):
         result = {}

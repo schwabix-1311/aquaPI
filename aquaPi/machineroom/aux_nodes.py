@@ -74,7 +74,7 @@ class CalibrationAux(AuxNode):
     def listen(self, msg):
         if isinstance(msg, MsgData):
             self.data = self.factor * float(msg.data) + self.offset
-            log.brief('CalibrationAux %s: output %f', self.id, self.data)
+            log.info('CalibrationAux %s: output %f', self.id, self.data)
             self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
@@ -142,27 +142,22 @@ class AvgAux(MultiInAux):
         if isinstance(msg, MsgData):
             if self.unfair_avg:
                 if self.data == -1:
-                    self.data = float(msg.data)
-                    # log.brief('AvgAux %s: output %f', self.id, self.data)
-                    self.post(MsgData(self.id, self.data))
+                    val = float(msg.data)
                 else:
                     # unfair_avg-1 is the amount (count) of old data to keep
                     old_data = self.data * (self.unfair_avg - 1)
                     val = (float(msg.data) + old_data) / self.unfair_avg
-                    if (self.data != val):
-                        self.data = val
-                        # log.brief('AvgAux %s: output %f', self.id, self.data)
-                        self.post(MsgData(self.id, round(self.data, 4)))
             else:
                 if self.values.get(msg.sender) != float(msg.data):
                     self.values[msg.sender] = float(msg.data)
                 val = 0
                 for k in self.values:
                     val += self.values[k] / len(self.values)
-                if (self.data != val):
-                    self.data = val
-                    # log.brief('AvgAux %s: output %f', self.id, self.data)
-                    self.post(MsgData(self.id, round(self.data, 4)))
+
+            if (self.data != val):
+                self.data = val
+                log.info('AvgAux %s: output %f', self.id, self.data)
+                self.post(MsgData(self.id, round(self.data, 4)))
         return super().listen(msg)
 
     def get_settings(self):
@@ -194,6 +189,6 @@ class MaxAux(MultiInAux):
             val = round(val, 4)
             if self.data != val:
                 self.data = val
-                # log.brief('MaxAux %s: output %f', self.id, self.data)
+                log.info('MaxAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)

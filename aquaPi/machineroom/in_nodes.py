@@ -93,7 +93,7 @@ class AsyncInputNode(InputNode):
                 self.alert = None
                 if self.data != val:
                     self.data = val
-                    log.brief('%s: post %f', self.id, self.data)
+                    log.brief('%s: read %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
             except DriverReadError:
                 self.alert = ('Read error!', 'err')
@@ -146,6 +146,7 @@ class SwitchInput(AsyncInputNode):
         # TODO: reduce load & improve response time by using interrupt-driven IO, either here or in DriverGPIO
         if self._driver:
             val = bool(self._driver.read())
+            log.debug('Bin.read %f', val)
         if self.inverted:
             val = not val
         return val
@@ -202,7 +203,7 @@ class AnalogInput(AsyncInputNode):
         val = self.data
         if self._driver:
             val = float(self._driver.read())
-            log.debug('DBG Ain.read %f', val)
+            log.debug('Ain.read %f', val)
         val = (val + self.data * (self.avg - 1)) / self.avg
         val = round(val, 4)
         return val

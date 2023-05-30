@@ -76,7 +76,7 @@ class DriverADS1115(AInDriver):
 
     @staticmethod
     def find_ports():
-        global adc_count
+        global adc_count  # pylint: disable=W0603
 
         io_ports = {}
         if not SIMULATED:

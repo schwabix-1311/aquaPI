@@ -13,6 +13,7 @@ try:
     from psycopg import sql
     QUEST_DB = True
 except:
+    # pylint: disable-next: E1129
     QUEST_DB = False
 
 from .msg_bus import (BusListener, BusRole, MsgData)

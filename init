@@ -7,6 +7,7 @@ MySelf=$(realpath "$BASH_SOURCE")
 MyHome=$(dirname "$MySelf")
 
 QuestRel="7.1.3"
+Envir=${1:-"Devel"}   # else "Prod"
 
 if [[ $(basename -- "$BASH_ARGV0") = $(basename -- "${MySelf}") ]]
 then
@@ -32,13 +33,18 @@ then
   # NOTE: You can append --system-site-packages to inherit all
   #       packages installed globally, e.g. your vim's jedi. The
   #       release environment should not, to ensure requirments are complete.
-  python3 -m venv venv
+  if [ ${Envir@U} == "DEVEL" ]
+  then
+    python3 -m venv venv --system-site-packages
+  else
+    python3 -m venv venv
+  fi
 fi
 
 echo "Activate aquaPi development env."
 cd "${MyHome}" || return 12
 . ./venv/bin/activate
-echo "===== get all python modules"
+echo "===== get all python packages"
 pip3 install -r requirements.txt
 echo "====="
 

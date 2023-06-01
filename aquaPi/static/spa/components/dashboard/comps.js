@@ -412,7 +412,7 @@ const History = {
 						tooltip: {position: 'nearest', xAlign: 'center', yAlign: 'bottom', caretPadding: 24},
 					},	//top"},
 					animation: {duration: 1500, easing: "easeInOutBack"},
-					interaction: {mode: "nearest", axis: "x", intersect: false},
+					interaction: {mode: "x", axis: "x", intersect: false},
 					scales: {
 						x: {
 							type: "time",

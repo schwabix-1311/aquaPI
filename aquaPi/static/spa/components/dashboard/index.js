@@ -333,7 +333,7 @@ const AquapiDashboard = {
 				</v-row>
 
 				<masonry
-					:cols="{default: 3, 1904: 4, 1264: 3, 960: 2, 600: 1}"
+					:cols="{default: 3, 1264: 3, 960: 2, 600: 1}"
 					:gutter="24"
 				>
 					<div 

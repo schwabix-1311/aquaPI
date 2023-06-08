@@ -91,12 +91,6 @@ def create_app(test_config=None):
     from .pages import spa
     app.register_blueprint(spa.bp)
 
-    # from . import auth
-    # app.register_blueprint(auth.bp)
-
-    # from .hello import hello as hello_blueprint
-    # app.register_blueprint(hello_blueprint)
-
     # Is there a better way? We won't start, so no reason to construct
     # and finally save the bus.
     if 'routes' in sys.argv:

@@ -98,7 +98,6 @@ def api_history(node_id: str):
     else:
         return Response(status=HTTPStatus.NOT_FOUND)
 
-
 @bp.route('/api/config/dashboard', methods=['GET', 'POST'])
 def api_dashboard():
     is_ajax_request = request.headers.get('X-Requested-With', '') == 'XMLHttpRequest'

@@ -56,9 +56,8 @@ def home():
                             'vis': int(False)}
                            for n in bus.get_nodes(BusRole.HISTORY)]
 
-        # this will need 1..n HistoryNodes, their inputs define what will be
-        # on a chart, they feed e.g. InfluxDB, the Vue comp(s) will show one
-        # chart per HistNode with all inputs
+        # this will need 1..n HistoryNodes, their inputs define what will be on a chart, they feed e.g. InfluxDB, the Vue comp(s) will show one chart per HistNode with all inputs
+        # bus.dash_tiles += [{'name': 'Diagramm ' + n.name, 'comp': 'Chart', 'id': n.id, 'vis': int(False)}  for n in bus.get_nodes(BusRole.HISTORY)]
 
     def sse_update():
         changed_ids = bus.wait_for_changes()

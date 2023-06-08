@@ -32,6 +32,14 @@ const AquapiNavDrawer = {
 				dense
 				nav
 			>
+				<v-list-item>
+					<v-list-item-content>
+						<v-list-item-title>
+							<a href="/settings">(alte) Settings</a>
+						</v-list-item-title>
+					</v-list-item-content>
+				</v-list-item>
+			
 				<v-list-item
 					v-for="item in items"
 					:key="item.name"

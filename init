@@ -35,7 +35,7 @@ then
 
   # NOTE: You can append --system-site-packages to inherit all
   #       packages installed globally, e.g. your vim's jedi. The
-  #       release environment should not, to ensure requirments are complete.
+  #       release environment should not, to ensure requirements are complete.
   if [ ${Envir@U} == "DEVEL" ]
   then
     python3 -m venv venv --system-site-packages

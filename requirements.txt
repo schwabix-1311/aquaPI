@@ -18,5 +18,5 @@ jsonpickle==3.0.0
 Adafruit-Blinka==8.11.0
 adafruit-circuitpython-ads1x15==2.2.21
 pyusb==1.2.1
-psycopg[binary]==3.1.9
+#on 64bit OSes only: psycopg[binary]==3.1.9
 regex==2023.6.3

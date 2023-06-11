@@ -510,7 +510,7 @@ const History = {
 
 		async loadHistory() {
 			this.isLoading = true
-			const result = await this.$store.dispatch('dashboard/loadNodeHistory', this.node)
+			const result = await this.$store.dispatch('dashboard/fetchNodeHistory', this.node)
 			if (result) {
 				this.prepareChartData()
 			}

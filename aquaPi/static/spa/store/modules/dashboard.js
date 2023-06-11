@@ -3,6 +3,7 @@ import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 const state = () => ({
 	widgets: [],
 	nodes: {},
+	allNodesLoaded: false,
 	histories: {}
 })
 const getters = {
@@ -20,6 +21,9 @@ const getters = {
 	nodes: (state) => {
 		return state.nodes
 	},
+	allNodesLoaded: (state) => {
+		return state.allNodesLoaded
+	},
 	node: (state) => (nodeId) => {
 		return state.nodes[nodeId]
 	},
@@ -32,6 +36,8 @@ const getters = {
 }
 
 const actions = {
+	// TODO: as for now, we simply use browser`s localStorage to persist dashboard configuration.
+	// Should be changed to use User record, when implemented database (SQLite?) and real authentication
 	persistConfig(context, payload) {
 		try {
 			const config = []
@@ -45,7 +51,19 @@ const actions = {
 			return false
 		}
 	},
+	// TODO: as for now, we simply use browser`s localStorage to persist dashboard configuration.
+	// Should be changed to use User record, when implemented database (SQLite?) and real authentication
 	async loadConfig(context) {
+		let configChanged = false
+
+		// Fetch all available nodes
+		if (!context.getters['allNodesLoaded']) {
+			await context.dispatch('fetchNodes')
+		}
+
+		// Get all available nodes from store
+		const nodes = await context.getters['nodes']
+
 		try {
 			let config = window.localStorage.getItem('aquapi.dashboard')
 			if (null === config) {
@@ -57,9 +75,37 @@ const actions = {
 					})
 					context.dispatch('persistConfig', items)
 					config = JSON.stringify(items)
+
+					configChanged = true
 				}
 			}
-			return await JSON.parse(config)
+			config = await JSON.parse(config)
+
+			// Remove dashboard items for no longer existing nodes
+			config = config.filter((item) => nodes[item.id] !== undefined)
+
+			// Add dashboard items for new nodes
+			for (let nodeId in nodes) {
+				if (config.filter((item) => item.id === nodeId).length == 0) {
+					let node = nodes[nodeId]
+					config.push({
+						id: node.id,
+						identifier: node.identifier,
+						name: node.name,
+						role: node.role,
+						type: node.type,
+						visible: false
+					})
+
+					configChanged = true
+				}
+			}
+
+			if (configChanged) {
+				context.dispatch('persistConfig', config)
+			}
+
+			return config
 		} catch(e) {
 			console.error('ERROR loading dashboard config: ' + e.message)
 			return false
@@ -111,7 +157,7 @@ const actions = {
 		return nodePromise
 	},
 
-	async loadNodes({state, getters, dispatch, commit}, addHistory= false) {
+	async fetchNodes({state, getters, dispatch, commit}, addHistory= false) {
 		let nodes = {}
 
 		// Fetch all nodes (returns array of node id)
@@ -132,22 +178,25 @@ const actions = {
 			if (nodeIds.length) {
 				let promises = nodeIds.map(nodeId => dispatch('fetchNode', {nodeId, addHistory}))
 
-				Promise.all(promises)
+				await Promise.all(promises)
 					.then(values => {
 						values.forEach(item => {
 							nodes[item.id] = item
 						})
 
 						commit('setNodes', nodes)
+						commit('setAllNodesLoaded', true)
 						EventBus.$emit(AQUAPI_EVENTS.APP_LOADING, false)
 					})
 			}
 		}
+
+		return await state.nodes
 	},
 
 	// TODO: prelim. method for new history API
-	// async loadNodeHistory({state, getters, dispatch, commit}, node) {
-	//	console.log('### loadNodesHistory')
+	// async fetchNodeHistory({state, getters, dispatch, commit}, node) {
+	//	console.log('[store/dashboard] fetchNodeHistory')
 	//	console.log('node:', node)
 	//	const nodeIds = node.inputs?.sender
 	//
@@ -167,7 +216,7 @@ const actions = {
 	//			})
 	//	}
 	// },
-	async loadNodeHistory({state, getters, dispatch, commit}, node) {
+	async fetchNodeHistory({state, getters, dispatch, commit}, node) {
 		const nodeId = node.id
 
 		const result = await dispatch('fetchNode', {nodeId, addHistory: true})
@@ -200,6 +249,9 @@ const mutations = {
 	},
 	setNodes(state, payload) {
 		state.nodes = Object.assign({}, payload)
+	},
+	setAllNodesLoaded(state, payload) {
+		state.allNodesLoaded = payload
 	},
 	setHistories(state, payload) {
 		state.histories = Object.assign({}, state.histories, payload)

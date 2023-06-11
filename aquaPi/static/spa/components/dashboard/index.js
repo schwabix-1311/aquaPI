@@ -343,6 +343,7 @@ const AquapiDashboard = {
 					>
 						<aquapi-dashboard-widget
 							:item="item"
+							:addTitle="true"
 						>
 						</aquapi-dashboard-widget>
 					</div>
@@ -392,9 +393,8 @@ const AquapiDashboard = {
 			}
 		},
 	},
-
-	created() {
-		this.loadConfig()
+	async mounted() {
+		await this.loadConfig()
 	},
 }
 Vue.component('AquapiDashboard', AquapiDashboard)

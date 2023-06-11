@@ -36,8 +36,8 @@ const App = {
 
 			EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 		},
-		loadNodes() {
-			this.$store.dispatch('dashboard/loadNodes')
+		async fetchNodes() {
+			await this.$store.dispatch('dashboard/fetchNodes')
 		},
 		async handleSSE(payload) {
 			let addHistory = false
@@ -67,12 +67,9 @@ const App = {
 		}
 	},
 
-	created() {
+	async created() {
+		await this.fetchNodes()
 		this.initEventListeners()
-	},
-
-	beforeMount() {
-		this.loadNodes()
 	},
 
 	destroyed() {

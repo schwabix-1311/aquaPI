@@ -4,6 +4,11 @@ from enum import Enum
 import logging
 
 try:
+    # latest Blinka supports x86 LinuxPC, but we don't at least not chips on I²C
+    from adafruit_platformdetect import Detector
+    if Detector().board.id == 'GENERIC_LINUX_PC':
+        raise NotImplementedError
+
     import board
     import busio
     import adafruit_ads1x15.ads1115 as ADS

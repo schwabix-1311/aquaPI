@@ -60,7 +60,7 @@ const DefaultLayout = {
 			</v-app-bar>
 
 			<v-main style="max-height: 100vh;">
-				<v-container class="pa-5">
+				<v-container :fluid="containerFluid" class="pa-5">
 					 <transition name="fade" mode="out-in" :duration="$store.state.ui.navigation.transitionDuration">
 						<router-view name="default" class="view"></router-view>
 					</transition>
@@ -119,6 +119,10 @@ const DefaultLayout = {
 					route: 'about'
 				}
 			]
+		},
+		containerFluid() {
+			// TODO: maybe render container as 'fluid' (full viewport width) on all pages
+			return ['home', 'dashboard'].includes(this.$route.name)
 		}
 	},
 

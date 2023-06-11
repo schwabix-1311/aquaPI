@@ -1,56 +1,56 @@
 <!DOCTYPE html>
 <html lang="de">
-    <head>
-        <meta charset="UTF-8">
-        <title>aquaPi</title>
+	<head>
+		<meta charset="UTF-8">
+		<title>aquaPi</title>
 		<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
 		{#-
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
-        -#}
+			<link rel="preconnect" href="https://fonts.googleapis.com">
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+			<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
+			-#}
 
-        {# <link href="{{ url_for('static', filename='fonts/roboto-v30.css') }}" rel="stylesheet"> #}
-        <link href="{{ url_for('static', filename='fonts/blinker-v12.css') }}" rel="stylesheet">
+		{# <link href="{{ url_for('static', filename='fonts/roboto-v30.css') }}" rel="stylesheet"> #}
+		<link href="{{ url_for('static', filename='fonts/blinker-v12.css') }}" rel="stylesheet">
 
-        {#- <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet"> -#}
-        {# <link href="{{ url_for('static', filename='css/vuetify.2.6.13.min.css') }}" rel="stylesheet"> #}
-        {# NOTE: vuetify ...customized uses font Blinker instead of default Roboto #}
-        <link href="{{ url_for('static', filename='css/vuetify.2.6.13.customized.min.css') }}" rel="stylesheet">
-        <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+		{#- <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet"> -#}
+		{# <link href="{{ url_for('static', filename='css/vuetify.2.6.13.min.css') }}" rel="stylesheet"> #}
+		{# NOTE: vuetify ...customized uses font Blinker instead of default Roboto #}
+		<link href="{{ url_for('static', filename='css/vuetify.2.6.13.customized.min.css') }}" rel="stylesheet">
+		<link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
 
-        {#- <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet"> -#}
-        <link href="{{ url_for('static', filename='css/materialdesignicons.6.9.96.min.css') }}" rel="stylesheet">
+		{#- <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet"> -#}
+		<link href="{{ url_for('static', filename='css/materialdesignicons.6.9.96.min.css') }}" rel="stylesheet">
 
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3, user-scalable=yes, minimal-ui">
-    </head>
-    <body>
-        <noscript>
-            <div id="hint-javascript">
-                We're sorry but aquaPi doesn't work without JavaScript enabled.<br>Please enable it to continue.
-            </div>
-        </noscript>
+		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3, user-scalable=yes, minimal-ui">
+	</head>
+	<body>
+		<noscript>
+			<div id="hint-javascript">
+				We're sorry but aquaPi doesn't work without JavaScript enabled.<br>Please enable it to continue.
+			</div>
+		</noscript>
 
-        <div id="app">
-            <div id="app-splash">
-                <div id="app-splash-bg">
+		<div id="app">
+			<div id="app-splash">
+				<div id="app-splash-bg">
 					<img src="{{ url_for('static', filename='assets/img/fish_1.webp') }}">
-                    <div class="app-splash-content">
-                        <strong>Bissle Geduld, 's geht gleich los …</strong>
-                    </div>
-                </div>
-            </div>
-        </div>
+					<div class="app-splash-content">
+						<strong>Bissle Geduld, 's geht gleich los …</strong>
+					</div>
+				</div>
+			</div>
+		</div>
 
-        {# TODO: for development use CDN file #}
-        <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
-        {# <script src="{{ url_for('static', filename='libs/vue.2.7.14.js') }}"></script> #}
+		{# TODO: for development use CDN file #}
+		<script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+		{# <script src="{{ url_for('static', filename='libs/vue.2.7.14.js') }}"></script> #}
 
-        <script src="{{ url_for('static', filename='libs/vuex.2.5.0.js') }}"></script>
-        <script src="{{ url_for('static', filename='libs/vue-router.3.6.5.js') }}"></script>
-        <script src="{{ url_for('static', filename='libs/vue-i18n.8.28.2.js') }}"></script>
-        <script src="{{ url_for('static', filename='libs/vuetify.2.6.13.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vuex.3.6.2.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-router.3.6.5.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-i18n.8.28.2.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vuetify.2.6.13.js') }}"></script>
 
 		<script src="{{ url_for('static', filename='libs/chart.js.4.0.1.js') }}"></script>
 		<script src="{{ url_for('static', filename='libs/luxon.3.1.1.js') }}"></script>
@@ -66,5 +66,5 @@
 		<script src="{{ url_for('static', filename='libs/vue-masonry-css.1.0.3.js') }}"></script>
 
 		<script type="module" src="{{ url_for('static', filename='spa/main.js') }}"></script>
-    </body>
+	</body>
 </html>

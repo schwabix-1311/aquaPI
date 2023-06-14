@@ -66,8 +66,8 @@ then
       tar -xvf questdb-${QuestRel}-rt-linux-amd64.tar.gz
       mv questdb-${QuestRel}-rt-linux-amd64 questdb-${QuestRel}
     fi
-    pip3 install psycopg[binary]==3.1.9
   fi
+  pip3 install psycopg[binary]==3.1.9
   echo "===== ... and start QuestDB"
   ${MyHome}/questdb-${QuestRel}/bin/questdb.sh start
   echo "====="

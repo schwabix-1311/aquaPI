@@ -311,10 +311,10 @@ const MaxAux = {
 }
 Vue.component('MaxAux', MaxAux)
 
-const CalibrationAux = {
+const ScaleAux = {
 	extends: AuxNode,
 }
-Vue.component('CalibrationAux', CalibrationAux)
+Vue.component('ScaleAux', ScaleAux)
 
 
 const History = {

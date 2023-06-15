@@ -9,7 +9,7 @@ from .msg_bus import MsgBus, BusRole
 from .ctrl_nodes import MinimumCtrl, MaximumCtrl, SunCtrl, FadeCtrl
 from .in_nodes import AnalogInput, ScheduleInput
 from .out_nodes import SwitchDevice, AnalogDevice
-from .aux_nodes import CalibrationAux, MaxAux, AvgAux
+from .aux_nodes import ScaleAux, MaxAux, AvgAux
 from .misc_nodes import History
 
 
@@ -157,8 +157,8 @@ class MachineRoom:
 
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
                                  avg=1, interval=30)
-            calib_ph = CalibrationAux('pH Kalibrierung', adc_ph.id, unit=' pH',
-                                      points=[(2.99, 4.0), (2.51, 6.9)])
+            calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, unit=' pH',
+                                points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH', calib_ph.id, 6.5)
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
             out_ph.plugin(self.bus)
@@ -173,8 +173,8 @@ class MachineRoom:
         if TEST_PH:
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
                                  avg=1, interval=30)
-            calib_ph = CalibrationAux('pH Kalibrierung', adc_ph.id, unit=' pH',
-                                      points=[(2.99, 4.0), (2.51, 6.9)])
+            calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, unit=' pH',
+                                points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH', calib_ph.id, 7.0)
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
             out_ph.plugin(self.bus)
@@ -250,8 +250,15 @@ class MachineRoom:
                 w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 12 out')
                 w_heat.plugin(self.bus)
 
-                w_cool = SwitchDevice('W-Lüfter', w2_ctrl.id, 'GPIO 13 out')
+                #FIXME: a node chain like this one has no *Ctrl and is thus
+                #       invisible in UI, although totally valid
+                w_coolspeed = ScaleAux('Lüftergeschwindigkeit', w_temp.id,
+                                       unit='%', limit=True,
+                                       points=[(25.1, 0), (26, 100)])
+                w_cool = AnalogDevice('W-Lüfter', w_coolspeed.id,
+                                      'PWM 1')  # ?? minimum=10, maximum=80)
                 w_cool.plugin(self.bus)
+                w_coolspeed.plugin(self.bus)
 
                 t_history = History('Temperaturen',
                                     [w1_temp.id, w2_temp.id, w_temp.id,

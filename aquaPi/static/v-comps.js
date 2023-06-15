@@ -378,18 +378,18 @@ const MaxAux = {
 };
 Vue.component('MaxAux', MaxAux);
 
-const CalibrationAux = {
+const ScaleAux = {
 	extends: AuxNode,
 	computed: {
 		label() {
 			if (this.decoration === '')
-				return 'Calibration'
+				return 'Rescale'
 			else
 				return '<img style="width:24px">Max'
 		},
 	},
 };
-Vue.component('CalibrationAux', CalibrationAux);
+Vue.component('ScaleAux', ScaleAux);
 
 
 const History = {

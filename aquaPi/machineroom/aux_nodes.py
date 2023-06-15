@@ -10,7 +10,7 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log.setLevel(logging.DEBUG)
 
 
 # ========== auxiliary ==========
@@ -28,21 +28,25 @@ class AuxNode(BusListener):
         self.data = -1
 
 
-class CalibrationAux(AuxNode):
-    """ A 1:1 node changing data range via offset and factor,
-        or 2 points.
+class ScaleAux(AuxNode):
+    """ A 1:1 node rescaling via a graph defined by
+        offset and factor, or by 2 points.
         Useful for calibrations of linear (!) sensors.
+        And quite a few other creative use cases ...
 
         Options:
             offset - a simple offset:  in + offset = out
             factor - a scaling factor: in * factor = out
             points - alternate way to define offset and factor
                       by 2 points as [(in1 out1),(in2 out2)]
+            limit  - if tupel, limit out to this range,
+                     else if true-ish, limit to 0..100
     """
     data_range = DataRange.ANALOG
 
-    def __init__(self, name, inputs,
-                 offset=0, factor=1.0, points=None, unit='pH',
+    def __init__(self, name, inputs, unit='pH',
+                 offset=0, factor=1.0, points=None,
+                 limit=None,
                  _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.unit = unit
@@ -55,26 +59,39 @@ class CalibrationAux(AuxNode):
             log.info('No valid calibration points found')
             self.offset = offset
             self.factor = factor
-        log.info('CalibrationAux %s: factor %f, offset %f',
-                 name, self.factor, self.offset)
+
+        if limit:
+            try:
+                self.limit = (limit[0], limit[1])
+            except (TypeError, IndexError):
+                self.limit = (0, 100)
+        else:
+            self.limit = None
+
+        log.info('ScaleAux %s: factor %f, offset %f, limiting %s',
+                 name, self.factor, self.offset, str(self.limit))
 
     def __getstate__(self):
         state = super().__getstate__()
         state.update(unit=self.unit)
         state.update(offset=self.offset)
         state.update(factor=self.factor)
+        state.update(limit=self.limit)
         return state
 
     def __setstate__(self, state):
         self.data = state['data']
         self.__init__(state['name'], state['inputs'], unit=state['unit'],
                       offset=state['offset'], factor=state['factor'],
+                      limit=state['limit'],
                       _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
             self.data = self.factor * float(msg.data) + self.offset
-            log.info('CalibrationAux %s: output %f', self.id, self.data)
+            if self.limit:
+                self.data = min(max( self.limit[0], self.data), self.limit[1])
+            log.info('ScaleAux %s: output %f', self.id, self.data)
             self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
@@ -82,17 +99,20 @@ class CalibrationAux(AuxNode):
         settings = super().get_settings()
         settings.append(('unit', 'Einheit',
                          self.unit, 'type="text"'))
+        # TODO frontend should also offer 2-point calibration, this is most practical for pH
         settings.append(('offset', 'Offset', round(self.offset, 4),
                          'type="number" step="0.0001"'))
         settings.append(('factor', 'Skalierfaktor', round(self.factor, 4),
                          'type="number" step="0.0001"'))
-        # TODO frontend should also offer 2-point calibration, this is most practical for pH
+        # settings.append(('limit', 'Grenzen', self.limit,
+        #                  'type="combo"'))  #  None/0..100/(min,max)
         return settings
 
 
 class MultiInAux(AuxNode):
     """ subtype of AuxNodes listening to more than 1 input
     """
+
     def __init__(self, name, inputs, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.values = {}
@@ -124,6 +144,7 @@ class AvgAux(MultiInAux):
         Output:
             float - posts changes of arithmetic average of inputs
     """
+
     def __init__(self, name, inputs, unfair_avg=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.unfair_avg = 0 or int(unfair_avg)
@@ -179,6 +200,7 @@ class MaxAux(MultiInAux):
         Output:
             float - posts changes of maximum value of all inputs
     """
+
     def listen(self, msg):
         if isinstance(msg, MsgData):
             if self.values.get(msg.sender) != float(msg.data):

@@ -102,6 +102,7 @@ class DriverGPIO(OutDriver, InDriver):
                 'GPIO 13 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 13, 'fake': True}, []),  # (Cooler relay)
                 'GPIO 18 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 18, 'fake': True}, []),
                 'GPIO 18 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 18, 'fake': True}, []),  # PWM 0
+                'GPIO 19 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 19, 'fake': True}, []),
                 'GPIO 19 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 19, 'fake': True}, []),  # PWM 1
                 'GPIO 20 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 20, 'fake': True}, [])  # CO2 vent
             }

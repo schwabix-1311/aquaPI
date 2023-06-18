@@ -1,3 +1,5 @@
+import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
+
 const state = () => ({
 	appLoading: false,
 	darkMode: false,
@@ -45,7 +47,6 @@ const getters = {
 	isActiveDialog: (state, getters) => (dialog) => {
 		let dialogs = state.activeDialogs
 		if (dialogs[dialog] == undefined || dialogs[dialog] == null) {
-		// if (!Object.keys(dialogs).includes(dialog)) {
 			dialogs[dialog] = false
 			state.activeDialogs = Object.assign({}, dialogs)
 		}
@@ -70,11 +71,13 @@ const actions = {
 		let dialogs = context.state.activeDialogs
 		dialogs[dialog] = true
 		context.state.activeDialogs = Object.assign({}, dialogs)
+		EventBus.$emit(AQUAPI_EVENTS.DIALOG_OPENED, {id: dialog})
 	},
 	hideDialog(context, dialog) {
 		let dialogs = context.state.activeDialogs
 		dialogs[dialog] = false
 		context.state.activeDialogs = Object.assign({}, dialogs)
+		EventBus.$emit(AQUAPI_EVENTS.DIALOG_CLOSED, {id: dialog})
 	},
 	hideAllDialogs(context, except=null) {
 		const dialogs = context.state.activeDialogs

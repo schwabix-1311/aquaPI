@@ -40,8 +40,6 @@ const App = {
 			await this.$store.dispatch('dashboard/fetchNodes')
 		},
 		async handleSSE(payload) {
-			let addHistory = false
-
 			let nodeId = null
 			if (typeof payload == 'string') {
 				nodeId = payload
@@ -49,13 +47,7 @@ const App = {
 				nodeId = payload.id
 			}
 
-			// TODO: adapt to new history API, if implemented
-			const visibleDashboardWidgets = this.$store.getters['dashboard/visibleWidgets']
-			if (visibleDashboardWidgets && Object.keys(visibleDashboardWidgets).includes(nodeId) && visibleDashboardWidgets[nodeId].role == 'HISTORY') {
-				addHistory = true
-			}
-
-			const response = await fetch('/api/nodes/' + nodeId + (addHistory ? '?add_history=true' : ''))
+			const response = await fetch('/api/nodes/' + nodeId)
 
 			try {
 				const {result, data} = await response.json()

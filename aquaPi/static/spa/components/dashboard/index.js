@@ -263,7 +263,6 @@ const AquapiDashboardWidget = {
 			if (this.node) {
 				w_key += '.' + this.node.unit.trim()
 			}
-			//w_key = w_key.replace('HISTORY', '')
 
 			for (const k in this.typeIcons) {
 				if (w_key.includes(k)) {
@@ -338,7 +337,7 @@ const AquapiDashboard = {
 				>
 					<div 
 						v-for="(item, index) in widgets" 
-						:key="index"
+						:key="item.identifier"
 						class="mb-6"
 					>
 						<aquapi-dashboard-widget

@@ -499,6 +499,8 @@ const History = {
 					for (let val of store[series]) {
 						this.cd.data.datasets[dsIdx].data.push({x: val[0] * 1000, y: val[1]})
 					}
+					// append current value
+					this.cd.data.datasets[dsIdx].data.push({x: now, y: this.$store.getters['dashboard/node'](series).data});
 					dsIdx++;
 				}
 				this.cd.options.scales.x.min = now - this.currentPeriod

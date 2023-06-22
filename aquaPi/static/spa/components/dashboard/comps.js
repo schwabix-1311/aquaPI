@@ -489,7 +489,7 @@ const History = {
 							data: [],
 						});
 
-						if (node.data_range === 'ANALOG') {
+						if (node.data_range === 'ANALOG' && node.unit != '%') {
 							this.cd.data.datasets[dsIdx].stepped = false
 							this.cd.data.datasets[dsIdx].yAxisID = 'yAnalog'
 						}

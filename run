@@ -1,5 +1,27 @@
 #!/usr/bin/env bash
 
+cfg_file='config'
+while getopts "hrc:" arg; do
+  case $arg in
+    h)
+      echo "Parameters:"
+      echo "-c CONFIG  use CONFIG.pickle to store configuration"
+      echo "-r         reset configuration"
+      exit 1
+      ;;
+    r)
+      reset_cfg=1
+      ;;
+    c)
+      cfg_file=$OPTARG
+      ;;
+    esac
+  done
+
+export AQUAPI_CFG="${cfg_file}.pickle"
+if [[ ${reset_cfg} ]]; then rm "instance/${AQUAPI_CFG}"; fi
+
 export FLASK_APP=aquaPi
 export FLASK_ENV=development
-nohup flask run -h $(hostname -i|cut -d ' ' -f 1) | tee run.log
+
+nohup flask run --host "$(hostname -i|cut -d ' ' -f 1)" | tee run.log

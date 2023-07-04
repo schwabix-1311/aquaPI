@@ -12,7 +12,7 @@ from flask import (
 )
 from http import HTTPStatus
 
-from .machineroom.misc_nodes import BusRole
+from .machineroom.msg_bus import BusRole
 from .pages.sse_util import send_sse_events
 
 

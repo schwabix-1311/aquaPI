@@ -20,7 +20,7 @@ from .msg_bus import (BusListener, BusRole, MsgData)
 # from ..driver import (PortFunc, io_registry, DriverReadError)
 
 
-log = logging.getLogger('MiscNodes')
+log = logging.getLogger('HistoryNodes')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 log.setLevel(logging.WARNING)
@@ -312,7 +312,7 @@ class TimeDbQuest(TimeDb):
         return result
 
 
-# ========== miscellaneous ==========
+# ========== history for charts and statistics ==========
 
 
 class History(BusListener):

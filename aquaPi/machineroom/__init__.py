@@ -10,7 +10,8 @@ from .ctrl_nodes import MinimumCtrl, MaximumCtrl, SunCtrl, FadeCtrl
 from .in_nodes import AnalogInput, ScheduleInput
 from .out_nodes import SwitchDevice, AnalogDevice
 from .aux_nodes import ScaleAux, MaxAux, AvgAux
-from .misc_nodes import History
+from .hist_nodes import History
+from .alert_nodes import Alert, AlertAbove, AlertBelow
 
 
 log = logging.getLogger('MachineRoom')
@@ -111,9 +112,11 @@ class MachineRoom:
         """
         REAL_CONFIG = False  # exclusive
 
+        TEST_ALERT = True
+
         TEST_PH = True
 
-        SIM_LIGHT = True
+        SIM_LIGHT = False  #True
         DAWN_LIGHT = SIM_LIGHT and False  # True
 
         SIM_TEMP = True
@@ -264,3 +267,13 @@ class MachineRoom:
                                     [w1_temp.id, w2_temp.id, w_temp.id,
                                      w_heat.id, w_cool.id])
                 t_history.plugin(self.bus)
+
+        if TEST_ALERT:
+            led_alert = Alert('Alert LED',
+                              [AlertAbove(calib_ph.id, 7.2), AlertBelow(calib_ph.id, 6.8)],
+                              'GPIO 1 out')
+            led_alert.plugin(self.bus)
+            mail_alert = Alert('Alert Mail',
+                              [AlertAbove(w_temp.id, 26.0), AlertBelow(w_temp.id, 23.0)],
+                              'GPIO 0 out')  #TEMP, no drivers for email/Telegram yet
+            mail_alert.plugin(self.bus)

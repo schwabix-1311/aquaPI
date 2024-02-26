@@ -488,6 +488,7 @@ const HistoryChart = {
 					datasets: [],
 				},
 				options: {
+					spanGaps: true,
 					//locale: "de-DE",
 					responsive: true,
 					//aspectRatio: 1,

@@ -29,22 +29,28 @@ log.setLevel(logging.WARNING)
 #TODO remove test_config & config.py, use ArgumentParser instead, see https://stackoverflow.com/questions/48346025/how-to-pass-an-arbitrary-argument-to-flask-through-app-run
 # args:  -c "config"[.pickle]
 
-def create_app(test_config=None):
+def create_app():
     logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s'
                        , datefmt='%H:%M:%S', stream=sys.stdout, level=logging.WARNING)
 
 # TODO wrap in try/catch, but how should exceptions be handled?
 
     app = Flask(__name__, instance_relative_config=True)
+
+    # no luck with comand line parsing:
+    # 1. Flask uses "click", which conflicts with the simple argparse
+    # 2. click is complex, I simply didn't succeed to add options to Flask's commnd groups
+    # for now use env. vars instead
+
+    try:
+        cfg_file = os.environ['AQUAPI_CFG']
+    except KeyError:
+        cfg_file = 'config.pickle'
+
     app.config.from_mapping(
         SECRET_KEY='ToDo during installation',   # TODO !!
-        DATABASE=os.path.join(app.instance_path, 'aquaPi.sqlite'),
-        CONFIG=os.path.join(app.instance_path, 'config.pickle')
+        CONFIG=os.path.join(app.instance_path, cfg_file)
     )
-    if test_config:
-        app.config.from_mapping(test_config)
-    else:
-        app.config.from_pyfile('config.py', silent=True)
 
     # FIXME: this would use app.debug before assignment
     # if False:
@@ -72,9 +78,6 @@ def create_app(test_config=None):
         os.makedirs(app.instance_path)
     except OSError:
         pass
-
-    from . import db
-    db.init_app(app)
 
     from . import api
     app.register_blueprint(api.bp)

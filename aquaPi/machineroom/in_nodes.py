@@ -95,7 +95,8 @@ class AsyncInputNode(InputNode):
                     self.data = val
                     log.brief('%s: read %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
-            except DriverReadError:
+            except (DriverReadError, Exception):
+                log.exception('Reader exception')
                 self.alert = ('Read error!', 'err')
             time.sleep(self.interval)
 
@@ -331,7 +332,7 @@ class ScheduleInput(BusNode):
                 if sec_next - sec_prev > tick:
                     # as we concatenate events <1 tick apart, must be a pause
                     self.data = 0
-                    log.brief('ScheduleInput %s: output 0 for %f s',
+                    log.info('ScheduleInput %s: output 0 for %f s',
                               self.id, sec_next - sec_now)
                     self.post(MsgData(self.id, self.data))
 
@@ -356,7 +357,7 @@ class ScheduleInput(BusNode):
                     return  # cleanup is done in finally!
 
                 self.data = 100
-                log.brief('ScheduleInput %s: output 100 for %f s',
+                log.info('ScheduleInput %s: output 100 for %f s',
                           self.id, sec_next - time.time())
                 self.post(MsgData(self.id, self.data))
 

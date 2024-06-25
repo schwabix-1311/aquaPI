@@ -79,6 +79,7 @@ class DriverPWM(DriverPWMbase):
 
         self.name = 'PWM %d @ pin %d' % (self._channel, self._pin)
         if not self._fake:
+            #FIXME: export the _channel on sysfs, should we?
             self._sysfs = path.join('/sys/class/pwm/pwmchip0/pwm%d/' % self._channel)
             self.name = 'PWM %d @ sysfs' % self._channel
             with open(path.join(self._sysfs, 'enable'), 'wt', encoding='ascii') as p:
@@ -108,9 +109,9 @@ class DriverPWM(DriverPWMbase):
 
 
 dummy = '''if False:
- This needs review to use IoPorts.dependants which solves implicit use of a different io_port
+ Review code to utilize the IoPorts.dependants. This solves implicit use of GPIO port.
     class DriverSoftPWM(DriverPWMbase):
-        """ one PWM channel, hardware PWM
+        """ one PWM channel, software PWM on arbitrary GPIO port, unprecise!
             This is problematic, as it uses GPIO ports, thus should be handled by DriverGPIO, but then
             the PortFunc.IO is unexpected. Make PortFunc a set of PortFuncs and have a PortFunc.SoftPWM ?
         """

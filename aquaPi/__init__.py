@@ -25,6 +25,9 @@ log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
 # log.setLevel(logging.DEBUG)
 
+#TODO remove sqlite completely
+#TODO remove test_config & config.py, use ArgumentParser instead, see https://stackoverflow.com/questions/48346025/how-to-pass-an-arbitrary-argument-to-flask-through-app-run
+# args:  -c "config"[.pickle]
 
 def create_app(test_config=None):
     logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s'
@@ -58,8 +61,8 @@ def create_app(test_config=None):
     #    if not app.debug:
     #        app.logger.addHandler(mail_handler)
 
-    # in debug mode, app is restarted in a 2nd interpreter and thus we
-    # duplicate all our threads, which then compete :-(
+    # in debug mode, app starts a 2nd instance and thus we
+    # would duplicate all our threads, which then compete,  AVOID THIS!
     # https://stackoverflow.com/questions/17552482/hook-when-flask-restarts-in-debug-mode
     import werkzeug
     if app.debug and not werkzeug.serving.is_running_from_reloader():

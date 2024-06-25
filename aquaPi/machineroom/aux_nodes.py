@@ -10,7 +10,7 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 log.setLevel(logging.WARNING)
 # log.setLevel(logging.INFO)
-log.setLevel(logging.DEBUG)
+# log.setLevel(logging.DEBUG)
 
 
 # ========== auxiliary ==========
@@ -188,8 +188,36 @@ class AvgAux(MultiInAux):
         return settings
 
 
+class MinAux(MultiInAux):
+    """ Auxiliary node to post the lower of two or more inputs = boolenan AND.
+        Can be used to let two controllers drive one output, or to have
+        redundant inputs.
+
+        Options:
+            name    - unique name of this auxiliary node in UI
+            inputs  - collection of input ids
+
+        Output:
+            float - posts changes of minimum value of all inputs
+    """
+
+    def listen(self, msg):
+        if isinstance(msg, MsgData):
+            if self.values.get(msg.sender) != float(msg.data):
+                self.values[msg.sender] = float(msg.data)
+            val = 100
+            for k in self.values:
+                val = min(val, self.values[k])
+            val = round(val, 4)
+            if self.data != val:
+                self.data = val
+##              log.info('MinAux %s: output %f', self.id, self.data)
+                self.post(MsgData(self.id, self.data))
+        return super().listen(msg)
+
+
 class MaxAux(MultiInAux):
-    """ Auxiliary node to post the higher of two or more inputs.
+    """ Auxiliary node to post the higher of two or more inputs = boolean OR.
         Can be used to let two controllers drive one output, or to have
         redundant inputs.
 
@@ -205,7 +233,7 @@ class MaxAux(MultiInAux):
         if isinstance(msg, MsgData):
             if self.values.get(msg.sender) != float(msg.data):
                 self.values[msg.sender] = float(msg.data)
-            val = -1  # 0
+            val = 0
             for k in self.values:
                 val = max(val, self.values[k])
             val = round(val, 4)

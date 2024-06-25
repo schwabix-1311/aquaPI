@@ -132,6 +132,7 @@ class DriverADS1115(AInDriver):
         i2c = busio.I2C(board.SCL, board.SDA)
         self._ads = ADS.ADS1115(i2c, address=cfg['adr'], gain=(abs(self.gain)))
         self._ana_in = AnalogIn(self._ads, cfg['in'])
+        self._median_filter = True  # const ATM
 
     def close(self):
         if self._fake:
@@ -142,20 +143,21 @@ class DriverADS1115(AInDriver):
         self._ads.read(0, is_differential=True)
 
     def read(self):
+        log.debug('+ADCread')
         if self._fake:
             return super().read()
 
         self._adjust_gain()
-        # val = self._ana_in.voltage
-        median = [self._ana_in.voltage,
-                  self._ana_in.voltage,
-                  self._ana_in.voltage,
-                  self._ana_in.voltage,
-                  self._ana_in.voltage]
-        median.sort()
-        log.debug('median %f %f %f', median[0], median[2], median[4])
-        val = median[2]
-
+        if not self._median_filter:
+            val = self._ana_in.voltage
+        else:
+            median = [self._ana_in.voltage,
+                      self._ana_in.voltage,
+                      self._ana_in.voltage]
+            median.sort()
+            log.debug('median %f %f %f', median[0], median[1], median[2])
+            val = median[2]
+        log.debug('-ADCread %r', val)
         return val
 
     def _adjust_gain(self):

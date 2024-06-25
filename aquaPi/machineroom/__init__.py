@@ -9,7 +9,7 @@ from .msg_bus import MsgBus, BusRole
 from .ctrl_nodes import MinimumCtrl, MaximumCtrl, SunCtrl, FadeCtrl
 from .in_nodes import AnalogInput, ScheduleInput
 from .out_nodes import SwitchDevice, AnalogDevice
-from .aux_nodes import ScaleAux, MaxAux, AvgAux
+from .aux_nodes import ScaleAux, MinAux, MaxAux, AvgAux
 from .misc_nodes import History
 
 
@@ -109,7 +109,7 @@ class MachineRoom:
             Distraction: interesting fact on English:
               "fish" is plural, "fishes" is several species of fish
         """
-        REAL_CONFIG = False  # exclusive
+        REAL_CONFIG = True   #False  # this disables the other test configs
 
         TEST_PH = True
 
@@ -120,26 +120,31 @@ class MachineRoom:
         COMPLEX_TEMP = SIM_TEMP and True
 
         if REAL_CONFIG:
-            # single LED bar, dawn & dusk 15mins, perceptive corr.
-            # light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
+            # single PWM dimmed LED bar, perceptive correction
+            light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
+
+            # ... with linear dawn & dusk for 15mins
             # light_c = FadeCtrl('Beleuchtung', light_schedule.id,
             #                    fade_time=15 * 60)
-            light_schedule = ScheduleInput('Zeitplan Licht', '* 14 * * *')
+
+            # ... with "realistic" dawn & dusk for 1h each
             light_c = SunCtrl('Beleuchtung', light_schedule.id,
                               highnoon=7.0, xscend=1.0)
+
             light_pwm = AnalogDevice('Dimmer', light_c.id,
                                      'PWM 0', percept=1, maximum=85)
             light_schedule.plugin(self.bus)
             light_c.plugin(self.bus)
             light_pwm.plugin(self.bus)
 
+            # ... and history for a diagram
             history = History('Licht',
                               [light_schedule.id, light_c.id, light_pwm.id])
             history.plugin(self.bus)
 
-            # single temp sensor, switched relays
+            # single water temp sensor, switched relay
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
-                                   avg=1, interval=30)
+                                   avg=3, interval=30)
             wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
             wasser_o = SwitchDevice('Heizstab', wasser.id,
                                     'GPIO 12 out', inverted=1)
@@ -147,26 +152,52 @@ class MachineRoom:
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
 
+            # air temperature, just for the diagram
             wasser_i2 = AnalogInput('Wasser 2', 'DS1820 x7A71E', 25.0, '°C')
             wasser_i2.plugin(self.bus)
 
+            # fancy: if water temp >26 a cooling fan spins dynamically up
+            coolspeed = ScaleAux('Lüftergeschwindigkeit', wasser_i.id,
+                                 unit='%', limit=True,
+                                 points=[(26.0, 0), (28.0, 100)])
+            cool = AnalogDevice('Lüfter', coolspeed.id,
+                                'PWM 1', minimum=10, maximum=80)
+            cool.plugin(self.bus)
+            coolspeed.plugin(self.bus)
+
+            # ... and history for a diagram
             t_history = History('Temperaturen',
                                 [wasser_i.id, wasser_i2.id,
-                                 wasser.id, wasser_o.id])
+                                 wasser.id, wasser_o.id,
+                                 coolspeed.id, cool.id])
             t_history.plugin(self.bus)
 
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
-                                 avg=1, interval=30)
+                                 avg=3, interval=30)
             calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, unit=' pH',
                                 points=[(2.99, 4.0), (2.51, 6.9)])
-            ph = MaximumCtrl('pH', calib_ph.id, 6.5)
-            out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
+            ph = MaximumCtrl('pH', calib_ph.id, 6.7)
+
+            ph_broken = True
+            if ph_broken:
+                # WAR broken CO2 vent:
+                # open/close repeatedly, as CO2 only flows when partially opened
+                ph_ticker = ScheduleInput('pH Blinker', '* * * * * */15')
+                ph_ticker_or = MinAux('pH Toggle', [ph.id, ph_ticker.id])
+                out_ph = SwitchDevice('CO2 Ventil', ph_ticker_or.id, 'GPIO 20 out')
+            else:
+                out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
             out_ph.plugin(self.bus)
             ph.plugin(self.bus)
+            if ph_broken:
+                ph_ticker_or.plugin(self.bus)
+                ph_ticker.plugin(self.bus)
             calib_ph.plugin(self.bus)
             adc_ph.plugin(self.bus)
+
+            # ... and history for a diagram
             ph_history = History('pH Verlauf',
-                                 [adc_ph.id, calib_ph.id, ph.id, out_ph.id])
+                                 [adc_ph.id, calib_ph.id, ph.id])  #, out_ph.id])
             ph_history.plugin(self.bus)
             return
 

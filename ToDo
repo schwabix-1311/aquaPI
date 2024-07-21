@@ -18,15 +18,10 @@ aquaPi ToDo list
 
 - add a route for log & errors - backend implemented as BusListener?
 
-- ATM no real config other than the pickled nodes. UI groups, dash and
-  global config will need a config storage -> sqlite??
-
-- DB or pickle file? overlap of instance/aquaPi.sqlite & aquaPi/db.py?
-  general handling of config data
-
 - idea: initial setup could be simplified by module templates,
   i.e. std controller combos (pickled?) for common functions with a wizzard
   this postpones the need for advanced config UI
+- related: allow (re-) config via command line option (json file)
 
 - simple UI & advanced UI, to allow easy start; simple = no AUX nodes!?
 
@@ -47,8 +42,8 @@ aquaPi ToDo list
   InfluxDB instances
 
 - input/output drivers, auto-detect where possible:
-    ADC ADS1115, File in, Shelly?
-    PWM pca9685, TC420, Shelly Relay, File, shell script
+    File in, Shelly in?
+    PWM pca9685, Shelly Relay, File out, shell script
 
 - pH probe: JBL describes aging of probes. A new probe has 0mV @ pH7 and 186mV @ pH4. When calibrating an offset of > +/-40mV or a voltage diff of < 90mV between pH7 and pH4 their controller rejects a probe.
 
@@ -61,16 +56,7 @@ aquaPi ToDo list
   ref: https://github.com/python-babel/flask-babel
   ref: https://flask-babel.tkte.ch/
 
-- REST API. What's the benefit of using flask-restful?
-  Related: data exchange front-back via POST or REST API?
-  ref: https://restfulapi.net/rest-api-design-tutorial-with-example/
-       https://flask.palletsprojects.com/en/2.2.x/views/#basic-reusable-view
-
-- WebUI snippets
-  ref: https://codemyui.com/
-
-- more references - collection of extensions I might need
-  ref: https://github.com/humiaozuzu/awesome-flask
+- REST API: some endpoints return text, others json, should be all json
 
 - TODO: in wallneradam/tc420 track PRs 11/12/13 or fork and apply there
 - TC420 lib installation once PRs are released:
@@ -117,9 +103,6 @@ aquaPi ToDo list
     temperature diffs, rotating wave?
   utilization -> heater dimension, CO2 valve setting/empty
   luxmeter??
-
-- unique feature would be a driver interface to a TC420 light controller,
-  wallneradam/tc420 on github is a Linux shell tool to interact with TC420
 
 
 THOUGHTS
@@ -195,3 +178,15 @@ DONE
     output: switch, analog
     aux: max, average, calibration (scaler)
 - OS Sleep/Resume disturbs scheduler - fixed
+- WebUI snippets
+  ref: https://codemyui.com/
+- more references - collection of extensions I might need
+  ref: https://github.com/humiaozuzu/awesome-flask
+- DB or pickle file? overlap of instance/aquaPi.sqlite & aquaPi/db.py?
+  general handling of config data
+  => machineroom config is pickled, user prefs are in browser store,
+  - might need additional app global config in back end for
+    e.g. UI groups, time zone, language, etc.  QuestDB is usable for this
+- unique feature is a driver interface to a TC420 light controller,
+  wallneradam/tc420 on github is a Linux shell tool to interact with TC420
+

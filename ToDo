@@ -34,7 +34,7 @@ aquaPi ToDo list
     controller: null (out=in), delay
     input: schedule analog?, random
     aux: min, limiter
-    misc: email, telegram (pyTelegramBotAPI), history, cloud telemetry, macro
+    misc: email, telegram, history, cloud telemetry, macro
 
 - macros!?! = scheduled/triggered sender of msgs on the bus? wait for msgs?
   This will require affected nodes to supended their listening to avoid conflicts.
@@ -78,7 +78,31 @@ aquaPi ToDo list
   adapter µUSB->USB A plus cable USB A -> USB B
 
 - Telegram bot in Python:
+  package pyTelegramBotAPI,
   https://thepythoncorner.com/posts/2021-01-16-how-create-telegram-bot-in-python/
+  in channel BotFather  /newbot:  name aquaPi, bot @UNIQUE_bot, remeber bot token,
+  find own "chat id": https://web.telegram.org/z/#?tgaddr=tg://resolve?domain=schwabix,
+    this redirects to a URL ending in your chat id
+    OR join and start @RawDataBot, it will reply with json showing your chat:id
+    OR join and start your bot, then https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+  send message - 8135... is bot token, 1261... is chat id - multiple subscribers??:
+    https://api.telegram.org/botXXXXXXXXX:AAEQ0ec6XT6i0BSvF3ldVrmepETMTjyxNiE/sendMessage?chat_id=XXXXXXXXX&text=bot6135_to_1261..
+  and modify/update it:
+    https://api.telegram.org/botXXXXXXXXX:AAEQ0ec6XT6i0BSvF3ldVrmepETMTjyxNiE/editMessageText?message_id=2983&chat_id=XXXXXXXXX&text=changed_Text
+  get message history (depth?), could be used to receive commands:
+    https://api.telegram.org/botYYYYYYYYYY:AAHH4nCC-vD8clvfiMryls_ZpdJi_HskctM/getUpdates
+      sample -> 
+    {"ok":true,"result":[{"update_id":23832511,
+"message":{"message_id":1,"from":{"id":126177523,"is_bot":false,"first_name":"Markus","username":"schwabix","language_code":"de"},"chat":{"id":126177523,"first_name":"Markus","username":"schwabix","type":"private"},"date":1691342697,"text":"/start","entities":[{"offset":0,"length":6,"type":"bot_command"}]}},{"update_id":23832512,
+...
+"message":{"message_id":7,"from":{"id":126177523,"is_bot":false,"first_name":"Markus","username":"schwabix","language_code":"de"},"chat":{"id":126177523,"first_name":"Markus","username":"schwabix","type":"private"},"date":1691343059,"text":"soso"}},{"update_id":23832516,
+"message":{"message_id":10,"from":{"id":126177523,"is_bot":false,"first_name":"Markus","username":"schwabix","language_code":"de"},"chat":{"id":126177523,"first_name":"Markus","username":"schwabix","type":"private"},"date":1691343182,"text":"silence"}}]}
+
+  or bot as group member allows multiple receivers, but only 1 bot??:
+    https://api.telegram.org/botYYYYYYYYYY:AAHH4nCC-vD8clvfiMryls_ZpdJi_HskctM/sendMessage?chat_id=-978207359&text=ph%20Alarm!
+
+  OR simple sample without dedicated package!!:
+    https://medium.com/codex/using-python-to-send-telegram-messages-in-3-simple-steps-419a8b5e5e2
 
 - packaging and deployment ... long way to there!
 

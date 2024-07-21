@@ -103,7 +103,7 @@ class MsgFilter:
     # TODO add filtering by other attributes (group, category, sender role/type)
     def __init__(self, sender):
         if isinstance(sender, str):
-            self.sender = [sender]
+            self.sender = {sender}
         else:
             self.sender = sender
 

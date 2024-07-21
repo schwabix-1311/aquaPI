@@ -76,7 +76,9 @@ IoPort = namedtuple('IoPort', 'func driver cfg deps used', defaults=([], 0))
 
 
 class PortFunc(Enum):
-    Bin, Bout, Ain, Aout = range(1, 5)
+    """ Function of a port driver: Bool/Analog/String + In/Out
+    """
+    Bin, Bout, Ain, Aout, Sin, Sout = range(1, 7)
 
 
 class PinFunc(Enum):

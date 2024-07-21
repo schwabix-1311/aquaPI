@@ -23,6 +23,7 @@ class BusRole(Flag):
     CTRL = auto()  # the core of a controller: process IN -> OUT
     AUX = auto()  # helper func: 2:1/n:1, e.g. avg, delay, or
     HISTORY = auto()  # nodes recording the output of other nodes
+    ALERTS = auto()  # nodes processing alert conditions
 
 
 class DataRange(Enum):

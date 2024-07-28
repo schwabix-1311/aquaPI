@@ -8,6 +8,7 @@ import platform
 import regex
 from collections import deque
 from time import time
+from threading import Lock
 
 try:
     import psycopg as pg
@@ -57,6 +58,7 @@ class TimeDbMemory(TimeDb):
         No persistance yet!
     """
     _store = {}  # one storage shared by all HistoryNodes
+    _store_lock = Lock()
 
     def __init__(self, duration):
         """ in-memory storage is limited to {duration} hours
@@ -71,59 +73,68 @@ class TimeDbMemory(TimeDb):
             TimeDbMemory._store[name] = deque(maxlen=self.duration * 60 * 60)  # 1/sec
 
     def feed(self, name, value):
-        now = int(time())
-        series = TimeDbMemory._store[name]
-        if not series or (series[-1][0] != now):
-            series.append((now, value))
-        else:
-            series[-1] = (now, (series[-1][1] + value) / 2)
+        with TimeDbMemory._store_lock:
+            now = int(time())
+            series = TimeDbMemory._store[name]
+            if not series or (series[-1][0] != now):
+                series.append((now, value))
+            else:
+                series[-1] = (now, (series[-1][1] + value) / 2)
 
-        # purge expired data
-        while series[0][0] < now - self.duration * 60 * 60:
-            series.popleft()
-        log.debug('TimeDbMemory: append %s: %r @ %d, %d ent., %d Byte'
-                 , name, value, now
-                 , len(TimeDbMemory._store[name])
-                 , sys.getsizeof(TimeDbMemory._store[name]))
+            # purge expired data
+            while series[0][0] < now - self.duration * 60 * 60:
+                series.popleft()
+            log.debug('TimeDbMemory: append %s: %r @ %d, %d ent., %d Byte'
+                     , name, value, now
+                     , len(TimeDbMemory._store[name])
+                     , sys.getsizeof(TimeDbMemory._store[name]))
 
 #TODO: once transistion is finished, TimeDbMemory._store can change to new structure
 #TODO: add downsampling of returned data if step>1
 #TODO: add permanent downsampling after some period, e.g. 1h, to reduce mem consumption
     def query(self, node_names, start=0, step=0):
-        store_cpy = TimeDbMemory._store.copy()  # freeze the source, could lock it instead
-        result = {}
+        with TimeDbMemory._store_lock:
+#            breakpoint()
+            #store_cpy = TimeDbMemory._store.copy()  # freeze the source, could lock it instead
+            result = {}
+##            step=60  #FIXME    ATM start==0 implies old format for Quest, bur nit for Mem
 
-        if not start and not step:
-            # just for reference, was never used with this API!
-            # previous struct:
-            #   {ser1: [(ts1, val1.1), (ts2, val1.2), ...],
-            #    ser2: [(ts1, val2.1), (ts2, val2.2),....],
-            #    ... }
-            for name in node_names:
-                result[name] = [(v[0], v[1]) for v in store_cpy[name]]
-        else:
-            # new structure, about 0.7 * space:
-            #   { 0:  ["ser1", "ser2", ...],
-            #    ts1: [val1.1, val2.1, ...],
-            #    ts2: [val1.2, val2.2, ...],
-            #    ... }
-            # each val may be null!
-            result[0] = node_names
-            result[start] = [None] * len(node_names)
-            idx = 0
-            for name in node_names:
-                for measurement in store_cpy[name]:
-                    (ts, val) = measurement
-                    if ts <= start:
-                        # still <= start, so update
-                        result[start][idx] = val
-                    else:
-                        # past start, ensure a tupel for ts exists
-                        if not ts in result:
-                            result[ts] = [None] * len(node_names)
-                        result[ts][idx] = val
-                idx += 1
+            if not start and not step:
+                # just for reference, was never used with this API!
+                # previous struct:
+                #   {ser1: [(ts1, val1.1), (ts2, val1.2), ...],
+                #    ser2: [(ts1, val2.1), (ts2, val2.2),....],
+                #    ... }
+                for name in node_names:
+                    #result[name] = [(v[0], v[1]) for v in store_cpy[name]]
+                    result[name] = [(v[0], v[1]) for v in TimeDbMemory._store[name]]
+            else:
+                # new structure, about 0.7 * space:
+                #   { 0:  ["ser1", "ser2", ...],
+                #    ts1: [val1.1, val2.1, ...],
+                #    ts2: [val1.2, val2.2, ...],
+                #    ... }
+                # each val may be null!
+                result[0] = node_names
+                start = max(1, start)
+                result[start] = [None] * len(node_names)
+                idx = 0
+                for name in node_names:
+                    #for measurement in store_cpy[name]:
+                    for measurement in TimeDbMemory._store[name]:
+                        (ts, val) = measurement
+                        if ts <= start:
+                            # still <= start, so update
+                            result[start][idx] = val
+                            pass
+                        else:
+                            # past start, ensure a tupel for ts exists
+                            if not ts in result:
+                                result[ts] = [None] * len(node_names)
+                            result[ts][idx] = val
+                    idx += 1
 
+        #log.debug('%r', result)
         return result
 
 if QUEST_DB:
@@ -250,6 +261,7 @@ if QUEST_DB:
 
         def query(self, node_names, start=0, step=0):
             result = {}
+##            step=60  #FIXME
 
             qry_begin = time()
             log.debug('TimeDbQuest query: %s / %d / %d', node_names, start, step)
@@ -309,6 +321,7 @@ if QUEST_DB:
                     result = {ts: result[ts] for ts in result if result[ts] != [None] * len(node_names)}
 
             log.debug('  done, overall %fs', time() - qry_begin)
+            #log.debug('%r', result)
             return result
 # end: if QUEST_DB            
 

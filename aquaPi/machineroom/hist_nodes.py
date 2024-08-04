@@ -362,8 +362,6 @@ class History(BusListener):
 
     def __getstate__(self):
         state = super().__getstate__()
-        hist = self.db.query(self._inputs.sender)
-        state.update(store=hist)            #TODO remove -> History API!
         return state
 
     def __setstate__(self, state):

@@ -44,7 +44,7 @@ class ScaleAux(AuxNode):
     """
     data_range = DataRange.ANALOG
 
-    def __init__(self, name, inputs, unit='pH',
+    def __init__(self, name, inputs, unit,
                  offset=0, factor=1.0, points=None,
                  limit=None,
                  _cont=False):
@@ -119,7 +119,7 @@ class MultiInAux(AuxNode):
 
     def __getstate__(self):
         state = super().__getstate__()
-        for inp in self.get_inputs(True):
+        for inp in self.get_inputs():
             self.unit = inp.unit
             self.data_range = inp.data_range  # depends on inputs
             break

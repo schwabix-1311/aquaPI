@@ -24,20 +24,11 @@ log.setLevel(logging.WARNING)
 class InputNode(BusNode):
     """ Base class for IN_ENDP delivering measurments,
         e.g. temperature, pH, water level switch
+        All use a reader thread, most reading from IoRegistry port
+        Semantically abstract - do not instantiate!
     """
     ROLE = BusRole.IN_ENDP
 
-    # def __getstate__(self):
-    #    return super().__getstate__()
-
-    # def __setstate__(self, state):
-    #    self.__init__(state, _cont=True)
-
-
-class AsyncInputNode(InputNode):
-    """" Input node with a reader thread reading from IoRegistry port
-         Semantically abstract - do not instantiate!
-    """
     def __init__(self, name, port, interval=0.5, _cont=False):
         super().__init__(name, _cont=_cont)
         self._driver = None
@@ -86,7 +77,7 @@ class AsyncInputNode(InputNode):
         raise NotImplementedError()
 
     def _reader(self):
-        log.debug('AsyncInputNode.reader started')
+        log.debug('InputNode.reader started')
         while not self._reader_stop:
             try:
                 val = self.read()
@@ -112,9 +103,9 @@ class AsyncInputNode(InputNode):
         return settings
 
 
-class SwitchInput(AsyncInputNode):
+class SwitchInput(InputNode):
     """ A binary input from a port driver like GPIO.
-        Driver is read in a worker thread.
+        Port driver is read in a worker thread.
 
         Options:
             name     - unique name of this input node in UI
@@ -130,6 +121,7 @@ class SwitchInput(AsyncInputNode):
     def __init__(self, name, port, interval=0.5, inverted=0, _cont=False):
         super().__init__(name, port, interval, _cont=_cont)
         self.inverted = int(inverted)
+        ##self.unit = '⏻'
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -158,10 +150,9 @@ class SwitchInput(AsyncInputNode):
         return settings
 
 
-class AnalogInput(AsyncInputNode):
+class AnalogInput(InputNode):
     """ An analog input for anything read from a port driver.
-        Name and labels auto-adjust to unit (for the known ones).
-        Measurements read in a worker thread.
+        Port driver reads measurements in a worker thread.
 
         Options:
             name     - unique name of this input node in UI
@@ -255,7 +246,7 @@ class ScheduleInput(BusNode):
         self.hires = len(cronspec.split(' ')) > 5
         if not _cont:
             self.data = 0
-        self.unit = '%'
+        ##self.unit = '⏻'
 
     def __getstate__(self):
         state = super().__getstate__()

@@ -56,23 +56,18 @@ class MsgBus:
         self._changed = Condition()
         self._queue = None
 
-        # FIXME: Terrible place to store this, but we have no better place YET!
-        #       Having it here is the least effort. Add a global config later.
-        self.dash_tiles = []  # TODO prelim!!
-
         if threaded:
             self._queue = Queue(maxsize=10)
             Thread(target=self._dispatch, daemon=True).start()
 
     def __getstate__(self):
-        state = {'nodes': self.nodes, 'threaded': self._threaded, 'dash_tiles': self.dash_tiles}
+        state = {'nodes': self.nodes, 'threaded': self._threaded}
         log.debug('MsgBus.getstate %r', state)
         return state
 
     def __setstate__(self, state):
         log.debug('MsgBus.setstate %r', state)
         self.__init__(state['threaded'])
-        self.dash_tiles = state['dash_tiles']  # TODO prelim!
         for n in state['nodes']:
             n.plugin(self)
 
@@ -242,7 +237,7 @@ class BusNode:
     def __init__(self, name, _cont=False):
         self.name = name
         self.id = name.lower()  # uuid.uuid4(uuid.NAMSPACE_OID,name)
-        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '').replace('-', '_')
+        self.id = self.id.replace(' ', '').replace('.', '').replace(';', '')
         self.id = self.id.replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue')
         self.id = self.id.replace('Ä', 'Ae').replace('Ö', 'Oe').replace('Ü', 'Ue')
         self.id = self.id.replace('-', '_').replace('ß', 'ss')

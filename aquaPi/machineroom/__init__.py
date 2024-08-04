@@ -160,8 +160,8 @@ class MachineRoom:
             wasser_i2.plugin(self.bus)
 
             # fancy: if water temp >26 a cooling fan spins dynamically up
-            coolspeed = ScaleAux('Lüftergeschwindigkeit', wasser_i.id,
-                                 unit='%', limit=True,
+            coolspeed = ScaleAux('Lüftergeschwindigkeit', wasser_i.id, '%',
+                                 limit=True,
                                  points=[(26.0, 0), (28.0, 100)])
             cool = AnalogDevice('Lüfter', coolspeed.id,
                                 'PWM 1', minimum=10, maximum=80)
@@ -177,7 +177,7 @@ class MachineRoom:
 
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
                                  avg=3, interval=30)
-            calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, unit=' pH',
+            calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, 'pH',
                                 points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH', calib_ph.id, 6.7)
 
@@ -207,7 +207,7 @@ class MachineRoom:
         if TEST_PH:
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
                                  avg=1, interval=30)
-            calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, unit=' pH',
+            calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, 'pH',
                                 points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH', calib_ph.id, 7.0)
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
@@ -286,8 +286,8 @@ class MachineRoom:
 
                 #FIXME: a node chain like this one has no *Ctrl and is thus
                 #       invisible in UI, although totally valid
-                w_coolspeed = ScaleAux('Lüftergeschwindigkeit', w_temp.id,
-                                       unit='%', limit=True,
+                w_coolspeed = ScaleAux('Lüftergeschwindigkeit', w_temp.id, '%',
+                                       limit=True,
                                        points=[(25.1, 0), (26, 100)])
                 w_cool = AnalogDevice('W-Lüfter', w_coolspeed.id,
                                       'PWM 1')  # ?? minimum=10, maximum=80)

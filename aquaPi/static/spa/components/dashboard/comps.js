@@ -1,5 +1,4 @@
 // TODO: more details on dashboard widget? Design/Layout? Colors? Icons? Edit settings?
-// TODO: adapt charts to new history API, when implemented
 // TODO: add 'zoom' / modal mode for charts
 // TODO: change masonry direction, if possible; maybe use other masonry plugin
 
@@ -223,8 +222,8 @@ const SunCtrl = {
 	computed: {
 		descript() {
 			return this.node.xscend.toString() + ' h_/ '
-			     + this.node.highnoon.toString() + ' h \\_'
-			     + this.node.xscend.toString() + ' h'
+				 + this.node.highnoon.toString() + ' h \\_'
+				 + this.node.xscend.toString() + ' h'
 		},
 		value() {
 			let node = this.node
@@ -241,11 +240,6 @@ const SunCtrl = {
 }
 Vue.component('SunCtrl', SunCtrl);
 Vue.component('FadeCtrl', SunCtrl) // temporary alias
-
-const LightCtrl = {
-	extends: ControllerNode,
-}
-Vue.component('LightCtrl', LightCtrl)
 
 
 const SwitchInput = {
@@ -322,64 +316,151 @@ const History = {
 
 	template: `
 		<div>
-			<v-card-title
-				v-if="addNodeTitle"
-			>
-				{{ node.name }}
-			</v-card-title>
 			<aquapi-node-description
 				:item="node"
 			>
 			</aquapi-node-description>
+
+			<history-chart
+				:id="id"
+				:node="node"
+				:level="level"
+				:renderType="'widget'"
+			></history-chart>
 			
-			<div
-				v-if="this.dataPrepared == false"
-				class="pa-10 text-center"
+			<v-dialog
+				v-model="$store.getters['ui/isActiveDialog'](modalDialogName)"
+				persistent
+				width="80vw"
 			>
-				<aquapi-loading-indicator></aquapi-loading-indicator>
-			</div>
-			
-			<div 
-				v-else
-				class="pa-2"
-			>
-				<div 
-					class="d-flex justify-end px-0 py-2"
-				>
-					<v-menu 
-						offset-y
-						open-on-hover
-					>
-						<template v-slot:activator="{ on, attrs }">
-							<v-btn
-								v-bind="attrs"
-								v-on="on"
-								depressed
-								small
-								class="text-none"
-								:loading="isLoading"
-							>
-								{{ humanPeriod() }}
-							</v-btn>
-						</template>
-						<v-list
-							dense
-							class="py-0"
+				<v-card>
+					<v-card-title class="text-h6">
+						{{ node.name }}
+						<v-spacer></v-spacer>
+						<v-btn
+							icon
+							@click="closeModal"
 						>
-							<v-list-item
-								v-for="(item, index) in periods"
-								:key="index"
-								@click="setPeriod(item.value)"
-							>
-								<v-list-item-title>
-									{{ item.label }}
-								</v-list-item-title>
-							</v-list-item>
-						</v-list>
-					</v-menu>
+							<v-icon color="grey">mdi-close</v-icon>
+						</v-btn>
+					</v-card-title>
+					<v-divider></v-divider>
+
+					<v-card-text>
+						<history-chart
+							:id="id"
+							:node="node"
+							:level="level"
+							:renderType="'modal'"
+						></history-chart>
+					</v-card-text>
+				</v-card>
+			</v-dialog>
+			
+		</div>
+	`,
+
+	data() {
+		return {
+			chart: null,
+			chartContainerWidth: null,
+		}
+	},
+
+	computed: {
+		modalDialogName() {
+			return `chart_modal_${this.id}`
+		}
+	},
+	methods: {
+		closeModal() {
+			this.$store.dispatch('ui/hideDialog', this.modalDialogName)
+		}
+	}
+}
+Vue.component('History', History)
+
+
+const HistoryChart = {
+	extends: AnyNode,
+
+	props: {
+		renderType: {
+			type: String,
+			default: 'widget',
+			required: false
+		}
+	},
+
+	template: `
+		<div>
+			<div
+				class="v-card__text"
+			>
+				<div :id="wrapperId">
 				</div>
-				<div>
-					<canvas :id="'chart_' + id"></canvas>
+
+				<div
+					 v-if="dataPrepared == false"
+					 class="pa-10 text-center"
+				 >
+					<aquapi-loading-indicator></aquapi-loading-indicator>
+				</div>
+				
+				<div 
+					v-else
+					
+				>
+					<div class="d-flex justify-end px-0 py-2">
+						<v-menu 
+							offset-y
+							open-on-hover
+						>
+							<template v-slot:activator="{ on, attrs }">
+								<v-btn
+									v-bind="attrs"
+									v-on="on"
+									depressed
+									small
+									class="text-none"
+									:loading="isLoading"
+								>
+									{{ humanPeriod() }}
+								</v-btn>
+							</template>
+							<v-list
+								dense
+								class="py-0"
+							>
+								<v-list-item
+									v-for="(item, index) in periods"
+									:key="index"
+									@click="setPeriod(item.value, chart)"
+								>
+									<v-list-item-title>
+										{{ item.label }}
+									</v-list-item-title>
+								</v-list-item>
+							</v-list>
+						</v-menu>
+						
+						<v-btn
+							v-if="renderType != 'modal'"
+							depressed
+							small
+							class="text-none ms-2 px-0 v-btn--icon"
+							width="28"
+							max-width="28"
+							min-width="28"
+							@click="openModal"
+						>
+							<v-icon class="text-button">mdi-arrow-expand-all</v-icon>
+						</v-btn>
+					</div>
+					
+					<div class="chart-container" style="position: relative; width:100%;">
+						<canvas :id="canvasId"></canvas>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -387,17 +468,21 @@ const History = {
 
 	data() {
 		return {
+			numDataItems : 0,
 			chart: null,
+			chartContainerWidth: null,
+
 			dataPrepared: false,
 			isLoading: false,
 			currentPeriod: (60 * 60 * 1000),
 			cd: {
 				type: "scatter",
 				data: {
-					labels: [],
+					// labels: [],
 					datasets: [],
 				},
 				options: {
+					spanGaps: true,
 					//locale: "de-DE",
 					responsive: true,
 					//aspectRatio: 1,
@@ -405,10 +490,10 @@ const History = {
 					showLine: true,
 					borderWidth: 1,
 					lineTension: 0,
-					stepped: true, //false,
+					stepped: false,
 					pointRadius: 0,
 					plugins: {
-						legend: {display: true, labels: {boxWidth: 3}, position: "top"},
+						legend: {display: true, labels: {boxWidth: 5}, position: "bottom"},
 						tooltip: {position: 'nearest', xAlign: 'center', yAlign: 'bottom', caretPadding: 24},
 					},	//top"},
 					animation: {duration: 1500, easing: "easeInOutBack"},
@@ -424,9 +509,31 @@ const History = {
 								displayFormats: {seconds: "H:mm:ss", minutes: "H:mm", hours: "H:mm"},
 								tooltipFormat: "TT"
 							},
+							grid: {
+								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+							}
 						},
-						y: {display: 'auto', axis: 'y', ticks: {beginAtZero: true}},
-						yAnalog: {display: 'auto', axis: 'y', position: 'right'},
+						y: {
+							display: 'auto',
+							axis: 'y',
+							position: 'left',
+							min: 0,
+							max: 100,
+							ticks: {
+								beginAtZero: true
+							},
+							grid: {
+								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.12)' : 'rgba(0, 0, 0, 0.12)'
+							}
+						},
+						yAnalog: {
+							display: 'auto',
+							axis: 'y',
+							position: 'right',
+							grid: {
+								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+							}
+						},
 					}
 				}
 			},
@@ -434,9 +541,32 @@ const History = {
 	},
 
 	computed: {
+		wrapperId() {
+			return `chart_wrapper_${this.id}_${this.renderType}`
+		},
+		canvasId() {
+			return `chart_canvas_${this.id}_${this.renderType}`
+		},
+		modalId() {
+			return `chart_modal_${this.id}_${this.renderType}`
+		},
+		modalDialogName() {
+			return `chart_modal_${this.id}`
+		},
+		storageId() {
+			return `${this.id}_${this.renderType}`
+		},
+		chartWidth: {
+			set(val) {
+				this.chartContainerWidth = val
+			},
+			get() {
+				return this.chartContainerWidth
+			}
+		},
 		periods() {
 			const vm = this
-			return [0.25, 1, 4, 8, 24].map((h) => {
+			return [0.25, 1, 4, 8, 12, 24].map((h) => {
 				const value = (h * 60 * 60 * 1000)
 				return { value: value, label: vm.humanPeriod(false, value) }
 			})
@@ -452,7 +582,7 @@ const History = {
 					} else {
 						config = {}
 					}
-					config[this.node.id] = {period: val}
+					config[this.storageId] = {period: val}
 					storage.setItem('aquapi.history', JSON.stringify(config))
 				} catch(e) {}
 
@@ -464,66 +594,120 @@ const History = {
 					let config = storage.getItem('aquapi.history')
 					if (config) {
 						config = JSON.parse(config)
-						if (config[this.node.id]?.period) {
-							this.currentPeriod = config[this.node.id].period
+						if (config[this.storageId]?.period) {
+							this.currentPeriod = config[this.storageId].period
 						}
 					}
 				} catch(e) {}
 
 				return this.currentPeriod
 			}
+		},
+		chartStep() {
+			if (!this.chartWidth) {
+				return 5
+			}
+
+			// NOTE: period is millisecs, result must be secs
+			// NOTE: for now, we round up to 15 seconds
+			let minStep = 60  //?15
+			// TODO: (?) calculate factor based on period, chartWidth, ...
+			let factor = this.period / 1000 / 3600
+			let val = this.period / 1000 / this.chartWidth * factor
+			let rounded = Math.ceil(val / minStep) * minStep
+
+			//return rounded
+			return (factor <= 1) ? 1 : rounded
 		}
 	},
 	methods: {
-		prepareChartData() {
-			const store = this.$store.getters['dashboard/history'](this.node.id)
+		prepareChartData(payload) {
+			const now = Date.now();
+			const data = payload
 
-			if (store != null) {
-				const now = Date.now();
-				let dsIdx = 0;
-				for (let series in store) {
-					if (dsIdx >= this.cd.data.datasets.length) {
-						const node = this.$store.getters['dashboard/node'](series)
-						this.cd.data.datasets.push({
-							label: node.name,
+			if (data) {
+				const historySeries = data[0]
+				delete(data[0])
+
+				let values = {}
+
+				for (let dsIdx in historySeries) {
+					values[dsIdx] = {}
+
+					const node = this.$store.getters['dashboard/node'](historySeries[dsIdx])
+
+					if (this.cd.data.datasets[dsIdx] === undefined) {
+						this.cd.data.datasets[dsIdx] = {
+							label: node.name + ' [' + node.unit + ']', // ' %',
 							data: [],
-						});
+						}
 
 						if (node.data_range === 'ANALOG' && node.unit != '%') {
+							//this.cd.data.datasets[dsIdx].label = node.name
 							this.cd.data.datasets[dsIdx].stepped = false
 							this.cd.data.datasets[dsIdx].yAxisID = 'yAnalog'
 						}
+						if (node.data_range === 'BINARY') {
+							// TODO: check this:
+							this.cd.data.datasets[dsIdx].stepped = true
+							this.cd.data.datasets[dsIdx].label = '⏻ ' + node.name 
+						}
 					}
-
-					this.cd.data.datasets[dsIdx].data = []
-					for (let val of store[series]) {
-						this.cd.data.datasets[dsIdx].data.push({x: val[0] * 1000, y: val[1]})
-					}
-					// append current value
-					this.cd.data.datasets[dsIdx].data.push({x: now, y: this.$store.getters['dashboard/node'](series).data});
 					dsIdx++;
 				}
+
+				for (let dsIdx in historySeries) {
+					let val = null
+					for (const ts in data) {
+						if (data[ts][dsIdx] !== null) {
+							val = data[ts][dsIdx]
+							values[dsIdx][ts] = {x: ts * 1000, y: val}
+//	 						console.log('  data ' + dsIdx + ': ' + ts + '/' + val)
+						}
+					}
+					if (val !== null) {
+						values[dsIdx][now] = {x: now, y: val}
+//						console.log('  append ' + dsIdx + ': ' + now + '/' + val +  ' ? ' + this.$store.getters['dashboard/node'](node.id).data)
+					}
+
+					this.cd.data.datasets[dsIdx].data = Object.values(values[dsIdx])
+				}
+
 				this.cd.options.scales.x.min = now - this.currentPeriod
 				this.cd.options.scales.x.max = now
 			}
 
+			this.numDataItems = this.cd?.data?.datasets[0]?.data?.length || 0
 			this.dataPrepared = true
 		},
 
 		async loadHistory() {
+			if (this.renderType === 'modal' && !this.$store.getters['ui/isActiveDialog'](this.modalDialogName)) {
+				return
+			}
+
 			this.isLoading = true
-			const result = await this.$store.dispatch('dashboard/loadNodeHistory', this.node)
+
+			let tsNow = Math.floor(Date.now() / 1000)
+			let start = tsNow - this.currentPeriod / 1000
+
+			const result = await this.$store.dispatch('dashboard/fetchNodeHistory', {
+				nodeId: this.node.id,
+				start: start,
+				step: this.chartStep
+			})
+
 			if (result) {
-				this.prepareChartData()
+				this.prepareChartData(result)
 			}
 			this.isLoading = false
 		},
-		async setPeriod(val) {
+		async setPeriod(val, chart) {
 			if (val !== this.currentPeriod) {
 				this.period = val
-				if (this.chart) {
+				if (chart) {
 					await this.loadHistory()
-					this.chart.update()
+					chart.update()
 				}
 			}
 		},
@@ -537,21 +721,20 @@ const History = {
 			}
 			value /= 60
 			return (addLabel ? label.replace('%s', `${value} ${unit}`) : `${value} ${unit}`)
+		},
+		async openModal() {
+			await this.$store.dispatch('ui/showDialog', this.modalDialogName, true)
+			await this.loadHistory()
+		},
+		closeModal() {
+			this.$store.dispatch('ui/hideDialog', this.modalDialogName)
+			if (this.chart != null) {
+				this.chart.destroy()
+				this.chart = null
+			}
 		}
 	},
 	async created() {
-		this.chart = null
-		this.currentPeriod = this.period
-		await this.loadHistory()
-
-		if (this.chart == null) {
-			const el = document.getElementById('chart_' + this.id)
-			if (el != null) {
-				this.chart = new Chart(el, this.cd)
-			}
-		}
-
-		// TODO: maybe listen to SSE_NODE_UPDATE for this node.inputs, not only for this node ?
 		EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, async (payload) => {
 			if (payload.id === this.node.id) {
 				await this.loadHistory()
@@ -561,6 +744,26 @@ const History = {
 			}
 		})
 	},
+
+	async mounted() {
+		this.chart = null
+		this.currentPeriod = this.period
+
+		let elContainer = await document.getElementById(this.wrapperId)
+		if (elContainer) {
+			this.chartContainerWidth = elContainer.offsetWidth
+		}
+
+		await this.loadHistory()
+
+		if (this.chart == null) {
+			let el = document.getElementById(this.canvasId)
+			if (el != null) {
+				this.chart = new Chart(el, this.cd)
+			}
+		}
+	},
+
 	destroyed() {
 		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
 
@@ -568,10 +771,10 @@ const History = {
 			this.chart.destroy()
 		}
 		this.chart = null
-	},
+		this.chartContainerWidth = null
+	}
 }
-Vue.component('History', History)
-
+Vue.component('HistoryChart', HistoryChart)
 
 const AquapiNodeDescription = {
 	props: {

@@ -20,12 +20,11 @@ log.setLevel(logging.WARNING)
 
 def get_unit_limits(unit):
     if ('°C') in unit:
-        limits = 'min="15" max="33" step="0.1"'
+        limits = 'min="15" max="35" step="0.1"'
     elif ('°F') in unit:
-        limits = 'min="59" max="90" step="0.2"'
+        limits = 'min="59" max="95" step="0.2"'
     elif ('pH') in unit:
-        limits = 'min="6.0" max="8.0" step="0.05"'
-        limits = 'min="2.0" max="8.0" step="0.01"'
+        limits = 'min="5.0" max="9.0" step="0.05"'
     elif ('%') in unit:
         limits = 'min="0" max="100" step="1"'
     else:
@@ -42,9 +41,11 @@ class ControllerNode(BusListener):
         The required core of each controller chain.
     """
     ROLE = BusRole.CTRL
+    data_range = DataRange.BINARY
 
     def __init__(self, name, inputs, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
+##        self.unit = '⏻'
         self.data = 0
 
     # def __getstate__(self):
@@ -52,12 +53,6 @@ class ControllerNode(BusListener):
 
     # def __setstate__(self, state):
     #    self.__init__(state, _cont=True)
-
-    def find_source_unit(self):
-        for inp in self.get_inputs():
-            self.unit = inp.unit
-            break
-        return self.unit
 
     def is_advanced(self):
         for i in self.get_inputs():
@@ -90,8 +85,6 @@ class MinimumCtrl(ControllerNode):
               100 when input < (thr. - hyst./2),
               0 when input >= (thr. + hyst./2)
     """
-    data_range = DataRange.BINARY
-
     # TODO: could have a threshold for max. active time -> warning
 
     def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
@@ -103,7 +96,6 @@ class MinimumCtrl(ControllerNode):
         state = super().__getstate__()
         state.update(threshold=self.threshold)
         state.update(hysteresis=self.hysteresis)
-        state.update(unit=self.find_source_unit())
 
         log.debug('MinimumCtrl.getstate %r', state)
         return state
@@ -140,7 +132,7 @@ class MinimumCtrl(ControllerNode):
         return super().listen(msg)
 
     def get_settings(self):
-        limits = get_unit_limits(self.find_source_unit())
+        limits = get_unit_limits(self.unit)
 
         settings = super().get_settings()
         settings.append(('threshold', 'Minimum [%s]' % self.unit,
@@ -166,8 +158,6 @@ class MaximumCtrl(ControllerNode):
               100 when input > (thr. - hyst./2),
               0 when input <= (thr. + hyst./2)
     """
-    data_range = DataRange.BINARY
-
     def __init__(self, name, inputs, threshold, hysteresis=0, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
         self.threshold = float(threshold)
@@ -177,7 +167,6 @@ class MaximumCtrl(ControllerNode):
         state = super().__getstate__()
         state.update(threshold=self.threshold)
         state.update(hysteresis=self.hysteresis)
-        state.update(unit=self.find_source_unit())
 
         log.debug('MaximumCtrl.getstate %r', state)
         return state
@@ -214,7 +203,7 @@ class MaximumCtrl(ControllerNode):
         return super().listen(msg)
 
     def get_settings(self):
-        limits = get_unit_limits(self.find_source_unit())
+        limits = get_unit_limits(self.unit)
 
         settings = super().get_settings()
         settings.append(('threshold', 'Maximum [%s]' % self.unit,
@@ -243,13 +232,11 @@ class FadeCtrl(ControllerNode):
     """
     data_range = DataRange.PERCENT
 
-    # TODO: add random variation, other profiles
-    # TODO: overheat reduction driven from temperature - separate nodes!
+# TODO: add random variation, other profiles
 
     def __init__(self, name, inputs,
                  fade_time=None, fade_out=None, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
-        self.unit = '%'
         self.fade_time = fade_time
         if fade_time and isinstance(fade_time, timedelta):
             self.fade_time = fade_time.total_seconds()
@@ -261,6 +248,7 @@ class FadeCtrl(ControllerNode):
         if not _cont:
             self.data = 0
         self.target = self.data
+        self.unit = '%'
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -281,16 +269,18 @@ class FadeCtrl(ControllerNode):
             log.info('FadeCtrl: got %f', msg.data)
             self.target = float(msg.data)
             if self.data != self.target:
-                # our fade direction want's a hard switch
+                if self._fader_thread:
+                    self._fader_stop = True
+                    self._fader_thread.join()
+                    self.post(MsgData(self.id, round(self.data, 4)))  # start of new ramp
+
+                # fade_time or fade_out can be 0 -> switch to target
                 if (self.data < self.target and not self.fade_time) \
                  or (self.data > self.target and not self.fade_out):
                     self.data = self.target
                     log.brief('FadeCtrl %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
-                    if self._fader_thread:
-                        self._fader_stop = True
-                        self._fader_thread.join()
                     log.debug('_fader %f -> %f', self.data, self.target)
                     self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
                     self._fader_thread.start()
@@ -322,7 +312,7 @@ class FadeCtrl(ControllerNode):
             else:
                 if self.data != self.target:
                     self.data = self.target
-                    self.post(MsgData(self.id, self.data))
+                    self.post(MsgData(self.id, self.data))  # end of ramp
                 self.alert = None
                 log.brief('FadeCtrl %s: fader DONE', self.id)
         self._fader_thread = None
@@ -359,7 +349,6 @@ class SunCtrl(ControllerNode):
 
     def __init__(self, name, inputs, highnoon=4, xscend=2, _cont=False):
         super().__init__(name, inputs, _cont=_cont)
-        self.unit = '%'
         self.highnoon = highnoon
         if highnoon and isinstance(highnoon, timedelta):
             self.highnoon = highnoon.total_seconds() / 60 / 60
@@ -371,6 +360,7 @@ class SunCtrl(ControllerNode):
         if not _cont:
             self.data = 0
         self.target = self.data
+        self.unit = '%'
         self.clouds = []
 
     def __getstate__(self):

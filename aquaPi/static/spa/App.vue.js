@@ -27,7 +27,7 @@ const App = {
 					const items = JSON.parse(e.data)
 					if (items.length) {
 						items.forEach((item) => {
-							console.log('[App] >> emit event "sse:node_update" with item: ' + item)
+							//console.log('[App] >> emit event "sse:node_update" with item: ' + item)
 							EventBus.$emit(AQUAPI_EVENTS.SSE_NODE_UPDATE, {id: item, identifier: 'node__' + item})
 						})
 					}
@@ -36,12 +36,10 @@ const App = {
 
 			EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 		},
-		loadNodes() {
-			this.$store.dispatch('dashboard/loadNodes')
+		async fetchNodes() {
+			await this.$store.dispatch('dashboard/fetchNodes')
 		},
 		async handleSSE(payload) {
-			let addHistory = false
-
 			let nodeId = null
 			if (typeof payload == 'string') {
 				nodeId = payload
@@ -49,13 +47,7 @@ const App = {
 				nodeId = payload.id
 			}
 
-			// TODO: adapt to new history API, if implemented
-			const visibleDashboardWidgets = this.$store.getters['dashboard/visibleWidgets']
-			if (visibleDashboardWidgets && Object.keys(visibleDashboardWidgets).includes(nodeId) && visibleDashboardWidgets[nodeId].role == 'HISTORY') {
-				addHistory = true
-			}
-
-			const response = await fetch('/api/nodes/' + nodeId + (addHistory ? '?add_history=true' : ''))
+			const response = await fetch('/api/nodes/' + nodeId)
 
 			try {
 				const {result, data} = await response.json()
@@ -67,12 +59,9 @@ const App = {
 		}
 	},
 
-	created() {
+	async created() {
+		await this.fetchNodes()
 		this.initEventListeners()
-	},
-
-	beforeMount() {
-		this.loadNodes()
 	},
 
 	destroyed() {

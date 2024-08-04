@@ -85,14 +85,7 @@ const router =	new VueRouter({
 
 router.beforeEach((to, from, next) => {
 	// TODO: implement authentication
-
 	console.log('[router/index.js] ROUTER BEFORE EACH')
-	// console.log('... to:')
-	// console.log(to)
-	// console.log('... from:')
-	// console.log(from)
-	// console.log('this:')
-	// console.log(this)
 
 	// if (to.name !== 'login' && !isAuthenticated) {
 	if (to.name !== 'login' && !(999 == 999)) {

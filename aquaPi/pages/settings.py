@@ -27,7 +27,6 @@ def settings():
     if request.method == 'POST':
         success = True
         for key in request.form.keys():
-
             # page has a (sub-) form for each controller. each sets a hidden input with sub_form name,
             # forward this after submit to allow this sub_form to render in unfolded state
             if key == 'sub_form':

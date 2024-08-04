@@ -62,7 +62,6 @@ const AnyNode = {
 		await this.$root.updateNode(this.id, true)
 		//console.debug(`... Any create ${this.id} done`)
 
-		//console.log(this.node.inputs?.sender)
 		if (this.node.inputs?.sender != null) {
 			this.in_ids = this.node.inputs.sender
 			if (this.in_ids == '*')

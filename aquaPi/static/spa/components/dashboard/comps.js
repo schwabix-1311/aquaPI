@@ -406,13 +406,13 @@ const HistoryChart = {
 				 >
 					<aquapi-loading-indicator></aquapi-loading-indicator>
 				</div>
-				
+
 				<div 
 					v-else
-					
+
 				>
 					<div class="d-flex justify-end px-0 py-2">
-						<v-menu 
+						<v-menu
 							offset-y
 							open-on-hover
 						>
@@ -443,7 +443,7 @@ const HistoryChart = {
 								</v-list-item>
 							</v-list>
 						</v-menu>
-						
+
 						<v-btn
 							v-if="renderType != 'modal'"
 							depressed
@@ -457,7 +457,7 @@ const HistoryChart = {
 							<v-icon class="text-button">mdi-arrow-expand-all</v-icon>
 						</v-btn>
 					</div>
-					
+
 					<div class="chart-container" style="position: relative; width:100%;">
 						<canvas :id="canvasId"></canvas>
 					</div>
@@ -643,14 +643,12 @@ const HistoryChart = {
 						}
 
 						if (node.data_range === 'ANALOG' && node.unit != '%') {
-							//this.cd.data.datasets[dsIdx].label = node.name
 							this.cd.data.datasets[dsIdx].stepped = false
 							this.cd.data.datasets[dsIdx].yAxisID = 'yAnalog'
 						}
 						if (node.data_range === 'BINARY') {
-							// TODO: check this:
 							this.cd.data.datasets[dsIdx].stepped = true
-							this.cd.data.datasets[dsIdx].label = '⏻ ' + node.name 
+							this.cd.data.datasets[dsIdx].label = '⏻ ' + node.name
 						}
 					}
 					dsIdx++;

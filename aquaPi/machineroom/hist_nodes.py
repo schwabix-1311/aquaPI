@@ -69,44 +69,46 @@ class TimeDbMemory(TimeDb):
     def add_field(self, name):
         super().add_field(name)
         if name not in TimeDbMemory._store:
-            log.debug('TimeDbMemory: new history for %s', name)
             TimeDbMemory._store[name] = deque(maxlen=self.duration * 60 * 60)  # 1/sec
 
     def feed(self, name, value):
         with TimeDbMemory._store_lock:
+            if name not in TimeDbMemory._store:
+                log.error('TimeDbMemory: unknown history for %s, adding implicitly', name)
+                TimeDbMemory._store[name] = deque(maxlen=self.duration * 60 * 60)  # 1/sec
+
             now = int(time())
             series = TimeDbMemory._store[name]
-            if not series or (series[-1][0] != now):
+            if (len(series) == 0 or series[-1][0] != now):
                 series.append((now, value))
             else:
+                # multiple values for same second, build average
                 series[-1] = (now, (series[-1][1] + value) / 2)
 
             # purge expired data
             while series[0][0] < now - self.duration * 60 * 60:
                 series.popleft()
+
             log.debug('TimeDbMemory: append %s: %r @ %d, %d ent., %d Byte'
                      , name, value, now
                      , len(TimeDbMemory._store[name])
                      , sys.getsizeof(TimeDbMemory._store[name]))
 
-#TODO: once transistion is finished, TimeDbMemory._store can change to new structure
 #TODO: add downsampling of returned data if step>1
 #TODO: add permanent downsampling after some period, e.g. 1h, to reduce mem consumption
     def query(self, node_names, start=0, step=0):
         with TimeDbMemory._store_lock:
-#            breakpoint()
-            #store_cpy = TimeDbMemory._store.copy()  # freeze the source, could lock it instead
             result = {}
-##            step=60  #FIXME    ATM start==0 implies old format for Quest, bur nit for Mem
 
+            qry_begin = time()
             if not start and not step:
+                log.warning('TimeDbMemory OLD API used for %r', name_names)
                 # just for reference, was never used with this API!
                 # previous struct:
                 #   {ser1: [(ts1, val1.1), (ts2, val1.2), ...],
                 #    ser2: [(ts1, val2.1), (ts2, val2.2),....],
                 #    ... }
                 for name in node_names:
-                    #result[name] = [(v[0], v[1]) for v in store_cpy[name]]
                     result[name] = [(v[0], v[1]) for v in TimeDbMemory._store[name]]
             else:
                 # new structure, about 0.7 * space:
@@ -120,7 +122,6 @@ class TimeDbMemory(TimeDb):
                 result[start] = [None] * len(node_names)
                 idx = 0
                 for name in node_names:
-                    #for measurement in store_cpy[name]:
                     for measurement in TimeDbMemory._store[name]:
                         (ts, val) = measurement
                         if ts <= start:
@@ -134,7 +135,8 @@ class TimeDbMemory(TimeDb):
                             result[ts][idx] = val
                     idx += 1
 
-        #log.debug('%r', result)
+        log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
+        log.debug('TimeDbMemory.query start %r step %r: %r', start, step, result)
         return result
 
 if QUEST_DB:
@@ -172,14 +174,13 @@ if QUEST_DB:
                         timestamp(ts) PARTITION BY HOUR;
                       """)
             except pg.OperationalError as ex:
-                log.warning('TimeQuestDB - %s', str(ex))
+                log.exception('TimeDbQuest')
                 raise ModuleNotFoundError() from ex
 
         @staticmethod
         def _get_local_tz():
             # time is a bad concept, troublesome everywhere!
-            #FIXME: this sets QuestDB to local timezone. Sensible for aquaPi host and the DB, which means debugging and logs. Conversion to and from user's TZ must be done in frontend!
-
+            #FIXME: this sets QuestDB to host's local timezone. Ok for debugging and logs. Conversion to and from user's TZ must be done in frontend!
             # To make things interesting, there's no simple way to get the 'Olson TZ name' (e.g. 'Europe/Belin'), most systems prefer the 3-4 letter names, e.g. CEST. Reading link /etc/localtime has several chances to break, but seems to work on Raspi (and Manjaro).
             tzfile = os.readlink('/etc/localtime')
             match = regex.search('/zoneinfo/(.*)$', tzfile)
@@ -201,7 +202,7 @@ if QUEST_DB:
                             qry = sql.SQL("INSERT INTO node VALUES (%s, true)")
                             conn.execute(qry, [name])
             except pg.OperationalError as ex:
-                log.warning('TimQuestDB.add_field - %s', str(ex))
+                log.exception('TimeDbQuest.add_field')
 
         def feed(self, name, value):
             try:
@@ -210,7 +211,7 @@ if QUEST_DB:
                     qry = sql.SQL("INSERT INTO value VALUES (now(), %s, %s)")
                     conn.execute(qry, [name, value])
             except pg.OperationalError as ex:
-                log.warning('TimeQuestDB.feed - %s', str(ex))
+                log.exception('TimeDbQuest.feed')
 
         def _query(self, node_names, start, step):
             try:
@@ -239,9 +240,10 @@ if QUEST_DB:
                                 SELECT ts, node_id id, avg(value) value
                                   FROM value -- JOIN node ON (node_id)
                                   WHERE ts >= to_utc({start} * 1000000L, {timezone})
+                                    AND node_id IN ({nodes})
                                   SAMPLE BY 1s FILL (PREV)
                                 )
-                                WHERE id IN ({nodes})
+                                --WHERE id IN ({nodes})
                                 SAMPLE BY {step}s FILL (PREV) ALIGN TO CALENDAR
                                 GROUP BY ts,id ORDER BY span,id;
                               """).format(
@@ -250,18 +252,17 @@ if QUEST_DB:
                                 step=sql.Literal(step),
                                 nodes=sql.SQL(',').join(node_names)
                               )
-                        log.debug(qry.as_string(conn))
+                        #log.debug(qry.as_string(conn))
                         curs.execute(qry)
                         recs = curs.fetchall()
 
                         return recs
             except pg.OperationalError as ex:
-                log.warning('TimeQuestDB.query - %s', str(ex))
+                log.exception('TimeDbQuest.query')
                 return {}
 
         def query(self, node_names, start=0, step=0):
             result = {}
-##            step=60  #FIXME
 
             qry_begin = time()
             log.debug('TimeDbQuest query: %s / %d / %d', node_names, start, step)
@@ -269,10 +270,8 @@ if QUEST_DB:
             log.debug('  qry time %fs', time() - qry_begin)
 
             if recs:
-                #for row in recs:
-                #    log.debug(row)
-
                 if start <= 0:
+                    log.warning('TimeDbQuest OLD API used for %r', name_names)
                     # old structure (start=0), each series is an array of data point tupels:
                     # { "ser1": [(ts1, val1.1), (ts2: val1.2), ... ],
                     #   "ser2": [(ts1, val2.1), (ts3, val2.3), ... ],
@@ -320,8 +319,8 @@ if QUEST_DB:
                                 prev[n_idx] = result[ts][n_idx]
                     result = {ts: result[ts] for ts in result if result[ts] != [None] * len(node_names)}
 
-            log.debug('  done, overall %fs', time() - qry_begin)
-            #log.debug('%r', result)
+            log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
+            #log.debug('TimeDbQuest.query start %r step %r: %r', start, step, result)
             return result
 # end: if QUEST_DB            
 
@@ -372,7 +371,7 @@ class History(BusListener):
             self.db.feed(msg.sender, msg.data)
             if time() >= self._nextrefresh:
                 self.post(MsgData(self.id, 0))
-                self._nextrefresh = int(time()) + 60
+                self._nextrefresh = int(time()) + 10
 
     def get_history(self, start, step):
         return self.db.query(self._inputs.sender, start, step)

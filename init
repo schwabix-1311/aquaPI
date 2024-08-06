@@ -53,7 +53,7 @@ echo "====="
 
 if [ $(getconf LONG_BIT) == 64 ]
 then
-  if [ -z "$(ls -d ${MyHome}/questdb-${QuestRel}/ 2>/dev/null)" ]
+  if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
   then
     if ( grep -i arm /proc/cpuinfo >/dev/null )
     then
@@ -69,7 +69,8 @@ then
   fi
   pip3 install 'psycopg[binary]>=3.1.9'
   echo "===== ... and start QuestDB"
-  ${MyHome}/questdb-${QuestRel}/bin/questdb.sh start
+  "${MyHome}/questdb-${QuestRel}/bin/questdb.sh" start
+  echo "You can interact with Quest DB in your browser at localhost:9000"
   echo "====="
 fi
 

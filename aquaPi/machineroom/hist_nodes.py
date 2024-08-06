@@ -102,7 +102,7 @@ class TimeDbMemory(TimeDb):
 
             qry_begin = time()
             if not start and not step:
-                log.warning('TimeDbMemory OLD API used for %r', name_names)
+                log.warning('TimeDbMemory OLD API used for %r', node_names)
                 # just for reference, was never used with this API!
                 # previous struct:
                 #   {ser1: [(ts1, val1.1), (ts2, val1.2), ...],
@@ -271,7 +271,7 @@ if QUEST_DB:
 
             if recs:
                 if start <= 0:
-                    log.warning('TimeDbQuest OLD API used for %r', name_names)
+                    log.warning('TimeDbQuest OLD API used for %r', node_names)
                     # old structure (start=0), each series is an array of data point tupels:
                     # { "ser1": [(ts1, val1.1), (ts2: val1.2), ... ],
                     #   "ser2": [(ts1, val2.1), (ts3, val2.3), ... ],

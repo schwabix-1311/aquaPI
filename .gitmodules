@@ -1,3 +1,3 @@
 [submodule "aquaPi/driver/tc420"]
 	path = aquaPi/driver/tc420
-	url = https://github.com/schwabix-1311/tc420
+	url = git@github.com:schwabix-1311/tc420.git

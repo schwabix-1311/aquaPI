@@ -142,7 +142,7 @@ class MachineRoom:
 
             # ... and history for a diagram
             history = History('Licht',
-                              [light_schedule.id, light_c.id) #, light_pwm.id])
+                              [light_schedule.id, light_c.id]) #, light_pwm.id])
             history.plugin(self.bus)
 
             # single water temp sensor, switched relay

@@ -142,7 +142,7 @@ class MachineRoom:
 
             # ... and history for a diagram
             history = History('Licht',
-                              [light_schedule.id, light_c.id, light_pwm.id])
+                              [light_schedule.id, light_c.id) #, light_pwm.id])
             history.plugin(self.bus)
 
             # single water temp sensor, switched relay
@@ -156,7 +156,8 @@ class MachineRoom:
             wasser_o.plugin(self.bus)
 
             # air temperature, just for the diagram
-            wasser_i2 = AnalogInput('Wasser 2', 'DS1820 x7A71E', 25.0, '°C')
+            wasser_i2 = AnalogInput('Wasser 2', 'DS1820 x7A71E', 25.0, '°C',
+                                    avg=2, interval=60)
             wasser_i2.plugin(self.bus)
 
             # fancy: if water temp >26 a cooling fan spins dynamically up
@@ -171,8 +172,8 @@ class MachineRoom:
             # ... and history for a diagram
             t_history = History('Temperaturen',
                                 [wasser_i.id, wasser_i2.id,
-                                 wasser.id, wasser_o.id,
-                                 coolspeed.id, cool.id])
+                                 wasser.id, #wasser_o.id,
+                                 coolspeed.id) #, cool.id])
             t_history.plugin(self.bus)
 
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',

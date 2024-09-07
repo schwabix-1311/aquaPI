@@ -173,7 +173,7 @@ class MachineRoom:
             t_history = History('Temperaturen',
                                 [wasser_i.id, wasser_i2.id,
                                  wasser.id, #wasser_o.id,
-                                 coolspeed.id) #, cool.id])
+                                 coolspeed.id]) #, cool.id])
             t_history.plugin(self.bus)
 
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',

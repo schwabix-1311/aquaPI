@@ -504,10 +504,10 @@ const HistoryChart = {
 							min: Date.now() - this.currentPeriod,
 							max: Date.now(),
 							time: {
-								//unit: "minutes"
-								// unit: "hours",
-								displayFormats: {seconds: "H:mm:ss", minutes: "H:mm", hours: "H:mm"},
-								tooltipFormat: "TT"
+								//unit: "hour",
+								// from https://github.com/moment/luxon/blob/master/docs/formatting.md 
+								displayFormats: {second: "mm:ss", minute: "t", hour: "t", day: "D"},
+								tooltipFormat: "tt",
 							},
 							grid: {
 								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'

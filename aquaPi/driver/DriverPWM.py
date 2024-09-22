@@ -2,6 +2,7 @@
 
 import logging
 from os import path
+from time import sleep
 
 try:
     import RPi.GPIO as GPIO
@@ -79,12 +80,21 @@ class DriverPWM(DriverPWMbase):
 
         self.name = 'PWM %d @ pin %d' % (self._channel, self._pin)
         if not self._fake:
-            #FIXME: export the _channel on sysfs, should we?
-            self._sysfs = path.join('/sys/class/pwm/pwmchip0/pwm%d/' % self._channel)
             self.name = 'PWM %d @ sysfs' % self._channel
-            with open(path.join(self._sysfs, 'enable'), 'wt', encoding='ascii') as p:
+            self._pwmchip = '/sys/class/pwm/pwmchip0'
+            self._pwmchannel = path.join(self._pwmchip, 'pwm%d' % self._channel)
+
+            try:
+                log.debug('Creating sysfs PWM channel %d ...', self._channel)
+                with open(path.join(self._pwmchip, 'export'), 'wt', encoding='ascii') as p:
+                    p.write('%d' % self._channel)
+                sleep(.1)  # sombody (kernel?) needs a bit of time to finish it!
+                log.debug('Created sysfs PWM channel %d', self._channel)
+            except OSError:
+                pass
+            with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
                 p.write('0')
-            with open(path.join(self._sysfs, 'period'), 'wt', encoding='ascii') as p:
+            with open(path.join(self._pwmchannel, 'period'), 'wt', encoding='ascii') as p:
                 p.write('3333333')
         else:
             self.name = '!' + self.name
@@ -94,15 +104,19 @@ class DriverPWM(DriverPWMbase):
     def close(self):
         log.debug('Closing %r', self)
         if not self._fake:
-            with open(path.join(self._sysfs, 'enable'), 'wt', encoding='ascii') as p:
+            with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
                 p.write('0')
+            log.debug('Removing sysfs PWM channel %d ...', self._channel)
+            with open(path.join(self._pwmchip, 'unexport'), 'wt', encoding='ascii') as p:
+                p.write('%d' % self._channel)
+            log.debug('Removed sysfs PWM channel %d', self._channel)
 
     def write(self, value):
         log.info('%s -> %f', self.name, float(value))
         if not self._fake:
-            with open(path.join(self._sysfs, 'duty_cycle'), 'wt', encoding='ascii') as p:
+            with open(path.join(self._pwmchannel, 'duty_cycle'), 'wt', encoding='ascii') as p:
                 p.write('%d' % int(value / 100.0 * 3333333))
-            with open(path.join(self._sysfs, 'enable'), 'wt', encoding='ascii') as p:
+            with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
                 p.write('1' if value > 0 else '0')
         else:
             self._val = float(value)

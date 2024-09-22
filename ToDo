@@ -1,6 +1,10 @@
 aquaPi ToDo list
 ================
 
+- Known defects:
+  # REAL_CONFIG: GPIO13 must be permanently on (Filter!) - might need a new ConstInput(100)
+  # startup behaviour of bus isn't good - let everybody post its data as response to HELLO?
+
 - Navigation:
   /          Home, a configurable dashboard
   /settings  Controllers, with foldable groups containing Controllers & their in/out

@@ -221,9 +221,8 @@ const SunCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return this.node.xscend.toString() + ' h_/ '
-				 + this.node.highnoon.toString() + ' h \\_'
-				 + this.node.xscend.toString() + ' h'
+			//TODO: prefix a label: dusk/dawn  or ramp
+			return this.node.xscend.toString() + ' h'
 		},
 		value() {
 			let node = this.node
@@ -239,7 +238,30 @@ const SunCtrl = {
 	}
 }
 Vue.component('SunCtrl', SunCtrl);
-Vue.component('FadeCtrl', SunCtrl) // temporary alias
+
+
+const FadeCtrl = {
+	extends: ControllerNode,
+	computed: {
+		descript() {
+			//TODO: prefix a label: dusk/dawn  or ramp
+			return this.node.fade_time.toString() + ' h / '
+			       + this.node.fade_out.toString() + ' h'
+		},
+		value() {
+			let node = this.node
+			switch (node.data) {
+			case 100:
+				return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.on')
+			case 0:
+				return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.off')
+			default:
+				return node.data.toFixed(2).toString() + (node.unit ? ' ' + node.unit : '')
+			}
+		}
+	}
+}
+Vue.component('FadeCtrl', FadeCtrl)
 
 
 const SwitchInput = {

@@ -11,7 +11,7 @@ aquaPi ToDo list
              This page views and allows to edit operation parameters (Temp, Schedule)
              Edit needs auth.??
   /config    Configuration, show all bus nodes, their relations, or /modules ?
-             Allow authenticated users to add/change/remove nodes on the bus
+             Allow authenticated users to add/change/remove nodes on the bus.
   /system    Global configuration, users, email, logging, start/stop, update ...
              Authenticated, at least some actions.
   /log       View logs with errors, warnings and configured events.
@@ -22,8 +22,8 @@ aquaPi ToDo list
 
 - add a route for log & errors - backend implemented as BusListener?
 
-- idea: initial setup could be simplified by module templates,
-  i.e. std controller combos (pickled?) for common functions with a wizzard
+- initial setup could be simplified by module templates,
+  i.e. std controller combos (pickled/json?) for common functions with a wizzard
   this postpones the need for advanced config UI
 - related: allow (re-) config via command line option (json file)
 
@@ -34,16 +34,11 @@ aquaPi ToDo list
     input: schedule analog?, random
     aux: min, limiter
     misc: email, telegram, history, cloud telemetry, macro
+    UI node: shows data when configured as listener, else UI input is posted to bus
 
 - macros!?! = scheduled/triggered sender of msgs on the bus? wait for msgs?
   This will require affected nodes to supended their listening to avoid conflicts.
   Not fully clear how this can work.
-
-- DB for history: InfluxDB, 2.6 is current, Raspi OS offers 1.6.4, should suffice,
-  most prominent changes are optional TSI (on disk index), CQ -> tasks,
-  Unlikely we need this with our very low utilization
-  BTW, 1.6 is the release used in my (old) openHAB, allowing to test external
-  InfluxDB instances
 
 - input/output drivers, auto-detect where possible:
     File in, Shelly in?
@@ -56,14 +51,14 @@ aquaPi ToDo list
 
 - add 'click' cmdline options, e.g. --resetfactory --list ...
 
-- use Flask-Babel for i18n & l10
+- use Flask-Babel for backend i18n & l10 / frontend is prepared
   ref: https://github.com/python-babel/flask-babel
   ref: https://flask-babel.tkte.ch/
 
 - REST API: some endpoints return text, others json, should be all json
 
-- TODO: in wallneradam/tc420 track PRs 11/12/13 or fork and apply there
-- TC420 lib installation once PRs are released:
+- wallneradam/tc420 is forked to shcwabix-1311/tc420, PRs 11/12/13 and more are applied there,
+  using a git submodule to integrate it, installation must be reviewd:
     pip install tc420 (->requirements.txt); (addgroup plugdev); adduser <user> plugdev; cp 99-7c420.rules /etc/udev/rules.d/
   adapter µUSB->USB A plus cable USB A -> USB B
 
@@ -100,8 +95,8 @@ aquaPi ToDo list
   multiple sensors can feed one control unit (redundancy=safety),
   several control units can drive one output in a predictible manner,
   logging/email alerts for virtually anything,
-  over-temperature could dim the light (aux nodes to limit light level
-  from inverted|scaled temp)
+  over-temperature could dim the light or let a fan spin up: 
+    min(LightCtrl, clipped result of a inversly scaled temperature) -> AnalogOut
   too low pH could turn on light (to let plants consume CO2)
   heuristics to recommend filter cleaning, based on reduced flow ->
     temperature diffs, rotating wave?
@@ -112,7 +107,7 @@ aquaPi ToDo list
 THOUGHTS
 ========
 
-- python & Flask are closer to my skills and work style, than NodeJS and its huge library of tiny modules (introduces too many dependencies requiring permanent updates). Same might be the case with Django.
+- python & Flask are closer to my skills and work style, than NodeJS and its huge library of tiny modules (introduces many dependencies requiring permanent updates). Same might be the case with Django.
 
 - Task Queues like huey could be used instead of my own MsgBus, but it requires exploration until I know where its limits are. For MsgBus I know them and can hopefully solve them.
 
@@ -142,18 +137,15 @@ DONE
         export FLASK_APP=aquaPi
         export FLASK_ENV=development
         flask run
-- WebUI styling - small and clean std css
-  ref:  https://purecss.io/
 - proof of concept for front-end updates:
-  push data from backend to UI, use page reload/Ajax/websocket/SSE?
-  -> so far SSE seems appropriate
+  push data from backend to UI, use page reload/Ajax/websocket/SSE? SSE to trigger REST!
   ref: https://stackoverflow.com/questions/13386681/streaming-data-with-python-and-flask
   ref: https://javascript.info/server-sent-events
 - sample with interaction of MsgListener with SSE-consuming page
 - put the project on github. Or somewhere else? Unlikely
 - use Jinja template inheritance, so far just plain templates are used
 - cleanup the project name: 'aquaPi' (lowercase i), but home directory is 
-  auquPI (upper!) to distinguish it from the app directory
+  aquaPI (upper!) to distinguish it from the app directory
 - Flask in debug mode reloaded everything without cleanup, duplicating worker threads, etc.,
   at least the 1st reload is now handled correctly, still no atexit-cleanup
 - milestones for machine room:
@@ -175,22 +167,22 @@ DONE
 - explore Flask.flash() - for input validation message
 - input/output drivers, auto-detect where possible:
     GPIOin switch, DS1820, ADS1115
-    GPIOout switch, internal PWM
+    GPIOout switch, hardware PWM
 - Nodes:
     controller: minimum, maximum, fader, sun
     input: switch, analog, schedule switch
     output: switch, analog
     aux: max, average, calibration (scaler)
 - OS Sleep/Resume disturbs scheduler - fixed
-- WebUI snippets
-  ref: https://codemyui.com/
-- more references - collection of extensions I might need
-  ref: https://github.com/humiaozuzu/awesome-flask
-- DB or pickle file? overlap of instance/aquaPi.sqlite & aquaPi/db.py?
+- config persistance - DB or pickle file? overlap of instance/aquaPi.sqlite & aquaPi/db.py?
   general handling of config data
   => machineroom config is pickled, user prefs are in browser store,
   - might need additional app global config in back end for
     e.g. UI groups, time zone, language, etc.  QuestDB is usable for this
+- DB for history: InfluxDB 1.6.4 loked OK, but irregular time series aren't
+  handled correctly in subsampled queries. Switched to QuestDB, which needs 
+  a 64bit OS; will use an in-memory storage for 32bit with minimal funtionality.
 - unique feature is a driver interface to a TC420 light controller,
   wallneradam/tc420 on github is a Linux shell tool to interact with TC420
+- thanks to Thomas migrated most from Jinja templates via Vue to Vuetify
 

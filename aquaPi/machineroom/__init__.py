@@ -110,16 +110,16 @@ class MachineRoom:
             Distraction: interesting fact on English:
               "fish" is plural, "fishes" is several species of fish
         """
-        REAL_CONFIG = True   # False  # this disables the other test configs
+        REAL_CONFIG = True  #False  # this disables the other test configs
 
-        TEST_ALERT = True
+        TEST_ALERT = False  #True
 
-        TEST_PH = True
+        TEST_PH = False  #True
 
-        SIM_LIGHT = False  #True
+        SIM_LIGHT = True
         DAWN_LIGHT = SIM_LIGHT and False  # True
 
-        SIM_TEMP = True
+        SIM_TEMP = False  #True
         COMPLEX_TEMP = SIM_TEMP and True
 
         if REAL_CONFIG:
@@ -131,8 +131,7 @@ class MachineRoom:
             #                    fade_time=15 * 60)
 
             # ... with "realistic" dawn & dusk for 1h each
-            light_c = SunCtrl('Beleuchtung', light_schedule.id,
-                              highnoon=7.0, xscend=1.0)
+            light_c = SunCtrl('Beleuchtung', light_schedule.id, xscend=1.0)
 
             light_pwm = AnalogDevice('Dimmer', light_c.id,
                                      'PWM 0', percept=1, maximum=85)
@@ -221,11 +220,11 @@ class MachineRoom:
             ph_history.plugin(self.bus)
 
         if SIM_LIGHT:
-            light_schedule = ScheduleInput('Zeitplan 1', '* 14-21 * * *')
+            light_schedule = ScheduleInput('Zeitplan 1', '* 10/2 * * *')
             light_schedule.plugin(self.bus)
             # light_c = FadeCtrl('Beleuchtung', light_schedule.id,
             #                    fade_time=30 * 60)  # 30*60)
-            light_c = SunCtrl('Beleuchtung', light_schedule.id)
+            light_c = SunCtrl('Beleuchtung', light_schedule.id, xscend=.2)
             light_c.plugin(self.bus)
             if not DAWN_LIGHT:
                 light_pwm = AnalogDevice('Dimmer', light_c.id,

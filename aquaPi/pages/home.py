@@ -6,12 +6,9 @@ from flask import (Blueprint, current_app, json)
 from ..machineroom import BusRole
 from .sse_util import render_sse_template
 
-log = logging.getLogger('/home')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log = logging.getLogger('pages.home')
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 bp = Blueprint('home', __name__)

@@ -5,12 +5,8 @@ import logging
 from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
 
 
-log = logging.getLogger('AuxNodes')
+log = logging.getLogger('machineroom.aux_nodes')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== auxiliary ==========

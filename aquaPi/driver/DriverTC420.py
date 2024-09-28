@@ -12,12 +12,9 @@ from tc420 import TC420, PlayInitPacket, PlaySetChannels, ModeStopPacket, NoDevi
 
 from .base import (OutDriver, IoPort, PortFunc)
 
-log = logging.getLogger('DriverTC420')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log = logging.getLogger('driver.DriverTC420')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== PWM ==========

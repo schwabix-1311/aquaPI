@@ -10,12 +10,8 @@ from .msg_bus import (BusNode, BusRole, DataRange, MsgData)
 from ..driver import (io_registry, DriverReadError)
 
 
-log = logging.getLogger('InNodes')
+log = logging.getLogger('machineroom.in_nodes')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== inputs AKA sensors ==========

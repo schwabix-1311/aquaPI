@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 
+import logging
 import time
 from flask import Response, request, render_template
+
+
+log = logging.getLogger('pages.sse_util')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 def format_msg(data: str, event=None) -> str:

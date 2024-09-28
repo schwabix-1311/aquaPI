@@ -4,11 +4,15 @@ import os
 from os import path
 import sys
 from flask import Flask
-import logging
+
+import json
+import logging.config
+import logging.handlers
 # from logging.handlers import SMTPHandler
 
 
-log = logging.getLogger('werkzeug')
+log = logging.getLogger('aquaPi')
+
 
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
 logging.addLevelName(logging.WARN, 'LOG')  # this makes log.warn kind of useless
@@ -21,27 +25,97 @@ logging.addLevelName(logging.WARN, 'LOG')  # this makes log.warn kind of useless
 #  logging.addLevelName(logging.VERBOSE, 'LOG')
 #  log.verbose = log.log( ...  need to implant a methods into logging for this
 
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+# this is a json string to make it a template for log_config.json
+log_default = {
+  "version": 1,
+  "disable_existing_loggers": False,
+  "formatters": {
+    "simple": {
+      "format": "%(asctime)s %(levelname).3s %(name)s: %(message)s",
+      "datefmt": "%H:%M:%S"
+    }
+  },
+  "handlers": {
+    "stdout": {
+      "class": "logging.StreamHandler",
+      "level": "INFO",
+      "formatter": "simple",
+      "stream": "ext://sys.stdout"
+    },
+    "file": {
+      "class": "logging.handlers.RotatingFileHandler",
+      "level": "WARNING",
+      "formatter": "simple",
+      "filename": "logs/aquaPi.log",
+      "maxBytes": 1000000,
+      "backupCount": 3
+    }
+  },
+  "loggers": {
+    "root": {
+      "level": "WARNING",
+      "handlers": ["stdout","file"]
+    },
 
-#TODO remove sqlite completely
-#TODO remove test_config & config.py, use ArgumentParser instead, see https://stackoverflow.com/questions/48346025/how-to-pass-an-arbitrary-argument-to-flask-through-app-run
-# args:  -c "config"[.pickle]
+    "aquaPi":     {"level": "NOTSET"},
+    #"aquaPi.api": {"level": "NOTSET"},
+
+    "machineroom":             {"level": "NOTSET"},
+    #"machineroom.alert_nodes": {"level": "NOTSET"},
+    #"machineroom.aux_nodes":   {"level": "NOTSET"},
+    #"machineroom.ctrl_nodes":  {"level": "NOTSET"},
+    #"machineroom.hist_nodes":  {"level": "NOTSET"},
+    #"machineroom.in_nodes":    {"level": "NOTSET"},
+    #"machineroom.msg_bus":     {"level": "NOTSET"},
+    #"machineroom.msg_types":   {"level": "NOTSET"},
+    #"machineroom.out_nodes":   {"level": "NOTSET"},
+
+    "driver":               {"level": "NOTSET"},
+    #"driver.base":          {"level": "NOTSET"},
+    #"driver.DriverADC":     {"level": "NOTSET"},
+    #"driver.DriverAlert":   {"level": "NOTSET"},
+    #"driver.DriverGPIO":    {"level": "NOTSET"},
+    #"driver.DriverOneWire": {"level": "NOTSET"},
+    #"driver.DriverPWM":     {"level": "NOTSET"},
+    #"driver.DriverTC420":   {"level": "NOTSET"},
+
+    "pages":          {"level": "NOTSET"},
+    #"pages.about":    {"level": "NOTSET"},
+    #"pages.config":   {"level": "NOTSET"},
+    #"pages.home":     {"level": "NOTSET"},
+    #"pages.settings": {"level": "NOTSET"},
+    #"pages.spa":      {"level": "NOTSET"},
+    #"pages.sse_util": {"level": "NOTSET"},
+
+    "werkzeug": {
+      "comment": "werkzeug is noisy, reduce to >=WARNING, INFO shows all https requests",
+      "level": "WARNING",
+      "propagate": False
+    }
+  }
+}
+
+
 
 def create_app():
-    logging.basicConfig(format='%(asctime)s %(levelname).3s %(name)s: %(message)s'
-                       , datefmt='%H:%M:%S', stream=sys.stdout, level=logging.WARNING)
-
-# TODO wrap in try/catch, but how should exceptions be handled?
-
+    # TODO wrap in try/catch, but how should exceptions be handled?
     app = Flask(__name__, instance_relative_config=True)
 
-    # no luck with comand line parsing:
-    # 1. Flask uses "click", which conflicts with the simple argparse
-    # 2. click is complex, I simply didn't succeed to add options to Flask's commnd groups
-    # for now use env. vars instead
+    config_file = path.join(app.instance_path, "log_config.json")
+    if path.exists(config_file):
+        with open(config_file) as f_in:
+            log_config = json.load(f_in)
+    else:
+        log_config = log_default
+    logging.config.dictConfig(log_config)
 
+    logging.warning("Press CTRL+C to quit")
+    log.brief("... und los geht's")
+
+    # no luck with command line parsing:
+    # 1. Flask uses "click", which conflicts with the simple argparse
+    # 2. click is complex, I simply didn't succeed to add options to Flask's command groups
+    # for now use env. vars instead
     try:
         cfg_file = os.environ['AQUAPI_CFG']
     except KeyError:

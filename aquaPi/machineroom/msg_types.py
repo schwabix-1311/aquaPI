@@ -3,8 +3,7 @@
 import logging
 
 
-log = logging.getLogger('MsgBusMsgs')
-log.setLevel(logging.WARNING)  # INFO)
+log = logging.getLogger('machineroom.msg_types')
 
 
 class Msg:

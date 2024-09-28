@@ -7,12 +7,8 @@ import glob
 from .base import (AInDriver, IoPort, PortFunc, is_raspi,
                    DriverInvalidAddrError, DriverReadError)
 
-log = logging.getLogger('DriverOneWire')
+log = logging.getLogger('driver.DriverOneWire')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== 1-wire ==========

@@ -6,12 +6,8 @@ from flask import (Blueprint, current_app, flash, request, render_template)
 # from ..machineroom import msg_bus
 
 
-log = logging.getLogger('/settings')
+log = logging.getLogger('pages.settings')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 bp = Blueprint('settings', __name__)

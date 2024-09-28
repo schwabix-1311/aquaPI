@@ -6,12 +6,8 @@ from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
 from ..driver import (io_registry)
 
 
-log = logging.getLogger('OutNodes')
+log = logging.getLogger('machineroom.out_nodes')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== outputs AKA Device ==========

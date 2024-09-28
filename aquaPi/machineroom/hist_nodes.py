@@ -21,12 +21,8 @@ from .msg_bus import (BusListener, BusRole, MsgData)
 # from ..driver import (PortFunc, io_registry, DriverReadError)
 
 
-log = logging.getLogger('HistoryNodes')
+log = logging.getLogger('machineroom.hist_nodes')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== interface to time series DB ==========
@@ -350,12 +346,12 @@ class History(BusListener):
         if QUEST_DB:
             try:
                 self.db = TimeDbQuest()
-                log.brief('Recording history in QuestDB')
+                log.brief('Recording history %s in QuestDB', name)
             except (NotImplementedError, ModuleNotFoundError, ImportError):
                 pass
         if not self.db:
             self.db = TimeDbMemory(duration)
-            log.brief('Recording history in main memory with limited depth of %dh!', duration)
+            log.brief('Recording history %s in main memory with limited depth of %dh!', name, duration)
         for snd in self._inputs.sender:
             self.db.add_field(snd)
 

@@ -16,12 +16,8 @@ from .machineroom.msg_bus import BusRole
 from .pages.sse_util import send_sse_events
 
 
-log = logging.getLogger('API')
+log = logging.getLogger('aquaPi.api')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 bp = Blueprint('api', __name__)

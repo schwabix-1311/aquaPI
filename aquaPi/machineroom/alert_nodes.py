@@ -8,12 +8,8 @@ from .msg_bus import (BusListener, BusRole, MsgData, MsgFilter)
 from ..driver import (PortFunc, io_registry, DriverReadError)
 
 
-log = logging.getLogger('AlertNodes')
+log = logging.getLogger('machineroom.alert_nodes')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== alert conditions ==========

@@ -7,12 +7,8 @@ from flask import (Blueprint, render_template)
 # from ..machineroom import msg_bus
 
 
-log = logging.getLogger('/config')
+log = logging.getLogger('pages.config')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 bp = Blueprint('config', __name__)

@@ -24,12 +24,9 @@ except NotImplementedError:
 
 from .base import (AInDriver, IoPort, PortFunc)
 
-log = logging.getLogger('DriverADS111x')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log = logging.getLogger('driver.DriverADC')
+log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 # ========== ADC inputs ==========

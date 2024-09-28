@@ -47,12 +47,8 @@ except (RuntimeError, ModuleNotFoundError):
 
 from .base import (InDriver, OutDriver, IoPort, PortFunc, is_raspi, DriverWriteError)
 
-log = logging.getLogger('DriverGPIO')
+log = logging.getLogger('driver.DriverGPIO')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 if is_raspi():

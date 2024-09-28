@@ -2,8 +2,10 @@ aquaPi ToDo list
 ================
 
 - Known defects:
+  # logging: resolve the abuse of logging.WARNING as loglevel.BRIEF; log.verbose() could be a functools.partialmethod(log.log, loglevel.INFO-1,...)
   # REAL_CONFIG: GPIO13 must be permanently on (Filter!) - might need a new ConstInput(100)
   # startup behaviour of bus isn't good - let everybody post its data as response to HELLO?
+  # on Raspi driver TC420 finds a device although there's none
 
 - Navigation:
   /          Home, a configurable dashboard

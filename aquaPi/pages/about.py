@@ -6,12 +6,9 @@ import time
 
 from .sse_util import render_sse_template
 
-log = logging.getLogger('/about')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log = logging.getLogger('pages.about')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 bp = Blueprint('about', __name__)

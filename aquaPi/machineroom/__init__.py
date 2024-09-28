@@ -14,12 +14,8 @@ from .hist_nodes import History
 from .alert_nodes import Alert, AlertAbove, AlertBelow
 
 
-log = logging.getLogger('MachineRoom')
+log = logging.getLogger('machineroom')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 mr = None

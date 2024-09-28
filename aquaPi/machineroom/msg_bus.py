@@ -9,12 +9,8 @@ from threading import (Condition, Thread)
 from .msg_types import (MsgInfra, MsgBorn, MsgBye, MsgReply, MsgReplyHello, MsgData, MsgFilter)
 
 
-log = logging.getLogger('MsgBus')
+log = logging.getLogger('machineroom.msg_bus')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 class BusRole(Flag):

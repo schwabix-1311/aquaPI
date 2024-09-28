@@ -9,12 +9,8 @@ import glob
 from .base import Driver, DriverParamError, DriverPortInuseError
 from .base import *
 
-log = logging.getLogger('Driver Base')
+log = logging.getLogger('driver')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== IO registry ==========
@@ -158,7 +154,7 @@ class IoRegistry(object):
 DRIVER_FILE_PREFIX = 'Driver'
 CUSTOM_DRIVERS = 'CustomDrivers'
 
-# import all files named Driver*,py into our package, icluding a subfolder CustomDrivers
+# import all files named Driver*.py into our package, including a subfolder CustomDrivers
 __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
 
 for drv_path in __path__:

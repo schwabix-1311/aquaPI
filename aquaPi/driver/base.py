@@ -7,12 +7,8 @@ from collections import namedtuple
 import math
 import random
 
-log = logging.getLogger('Driver Base')
+log = logging.getLogger('driver.base')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
-
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
 
 
 # ========== common functions ==========

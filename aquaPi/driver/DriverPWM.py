@@ -18,12 +18,9 @@ except (RuntimeError, ModuleNotFoundError):
 
 from .base import (OutDriver, IoPort, PortFunc, PinFunc, is_raspi)
 
-log = logging.getLogger('DriverPWM')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
-log.setLevel(logging.WARNING)
-# log.setLevel(logging.INFO)
-# log.setLevel(logging.DEBUG)
+log = logging.getLogger('driver.DriverPWM')
+log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== PWM ==========

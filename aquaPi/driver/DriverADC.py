@@ -2,10 +2,11 @@
 
 from enum import Enum
 import logging
+from typing import TYPE_CHECKING
 
 # latest Blinka supports x86 LinuxPC, but we don't, at least not chips on I²C
 from adafruit_platformdetect import Detector  # type: ignore[import-untyped]
-if not Detector().board.id == 'GENERIC_LINUX_PC':
+if TYPE_CHECKING or not Detector().board.id == 'GENERIC_LINUX_PC':
     SIMULATED = False
     import board  # type: ignore[import-untyped]
     from busio import I2C  # type: ignore[import-untyped]
@@ -14,14 +15,14 @@ if not Detector().board.id == 'GENERIC_LINUX_PC':
     from adafruit_ads1x15.analog_in import AnalogIn
 else:
     SIMULATED = True
-    def ADS1115(_1,_2):  # type: ignore[no-redef]
+    def ADS1115(_1,_2):
         return None
     P0, P1, P2, P3 = range(0, 4)
-    class board(Enum):  # type: ignore[no-redef]
+    class board(Enum):
         SCL, SDA = range(0,2)
     def I2C(_1,_2):
         return None
-    def AnalogIn(_1,_2):  # type: ignore[no-redef]
+    def AnalogIn(_1,_2):
 
         return None
 

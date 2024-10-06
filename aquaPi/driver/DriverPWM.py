@@ -5,16 +5,11 @@ from os import path
 from time import sleep
 
 try:
-    import RPi.GPIO as GPIO
+    from RPi.GPIO import gpio_function  # type: ignore[import-untyped]
 except (RuntimeError, ModuleNotFoundError):
     # make lint happy with minimal non-funct facade
-    class GPIOdummy:
-        @staticmethod
-        def gpio_function(pin):
-            pin = not pin
-            return None
-
-    GPIO = GPIOdummy
+    def gpio_function(_:int):
+        return 0
 
 from .base import (OutDriver, IoPort, PortFunc, PinFunc, is_raspi)
 
@@ -27,13 +22,13 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 
 class DriverPWMbase(OutDriver):
-    """ abstrract base of PWM drivers
+    """ abstract base of PWM drivers
     """
 
-    def __init__(self, cfg, func):
+    def __init__(self, cfg:dict[str,str], func:PortFunc):
         super().__init__(cfg, func)
-        self._channel = int(cfg['channel'])
-        self._pin = int(cfg['pin'])
+        self._channel: int = int(cfg['channel'])
+        self._pin: int = int(cfg['pin'])
 
 
 class DriverPWM(DriverPWMbase):
@@ -41,7 +36,7 @@ class DriverPWM(DriverPWMbase):
     """
 
     @staticmethod
-    def find_ports():
+    def find_ports() -> dict[str,IoPort]:
         io_ports = {}
         if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
@@ -57,7 +52,7 @@ class DriverPWM(DriverPWMbase):
             cnt = 0
             for pin in range(28):
                 try:
-                    func = PinFunc(GPIO.gpio_function(pin))
+                    func = PinFunc(gpio_function(pin))
                     if func == PinFunc.PWM:
                         deps = ['GPIO %d in' % pin, 'GPIO %d out' % pin]
                         port_name = 'PWM %d' % cnt
@@ -69,17 +64,17 @@ class DriverPWM(DriverPWMbase):
                     else:
                         log.debug('pin %d is in use as %s', pin, func.name)
                 except KeyError:
-                    log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
+                    log.debug('Unknown function on pin %d = %d', pin, gpio_function(pin))
         return io_ports
 
-    def __init__(self, cfg, func):
+    def __init__(self, cfg:dict[str,str], func:PortFunc):
         super().__init__(cfg, func)
 
-        self.name = 'PWM %d @ pin %d' % (self._channel, self._pin)
+        self.name: str = 'PWM %d @ pin %d' % (self._channel, self._pin)
         if not self._fake:
             self.name = 'PWM %d @ sysfs' % self._channel
-            self._pwmchip = '/sys/class/pwm/pwmchip0'
-            self._pwmchannel = path.join(self._pwmchip, 'pwm%d' % self._channel)
+            self._pwmchip: str = '/sys/class/pwm/pwmchip0'
+            self._pwmchannel: str = path.join(self._pwmchip, 'pwm%d' % self._channel)
 
             try:
                 log.debug('Creating sysfs PWM channel %d ...', self._channel)
@@ -98,7 +93,7 @@ class DriverPWM(DriverPWMbase):
 
         self.write(0)
 
-    def close(self):
+    def close(self) -> None:
         log.debug('Closing %r', self)
         if not self._fake:
             with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
@@ -108,15 +103,14 @@ class DriverPWM(DriverPWMbase):
                 p.write('%d' % self._channel)
             log.debug('Removed sysfs PWM channel %d', self._channel)
 
-    def write(self, value):
+    def write(self, value:float) -> None:
         log.info('%s -> %f', self.name, float(value))
         if not self._fake:
             with open(path.join(self._pwmchannel, 'duty_cycle'), 'wt', encoding='ascii') as p:
                 p.write('%d' % int(value / 100.0 * 3333333))
             with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
                 p.write('1' if value > 0 else '0')
-        else:
-            self._val = float(value)
+        self._val = float(value)
 
 
 dummy = '''if False:
@@ -137,7 +131,7 @@ dummy = '''if False:
                 cnt = 0
                 for pin in range(28):
                     try:
-                        func = PinFunc(GPIO.gpio_function(pin))
+                        func = PinFunc(gpio_function(pin))
                         if func in [PinFunc.PWM]:
                             port_name = 'softPWM %d' % cnt
                             io_ports[port_name] = IoPort(PortFunc.PWM, DriverPWM, {'pin': pin, 'channel': cnt})
@@ -145,7 +139,7 @@ dummy = '''if False:
                         else:
                             log.debug('pin %d is in use as %s',  pin, func.name)
                     except KeyError:
-                        log.debug('Unknown function on pin %d = %d', pin, GPIO.gpio_function(pin))
+                        log.debug('Unknown function on pin %d = %d', pin, gpio_function(pin))
             return io_ports
 
         def __init__(self, cfg, func):

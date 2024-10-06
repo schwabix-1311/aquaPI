@@ -58,7 +58,7 @@ class IoRegistry(object):
     Very likely getting a higher level driver and a tupel of IoPorts.  TBD!
     """
 
-    _map = {}
+    _map: dict[str,IoPort] = {}
 
     def __init__(self):
         # iterate all class imports from a module, then call each class' port enumerator
@@ -97,14 +97,14 @@ class IoRegistry(object):
         log.brief('Port drivers found for:')
         log.brief('%r', [k for k in IoRegistry._map])
 
-    def get_ports_by_function(self, funcs, in_use=False):
+    def get_ports_by_function(self, funcs:list[PortFunc], in_use:bool=False) -> dict[str,IoPort]:
         """ returns a view of free or used IoPorts filtered by iterable funcs.
         """
         mp = IoRegistry._map
         return {key: mp[key] for key in mp
                 if mp[key].func in funcs and bool(mp[key].used) == in_use}
 
-    def driver_factory(self, port, drv_options=None):
+    def driver_factory(self, port:str, drv_options:dict|None=None) -> Driver|None:
         """ Create a driver for a port found in io_ports.keys().
             Drivers that use >1 port are created by a dedicated factory (later)
         """
@@ -131,8 +131,9 @@ class IoRegistry(object):
             return driver
         except Exception:
             log.exception('Failed to create driver: %s', port)
+            return None
 
-    def driver_destruct(self, port, driver):
+    def driver_destruct(self, port:str, driver:Driver) -> None:
         log.debug('destruct driver for %r', port)
         if port not in IoRegistry._map:
             raise DriverParamError('There is no driver for port %s' % port)

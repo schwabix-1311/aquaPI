@@ -3,24 +3,27 @@
 from enum import Enum
 import logging
 
-try:
-    # latest Blinka supports x86 LinuxPC, but we don't at least not chips on I²C
-    from adafruit_platformdetect import Detector
-    if Detector().board.id == 'GENERIC_LINUX_PC':
-        raise NotImplementedError
-
-    import board
-    import busio
-    import adafruit_ads1x15.ads1115 as ADS
+# latest Blinka supports x86 LinuxPC, but we don't, at least not chips on I²C
+from adafruit_platformdetect import Detector  # type: ignore[import-untyped]
+if not Detector().board.id == 'GENERIC_LINUX_PC':
+    SIMULATED = False
+    import board  # type: ignore[import-untyped]
+    from busio import I2C  # type: ignore[import-untyped]
+    from adafruit_ads1x15.ads1115 import (ADS1115, P0, P1, P2, P3)
     # import adafruit_ads1x15.ads1015 as ADSxx
     from adafruit_ads1x15.analog_in import AnalogIn
-
-    SIMULATED = False
-except NotImplementedError:
+else:
     SIMULATED = True
+    def ADS1115(_1,_2):  # type: ignore[no-redef]
+        return None
+    P0, P1, P2, P3 = range(0, 4)
+    class board(Enum):  # type: ignore[no-redef]
+        SCL, SDA = range(0,2)
+    def I2C(_1,_2):
+        return None
+    def AnalogIn(_1,_2):  # type: ignore[no-redef]
 
-    class ADS(Enum):
-        P0, P1, P2, P3 = range(0, 4)
+        return None
 
 from .base import (AInDriver, IoPort, PortFunc)
 
@@ -32,7 +35,7 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 # ========== ADC inputs ==========
 
 
-adc_count = 0
+adc_count: int = 0
 
 
 class DriverADS1115(AInDriver):
@@ -46,10 +49,10 @@ class DriverADS1115(AInDriver):
     """
 
     ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
-    CHANNELS = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]  # ATM no differential channels
+    CHANNELS = [P0, P1, P2, P3]  # ATM no differential channels
 
     @staticmethod
-    def is_ads111x(ads):
+    def is_ads111x(ads: ADS1115) -> bool:
         """ check power-on register defaults of ADS1113/4/5
         """
         try:
@@ -72,19 +75,19 @@ class DriverADS1115(AInDriver):
                           bytes(buf[4:6]).hex(),
                           bytes(buf[6:8]).hex())
         except Exception as ex:
+            # whatever it is, ignore device @ this adr!
             log.debug('Exception %r', ex)
-            # pass  # whatever it is, ignore device @ this adr!
         return False
 
     @staticmethod
-    def find_ports():
+    def find_ports() -> dict[str,IoPort]:
         global adc_count  # pylint: disable=W0603
 
         io_ports = {}
         if not SIMULATED:
             # autodetect of I²C is undefined and risky, as some chips may react
             # on read as if it was a write! We're on a pretty well defined HW though.
-            i2c = busio.I2C(board.SCL, board.SDA)
+            i2c = I2C(board.SCL, board.SDA)
             deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id,
                     'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
 
@@ -92,11 +95,11 @@ class DriverADS1115(AInDriver):
             log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
             for adr in DriverADS1115.ADDRESSES:
                 try:
-                    ads = ADS.ADS1115(i2c, address=adr)
+                    ads = ADS1115(i2c, address=adr)
                     if DriverADS1115.is_ads111x(ads):
                         adc_count += 1
                         for ch in DriverADS1115.CHANNELS:
-                            port_name = 'ADC #%d in %d' % (adc_count, ch)
+                            port_name = f'ADC #{adc_count} in {ch}'
                             port_cfg = {'adr': adr, 'cnt': adc_count, 'in': ch}
                             io_ports[port_name] = IoPort(PortFunc.Ain,
                                                          DriverADS1115,
@@ -105,8 +108,8 @@ class DriverADS1115(AInDriver):
                     else:
                         log.brief('I²C device at 0x%02X seems not to be an ADS1x15, probably a different device, or already in use.', adr)
                 except Exception as ex:
+                    # whatever it is, ignore this device
                     log.debug('%r', ex)
-                    # pass  # whatever it is, ignore this device
         else:  # SIMULATED
             deps = ['GPIO 2 in', 'GPIO 2 out']
             adc_count += 1
@@ -120,18 +123,21 @@ class DriverADS1115(AInDriver):
             }
         return io_ports
 
-    def __init__(self, cfg, func):
+    def __init__(self, cfg:dict[str,str], func:PortFunc):
         super().__init__(cfg, func)
-        self.name = 'ADC #%d (ADS1115 @0x%02X) in %d' % (cfg['cnt'], cfg['adr'], cfg['in'])
-        self.cfg = cfg
+        cnt = int(cfg['cnt'])
+        adr = int(cfg['adr'])
+        inp = int(cfg['in'])
+        self.gain: float = float(cfg.get('gain', -16))
+        self.cfg: dict[str,str] = cfg
+        self.name: str = 'ADC #%d (ADS1115 @0x%02X) in %d' % (cnt, adr, inp)
 
-        self.gain = cfg.get('gain', -16)
-        i2c = busio.I2C(board.SCL, board.SDA)
-        self._ads = ADS.ADS1115(i2c, address=cfg['adr'], gain=(abs(self.gain)))
-        self._ana_in = AnalogIn(self._ads, cfg['in'])
-        self._median_filter = True  # const ATM
+        i2c = I2C(board.SCL, board.SDA)
+        self._ads: ADS1115 = ADS1115(i2c, address=adr, gain=abs(self.gain))
+        self._ana_in: AnalogIn = AnalogIn(self._ads, inp)
+        self._median_filter: bool = True  # const ATM
 
-    def close(self):
+    def close(self) -> None:
         if self._fake:
             return super().close()
 
@@ -139,25 +145,25 @@ class DriverADS1115(AInDriver):
         self._ads.gain = 2
         self._ads.read(0, is_differential=True)
 
-    def read(self):
-        log.debug('+ADCread')
+    def read(self) -> int|float:
         if self._fake:
             return super().read()
 
         self._adjust_gain()
         if not self._median_filter:
-            val = self._ana_in.voltage
+            self._val = self._ana_in.voltage
         else:
             median = [self._ana_in.voltage,
                       self._ana_in.voltage,
                       self._ana_in.voltage]
             median.sort()
             log.debug('median %f %f %f', median[0], median[1], median[2])
-            val = median[2]
-        log.debug('-ADCread %r', val)
-        return val
+            self._val = median[2]
 
-    def _adjust_gain(self):
+        log.info('%s = %f', self.name, self._val)
+        return self._val
+
+    def _adjust_gain(self) -> None:
         """ gain <= 0 is auto-gain.
             Since there's only a common gain for all channels,
             we need repeated conversions, and increase I2C traffic.

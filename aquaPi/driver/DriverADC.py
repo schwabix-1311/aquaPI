@@ -142,25 +142,25 @@ class DriverADS1115(AInDriver):
         self._ads.gain = 2
         self._ads.read(0, is_differential=True)
 
-    def read(self):
-        log.debug('+ADCread')
+    def read(self) -> float:
         if self._fake:
             return super().read()
 
         self._adjust_gain()
         if not self._median_filter:
-            val = self._ana_in.voltage
+            self._val = self._ana_in.voltage
         else:
             median = [self._ana_in.voltage,
                       self._ana_in.voltage,
                       self._ana_in.voltage]
             median.sort()
             log.debug('median %f %f %f', median[0], median[1], median[2])
-            val = median[2]
-        log.debug('-ADCread %r', val)
-        return val
+            self._val = median[2]
 
-    def _adjust_gain(self):
+        log.info('%s = %f', self.name, self._val)
+        return self._val
+
+    def _adjust_gain(self) -> None:
         """ gain <= 0 is auto-gain.
             Since there's only a common gain for all channels,
             we need repeated conversions, and increase I2C traffic.

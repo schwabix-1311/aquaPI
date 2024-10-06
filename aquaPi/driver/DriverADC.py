@@ -5,21 +5,21 @@ import logging
 
 try:
     # latest Blinka supports x86 LinuxPC, but we don't at least not chips on I²C
-    from adafruit_platformdetect import Detector
+    from adafruit_platformdetect import Detector  # type: ignore[import-untyped]
     if Detector().board.id == 'GENERIC_LINUX_PC':
         raise NotImplementedError
 
-    import board
-    import busio
+    SIMULATED = False
+    import board  # type: ignore[import-untyped]
+    import busio  # type: ignore[import-untyped]
     import adafruit_ads1x15.ads1115 as ADS
     # import adafruit_ads1x15.ads1015 as ADSxx
     from adafruit_ads1x15.analog_in import AnalogIn
 
-    SIMULATED = False
 except NotImplementedError:
     SIMULATED = True
 
-    class ADS(Enum):
+    class ADS(Enum):  # type: ignore[no-redef]
         P0, P1, P2, P3 = range(0, 4)
 
 from .base import (AInDriver, IoPort, PortFunc)
@@ -96,7 +96,7 @@ class DriverADS1115(AInDriver):
                     if DriverADS1115.is_ads111x(ads):
                         adc_count += 1
                         for ch in DriverADS1115.CHANNELS:
-                            port_name = 'ADC #%d in %d' % (adc_count, ch)
+                            port_name = f'ADC #{adc_count} in {ch}'
                             port_cfg = {'adr': adr, 'cnt': adc_count, 'in': ch}
                             io_ports[port_name] = IoPort(PortFunc.Ain,
                                                          DriverADS1115,
@@ -125,10 +125,10 @@ class DriverADS1115(AInDriver):
         cnt = int(cfg['cnt'])
         adr = int(cfg['adr'])
         inp = int(cfg['in'])
-        self.name: str = f'ADC #{cnt} (ADS1115 @0x{adr:02X} in {inp}'
+        self.gain: float = float(cfg.get('gain', -16))
         self.cfg: dict[str,str] = cfg
+        self.name: str = f'ADC #{cnt} (ADS1115 @0x{adr:02X} in {inp}'
 
-        self.gain = float(cfg.get('gain', -16))
         i2c = busio.I2C(board.SCL, board.SDA)
         self._ads = ADS.ADS1115(i2c, address=adr, gain=abs(self.gain))
         self._ana_in: AnalogIn = AnalogIn(self._ads, inp)

@@ -3,11 +3,12 @@
 import logging
 import random
 
+#TODO: replace all with Adafruit Ports, keep unique GPIO.gpio_function
 try:
     import RPi.GPIO as GPIO  # type: ignore[import-untyped]
 except (RuntimeError, ModuleNotFoundError):
     # make lint happy with minimal non-funct facade
-    class GPIO:
+    class GPIO:  # type: ignore[no-redef]
         BCM = None
         IN = None
         OUT = None

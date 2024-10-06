@@ -122,13 +122,16 @@ class DriverADS1115(AInDriver):
 
     def __init__(self, cfg:dict[str,str], func:PortFunc):
         super().__init__(cfg, func)
-        self.name: str = f'ADC #{cfg['cnt']} (ADS1115 @0x{cfg['adr']:02X} in {cfg['in']}'
+        cnt = int(cfg['cnt'])
+        adr = int(cfg['adr'])
+        inp = int(cfg['in'])
+        self.name: str = f'ADC #{cnt} (ADS1115 @0x{adr:02X} in {inp}'
         self.cfg: dict[str,str] = cfg
 
         self.gain = float(cfg.get('gain', -16))
         i2c = busio.I2C(board.SCL, board.SDA)
-        self._ads = ADS.ADS1115(i2c, address=int(cfg['adr']), gain=abs(self.gain))
-        self._ana_in: AnalogIn = AnalogIn(self._ads, int(cfg['in']))
+        self._ads = ADS.ADS1115(i2c, address=adr, gain=abs(self.gain))
+        self._ana_in: AnalogIn = AnalogIn(self._ads, inp)
         self._median_filter: bool = True  # const ATM
 
     def close(self) -> None:

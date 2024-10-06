@@ -433,9 +433,8 @@ class SunCtrl(ControllerNode):
             self.clouds.append(cl)
             log.brief('SunCtrl %s: new cloud (%dmin | %d%%)', self.id, cl[1]/60, cl[2])
 
-        i = 0
         shadow = 0
-        for cl in self.clouds.copy():
+        for i, cl in enumerate(self.clouds.copy()):
             if cl[0] + cl[1] < now:
                 self.clouds.remove(cl)
             else:
@@ -443,7 +442,6 @@ class SunCtrl(ControllerNode):
                 sh = self._halfsine(now - cl[0], cl[1], cl[2])
                 log.debug('SunCtrl %s: cloud %d = %f%%', self.id, i, sh)
                 shadow = min(shadow + sh, 80)
-            i += 1
         shadow = (100 - shadow) / 100
         log.debug('SunCtrl %s: cloud factor %f', self.id, shadow)
         return shadow

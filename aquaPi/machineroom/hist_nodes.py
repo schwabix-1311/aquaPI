@@ -14,7 +14,7 @@ try:
     import psycopg as pg
     from psycopg import sql
     QUEST_DB = True
-except:  # pylint: disable=W0702
+except Exception:
     QUEST_DB = False
 
 from .msg_bus import (BusListener, BusRole, MsgData)
@@ -31,14 +31,13 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 class TimeDb(ABC):
     """ Base class for time series storage
     """
-    fields = []
+    fields = {str}
 
     def __init__(self):
         pass
 
     def add_field(self, name):
-        if name not in TimeDb.fields:
-            TimeDb.fields.append(name)
+        TimeDb.fields.add(name)
 
     @abstractmethod
     def feed(self, name, value):
@@ -64,14 +63,11 @@ class TimeDbMemory(TimeDb):
 
     def add_field(self, name):
         super().add_field(name)
-        if name not in TimeDbMemory._store:
-            TimeDbMemory._store[name] = deque(maxlen=self.duration * 60 * 60)  # 1/sec
+        TimeDbMemory._store.setdefault(name, deque(maxlen=self.duration * 60 * 60))  # 1/sec
 
     def feed(self, name, value):
         with TimeDbMemory._store_lock:
-            if name not in TimeDbMemory._store:
-                log.error('TimeDbMemory: unknown history for %s, adding implicitly', name)
-                TimeDbMemory._store[name] = deque(maxlen=self.duration * 60 * 60)  # 1/sec
+            TimeDbMemory._store.setdefault(name, deque(maxlen=self.duration * 60 * 60))  # 1/sec
 
             now = int(time())
             series = TimeDbMemory._store[name]
@@ -116,20 +112,17 @@ class TimeDbMemory(TimeDb):
                 result[0] = node_names
                 start = max(1, start)
                 result[start] = [None] * len(node_names)
-                idx = 0
-                for name in node_names:
+                for idx, name in enumerate(node_names):
                     for measurement in TimeDbMemory._store[name]:
                         (ts, val) = measurement
                         if ts <= start:
                             # still <= start, so update
                             result[start][idx] = val
-                            pass
                         else:
                             # past start, ensure a tupel for ts exists
                             if not ts in result:
                                 result[ts] = [None] * len(node_names)
                             result[ts][idx] = val
-                    idx += 1
 
         log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
         log.debug('TimeDbMemory.query start %r step %r: %r', start, step, result)
@@ -197,7 +190,7 @@ if QUEST_DB:
                         if not rec:
                             qry = sql.SQL("INSERT INTO node VALUES (%s, true)")
                             conn.execute(qry, [name])
-            except pg.OperationalError as ex:
+            except pg.OperationalError:
                 log.exception('TimeDbQuest.add_field')
 
         def feed(self, name, value):
@@ -206,7 +199,7 @@ if QUEST_DB:
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     qry = sql.SQL("INSERT INTO value VALUES (now(), %s, %s)")
                     conn.execute(qry, [name, value])
-            except pg.OperationalError as ex:
+            except pg.OperationalError:
                 log.exception('TimeDbQuest.feed')
 
         def _query(self, node_names, start, step):
@@ -253,7 +246,7 @@ if QUEST_DB:
                         recs = curs.fetchall()
 
                         return recs
-            except pg.OperationalError as ex:
+            except pg.OperationalError:
                 log.exception('TimeDbQuest.query')
                 return {}
 
@@ -285,6 +278,7 @@ if QUEST_DB:
                     # each val may be null!
                     result = {}
                     result[0] = node_names
+# FIXME: refactor!!
                     result[start] = [None] * len(node_names)
                     for row in recs:
                         (dt_tm, node, val) = row

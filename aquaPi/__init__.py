@@ -103,7 +103,7 @@ def create_app():
 
     config_file = path.join(app.instance_path, "log_config.json")
     if path.exists(config_file):
-        with open(config_file) as f_in:
+        with open(config_file, encoding='ascii') as f_in:
             log_config = json.load(f_in)
     else:
         log_config = log_default

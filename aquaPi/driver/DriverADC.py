@@ -32,7 +32,7 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 # ========== ADC inputs ==========
 
 
-adc_count = 0
+adc_count: int = 0
 
 
 class DriverADS1115(AInDriver):
@@ -49,7 +49,7 @@ class DriverADS1115(AInDriver):
     CHANNELS = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]  # ATM no differential channels
 
     @staticmethod
-    def is_ads111x(ads):
+    def is_ads111x(ads: ADS.ADS1115) -> bool:
         """ check power-on register defaults of ADS1113/4/5
         """
         try:
@@ -72,12 +72,12 @@ class DriverADS1115(AInDriver):
                           bytes(buf[4:6]).hex(),
                           bytes(buf[6:8]).hex())
         except Exception as ex:
-            log.debug('Exception %r', ex)
             # pass  # whatever it is, ignore device @ this adr!
+            log.debug('Exception %r', ex)
         return False
 
     @staticmethod
-    def find_ports():
+    def find_ports() -> dict[str,IoPort]:
         global adc_count  # pylint: disable=W0603
 
         io_ports = {}
@@ -105,8 +105,8 @@ class DriverADS1115(AInDriver):
                     else:
                         log.brief('I²C device at 0x%02X seems not to be an ADS1x15, probably a different device, or already in use.', adr)
                 except Exception as ex:
-                    log.debug('%r', ex)
                     # pass  # whatever it is, ignore this device
+                    log.debug('%r', ex)
         else:  # SIMULATED
             deps = ['GPIO 2 in', 'GPIO 2 out']
             adc_count += 1

@@ -96,8 +96,7 @@ log_default = {
 }
 
 
-
-def create_app():
+def create_app() -> Flask:
     # TODO wrap in try/catch, but how should exceptions be handled?
     app = Flask(__name__, instance_relative_config=True)
 
@@ -176,12 +175,12 @@ def create_app():
     if 'routes' in sys.argv:
         return app
 
-    from . import machineroom
-    app.machineroom = machineroom.init(app.config['CONFIG'])
-    app.bus = app.machineroom.bus
+    from .machineroom import MachineRoom
+    app.extensions['machineroom'] = MachineRoom(app.config['CONFIG'])
 
+    #FIXME bus is used by Python code in jinja template 'settings'
     @app.context_processor
     def inject_globals():
-        return dict(bus=app.bus)
+        return dict(bus=app.extensions['machineroom'].bus)
 
     return app

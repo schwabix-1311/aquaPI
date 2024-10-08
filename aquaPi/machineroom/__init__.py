@@ -18,36 +18,6 @@ log = logging.getLogger('machineroom')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
-mr = None
-
-
-def init(storage):
-    global mr  # pylint: disable=W0603
-
-    mr = MachineRoom(storage)
-    return mr
-
-
-# This is brute force, as a destructor AKA __del__ is not called after Ctrl-C.
-# However, the concept of shutting down a web server by app code is a no-no.
-# A development server might allow this, but this was removed from werkzeug
-# with v2.1. Instead, I could crete a route /flush and a button (debug-only).
-# This should save_nodes and bring all nodes to a safe state, e.g. heater OFF
-# Seen as an appliance aquaPi should somehow allow a restart for updates,
-# or to recover SW state
-
-@atexit.register
-def cleanup():
-    log.brief('Preparing shutdown ...')
-    if mr and mr.bus:
-        # this does not work completely, teardown aborts half-way.
-        # My theory: we run multi-threaded as a daemon and have only
-        # limited time until we're killed.
-        mr.save_nodes(mr.bus)
-        mr.bus.teardown()
-        mr.bus = None
-
-
 class MachineRoom:
     """ The Machine Room
         The core is a message bus, on which different sensors,
@@ -57,14 +27,14 @@ class MachineRoom:
         works in msg handlers and callbacks.
     """
 
-    def __init__(self, bus_storage):
+    def __init__(self, bus_storage:str) -> None:
         """ Create everything needed to get the machinery going.
             So far the only thing here is the bus.
         """
         self.bus_storage = bus_storage
 
         if not path.exists(self.bus_storage):
-            self.bus = MsgBus()  # threaded=True)
+            self.bus: MsgBus|None = MsgBus()  # threaded=True)
 
             log.brief("=== There are no controllers defined, creating default")
             self.create_default_nodes()
@@ -76,10 +46,27 @@ class MachineRoom:
             log.brief("=== Loading Bus & Nodes from %s", self.bus_storage)
             self.bus = self.restore_nodes()
 
-        log.brief("%s", str(self.bus))
-        log.info(self.bus.get_nodes())
+        # Our __del__ would not be called after Ctrl-C.
+        atexit.register(self.shutdown)
 
-    def save_nodes(self, container, fname=None):
+        log.brief("%s", str(self.bus))
+        if self.bus:
+            log.info(self.bus.get_nodes())
+
+    def shutdown(self) -> None:
+        """ Prepare for shutdown, save bus state etc.
+        """
+        log.brief('Preparing shutdown ...')
+        if self.bus:
+            # this does not work completely, teardown aborts half-way.
+            # My theory: we run multi-threaded as a daemon and have only
+            # limited time until we're killed.
+            self.save_nodes(self.bus)
+            self.bus.teardown()
+            self.bus = None
+            log.brief('... shutdown completed')
+
+    def save_nodes(self, container, fname:str='') -> None:
         """ save the Bus, Nodes and Drivers to storage
             Parameters allow usage for controller templates,
             contained in "something", not a bus
@@ -90,7 +77,7 @@ class MachineRoom:
             with open(fname, 'wb') as p:
                 pickle.dump(container, p, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def restore_nodes(self, fname=None):
+    def restore_nodes(self, fname:str=''):
         """ recreate the Bus, Nodes and Drivers from storage,
             or a controller template in a container from some file
         """
@@ -100,7 +87,7 @@ class MachineRoom:
             container = pickle.load(p)
         return container
 
-    def create_default_nodes(self):
+    def create_default_nodes(self) -> None:
         """ "let there be light" and heating of course, what
             else do my fish(es) need?
             Distraction: interesting fact on English:

@@ -3,7 +3,6 @@
 import logging
 from flask import (Blueprint, current_app, json)
 
-from ..machineroom import BusRole
 from .sse_util import render_sse_template
 
 

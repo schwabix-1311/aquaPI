@@ -15,9 +15,9 @@ bp = Blueprint('settings', __name__)
 
 # @bp.route('/settings')
 @bp.route('/settings', methods=['GET', 'POST'])
-def settings():
-    bus = current_app.bus
-    mr = current_app.machineroom
+def settings() -> str:
+    mr = current_app.extensions['machineroom']
+    bus = mr.bus
     sub_form = None
 
     if request.method == 'POST':

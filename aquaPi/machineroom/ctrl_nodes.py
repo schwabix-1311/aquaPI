@@ -347,11 +347,13 @@ class SunCtrl(ControllerNode):
             self.xscend = xscend.total_seconds() / 60 / 60
         self._fader_thread = None
         self._fader_stop = False
+        self._high = 0
         if not _cont:
             self.data = 0
         self.target = self.data
         self.unit = '%'
         self.clouds = []
+        self.cloudiness = 0
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -374,7 +376,7 @@ class SunCtrl(ControllerNode):
                 self._fader_thread.join()
             self.target = float(msg.data)
             if self.target:
-                self.high = self.target
+                self._high = self.target
                 self.cloudiness = int(random.random() * 7.5)
                 log.brief('SunCtrl: cloudiness %d', self.cloudiness)
 
@@ -460,7 +462,7 @@ class SunCtrl(ControllerNode):
             self.post(MsgData(self.id, self.data))
             while now - start < xscend and not self._fader_stop:
                 shadow = self._calculate_clouds()
-                new_data = self._halfsine(now - start, xscend * 2, self.high) * shadow
+                new_data = self._halfsine(now - start, xscend * 2, self._high) * shadow
                 self._make_next_step('ascend', new_data)
                 now = time.time()
 
@@ -469,14 +471,14 @@ class SunCtrl(ControllerNode):
             while not self._fader_stop:
                 shadow = self._calculate_clouds()
                 self.alert = ('\u219d', 'act') if shadow else None  # rightwards wave arrow
-                new_data = self.high * shadow
+                new_data = self._high * shadow
                 self._make_next_step('cloudy', new_data)
                 now = time.time()
         else:
             self.alert = ('\u2198', 'act')  # south east arrow
             while now - start < xscend and not self._fader_stop:
                 shadow = self._calculate_clouds()
-                new_data = self._halfsine(now - start + xscend, xscend * 2, self.high) * shadow
+                new_data = self._halfsine(now - start + xscend, xscend * 2, self._high) * shadow
                 self._make_next_step('descend', new_data)
                 now = time.time()
             self.data = 0  # end of descend

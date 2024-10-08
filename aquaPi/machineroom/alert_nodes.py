@@ -5,7 +5,7 @@ import logging
 # from time import time
 
 from .msg_bus import (BusListener, BusRole, MsgData, MsgFilter)
-from ..driver import (PortFunc, io_registry, DriverReadError)
+from ..driver import (PortFunc, io_registry)
 
 
 log = logging.getLogger('machineroom.alert_nodes')

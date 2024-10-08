@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
 
-from enum import Enum
 import logging
 
-try:
-    # latest Blinka supports x86 LinuxPC, but we don't at least not chips on I²C
-    from adafruit_platformdetect import Detector  # type: ignore[import-untyped]
-    if Detector().board.id == 'GENERIC_LINUX_PC':
-        raise NotImplementedError
-
+# latest Blinka supports x86 LinuxPC, but we don't at least not chips on I²C
+from adafruit_platformdetect import Detector  # type: ignore[import-untyped]
+if not Detector().board.id == 'GENERIC_LINUX_PC':
     SIMULATED = False
-    import board  # type: ignore[import-untyped]
-    import busio  # type: ignore[import-untyped]
-    import adafruit_ads1x15.ads1115 as ADS
-    # import adafruit_ads1x15.ads1015 as ADSxx
-    from adafruit_ads1x15.analog_in import AnalogIn
-
-except NotImplementedError:
+else:
     SIMULATED = True
 
-    class ADS(Enum):  # type: ignore[no-redef]
-        P0, P1, P2, P3 = range(0, 4)
+import board  # type: ignore[import-untyped]
+import busio  # type: ignore[import-untyped]
+from adafruit_ads1x15.ads1115 import ADS1115, P0, P1, P2, P3
+from adafruit_ads1x15.analog_in import AnalogIn
+
 
 from .base import (AInDriver, IoPort, PortFunc)
 
@@ -46,10 +39,10 @@ class DriverADS1115(AInDriver):
     """
 
     ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
-    CHANNELS = [ADS.P0, ADS.P1, ADS.P2, ADS.P3]  # ATM no differential channels
+    CHANNELS = [P0, P1, P2, P3]  # ATM no differential channels
 
     @staticmethod
-    def is_ads111x(ads: ADS.ADS1115) -> bool:
+    def is_ads111x(ads:ADS1115) -> bool:
         """ check power-on register defaults of ADS1113/4/5
         """
         try:
@@ -92,7 +85,7 @@ class DriverADS1115(AInDriver):
             log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
             for adr in DriverADS1115.ADDRESSES:
                 try:
-                    ads = ADS.ADS1115(i2c, address=adr)
+                    ads = ADS1115(i2c, address=adr)
                     if DriverADS1115.is_ads111x(ads):
                         adc_count += 1
                         for ch in DriverADS1115.CHANNELS:
@@ -130,7 +123,7 @@ class DriverADS1115(AInDriver):
         self.name: str = f'ADC #{cnt} (ADS1115 @0x{adr:02X} in {inp}'
 
         i2c = busio.I2C(board.SCL, board.SDA)
-        self._ads = ADS.ADS1115(i2c, address=adr, gain=abs(self.gain))
+        self._ads = ADS1115(i2c, address=adr, gain=abs(self.gain))
         self._ana_in: AnalogIn = AnalogIn(self._ads, inp)
         self._median_filter: bool = True  # const ATM
 

@@ -133,7 +133,7 @@ class DriverADS1115(AInDriver):
 
         # return chip to power-on defaults to allow future auto-detect
         self._ads.gain = 2
-        self._ads.read(0, is_differential=True)
+        self._ads.read(0, True)
 
     def read(self) -> float:
         if self._fake:

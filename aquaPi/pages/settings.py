@@ -2,6 +2,7 @@
 
 import logging
 from flask import (Blueprint, current_app, flash, request, render_template)
+from typing import Any
 
 # from ..machineroom import msg_bus
 
@@ -33,7 +34,7 @@ def settings() -> str:
             node_attr = key.split('.')
             if len(node_attr) == 2:
                 try:
-                    new_value = float(request.form[key])
+                    new_value: Any = float(request.form[key])
                 except ValueError:
                     new_value = request.form[key]
                 try:

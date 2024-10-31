@@ -43,7 +43,7 @@
                             </div>
                         {% endfor %}
 
-                        {% for i_node in c_node.get_inputs(recurse=True) %}
+                        {% for i_node in c_node.get_receives(recurse=True) %}
                             <div class="uk-margin-small">
 {% if false %}
 {# TODO this should be r/o on this page, but keep it as template for select on page config #}
@@ -99,7 +99,7 @@
                             </div>
                         {% endfor %}
 
-                        {% for o_node in c_node.get_outputs(recurse=True) %}
+                        {% for o_node in c_node.get_listeners(recurse=True) %}
                             <div class="uk-margin-small">
                                 <label class="uk-form-label">Output:</label>
                                 <div class="uk-form-controls">

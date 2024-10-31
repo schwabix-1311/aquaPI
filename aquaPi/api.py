@@ -104,6 +104,7 @@ def api_sse() -> Response:
 
     def sse_update():
         changed_ids = bus.wait_for_changes()
-        return json.dumps(changed_ids)
+        log.debug(changed_ids)
+        return json.dumps([id for id in changed_ids])
 
     return send_sse_events(sse_update)

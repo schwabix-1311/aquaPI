@@ -22,7 +22,7 @@
 
         <small>Input</small><br>
         {% for i_node in bus.get_input_nodes() %}
-            {% if i_node in c_node.get_inputs(True) %}
+            {% if i_node in c_node.get_receives(True) %}
                 <strong>{{ i_node.name }}</strong> :  {{ i_node }}, 
                 drives {{ ','.join(bus.to_names(i_node.get_outputs())) }}<br>
             {% endif %}
@@ -31,13 +31,13 @@
         {% if c_node.is_advanced() %}
             <small>Auxiliary</small><br>
             {% for a_node in bus.get_auxiliary_nodes() %}
-                {% if a_node in c_node.get_inputs(True) %}
+                {% if a_node in c_node.get_receives(True) %}
                     <strong>{{ a_node.name }}</strong> :  {{ a_node }}, 
                     drives {{ ','.join(bus.to_names(a_node.get_outputs)()) }}<br>
                 {% endif %}
                 {% if a_node in c_node.get_outputs(True).values() %}
                     <strong>{{ a_node.name }}</strong> :  {{ a_node }}, 
-                    driven by {{ ','.join(bus.to_names(a_node.get_inputs())) }}<br>
+                    driven by {{ ','.join(bus.to_names(a_node.get_receives())) }}<br>
                 {% endif %}
             {% endfor %}
         {% endif %}
@@ -46,7 +46,7 @@
         {% for o_node in bus.get_output_nodes() %}
             {% if o_node in c_node.get_outputs(True) %}
                 <strong>{{ o_node.name }}</strong> :  {{ o_node }},  
-                driven by {{ ','.join(bus.to_names(o_node.get_inputs())) }})<br>
+                driven by {{ ','.join(bus.to_names(o_node.get_receives())) }})<br>
             {% endif %}
             {% endfor %}
     {% endfor %}
@@ -56,7 +56,7 @@
     <h3>ctrl</h3>
     {% for c_node in bus.get_controller_nodes() %}
         {{ c_node.name }}: 
-        {{ ','.join(bus.to_names(c_node.get_inputs())) }} 
+        {{ ','.join(bus.to_names(c_node.get_receives())) }} 
            -&gt; <strong>{{ c_node }}</strong>
            -&gt; {{ ','.join(bus.to_names(c_node.get_outputs())) }}
         <br>
@@ -64,7 +64,7 @@
     <h3>in</h3>
     {% for i_node in bus.get_input_nodes() %}
         {{ i_node.name }}:
-        {{ ','.join(bus.to_names(i_node.get_inputs())) }}
+        {{ ','.join(bus.to_names(i_node.get_receives())) }}
            -&gt; <strong>{{ i_node }}</strong>
            -&gt; {{ ','.join(bus.to_names(i_node.get_outputs())) }}
         <br>
@@ -72,7 +72,7 @@
     <h3>out</h3>
     {% for o_node in bus.get_output_nodes() %}
         {{ o_node.name }}:
-        {{ ','.join(bus.to_names(o_node.get_inputs())) }}
+        {{ ','.join(bus.to_names(o_node.get_receives())) }}
            -&gt; <strong>{{ o_node }}</strong>
            -&gt; {{ ','.join(bus.to_names(o_node.get_outputs())) }}
         <br>
@@ -80,7 +80,7 @@
     <h3>aux</h3>
     {% for a_node in bus.get_auxiliary_nodes() %}
         {{ a_node.name }}:
-        {{ ','.join(bus.to_names(a_node.get_inputs())) }} 
+        {{ ','.join(bus.to_names(a_node.get_receives())) }} 
            -&gt; <strong>{{ a_node }}</strong>
            -&gt; {{ ','.join(bus.to_names(a_node.get_outputs())) }}
         <br>

@@ -42,20 +42,25 @@ class DriverADS1115(AInDriver):
     CHANNELS = [P0, P1, P2, P3]  # ATM no differential channels
 
     @staticmethod
-    def is_ads111x(ads:ADS1115) -> bool:
+    def is_ads111x(ads: ADS1115) -> bool:
         """ check power-on register defaults of ADS1113/4/5
         """
         try:
             buf = bytearray(8)
             with ads.i2c_device as device:
-                device.write_then_readinto(bytearray([0]), buf, in_start=0, in_end=2)
-                device.write_then_readinto(bytearray([1]), buf, in_start=2, in_end=4)
-                device.write_then_readinto(bytearray([2]), buf, in_start=4, in_end=6)
-                device.write_then_readinto(bytearray([3]), buf, in_start=6, in_end=8)
+                device.write_then_readinto(
+                    bytearray([0]), buf, in_start=0, in_end=2)
+                device.write_then_readinto(
+                    bytearray([1]), buf, in_start=2, in_end=4)
+                device.write_then_readinto(
+                    bytearray([2]), buf, in_start=4, in_end=6)
+                device.write_then_readinto(
+                    bytearray([3]), buf, in_start=6, in_end=8)
                 # default is: in 0-1 differential, gain 2, 1 shot, 128SPS, comp low, no latch, disable comp
                 if buf[2:8] == bytearray.fromhex('8583 8000 7FFF'):
                     return True
-                if buf[3:8] == bytearray.fromhex('83 8000 7FFF'):   # TODO: DBG REMOVE_ME!
+                # TODO: DBG REMOVE_ME!
+                if buf[3:8] == bytearray.fromhex('83 8000 7FFF'):
                     return True
                 log.debug('I²C device @ 0x%02X returns 0x%s 0x%s 0x%s' +
                           ' from reg 1..3, probably a different device,' +
@@ -70,7 +75,7 @@ class DriverADS1115(AInDriver):
         return False
 
     @staticmethod
-    def find_ports() -> dict[str,IoPort]:
+    def find_ports() -> dict[str, IoPort]:
         global adc_count  # pylint: disable=W0603
 
         io_ports = {}
@@ -96,7 +101,9 @@ class DriverADS1115(AInDriver):
                                                          port_cfg,
                                                          deps)
                     else:
-                        log.brief('I²C device at 0x%02X seems not to be an ADS1x15, probably a different device, or already in use.', adr)
+                        log.brief('I²C device at 0x%02X seems not to be an '
+                                  'ADS1x15, probably a different device, '
+                                  'or already in use.', adr)
                 except Exception as ex:
                     # pass  # whatever it is, ignore this device
                     log.debug('%r', ex)
@@ -113,13 +120,13 @@ class DriverADS1115(AInDriver):
             }
         return io_ports
 
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
         cnt = int(cfg['cnt'])
         adr = int(cfg['adr'])
         inp = int(cfg['in'])
         self.gain: float = float(cfg.get('gain', -16))
-        self.cfg: dict[str,str] = cfg
+        self.cfg: dict[str, str] = cfg
         self.name: str = f'ADC #{cnt} (ADS1115 @0x{adr:02X} in {inp}'
 
         i2c = busio.I2C(board.SCL, board.SDA)
@@ -163,11 +170,13 @@ class DriverADS1115(AInDriver):
         if self.gain <= 0:
             val = self._ana_in.value
             while abs(val) > 32300:
-                l_gain = [ads.gains[0]] + [g for g in ads.gains if g < ads.gain]
+                l_gain = [ads.gains[0]] + \
+                    [g for g in ads.gains if g < ads.gain]
                 ads.gain = l_gain[-1]
                 val = self._ana_in.value
             while abs(val) < 16000:
-                h_gain = [g for g in ads.gains if g < ads.gain] + [ads.gains[-1]]
+                h_gain = [g for g in ads.gains if g <
+                          ads.gain] + [ads.gains[-1]]
                 ads.gain = h_gain[0]
                 val = self._ana_in.value
             self.gain = -ads.gain

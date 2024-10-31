@@ -8,7 +8,7 @@ try:
     from RPi.GPIO import gpio_function  # type: ignore[import-untyped]
 except (RuntimeError, ModuleNotFoundError):
     # make lint happy with minimal non-funct facade
-    def gpio_function(_:int):
+    def gpio_function(_: int):
         return 0
 
 from .base import (OutDriver, IoPort, PortFunc, PinFunc, is_raspi)
@@ -25,7 +25,7 @@ class DriverPWMbase(OutDriver):
     """ abstract base of PWM drivers
     """
 
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
         self._channel: int = int(cfg['channel'])
         self._pin: int = int(cfg['pin'])
@@ -36,7 +36,7 @@ class DriverPWM(DriverPWMbase):
     """
 
     @staticmethod
-    def find_ports() -> dict[str,IoPort]:
+    def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
@@ -67,7 +67,7 @@ class DriverPWM(DriverPWMbase):
                     log.debug('Unknown function on pin %d = %d', pin, gpio_function(pin))
         return io_ports
 
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
 
         self.name: str = 'PWM %d @ pin %d' % (self._channel, self._pin)

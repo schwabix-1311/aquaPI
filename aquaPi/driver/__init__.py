@@ -6,8 +6,9 @@ import sys
 from os import path
 import glob
 
-from .base import Driver, DriverParamError, DriverPortInuseError
-from .base import *
+from .base import (Driver, DriverParamError, DriverPortInuseError,
+                   IoPort, PortFunc)
+# from .base import *
 
 log = logging.getLogger('driver')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -58,7 +59,7 @@ class IoRegistry(object):
     Very likely getting a higher level driver and a tupel of IoPorts.  TBD!
     """
 
-    _map: dict[str,IoPort] = {}
+    _map: dict[str, IoPort] = {}
 
     def __init__(self):
         # iterate all class imports from a module, then call each class' port enumerator
@@ -97,14 +98,16 @@ class IoRegistry(object):
         log.brief('Port drivers found for:')
         log.brief('%r', [k for k in IoRegistry._map])
 
-    def get_ports_by_function(self, funcs:list[PortFunc], in_use:bool=False) -> dict[str,IoPort]:
+    def get_ports_by_function(self, funcs: list[PortFunc], in_use: bool = False
+                              ) -> dict[str, IoPort]:
         """ returns a view of free or used IoPorts filtered by iterable funcs.
         """
         mp = IoRegistry._map
         return {key: mp[key] for key in mp
                 if mp[key].func in funcs and bool(mp[key].used) == in_use}
 
-    def driver_factory(self, port:str, drv_options:dict|None=None) -> Driver|None:
+    def driver_factory(self, port: str, drv_options: dict | None = None
+                       ) -> Driver | None:
         """ Create a driver for a port found in io_ports.keys().
             Drivers that use >1 port are created by a dedicated factory (later)
         """
@@ -133,7 +136,7 @@ class IoRegistry(object):
             log.exception('Failed to create driver: %s', port)
             return None
 
-    def driver_destruct(self, port:str, driver:Driver) -> None:
+    def driver_destruct(self, port: str, driver: Driver) -> None:
         log.debug('destruct driver for %r', port)
         if port not in IoRegistry._map:
             raise DriverParamError('There is no driver for port %s' % port)
@@ -171,10 +174,13 @@ for drv_path in __path__:
         drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
         log.debug('Driver spec %s', drv_spec)
 
-        drv_mod = importlib.util.module_from_spec(drv_spec)
-        log.debug('Driver module %s', drv_mod)
+        if drv_spec:
+            drv_mod = importlib.util.module_from_spec(drv_spec)
+            log.debug('Driver module %s', drv_mod)
 
-        sys.modules[drv_name] = drv_mod
-        drv_spec.loader.exec_module(drv_mod)
+            sys.modules[drv_name] = drv_mod
+            if drv_spec.loader:
+                drv_spec.loader.exec_module(drv_mod)
+                log.debug('  loaded module %s', drv_mod)
 
 io_registry = IoRegistry()

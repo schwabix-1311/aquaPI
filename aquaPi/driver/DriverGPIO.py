@@ -63,7 +63,7 @@ class DriverGPIO(OutDriver, InDriver):
     """
 
     @staticmethod
-    def find_ports() -> dict[str,IoPort]:
+    def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
             for pin in range(28):
@@ -102,9 +102,9 @@ class DriverGPIO(OutDriver, InDriver):
             }
         return io_ports
 
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self._pin: int|None = int(cfg['pin'])
+        self._pin: int | None = int(cfg['pin'])
         inout = 'in' if self._is_input_driver() else 'out'
         self.name: str = 'GPIO %d %s' % (self._pin, inout)
 
@@ -122,7 +122,7 @@ class DriverGPIO(OutDriver, InDriver):
             GPIO.cleanup(self._pin)
             self._pin = None
 
-    def write(self, value:bool) -> None:
+    def write(self, value: bool) -> None:
         if self._is_input_driver():
             raise DriverWriteError()
 

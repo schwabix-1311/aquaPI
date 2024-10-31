@@ -27,19 +27,19 @@ def is_raspi() -> bool:
 
 
 class DriverNYI(Exception):
-    def __init__(self, msg:str='Not yet implemented.'):
+    def __init__(self, msg: str = 'Not yet implemented.'):
         super().__init__()
         self.msg: str = msg
 
 
 class DriverParamError(Exception):
-    def __init__(self, msg:str='Invalid parameter value.'):
+    def __init__(self, msg: str = 'Invalid parameter value.'):
         super().__init__()
         self.msg: str = msg
 
 
 class DriverInvalidAddrError(Exception):
-    def __init__(self, msg=None, adr=None):
+    def __init__(self, msg: str = '', adr=None):
         if not msg:
             msg = 'Pin, channel or address %r does not exist.' % adr
         super().__init__()
@@ -47,7 +47,7 @@ class DriverInvalidAddrError(Exception):
 
 
 class DriverPortInuseError(Exception):
-    def __init__(self, msg=None, port=None):
+    def __init__(self, msg: str = '', port=None):
         if not msg:
             msg = 'Pin or channel %r is already assigned.' % port
         super().__init__()
@@ -55,13 +55,13 @@ class DriverPortInuseError(Exception):
 
 
 class DriverReadError(Exception):
-    def __init__(self, msg:str='Failed to read a valid value.'):
+    def __init__(self, msg: str = 'Failed to read a valid value.'):
         super().__init__()
         self.msg: str = msg
 
 
 class DriverWriteError(Exception):
-    def __init__(self, msg:str='Failed to write value to the output.'):
+    def __init__(self, msg: str = 'Failed to write value to the output.'):
         super().__init__()
         self.msg: str = msg
 
@@ -98,15 +98,15 @@ class Driver:
     """
 
     # TODO this persistance approach could be transferred to MsgNodes!
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         self.name: str = '!abstract'
-        self.cfg: dict[str,str] = cfg
+        self.cfg: dict[str, str] = cfg
         self.func: PortFunc = func
         self._fake: bool = not is_raspi()
         if 'fake' in cfg:
             self._fake |= bool(cfg['fake'])
 
-    def __del__(self) -> None:  # ??
+    def __del__(self) -> None:
         self.close()
 
     def __str__(self) -> str:
@@ -121,19 +121,19 @@ class InDriver(Driver):
         InDriver can be read, e.g. a temperature sensor.
     """
 
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
         self.namei: str = '!abstract IN'
         self._interval: int = 0
 
-    def read(self) -> int|float:
+    def read(self) -> int | float:
         return 0
 
 
 class AInDriver(InDriver):
     """ Base class for all AnalogDigitalConverters (ADC)
     """
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
         self.name: str = '!ADC in'
         self.initval: float = float(cfg.get('initval', 0.0))
@@ -156,7 +156,7 @@ class OutDriver(Driver):
         OutDriver can be written to, the last written value can be read.
     """
 
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
         self.name: str = '!abstract OUT'
         self._val = 0.0

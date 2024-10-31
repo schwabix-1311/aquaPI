@@ -16,7 +16,7 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 class DriverDS1820(AInDriver):
     @staticmethod
-    def find_ports() -> dict[str,IoPort]:
+    def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if not is_raspi():
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
@@ -38,7 +38,7 @@ class DriverDS1820(AInDriver):
                                              deps)
         return io_ports
 
-    def __init__(self, cfg:dict[str,str], func:PortFunc):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         """ 1-wire temperature sensor of Dallas DS1820 series
             Sensor types vary by conversion speed and resolution.
             Parasitic power is supported; the typical read error of 85°C

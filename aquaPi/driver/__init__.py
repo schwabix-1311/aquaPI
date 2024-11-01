@@ -6,9 +6,8 @@ import sys
 from os import path
 import glob
 
-from .base import (Driver, DriverParamError, DriverPortInuseError,
-                   IoPort, PortFunc)
-# from .base import *
+from .base import (IoPort, PortFunc, Driver,
+                   DriverPortInuseError, DriverParamError)
 
 log = logging.getLogger('driver')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -158,7 +157,13 @@ class IoRegistry(object):
 DRIVER_FILE_PREFIX = 'Driver'
 CUSTOM_DRIVERS = 'CustomDrivers'
 
-# import all files named Driver*.py into our package, including a subfolder CustomDrivers
+# flake8: noqa
+# - F403 allow import * for the runtime-imports
+# - F405 __path__ undefined or from import *
+from .base import *  # noqa: F403 allow import * for the runtime-imports
+
+# import all files named Driver*.py into our package,
+#  including a subfolder CustomDrivers
 __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
 
 for drv_path in __path__:

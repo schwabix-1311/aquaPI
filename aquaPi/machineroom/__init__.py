@@ -183,6 +183,7 @@ class MachineRoom:
             ph_history = History('pH Verlauf',
                                  {adc_ph.id, calib_ph.id, ph.id})  # , out_ph.id])
             ph_history.plugin(self.bus)
+
             return
 
         if TEST_PH:

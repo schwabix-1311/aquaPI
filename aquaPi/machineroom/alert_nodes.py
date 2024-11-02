@@ -5,7 +5,7 @@ from typing import Any
 from abc import ABC, abstractmethod
 
 from .msg_types import (Msg, MsgPayload, MsgData)
-from .msg_bus import (MsgBus, BusListener, BusRole)
+from .msg_bus import (MsgBus, BusListener, BusRole, DataRange)
 from ..driver import (PortFunc, io_registry, OutDriver)
 
 
@@ -70,7 +70,7 @@ class AlertAbove(AlertCond):
         return msg.data > self.threshold
 
     def _text(self, msg: MsgPayload, name: str) -> str:
-        return 'Value of %s is %s: %.4f  [limit %.4f]' \
+        return 'Value of %s is %s: %.2f  [limit %.2f]' \
                % (name, 'too high' if self._alerted else 'OK', msg.data, self.threshold)
 
 
@@ -81,7 +81,7 @@ class AlertBelow(AlertCond):
         return msg.data < self.threshold
 
     def _text(self, msg: MsgPayload, name: str) -> str:
-        return 'Value of %s is %s: %.4f  [limit %.4f]' \
+        return 'Value of %s is %s: %.2f  [limit %.2f]' \
                % (name, 'too low' if self._alerted else 'OK', msg.data, self.threshold)
 
 
@@ -105,6 +105,7 @@ class Alert(BusListener):
             - nothing -
     """
     ROLE = BusRole.ALERTS
+    data_range = DataRange.STRING
 
     def __init__(self, name: str, conditions: set[AlertCond] | AlertCond,
                  port: str, _cont: bool = False):

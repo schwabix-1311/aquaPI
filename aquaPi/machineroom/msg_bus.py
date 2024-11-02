@@ -18,21 +18,22 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 
 class BusRole(Flag):
-    #FIXME: add UNDEF?
     IN_ENDP = auto()  # data sources: sensor, switch, schedule
     OUT_ENDP = auto()  # output: relays, logs, mails
     CTRL = auto()  # the core of a controller: process IN -> OUT
-    AUX = auto()  # helper func: 2:1/n:1, e.g. avg, delay, or
+    AUX = auto()  # helper func: 2:1/n:1, e.g. avg, delay
     HISTORY = auto()  # nodes recording the output of other nodes
     ALERTS = auto()  # nodes processing alert conditions
+    UNDEF = 0
 
 
 class DataRange(Enum):
     UNDEF = 0
-    ANALOG = 1   # float, any range, typically input sensors
-    BINARY = 2   # hard on=100 / off=0
-    PERCENT = 3  # normalized 0..100%, the bulk of data
-    PERC_3 = 4   # tupel of 3 percentages, e.g. RGB light
+    ANALOG = auto()   # float, any range, typically input sensors
+    BINARY = auto()   # hard on=100 / off=0
+    PERCENT = auto()  # normalized 0..100%, the bulk of data
+    PERC_3 = auto()   # tupel of 3 percentages, e.g. RGB light
+    STRING = auto()   # string , e.g. alert text
 
 
 #############################
@@ -45,7 +46,7 @@ class BusNode(ABC):
         is handled internally. Overload if you need one of them,
         but don't forget to call super().listen(...)
     """
-    ROLE: BusRole | None = None
+    ROLE: BusRole = BusRole.UNDEF
     data_range = DataRange.UNDEF
 
     def __init__(self, name: str, _cont: bool = False):
@@ -385,24 +386,7 @@ if __name__ == "__main__":
     mb = MsgBus()
     # mb = MsgBus(threaded=True)
 
-    # these are primitive BusNodes, they are implemented as
-    # message callbacks of the basic types
-
-    sensor1 = BusNode('TempSensor1')
-    sensor1.plugin(mb)
-    sensor2 = BusNode('TempSensor2')
-    sensor2.plugin(mb)
-
-    # callback functions have been removed in favor of
-    # derived classes, therefore below code does no longer work
-
-    # temp_ctrl = BusListener('TempController', 
-    #                         msg_cbk=minThreshold, inputs='TempSensor')
-    # temp_ctrl.plugin(mb)
-
     # relay = BusListener('TempRelay', msg_cbk=relay, inputs=temp_ctrl.id)
     # relay.plugin(mb)
-
-    mb.register(BusListener('BL3'))
 
     mb.teardown()

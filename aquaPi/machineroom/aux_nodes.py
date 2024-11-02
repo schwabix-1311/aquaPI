@@ -15,23 +15,25 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 # ========== auxiliary bases ==========
 
 
-class SingleInAux(BusListener, ABC):
+class AuxNode(BusListener, ABC):
     """ Auxiliary nodes are for advanced configurations where
         direct connections of input to controller or controller to
         output aren't sufficient.
     """
     ROLE = BusRole.AUX
 
+
+class SingleInAux(AuxNode, ABC):
+    """ subtype of AuxNode listening to a single input
+    """
     def __init__(self, name: str, receives: str, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.data = -1
 
 
-class MultiInAux(BusListener, ABC):
-    """ subtype of AuxNodes listening to more than 1 input
+class MultiInAux(AuxNode, ABC):
+    """ subtype of AuxNode listening to more than 1 input
     """
-    ROLE = BusRole.AUX
-
     def __init__(self, name: str, receives: Iterable[str], _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.values: dict[str, float] = {}

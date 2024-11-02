@@ -53,6 +53,9 @@ class ControllerNode(BusListener, ABC):
     #    self.__init__(state, _cont=True)
 
     def is_advanced(self) -> bool:
+        """ Advanced node chains include AUX nodes (or more than In->CTRL->OUT?)
+            might become obsolete: the ctrl centric model doesn't hold
+        """
         if not self._bus:
             return False
         for node in self.get_receives():

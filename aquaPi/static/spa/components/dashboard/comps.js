@@ -189,7 +189,6 @@ const BusNode = {
 Vue.component('BusNode', BusNode)
 
 //TODO: do we need derived nodes W/O any functional change? 
-Vue.component('Alert', BusNode)
 
 
 const ControllerNode = {
@@ -225,7 +224,7 @@ const SunCtrl = {
 	computed: {
 		descript() {
 			//TODO: prefix a label: dusk/dawn  or ramp
-			return this.node.xscend.toString() + ' h'
+			return '/\\ ' + this.node.xscend.toString() + ' h'
 		},
 		value() {
 			let node = this.node
@@ -248,8 +247,8 @@ const FadeCtrl = {
 	computed: {
 		descript() {
 			//TODO: prefix a label: dusk/dawn  or ramp
-			return this.node.fade_time.toString() + ' h / '
-			       + this.node.fade_out.toString() + ' h'
+			return '/ ' + this.node.fade_time.toString() + ' h'
+			       + '  \\ ' + this.node.fade_out.toString() + ' h'
 		},
 		value() {
 			let node = this.node
@@ -801,6 +800,45 @@ const HistoryChart = {
 Vue.component('HistoryChart', HistoryChart)
 
 
+const AlertNode = {
+	extends: AnyNode,
+	template: `
+		<div>
+			<v-card-title
+				v-if="addNodeTitle"
+			>
+				{{ node.name }}
+			</v-card-title>
+			<aquapi-node-description
+				:item="node"
+			>
+			</aquapi-node-description>
+			<v-card-text
+				class="text--secondary"
+			>
+				<aquapi-node-alert
+					:item="node"
+				>
+					<template v-slot:label>
+						<span>{{ label }}</span>
+					</template>
+					<template v-slot:value>
+						<span>{{ value }}</span>
+					</template>
+				</aquapi-node-data>
+			</v-card-text>
+		</div>
+	`,
+
+	computed: {
+		descript() {
+			return this.$parent?.conditions ?? ''
+		}
+	}
+}
+Vue.component('Alert', AlertNode)
+
+
 const AquapiNodeDescription = {
 	props: {
 		item: {
@@ -816,12 +854,11 @@ const AquapiNodeDescription = {
 			{{ descript }}
 		</v-card-subtitle>
 	`,
-
-	computed: {
-		descript() {
-			return this.$parent?.descript ?? ''
-		}
-	}
+    computed: {
+        descript() {
+            return this.$parent?.descript ?? ''
+        }
+    }
 }
 Vue.component('AquapiNodeDescription', AquapiNodeDescription)
 
@@ -851,5 +888,32 @@ const AquapiNodeData = {
 	computed: {}
 }
 Vue.component('AquapiNodeData', AquapiNodeData)
+
+
+
+const AquapiNodeAlert = {
+	props: {
+		item: {
+			type: Object,
+			required: true
+		},
+	},
+	template: `
+		<slot name="value">
+			Value
+			<v-list-item
+				v-for="(item, index) in value"
+				:key="index"
+			>
+				<v-list-item-title>
+					!{{ item }}
+				</v-list-item-title>
+			</v-list-item>
+		</slot>
+	`,
+
+	computed: {}
+}
+Vue.component('AquapiNodeAlert', AquapiNodeAlert)
 
 // vim: set noet ts=4 sw=4:

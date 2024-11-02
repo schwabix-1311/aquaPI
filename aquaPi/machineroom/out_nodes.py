@@ -29,7 +29,7 @@ class DeviceNode(BusListener, ABC):
 
     # def __setstate__(self, state: dict[str, Any]) -> None:
     #     self.data = state['data']
-    #     self.__init__(state, _cont=True)
+    #     DeviceNode.__init__(self, state, _cont=True)
 
 
 class SwitchDevice(DeviceNode):
@@ -65,8 +65,8 @@ class SwitchDevice(DeviceNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'], state['port'],
-                      inverted=state['inverted'], _cont=True)
+        SwitchDevice.__init__(self, state['name'], state['receives'], state['port'],
+                              inverted=state['inverted'], _cont=True)
 
     @property
     def port(self) -> str:
@@ -159,8 +159,9 @@ class AnalogDevice(DeviceNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'], state['port'], percept=state['percept'], minimum=state['minimum'],
-                      maximum=state['maximum'], _cont=True)
+        AnalogDevice.__init__(self, state['name'], state['receives'],
+                              state['port'], percept=state['percept'],
+                              minimum=state['minimum'], maximum=state['maximum'], _cont=True)
 
     @property
     def port(self) -> str:

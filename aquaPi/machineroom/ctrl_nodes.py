@@ -50,7 +50,7 @@ class ControllerNode(BusListener, ABC):
     #    return super().__getstate__()
 
     # def __setstate__(self, state: dict[str, Any]) -> None:
-    #    self.__init__(state, _cont=True)
+    #    ControllerNode.__init__(self, state, _cont=True)
 
     def is_advanced(self) -> bool:
         """ Advanced node chains include AUX nodes (or more than In->CTRL->OUT?)
@@ -102,9 +102,9 @@ class MinimumCtrl(ControllerNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'],
-                      state['threshold'], hysteresis=state['hysteresis'],
-                      _cont=True)
+        MinimumCtrl.__init__(self, state['name'], state['receives'],
+                             state['threshold'], hysteresis=state['hysteresis'],
+                             _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
@@ -171,9 +171,9 @@ class MaximumCtrl(ControllerNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'],
-                      state['threshold'], hysteresis=state['hysteresis'],
-                      _cont=True)
+        MaximumCtrl.__init__(self, state['name'], state['receives'],
+                             state['threshold'], hysteresis=state['hysteresis'],
+                             _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
@@ -261,9 +261,9 @@ class FadeCtrl(ControllerNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'],
-                      fade_time=state['fade_time'], fade_out=state['fade_out'],
-                      _cont=True)
+        FadeCtrl.__init__(self, state['name'], state['receives'],
+                          fade_time=state['fade_time'], fade_out=state['fade_out'],
+                          _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
@@ -419,9 +419,9 @@ class SunCtrl(ControllerNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'],
-                      xscend=state['xscend'],
-                      _cont=True)
+        SunCtrl.__init__(self, state['name'], state['receives'],
+                         xscend=state['xscend'],
+                         _cont=True)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):

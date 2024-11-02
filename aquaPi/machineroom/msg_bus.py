@@ -81,7 +81,7 @@ class BusNode(ABC):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], _cont=True)
+        BusNode.__init__(self, state['name'], _cont=True)
 
     def __str__(self) -> str:
         return '{}({})'.format(type(self).__name__, ','.join(self.receives))
@@ -171,9 +171,9 @@ class BusListener(BusNode, ABC):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'],
-                      receives=state['receives'],
-                      _cont=True)
+        BusListener.__init__(self, state['name'],
+                             receives=state['receives'],
+                             _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         log.debug('%s.listen got %s', str(self), str(msg))
@@ -220,7 +220,7 @@ class MsgBus:
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         log.debug('MsgBus.setstate %r', state)
-        self.__init__(state['threaded'])
+        MsgBus.__init__(self, state['threaded'])
         for n in state['nodes']:
             n.plugin(self)
 

@@ -5,7 +5,7 @@ from typing import Any
 from abc import ABC, abstractmethod
 
 from .msg_types import (Msg, MsgPayload, MsgData)
-from .msg_bus import (MsgBus, BusListener, BusRole, DataRange)
+from .msg_bus import (BusListener, BusRole, DataRange)
 from ..driver import (PortFunc, io_registry, OutDriver)
 
 
@@ -50,7 +50,7 @@ class AlertCond(ABC):
         """
         return self._alerted
 
-    def alert_text(self, msg: MsgPayload, bus: MsgBus) -> str:
+    def alert_text(self, msg: MsgPayload) -> str:
         """ build a human readable alert message
         """
         #if node := bus.get_node(msg.sender):
@@ -126,8 +126,8 @@ class Alert(BusListener):
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        self.__init__(state['name'], state['conditions'], state['port'],
-                      _cont=True)
+        Alert.__init__(self, state['name'], state['conditions'], state['port'],
+                       _cont=True)
 
     @property
     def port(self) -> str:
@@ -156,7 +156,7 @@ class Alert(BusListener):
                 log.debug('## (%s) check %f against %f - %s', type(cond), msg.data, cond.threshold, cond.node_id)
                 cond_change = cond.check_for_change(msg)
 
-                cond_txt = cond.alert_text(msg, self._bus)
+                cond_txt = cond.alert_text(msg)
                 if cond_change is not None:
                     self.data.append(cond_txt)
                     any_alert |= cond_change

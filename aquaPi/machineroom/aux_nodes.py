@@ -104,10 +104,10 @@ class ScaleAux(SingleInAux):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'], unit=state['unit'],
-                      offset=state['offset'], factor=state['factor'],
-                      limit=state['limit'],
-                      _cont=True)
+        ScaleAux.__init__(self, state['name'], state['receives'], unit=state['unit'],
+                          offset=state['offset'], factor=state['factor'],
+                          limit=state['limit'],
+                          _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
@@ -161,8 +161,8 @@ class AvgAux(MultiInAux):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['receives'],
-                      unfair_avg=state['unfair_avg'], _cont=True)
+        AvgAux.__init__(self, state['name'], state['receives'],
+                        unfair_avg=state['unfair_avg'], _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):

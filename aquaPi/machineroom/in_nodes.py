@@ -46,7 +46,7 @@ class InputNode(BusNode, ABC):
 
     # def __setstate__(self, state: dict[str, Any]) -> None:
     #     self.data = state['data']
-    #     self.__init__(state, _cont=True)
+    #     InputNode.__init__(self, state, _cont=True)
 
     def __str__(self) -> str:
         return '{}({})'.format(type(self).__name__, self.port)
@@ -140,9 +140,9 @@ class SwitchInput(InputNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['port'],
-                      interval=state['interval'], inverted=state['inverted'],
-                      _cont=True)
+        SwitchInput.__init__(self, state['name'], state['port'],
+                             interval=state['interval'], inverted=state['inverted'],
+                             _cont=True)
 
     def read(self) -> bool:
         val = self.data
@@ -196,10 +196,10 @@ class AnalogInput(InputNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['port'],
-                      state['initval'], state['unit'],
-                      interval=state['interval'], avg=state['avg'],
-                      _cont=True)
+        AnalogInput.__init__(self, state['name'], state['port'],
+                             state['initval'], state['unit'],
+                             interval=state['interval'], avg=state['avg'],
+                             _cont=True)
 
     def read(self) -> float:
         val = self.data
@@ -265,7 +265,7 @@ class ScheduleInput(BusNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['cronspec'], _cont=True)
+        ScheduleInput.__init__(self, state['name'], state['cronspec'], _cont=True)
 
     def __str__(self) -> str:
         return '{}({})'.format(type(self).__name__, self.cronspec)

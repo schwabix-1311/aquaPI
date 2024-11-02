@@ -198,7 +198,10 @@ if QUEST_DB:
         def _get_local_tz() -> str:
             # time is a bad concept, troublesome everywhere!
             #FIXME: this sets QuestDB to host's local timezone. Ok for debugging and logs. Conversion to and from user's TZ must be done in frontend!
-            # To make things interesting, there's no simple way to get the 'Olson TZ name' (e.g. 'Europe/Belin'), most systems prefer the 3-4 letter names, e.g. CEST. Reading link /etc/localtime has several chances to break, but seems to work on Raspi (and Manjaro).
+            # To make things interesting, there's no simple way to get the
+            # 'Olson TZ name' (e.g. 'Europe/Belin'), most systems prefer the
+            # 3-4 letter names, e.g. CEST. Reading link /etc/localtime has
+            # several chances to break, but workon Raspi (and Manjaro).
             tzfile = os.readlink('/etc/localtime')
             match = regex.search('/zoneinfo/(.*)$', tzfile)
             if not match:
@@ -208,25 +211,26 @@ if QUEST_DB:
         def add_field(self, name: str) -> None:
             super().add_field(name)
             try:
-# pylint: disable-next=E1129
+                # pylint: disable-next=E1129
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     with conn.cursor() as curs:
-                        qry = SQL("""
-                          SELECT {node_id} FROM node WHERE {node_id}=%s;
-                          """).format(node_id=Identifier('node_id'))
+                        qry = SQL("SELECT node_id FROM {} WHERE node_id=%s;"
+                                  ).format(Identifier('node'))
                         curs.execute(qry, [name])
                         rec = curs.fetchone()
                         if not rec:
-                            qry = SQL("INSERT INTO node VALUES (%s, true)")
+                            qry = SQL("INSERT INTO {} VALUES (%s, true)"
+                                      ).format(Identifier('node'))
                             conn.execute(qry, [name])
             except pg.OperationalError:
                 log.exception('TimeDbQuest.add_field')
 
         def feed(self, name: str, value: int | float) -> None:
             try:
-# pylint: disable-next=E1129
+                # pylint: disable-next=E1129
                 with pg.connect(self.conn_str, autocommit=True) as conn:
-                    qry = SQL("INSERT INTO value VALUES (now(), %s, %s)")
+                    qry = SQL("INSERT INTO {} VALUES (now(), %s, %s)"
+                              ).format(Identifier('value'))
                     conn.execute(qry, [name, value])
             except pg.OperationalError:
                 log.exception('TimeDbQuest.feed')
@@ -241,6 +245,7 @@ if QUEST_DB:
 # pylint: disable-next=E1129
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     with conn.cursor() as curs:
+                        q_names = SQL(',').join(map(Literal, node_names))
                         if step <= 0:
                             # unsampled = raw data
                             qry = SQL("""
@@ -251,7 +256,7 @@ if QUEST_DB:
                                 ORDER BY ts,node_id;
                               """).format(tz=Literal(self.timezone),
                                           start=Literal(start),
-                                          nodes=SQL(',').join(node_names))
+                                          nodes=q_names)
                         else:
                             qry = SQL("""
                               SELECT to_timezone(ts,{tz}) span, id, avg(value)
@@ -268,7 +273,7 @@ if QUEST_DB:
                               """).format(tz=Literal(self.timezone),
                                           start=Literal(start),
                                           step=Literal(step),
-                                          nodes=SQL(',').join(node_names))
+                                          nodes=q_names)
                         #log.debug(qry.as_string(conn))
                         curs.execute(qry)
                         recs = curs.fetchall()
@@ -278,32 +283,35 @@ if QUEST_DB:
                 log.exception('TimeDbQuest.query')
                 return []
 
-        def _generate_old(self, node_names: set[str], recs: list[tuple[datetime, str, float]]
+        def _generate_old(self, node_names: Iterable[str],
+                          recs: list[tuple[datetime, str, float]]
                           ) -> dict[str, TimeDb.ser_lst_o]:
-            # old structure (start=0), each series is an array of data point tupels:
+            # old structure (start=0), each series is an array of data tuples:
             # { "ser1": [(ts1, val1.1), (ts2: val1.2), ... ],
             #   "ser2": [(ts1, val2.1), (ts3, val2.3), ... ],
             #    ... }
             result: dict[str, TimeDb.ser_lst_o] = dict()
             for node in node_names:
-                result[node] = [(int(r[0].timestamp()), r[2]) for r in recs if r[1] == node]
+                result[node] = [(int(r[0].timestamp()), r[2])
+                                for r in recs if r[1] == node]
             return result
 
         def query(self, node_names: Iterable[str],
                   start: int = 0, step:  int = 0
                   # ) -> dict[int, list[str | float | None]]:
                   ) -> dict[int, TimeDb.val_lst] | dict[str, TimeDb.ser_lst_o]:
-            node_names = [nm for nm in node_names]  # make 'em indexable
+            names: TimeDb.val_lst = [n for n in node_names]  # make indexable
 
             qry_begin = time()
-            log.debug('TimeDbQuest query: %s / %d / %d', node_names, start, step)
+            log.debug('TimeDbQuest qry: %s / %d / %d', names, start, step)
             recs = self._query(node_names, start, step)
             log.debug('  qry time %fs', time() - qry_begin)
 
             if start <= 0:
-                log.warning('TimeDbQuest OLD API used for %r', node_names)
+                log.warning('TimeDbQuest OLD API used for %r', names)
                 result_o = self._generate_old(node_names, recs)
-                log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result_o))
+                log.debug('  done, overall %fs, %d data points',
+                          time() - qry_begin, len(result_o))
                 # log.debug('TimeDbQuest.query start %r step %r: %r', start, step, result_o)
                 return result_o
 
@@ -314,21 +322,21 @@ if QUEST_DB:
             #    ts3: [None,   val2.3, ...],
             #    ... }
             # each val may be null!
-            result = {}
-            result[0] = node_names
+            result: dict[int, TimeDb.val_lst] = {}
+            result[0] = names
 # FIXME: refactor!!
-            result[start] = [None] * len(node_names)
+            result[start] = [None] * len(names)
             for row in recs:
                 (dt_tm, node, val) = row
                 ts = int(dt_tm.timestamp())  # max resolution is 1sec
-                idx = node_names.index(node)
+                idx = names.index(node)
                 if ts <= start:
                     # still <= start, so update
                     result[start][idx] = val
                 else:
                     # past start, ensure a tupel for ts exists
                     if ts not in result:
-                        result[ts] = [None] * len(node_names)
+                        result[ts] = [None] * len(names)
                     result[ts][idx] = val
 
             # null out the unchanged values,
@@ -344,12 +352,12 @@ if QUEST_DB:
                         result[ts][idx] = None
                     elif result[ts][idx] is not None:
                         prev[idx] = result[ts][idx]
-            result = {ts: result[ts] for ts in result if result[ts] != [None] * len(node_names)}
+            result = {ts: result[ts] for ts in result if result[ts] != [None] * len(names)}
 
             log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
             #log.debug('TimeDbQuest.query start %r step %r: %r', start, step, result)
             return result
-# end: if QUEST_DB            
+# end: if QUEST_DB
 
 
 # ========== history for charts and statistics ==========
@@ -392,7 +400,7 @@ class History(BusListener):
     #    return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        self.__init__(state['name'], state['receives'], _cont=True)
+        History.__init__(self, state['name'], state['receives'], _cont=True)
 
     def listen(self, msg) -> bool:
         if isinstance(msg, MsgData):

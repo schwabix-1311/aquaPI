@@ -198,7 +198,7 @@ class MaximumCtrl(ControllerNode):
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self):
         limits = get_unit_limits(self.unit)
 
         settings = super().get_settings()
@@ -305,7 +305,7 @@ class PidCtrl(ControllerNode):
 
         return super().listen(msg)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self):
         settings = super().get_settings()
         settings.append(('setpoint', 'Sollwert [%s]' % self.unit,
                          self.setpoint, 'type="number"'))

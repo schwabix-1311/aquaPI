@@ -90,7 +90,6 @@ export default
 				}
 			}
 		}
-
 	},
 
 	misc: {
@@ -100,6 +99,7 @@ export default
 			history: 'Diagram',
 			in_endp: 'Input',
 			out_endp: 'Output',
+			alerts: 'Alert',
 		},
 		dataRange: {
 			default: {

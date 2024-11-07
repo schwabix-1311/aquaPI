@@ -99,6 +99,7 @@ export default
 			history: 'Diagramm',
 			in_endp: 'Eingang',
 			out_endp: 'Ausgang',
+			alerts: 'Störung',
 		},
 		dataRange: {
 			default: {

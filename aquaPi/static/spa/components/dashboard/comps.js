@@ -215,6 +215,7 @@ const MaximumCtrl = {
 	},
 }
 Vue.component('MaximumCtrl', MaximumCtrl)
+Vue.component('PidCtrl', MaximumCtrl)
 
 
 const SunCtrl = {

@@ -49,23 +49,7 @@ const Config = {
 
 							<template v-if="node.inputs">
 								<v-sheet outlined class="ba-1 ml-7">
-									<h5>INPUTS:</h5>
-<!--									{{ node.inputs }}-->
-									<ul>
-										<li v-for="item in node.inputs.sender">
-											<h3>
-												{{ nodeItem(item).name }} 
-												<span class="font-weight-light">
-													[{{ nodeItem(item).id }}]
-													{{ nodeItem(item).identifier }}
-													| {{ nodeItem(item).type }}
-													| {{ nodeItem(item).role }}
-													| data: {{ nodeItem(item).data}} {{ nodeItem(item).unit}} {{ nodeItem(item).data_range }}
-												</span>
-											</h3>
-<!--											{{ $store.getters['dashboard/node'](item) }}	-->
-										</li>
-									</ul>
+									INPUTS: {{ node.inputs }}
 								</v-sheet>
 							</template>
 						</div>

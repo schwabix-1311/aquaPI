@@ -16,8 +16,8 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 class DeviceNode(BusListener):
     """ Base class for OUT_ENDP such as relay, PWM, GPIO pins.
         Receives float input from listened sender.
-        The interpretation is device specific, recommendation is
-        to follow pythonic truth testing to avoid surprises.
+        Binary devices should use a threashold of 50 or pythonic
+        truth testing, whatever is more intuitive for each dev.
     """
     ROLE = BusRole.OUT_ENDP
 
@@ -50,8 +50,8 @@ class SwitchDevice(DeviceNode):
         self._inverted = int(inverted)
         ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
         self.port = port
-        self.switch(self.data if _cont else 0)
-        log.info('%s init to %r|%f|%f', self.name, _cont, self.data, inverted)
+        self.switch(self.data if _cont else False)
+        log.info('%s init to %r|%f|%r', self.name, _cont, self.data, inverted)
 
     def __getstate__(self):
         state = super().__getstate__()
@@ -86,12 +86,14 @@ class SwitchDevice(DeviceNode):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            if self.data != bool(msg.data):
-                self.switch(msg.data)
+            #if self.data != bool(msg.data):
+            data = (msg.data > 50.)
+            if self.data != data:
+                self.switch(data)
         return super().listen(msg)
 
-    def switch(self, on):
-        self.data = 100 if bool(on) else 0
+    def switch(self, state: bool) -> None:
+        self.data: bool = state
 
         log.info('SwitchDevice %s: turns %s', self.id, 'ON' if self.data else 'OFF')
         if not self.inverted:

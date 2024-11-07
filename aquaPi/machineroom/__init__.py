@@ -6,7 +6,7 @@ import pickle
 import atexit
 
 from .msg_bus import MsgBus, BusRole
-from .ctrl_nodes import MinimumCtrl, MaximumCtrl, SunCtrl, FadeCtrl
+from .ctrl_nodes import MinimumCtrl, MaximumCtrl, PidCtrl, SunCtrl, FadeCtrl
 from .in_nodes import AnalogInput, ScheduleInput
 from .out_nodes import SwitchDevice, AnalogDevice
 from .aux_nodes import ScaleAux, MinAux, MaxAux, AvgAux
@@ -143,7 +143,8 @@ class MachineRoom:
             # single water temp sensor, switched relay
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
                                    avg=3, interval=30)
-            wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
+            #wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
+            wasser = PidCtrl('PID Temperatur', wasser_i.id, 25.0)
             wasser_o = SwitchDevice('Heizstab', wasser.id,
                                     'GPIO 12 out', inverted=1)
             wasser_i.plugin(self.bus)

@@ -210,6 +210,113 @@ class MaximumCtrl(ControllerNode):
         return settings
 
 
+class PidCtrl(ControllerNode):
+    """ An experimental PID controller producing a slow PWM
+
+        Options:
+            name       - unique name of this controller node in UI
+            receives   - id of a single (!) input to receive measurements from
+            setpoint   - the target value
+            p_fact/i_fact,d_fact - the PID factors
+            sample     - the ratio of sensor reads to 1 PID output
+
+        Output:
+            posts a series of PWM pulses
+    """
+    data_range = DataRange.PERCENT
+    #data_range = DataRange.BINARY
+
+    def __init__(self, name: str, receives: str, setpoint: float,
+                 p_fact: float = 1.0, i_fact: float = .1, d_fact: float = 0.1,
+                 sample: int = 10,
+                 _cont: bool = False):
+        super().__init__(name, receives, _cont=_cont)
+        self.setpoint: float = setpoint
+        self.p_fact: float = p_fact
+        self.i_fact: float = i_fact
+        self.d_fact: float = d_fact
+        self.sample: int = sample
+        self._err_sum: float = 0
+        self._err_pre: float = 0
+        self._ta_pre: float = 0
+        self._t_pre: float = 0
+        self._cnt: int = 0
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state.update(setpoint=self.setpoint)
+        state.update(p_fact=self.p_fact)
+        state.update(i_fact=self.i_fact)
+        state.update(d_fact=self.d_fact)
+        state.update(sample=self.sample)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        log.debug('__SETstate__ %r', state)
+        self.data = state['data']
+        PidCtrl.__init__(self, state['name'], state['receives'], state['setpoint'],
+                         p_fact=state['p_fact'], i_fact=state['i_fact'], d_fact=state['d_fact'],
+                         sample=state['sample'],
+                         _cont=True)
+
+    def _pulse(self, dur: float, perc: float):
+        log.info('  PID ON: %d %% -> %f s', perc, round(dur * perc / 100, 1))
+        if perc:
+            self.post(MsgData(self.id, 100))
+            time.sleep(dur * perc / 100)
+        log.info('  PID off')
+        if perc < 100:
+            self.post(MsgData(self.id, 0))
+        return
+
+    def listen(self, msg: Msg) -> bool:
+        if isinstance(msg, MsgData):
+            log.debug('PID got %s', msg)
+            now = time.time()
+            ta = now - self._t_pre
+            err = float(msg.data) - self.setpoint
+            if self._ta_pre:
+                err_sum = self._err_sum + err
+                val = self.p_fact * err \
+                    + self.i_fact * ta * err_sum \
+                    + self.d_fact / ta * (err - self._err_pre)
+
+                log.debug('PID err %f, e-sum %f, p %f / i %f / d %f, ',
+                          err, self._err_sum,
+                          self.p_fact * err,
+                          self.i_fact * ta * err_sum,
+                          self.d_fact / ta * (err - self._err_pre))
+                self.data = min(max(0., 50. - val*10), 100.)
+                if self.data > 0.0 and self.data < 100.:
+                    self._err_sum = err_sum
+                else:
+                    log.debug('clipped')
+
+                self._cnt += 1
+                if self._cnt % self.sample == 0:
+                    log.info('PID -> %f (%f)', self.data, val)
+                    if self.data_range == DataRange.PERCENT:
+                        self.post(MsgData(self.id, round(self.data, 4)))
+                        #self.post(MsgData(self.id, 100 if self.data >= 50 else 0))
+                    else:
+                        Thread(name='PIDpulse', target=self._pulse, args=[9 * ta, self.data], daemon=True).start()
+            self._err_pre = err
+            self._ta_pre = ta
+            self._t_pre = now
+
+        return super().listen(msg)
+
+    def get_settings(self) -> list[tuple]:
+        settings = super().get_settings()
+        settings.append(('setpoint', 'Sollwert [%s]' % self.unit,
+                         self.setpoint, 'type="number"'))
+        settings.append(('p_fact', 'P Faktor', self.p_fact, 'type="number" min="0" max="10" step="0.1"'))
+        settings.append(('i_fact', 'I Faktor', self.i_fact, 'type="number" min="0" max="10" step="0.1"'))
+        settings.append(('d_fact', 'D Faktor', self.d_fact, 'type="number" min="0" max="10" step="0.1"'))
+        settings.append(('sample', 'Samples', self.sample, 'type="number" min="1" max="25" step="1"'))
+        return settings
+
+
 class FadeCtrl(ControllerNode):
     """ Single channel linear fading controller, usable for light (dusk/dawn).
         A change of input value will start a ramp from current to new

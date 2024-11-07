@@ -180,7 +180,7 @@ class AvgAux(MultiInAux):
                 for k in self.values:
                     val += self.values[k] / len(self.values)
 
-            if (self.data != val):
+            if (self.data != val) or True:
                 self.data = val
                 log.info('AvgAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, round(self.data, 4)))
@@ -214,7 +214,7 @@ class MinAux(MultiInAux):
             for k in self.values:
                 val = min(val, self.values[k])
             val = round(val, 4)
-            if self.data != val:
+            if self.data != val or True:
                 self.data = val
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
@@ -241,7 +241,7 @@ class MaxAux(MultiInAux):
             for k in self.values:
                 val = max(val, self.values[k])
             val = round(val, 4)
-            if self.data != val:
+            if self.data != val or True:
                 self.data = val
                 log.info('MaxAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))

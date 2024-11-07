@@ -6,7 +6,7 @@ import pickle
 import atexit
 
 from .msg_bus import MsgBus
-from .ctrl_nodes import MinimumCtrl, MaximumCtrl, SunCtrl, FadeCtrl
+from .ctrl_nodes import MinimumCtrl, MaximumCtrl, PidCtrl, SunCtrl, FadeCtrl
 from .in_nodes import AnalogInput, ScheduleInput
 from .out_nodes import SwitchDevice, AnalogDevice
 from .aux_nodes import ScaleAux, MinAux, MaxAux, AvgAux
@@ -97,10 +97,10 @@ class MachineRoom:
         #REAL_CONFIG = False
 
         TEST_ALERT = False  # True
-        TEST_PH = True
+        TEST_PH = False  # True
         SIM_LIGHT = False  # True
         DAWN_LIGHT = SIM_LIGHT and False  # True
-        SIM_TEMP = False  # True
+        SIM_TEMP = True
         COMPLEX_TEMP = SIM_TEMP and False
 
         if REAL_CONFIG:
@@ -122,7 +122,7 @@ class MachineRoom:
 
             # ... and history for a diagram
             history = History('Beleuchtung',
-                              {light_schedule.id, light_c.id})  # , light_pwm.id])
+                              [light_schedule.id, light_c.id])  # , light_pwm.id])
             history.plugin(self.bus)
 
             # single water temp sensor, switched relay
@@ -150,9 +150,9 @@ class MachineRoom:
 
             # ... and history for a diagram
             t_history = History('Temperaturen',
-                                {wasser_i.id, wasser_i2.id,
+                                [wasser_i.id, wasser_i2.id,
                                  wasser.id,  # wasser_o.id,
-                                 coolspeed.id})  # , cool.id])
+                                 coolspeed.id])  # , cool.id])
             t_history.plugin(self.bus)
 
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
@@ -181,25 +181,26 @@ class MachineRoom:
 
             # ... and history for a diagram
             ph_history = History('pH Verlauf',
-                                 {adc_ph.id, calib_ph.id, ph.id})  # , out_ph.id])
+                                 [adc_ph.id, calib_ph.id, ph.id])  # , out_ph.id])
             ph_history.plugin(self.bus)
 
             return
 
         if TEST_PH:
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
-                                 avg=1, interval=30)
+                                 avg=1, interval=10)
             calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, 'pH',
                                 limit=(4.0, 10.0),
                                 points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH', calib_ph.id, 7.0)
+            #ph = PidCtrl('pH', calib_ph.id, 7.0)
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
             out_ph.plugin(self.bus)
             ph.plugin(self.bus)
             calib_ph.plugin(self.bus)
             adc_ph.plugin(self.bus)
             ph_history = History('pH Verlauf',
-                                 {adc_ph.id, calib_ph.id, ph.id, out_ph.id})
+                                 [adc_ph.id, calib_ph.id, ph.id, out_ph.id])
             ph_history.plugin(self.bus)
 
         if SIM_LIGHT:
@@ -216,8 +217,8 @@ class MachineRoom:
                 light_pwm.plugin(self.bus)
 
                 history = History('Licht',
-                                  {light_schedule.id,
-                                   light_c.id, light_pwm.id})
+                                  [light_schedule.id,
+                                   light_c.id, light_pwm.id])
                 history.plugin(self.bus)
             else:
                 dawn_schedule = ScheduleInput('Zeitplan 2', '* 22 * * *')
@@ -233,19 +234,24 @@ class MachineRoom:
                 light_pwm.plugin(self.bus)
 
                 history = History('Licht',
-                                  {light_schedule.id, dawn_schedule.id,
-                                   light_c.id, dawn_c.id, light_pwm.id})
+                                  [light_schedule.id, dawn_schedule.id,
+                                   light_c.id, dawn_c.id, light_pwm.id])
                 history.plugin(self.bus)
 
         if SIM_TEMP:
             if not COMPLEX_TEMP:
                 # single temp sensor -> temp ctrl -> relay
                 wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C')
-                wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-                wasser_o = SwitchDevice('Heizstab', wasser.id, 'GPIO 12 out')
-                wasser.plugin(self.bus)
+                #wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
+                wasser_pid = PidCtrl('Temperatur', wasser_i.id, 25.0)
+                wasser_o = SwitchDevice('Heizstab', wasser_pid.id, 'GPIO 12 out')
+                wasser_pid.plugin(self.bus)
                 wasser_o.plugin(self.bus)
                 wasser_i.plugin(self.bus)
+
+                t_history = History('Temperaturen',
+                                    [wasser_i.id, wasser_pid.id, wasser_o.id])
+                t_history.plugin(self.bus)
 
             else:
                 # 2 temp sensors -> average -> temp ctrl -> relay
@@ -277,8 +283,8 @@ class MachineRoom:
                 w_coolspeed.plugin(self.bus)
 
                 t_history = History('Temperaturen',
-                                    {w1_temp.id, w2_temp.id, w_temp.id,
-                                     w_heat.id, w_cool.id})
+                                    [w1_temp.id, w2_temp.id, w_temp.id,
+                                     w_heat.id, w_cool.id])
                 t_history.plugin(self.bus)
 
         if TEST_ALERT:

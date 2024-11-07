@@ -90,7 +90,7 @@ class InputNode(BusNode, ABC):
             try:
                 val = self.read()
                 self.alert = None
-                if self.data != val:
+                if self.data != val or True:
                     self.data = val
                     log.brief('%s: read %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))

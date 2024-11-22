@@ -135,7 +135,7 @@ class SlowPwmDevice(DeviceNode):
         self._port = None
         self._inverted = int(inverted)
         self._thread = None
-        #self._thread_stop = False
+        self._thread_stop = False
         self.port = port
         self.set(self.data)
         log.info('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
@@ -176,35 +176,46 @@ class SlowPwmDevice(DeviceNode):
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
-            log.brief('SlowPwmDevice %s: got %f %%', self.name, msg.data)
             self.set(float(msg.data))
         return super().listen(msg)
 
-    def _pulse(self, dur: float):
-        log.brief('  PID pulse: %s -> %f s', self.name, round(dur, 1))
-        if dur > 0.1:
-            log.brief('  PID on')
-            self._driver.write(True  if not self._inverted else False)
-            self.post(MsgData(self.id, 100))
-            time.sleep(dur)
-        if dur < self.cycle:
-            log.brief('  PID off')
-            self._driver.write(False  if not self._inverted else True)
-            self.post(MsgData(self.id, 0))
-        log.brief('  PID pulse: done')
+    def _pulse(self, hi_sec: float):
+        def toggle_and_wait(state: bool, end: float) -> bool:
+            start = time.time()
+            self._driver.write(state  if not self._inverted else not state)
+            self.post(MsgData(self.id, 100  if state else 0))
+            # avoid error accumulation by exact final sleep()
+            while time.time() < end - .1:
+                if self._thread_stop:
+                    self._thread_stop = False
+                    return False
+                time.sleep(.1)
+            time.sleep(end - time.time())
+            log.debug('  _pulse needed %f instead of %f',
+                      time.time() - start, end - start)
+            return True
+
+        while True:
+            lead_edge = time.time()
+            if hi_sec > 0.1:
+                if not toggle_and_wait(True, lead_edge + hi_sec):
+                    return
+            if hi_sec < self.cycle:
+                if not toggle_and_wait(False, lead_edge + self.cycle):
+                    return
         return
 
     def set(self, perc: float) -> None:
         self.data: float = perc
 
-        log.error('SlowPwmDevice %s: sets %.1f', self.id, self.data)
-        #if self._thread:
-        #    self._thread_stop = True
-        #    log.brief('  PID pulse: stopping ...')
-        #    self._thread.join()
-        #    log.brief('  PID pulse: ... stopeed')
-        self._thread = Thread(name='PIDpulse', target=self._pulse, args=[self.data / 100. * self.cycle], daemon=True).start()
-
+        log.info('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
+                 self.id, self.data, self.cycle * perc/100, self.cycle)
+        if self._thread:
+            self._thread_stop = True
+            self._thread.join()
+        self._thread = Thread(name='PIDpulse', target=self._pulse,
+                              args=[self.data / 100 * self.cycle], daemon=True)
+        self._thread.start()
 
     def get_settings(self):
         settings = super().get_settings()

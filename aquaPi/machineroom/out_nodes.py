@@ -53,12 +53,12 @@ class SwitchDevice(DeviceNode):
         ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
         self.port = port
         self.switch(self.data if _cont else False)
-        log.info('%s init to %r|%f|%r', self.name, _cont, self.data, inverted)
+        log.info('%s init to %f|%r', self.name, self.data, inverted)
 
     def __getstate__(self):
         state = super().__getstate__()
         state.update(port=self.port)
-        state.update(inverted=self.inverted)
+        state.update(inverted=self._inverted)
         return state
 
     def __setstate__(self, state):
@@ -98,7 +98,7 @@ class SwitchDevice(DeviceNode):
         self.data: bool = state
 
         log.info('SwitchDevice %s: turns %s', self.id, 'ON' if self.data else 'OFF')
-        if not self.inverted:
+        if not self._inverted:
             self._driver.write(self.data)
         else:
             self._driver.write(not self.data)
@@ -111,7 +111,7 @@ class SwitchDevice(DeviceNode):
         return settings
 
 
-class SlowPwmDevice(SwitchDevice):
+class SlowPwmDevice(DeviceNode):
     """ An analog output to a binary GPIO pin or relay using slow PWM.
 
         Options:
@@ -124,17 +124,27 @@ class SlowPwmDevice(SwitchDevice):
         Output:
             drive output with PWM(input/100 * cycle), possibly inverted
     """
+    data_range = DataRange.BINARY
+
     def __init__(self, name, inputs, port, inverted=0, cycle=60., _cont=False):
-        super().__init__(name, inputs, port, inverted, _cont=_cont)
-        self.cycle = float(cycle)
+        super().__init__(name, inputs, _cont=_cont)
         self.data = 50.0
+        ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
+        self.cycle = float(cycle)
+        self._driver = None
+        self._port = None
+        self._inverted = int(inverted)
         self._thread = None
         #self._thread_stop = False
+        self.port = port
+        self.set(self.data)
         log.info('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
 
     def __getstate__(self):
         state = super().__getstate__()
         state.update(cycle=self.cycle)
+        state.update(port=self.port)
+        state.update(inverted=self._inverted)
         return state
 
     def __setstate__(self, state):
@@ -142,6 +152,27 @@ class SlowPwmDevice(SwitchDevice):
         self.__init__(state['name'], state['inputs'], state['port'],
                       inverted=state['inverted'], cycle=state['cycle'],
                       _cont=True)
+
+    @property
+    def port(self):
+        return self._port
+
+    @port.setter
+    def port(self, port):
+        if self._driver:
+            io_registry.driver_destruct(self._port, self._driver)
+        if port:
+            self._driver = io_registry.driver_factory(port)
+        self._port = port
+
+    @property
+    def inverted(self):
+        return self._inverted
+
+    @inverted.setter
+    def inverted(self, inverted):
+        self._inverted = inverted
+        self.set(self.data)
 
     def listen(self, msg):
         if isinstance(msg, MsgData):
@@ -174,10 +205,13 @@ class SlowPwmDevice(SwitchDevice):
         #    log.brief('  PID pulse: ... stopeed')
         self._thread = Thread(name='PIDpulse', target=self._pulse, args=[self.data / 100. * self.cycle], daemon=True).start()
 
+
     def get_settings(self):
         settings = super().get_settings()
         settings.append(('cycle', 'PWM cycle time', self.cycle,
-                         'type="number" min="10" max="300" step="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+                         'type="number" min="10" max="300" step="1"',
+                         'inverted', 'Inverted', self.inverted,
+                         'type="number" min="0" max="1"'))
         return settings
 
 

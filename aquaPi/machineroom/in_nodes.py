@@ -25,7 +25,7 @@ class InputNode(BusNode):
     """
     ROLE = BusRole.IN_ENDP
 
-    def __init__(self, name, port, interval=0.5, _cont=False):
+    def __init__(self, name, port, interval, _cont=False):
         super().__init__(name, _cont=_cont)
         self._driver = None
         self._driver_opts = None
@@ -95,7 +95,7 @@ class InputNode(BusNode):
         settings.append(('port', 'Input',
                          self.port, 'type="text"'))
         settings.append(('interval', 'Leseintervall [s]',
-                         self.interval, 'type="number" min="0.1" max="60" step="0.1"'))
+                         self.interval, 'type="number" min="1" max="600" step="1"'))
         return settings
 
 

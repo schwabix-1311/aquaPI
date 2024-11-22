@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import logging
+from threading import Thread
+import time
 
 from .msg_bus import (BusListener, BusRole, DataRange, MsgData)
 from ..driver import (io_registry)
@@ -106,6 +108,76 @@ class SwitchDevice(DeviceNode):
         settings = super().get_settings()
         settings.append(('inverted', 'Inverted', self.inverted,
                          'type="number" min="0" max="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        return settings
+
+
+class SlowPwmDevice(SwitchDevice):
+    """ An analog output to a binary GPIO pin or relay using slow PWM.
+
+        Options:
+            name       - unique name of this output node in UI
+            inputs     - id of a single (!) input to receive data from
+            port       - name of a IoRegistry port driver to drive output
+            inverted   - swap the boolean interpretation for active low outputs
+            cycle      - optional cycle time in sec for generated PWM
+
+        Output:
+            drive output with PWM(input/100 * cycle), possibly inverted
+    """
+    def __init__(self, name, inputs, port, inverted=0, cycle=60., _cont=False):
+        super().__init__(name, inputs, port, inverted, _cont=_cont)
+        self.cycle = float(cycle)
+        self.data = 50.0
+        self._thread = None
+        #self._thread_stop = False
+        log.info('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state.update(cycle=self.cycle)
+        return state
+
+    def __setstate__(self, state):
+        self.data = state['data']
+        self.__init__(state['name'], state['inputs'], state['port'],
+                      inverted=state['inverted'], cycle=state['cycle'],
+                      _cont=True)
+
+    def listen(self, msg):
+        if isinstance(msg, MsgData):
+            log.brief('SlowPwmDevice %s: got %f %%', self.name, msg.data)
+            self.set(float(msg.data))
+        return super().listen(msg)
+
+    def _pulse(self, dur: float):
+        log.brief('  PID pulse: %s -> %f s', self.name, round(dur, 1))
+        if dur > 0.1:
+            log.brief('  PID on')
+            self._driver.write(True  if not self._inverted else False)
+            self.post(MsgData(self.id, 100))
+            time.sleep(dur)
+        if dur < self.cycle:
+            log.brief('  PID off')
+            self._driver.write(False  if not self._inverted else True)
+            self.post(MsgData(self.id, 0))
+        log.brief('  PID pulse: done')
+        return
+
+    def set(self, perc: float) -> None:
+        self.data: float = perc
+
+        log.error('SlowPwmDevice %s: sets %.1f', self.id, self.data)
+        #if self._thread:
+        #    self._thread_stop = True
+        #    log.brief('  PID pulse: stopping ...')
+        #    self._thread.join()
+        #    log.brief('  PID pulse: ... stopeed')
+        self._thread = Thread(name='PIDpulse', target=self._pulse, args=[self.data / 100. * self.cycle], daemon=True).start()
+
+    def get_settings(self):
+        settings = super().get_settings()
+        settings.append(('cycle', 'PWM cycle time', self.cycle,
+                         'type="number" min="10" max="300" step="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
         return settings
 
 

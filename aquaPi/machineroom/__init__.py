@@ -8,7 +8,7 @@ import atexit
 from .msg_bus import MsgBus, BusRole
 from .ctrl_nodes import MinimumCtrl, MaximumCtrl, PidCtrl, SunCtrl, FadeCtrl
 from .in_nodes import AnalogInput, ScheduleInput
-from .out_nodes import SwitchDevice, AnalogDevice
+from .out_nodes import SwitchDevice, SlowPwmDevice, AnalogDevice
 from .aux_nodes import ScaleAux, MinAux, MaxAux, AvgAux
 from .hist_nodes import History
 from .alert_nodes import Alert, AlertAbove, AlertBelow
@@ -142,11 +142,14 @@ class MachineRoom:
 
             # single water temp sensor, switched relay
             wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
-                                   avg=3, interval=30)
+                                   avg=1, interval=72)
             #wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
-            wasser = PidCtrl('PID Temperatur', wasser_i.id, 25.0)
-            wasser_o = SwitchDevice('Heizstab', wasser.id,
-                                    'GPIO 12 out', inverted=1)
+            #wasser_o = SwitchDevice('Heizstab', wasser.id,
+            #                        'GPIO 12 out', inverted=1)
+            wasser = PidCtrl('PID Temperatur', wasser_i.id, 25.0,
+                             p_fact=1.5, i_fact=0.1, d_fact=0.)
+            wasser_o = SlowPwmDevice('Heizstab', wasser.id,
+                                    'GPIO 12 out', inverted=1, cycle=70)
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
@@ -168,7 +171,7 @@ class MachineRoom:
             # ... and history for a diagram
             t_history = History('Temperaturen',
                                 [wasser_i.id, wasser_i2.id,
-                                 wasser.id, #wasser_o.id,
+                                 wasser.id, wasser_o.id,
                                  coolspeed.id]) #, cool.id])
             t_history.plugin(self.bus)
 

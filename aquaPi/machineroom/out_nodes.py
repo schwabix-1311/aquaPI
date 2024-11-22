@@ -190,7 +190,7 @@ class SlowPwmDevice(DeviceNode):
                     self._thread_stop = False
                     return False
                 time.sleep(.1)
-            time.sleep(end - time.time())
+            time.sleep(max(0, end - time.time()))
             log.debug('  _pulse needed %f instead of %f',
                       time.time() - start, end - start)
             return True

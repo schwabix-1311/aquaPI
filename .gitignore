@@ -130,6 +130,7 @@ dmypy.json
 
 # ... and some space for myself
 _local/
+logs/
 
 # UIkit source and build tool stuff
 /aquaPi/static/uikit/

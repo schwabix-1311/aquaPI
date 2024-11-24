@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import logging
 from abc import (ABC, abstractmethod)
+import logging
 import time
 from queue import Queue
 from enum import (Enum, Flag, auto)
@@ -73,7 +73,7 @@ class BusNode(ABC):
         state = {'name': self.name}
         state.update(id=self.id)
         state.update(identifier=self.identifier)
-        state.update(receives=self.receives)
+        state.update(receives=self.receives)  #FIXME: "No overload var. of "update" of "MutableMapping" matches list[str]"
         state.update(data=self.data)
         state.update(unit=self.unit)
         state.update(data_range=self.data_range.name)

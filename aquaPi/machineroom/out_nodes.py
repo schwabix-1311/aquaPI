@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+from abc import ABC
 import logging
 from typing import Any
-from abc import ABC
+from threading import Thread
+import time
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange)
@@ -55,7 +57,7 @@ class SwitchDevice(DeviceNode):
         ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
         self.port = port
         self.switch(self.data if _cont else False)
-        log.info('%s init to %r|%f|%r', self.name, _cont, self.data, inverted)
+        log.info('%s init to %f|%r', self.name, self.data, inverted)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -117,6 +119,124 @@ class SwitchDevice(DeviceNode):
         settings = super().get_settings()
         settings.append(('inverted', 'Inverted', self.inverted,
                          'type="number" min="0" max="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        return settings
+
+
+class SlowPwmDevice(DeviceNode):
+    """ An analog output to a binary GPIO pin or relay using slow PWM.
+
+        Options:
+            name       - unique name of this output node in UI
+            receives   - id of a single (!) input to receive data from
+            port       - name of a IoRegistry port driver to drive output
+            inverted   - swap the boolean interpretation for active low outputs
+            cycle      - optional cycle time in sec for generated PWM
+
+        Output:
+            drive output with PWM(input/100 * cycle), possibly inverted
+    """
+    data_range = DataRange.BINARY
+
+    def __init__(self, name: str, receives: str, port: str,
+                 inverted: bool = False, cycle: float = 60.,
+                 _cont: bool = False):
+        super().__init__(name, receives, _cont=_cont)
+        self.data = 50.0
+        ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
+        self.cycle = float(cycle)
+        self._driver = None
+        self._port = ''
+        self._inverted = inverted
+        self._thread = None
+        self._thread_stop = False
+        self.port = port
+        self.set(self.data)
+        log.info('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state.update(cycle=self.cycle)
+        state.update(port=self.port)
+        state.update(inverted=self._inverted)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.data = state['data']
+        SlowPwmDevice.__init__(self, state['name'], state['inputs'], state['port'],
+                               inverted=state['inverted'], cycle=state['cycle'],
+                               _cont=True)
+
+    @property
+    def port(self) -> str:
+        return self._port
+
+    @port.setter
+    def port(self, port: str) -> None:
+        if self._driver:
+            io_registry.driver_destruct(self._port, self._driver)
+        if port:
+            self._driver = io_registry.driver_factory(port)
+        self._port = port
+
+    @property
+    def inverted(self) -> bool:
+        return self._inverted
+
+    @inverted.setter
+    def inverted(self, inverted: bool) -> None:
+        self._inverted = inverted
+        self.set(self.data)
+
+    def listen(self, msg: Msg) -> bool:
+        if isinstance(msg, MsgData):
+            self.set(float(msg.data))
+        return super().listen(msg)
+
+    def _pulse(self, hi_sec: float) -> None:
+        def toggle_and_wait(state: bool, end: float) -> bool:
+            start = time.time()
+            if self._driver:
+                self._driver.write(state  if not self._inverted else not state)
+            self.post(MsgData(self.id, 100  if state else 0))
+            # avoid error accumulation by exact final sleep()
+            while time.time() < end - .1:
+                if self._thread_stop:
+                    self._thread_stop = False
+                    return False
+                time.sleep(.1)
+            time.sleep(max(0, end - time.time()))
+            log.debug('  _pulse needed %f instead of %f',
+                      time.time() - start, end - start)
+            return True
+
+        while True:
+            lead_edge = time.time()
+            if hi_sec > 0.1:
+                if not toggle_and_wait(True, lead_edge + hi_sec):
+                    return
+            if hi_sec < self.cycle:
+                if not toggle_and_wait(False, lead_edge + self.cycle):
+                    return
+        return
+
+    def set(self, perc: float) -> None:
+        self.data: float = perc
+
+        log.info('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
+                 self.id, self.data, self.cycle * perc/100, self.cycle)
+        if self._thread:
+            self._thread_stop = True
+            self._thread.join()
+        self._thread = Thread(name='PIDpulse', target=self._pulse,
+                              args=[self.data / 100 * self.cycle], daemon=True)
+        self._thread.start()
+
+    def get_settings(self) -> list[tuple]:
+        settings = super().get_settings()
+        settings.append(('cycle', 'PWM cycle time', self.cycle,
+                         'type="number" min="10" max="300" step="1"',
+                         'inverted', 'Inverted', self.inverted,
+                         'type="number" min="0" max="1"'))
         return settings
 
 

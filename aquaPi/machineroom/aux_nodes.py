@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
+from abc import ABC
 import logging
 from typing import (Iterable, Any)
-from abc import ABC
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange)

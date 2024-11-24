@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
+from abc import (ABC, abstractmethod)
 import logging
 from typing import Any
-from abc import (ABC, abstractmethod)
 import os
 import sys
 import platform
@@ -404,7 +404,8 @@ class History(BusListener):
 
     def listen(self, msg) -> bool:
         if isinstance(msg, MsgData):
-            self.db.feed(msg.sender, msg.data)
+            if self.db:
+                self.db.feed(msg.sender, msg.data)
             if time() >= self._nextrefresh:
                 self.post(MsgData(self.id, 0))
                 self._nextrefresh = int(time()) + 10

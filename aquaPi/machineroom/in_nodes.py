@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
+from abc import ABC
 import logging
 from typing import Any
-from abc import ABC
 import time
 from datetime import datetime
 from croniter import croniter
@@ -107,7 +107,7 @@ class InputNode(BusNode, ABC):
         settings.append(('port', 'Input',
                          self.port, 'type="text"'))
         settings.append(('interval', 'Leseintervall [s]',
-                         self.interval, 'type="number" min="0.1" max="60" step="0.1"'))
+                         self.interval, 'type="number" min="1" max="600" step="1"'))
         return settings
 
 

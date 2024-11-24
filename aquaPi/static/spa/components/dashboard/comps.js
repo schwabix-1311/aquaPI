@@ -310,6 +310,7 @@ const AnalogDevice = {
 	extends: BusNode,
 }
 Vue.component('AnalogDevice', AnalogDevice)
+Vue.component('SlowPwmDevice', AnalogDevice)
 
 const AuxNode = {
 	extends: BusNode,

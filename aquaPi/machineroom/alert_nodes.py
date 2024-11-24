@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
+from abc import ABC, abstractmethod
 import logging
 from typing import Any
-from abc import ABC, abstractmethod
 
 from .msg_types import (Msg, MsgPayload, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange)

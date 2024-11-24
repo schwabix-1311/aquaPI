@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import logging
 from abc import ABC
+import logging
 from typing import Any
 
 

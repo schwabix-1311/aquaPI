@@ -104,6 +104,8 @@ class DriverADS1115(AInDriver):
                         log.brief('I²C device at 0x%02X seems not to be an '
                                   'ADS1x15, probably a different device, '
                                   'or already in use.', adr)
+                except ValueError as ex:
+                    log.info(ex)
                 except Exception as ex:
                     # pass  # whatever it is, ignore this device
                     log.debug('%r', ex)

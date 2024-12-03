@@ -3,7 +3,7 @@
 from abc import ABC
 import logging
 from typing import Any
-import time
+from time import (time, sleep)
 import math
 import random
 from datetime import timedelta
@@ -255,7 +255,7 @@ class PidCtrl(ControllerNode):
     def listen(self, msg):
         if isinstance(msg, MsgData):
             log.debug('PID got %s', msg)
-            now = time.time()
+            now = time()
             ta = now - self._tm_old
             err = float(msg.data) - self.setpoint
             if self._tm_old >= 1.:
@@ -275,7 +275,6 @@ class PidCtrl(ControllerNode):
                 if self.data <= 0. or self.data >= 100.:
                     self._err_sum /= 2
             self._err_old = err
-            self._ta_old = ta
             self._tm_old = now
 
         return super().listen(msg)
@@ -378,14 +377,14 @@ class FadeCtrl(ControllerNode):
         log.brief('FadeCtrl %s: fading in %f s from %f -> %f, change by %f every %f s',
                   self.id, delta_t, self.data, self.target, step_d, step_t)
 
-        next_t = time.time() + step_t
+        next_t = time() + step_t
         while abs(self.target - self.data) > abs(step_d):
             self.data += step_d
             log.debug('_fader %f ...', self.data)
 
             self.alert = ('\u2197' if self.target > self.data else '\u2198', 'act')
             self.post(MsgData(self.id, round(self.data, 4)))
-            time.sleep(next_t - time.time())
+            sleep(max(0, next_t - time()))
             next_t += step_t
             if self._fader_stop:
                 log.brief('FadeCtrl %s: fader stopped', self.id)
@@ -413,7 +412,7 @@ class Cloud(object):
     """ Represents a single cloud
     """
     def __init__(self, cloudiness: int):
-        self.born: float = time.time()
+        self.born: float = time()
         if cloudiness & 1:  # odd weather types have shorter darker clouds
             self.duration: int = random.randint(1, 60 * 60)
             self.darkness: int = random.randint(1, 20)
@@ -422,7 +421,7 @@ class Cloud(object):
             self.darkness = random.randint(1, 8)
 
     def current_shadow(self) -> float:
-        return self.halfsine(time.time() - self.born, self.duration, self.darkness)
+        return self.halfsine(time() - self.born, self.duration, self.darkness)
 
     @staticmethod
     def halfsine(elapsed_t, wave_t, max_p):
@@ -525,7 +524,7 @@ class SunCtrl(ControllerNode):
             self.data = new_data
             log.info('SunCtrl %s: %s %f%%', self.id, phase, self.data)
             self.post(MsgData(self.id, self.data))
-        time.sleep(max(1, new_data/30))  # shorten steps for low values
+        sleep(max(1, new_data/30))  # shorten steps for low values
 
     def _calculate_clouds(self) -> float:
         if random.random() < 0.002 and len(self.clouds) < self.cloudiness:
@@ -535,7 +534,7 @@ class SunCtrl(ControllerNode):
 
         shadow = 0.0
         for i, cloud in enumerate(self.clouds.copy()):
-            if cloud.born + cloud.duration < time.time():
+            if cloud.born + cloud.duration < time():
                 self.clouds.remove(cloud)
             else:
                 sh = cloud.current_shadow()
@@ -550,7 +549,7 @@ class SunCtrl(ControllerNode):
             Changes are delayed until <0.1%
         """
         xscend = self.xscend * 60 * 60
-        start = now = time.time()
+        start = now = time()
         if self.target:
             self.alert = ('\u2197', 'act')  # north east arrow
             self.data = 0  # sart of ascend
@@ -559,7 +558,7 @@ class SunCtrl(ControllerNode):
                 shadow = self._calculate_clouds()
                 new_data = Cloud.halfsine(now - start, xscend * 2, self._high) * shadow
                 self._make_next_step('ascend', new_data)
-                now = time.time()
+                now = time()
 
             # loop with clouds until fader_stop
             #FIXME: post some heartbeat values to keep diagram nice - could help everywhere ...
@@ -568,14 +567,14 @@ class SunCtrl(ControllerNode):
                 self.alert = ('\u219d', 'act') if shadow else None  # rightwards wave arrow
                 new_data = self._high * shadow
                 self._make_next_step('cloudy', new_data)
-                now = time.time()
+                now = time()
         else:
             self.alert = ('\u2198', 'act')  # south east arrow
             while now - start < xscend and not self._fader_stop:
                 shadow = self._calculate_clouds()
                 new_data = Cloud.halfsine(now - start + xscend, xscend * 2, self._high) * shadow
                 self._make_next_step('descend', new_data)
-                now = time.time()
+                now = time()
             self.data = 0  # end of descend
 
 

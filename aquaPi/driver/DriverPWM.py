@@ -38,17 +38,7 @@ class DriverPWM(DriverPWMbase):
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
-        if not is_raspi():
-            # name: IoPort('function', 'driver', 'cfg', 'dependants')
-            io_ports = {
-                'PWM 0': IoPort(PortFunc.Aout, DriverPWM,
-                                {'pin': 18, 'channel': 0, 'fake': True},
-                                ['GPIO 18 in', 'GPIO 18 out']),
-                'PWM 1': IoPort(PortFunc.Aout, DriverPWM,
-                                {'pin': 19, 'channel': 1, 'fake': True},
-                                ['GPIO 19 in', 'GPIO 19 out'])
-            }
-        else:
+        if is_raspi():
             cnt = 0
             for pin in range(28):
                 try:
@@ -61,10 +51,20 @@ class DriverPWM(DriverPWMbase):
                                                      {'pin': pin, 'channel': cnt},
                                                      deps)
                         cnt += 1
-                    else:
-                        log.debug('pin %d is in use as %s', pin, func.name)
+                    #else:
+                    #    log.debug('pin %d is configured as %s', pin, func.name)
                 except KeyError:
                     log.debug('Unknown function on pin %d = %d', pin, gpio_function(pin))
+            # name: IoPort('function', 'driver', 'cfg', 'dependants')
+        else:
+            io_ports = {
+                'PWM 0': IoPort(PortFunc.Aout, DriverPWM,
+                                {'pin': 18, 'channel': 0, 'fake': True},
+                                ['GPIO 18 in', 'GPIO 18 out']),
+                'PWM 1': IoPort(PortFunc.Aout, DriverPWM,
+                                {'pin': 19, 'channel': 1, 'fake': True},
+                                ['GPIO 19 in', 'GPIO 19 out'])
+            }
         return io_ports
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
@@ -76,18 +76,17 @@ class DriverPWM(DriverPWMbase):
             self._pwmchip: str = '/sys/class/pwm/pwmchip0'
             self._pwmchannel: str = path.join(self._pwmchip, 'pwm%d' % self._channel)
 
-            try:
+            if not path.exists(self._pwmchannel):
                 log.debug('Creating sysfs PWM channel %d ...', self._channel)
                 with open(path.join(self._pwmchip, 'export'), 'wt', encoding='ascii') as p:
                     p.write('%d' % self._channel)
                 sleep(.1)  # sombody (kernel?) needs a bit of time to finish it!
                 log.debug('Created sysfs PWM channel %d', self._channel)
-            except OSError:
-                pass
-            with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
-                p.write('0')
+
             with open(path.join(self._pwmchannel, 'period'), 'wt', encoding='ascii') as p:
                 p.write('3333333')
+            with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
+                p.write('0')
         else:
             self.name = '!' + self.name
 

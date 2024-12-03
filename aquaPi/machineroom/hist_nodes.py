@@ -191,7 +191,8 @@ if QUEST_DB:
                         timestamp(ts) PARTITION BY HOUR;
                       """)
             except pg.OperationalError as ex:
-                log.exception('TimeDbQuest')
+                if log.level == logging.DEBUG:
+                    log.exception('TimeDbQuest')
                 raise ModuleNotFoundError() from ex
 
         @staticmethod
@@ -388,7 +389,9 @@ class History(BusListener):
                 self.db = TimeDbQuest()
                 log.brief('Recording history %s in QuestDB', name)
             except (NotImplementedError, ModuleNotFoundError, ImportError):
-                pass
+                if log.level == logging.DEBUG:
+                    log.exception("QuestDB failure:")
+                log.error('QuestDB failed, will keep history in memeory')
         if not self.db:
             self.db = TimeDbMemory(duration)
             log.brief('Recording history %s in main memory with limited depth of %dh!', name, duration)

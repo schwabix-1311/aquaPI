@@ -12,6 +12,7 @@ from .out_nodes import SwitchDevice, SlowPwmDevice, AnalogDevice
 from .aux_nodes import ScaleAux, MinAux, MaxAux, AvgAux
 from .hist_nodes import History
 from .alert_nodes import Alert, AlertAbove, AlertBelow
+from ..driver import DriverError
 
 
 log = logging.getLogger('machineroom')
@@ -33,18 +34,23 @@ class MachineRoom:
         """
         self.bus_storage: str = bus_storage
 
-        if not path.exists(self.bus_storage):
-            self.bus: MsgBus = MsgBus()  # threaded=True)
+        try:
+            if not path.exists(self.bus_storage):
+                self.bus: MsgBus = MsgBus()  # threaded=True)
 
-            log.brief("=== There are no controllers defined, creating default")
-            self.create_default_nodes()
-            self.save_nodes(self.bus)
-            log.brief("=== Successfully created Bus and default Nodes")
-            log.brief("  ... and saved to %s", self.bus_storage)
+                log.brief("=== There are no controllers defined, creating default")
+                self.create_default_nodes()
+                self.save_nodes(self.bus)
+                log.brief("=== Successfully created Bus and default Nodes")
+                log.brief("  ... and saved to %s", self.bus_storage)
 
-        else:
-            log.brief("=== Loading Bus & Nodes from %s", self.bus_storage)
-            self.bus = self.restore_nodes()
+            else:
+                log.brief("=== Loading Bus & Nodes from %s", self.bus_storage)
+                self.bus = self.restore_nodes()
+
+        except DriverError as ex:
+            log.fatal("Creation of a controller failed: %s", ex.msg)
+            raise
 
         # Our __del__ would not be called after Ctrl-C.
         atexit.register(self.shutdown)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from typing import Any
 from os import path
 from enum import Enum
 from collections import namedtuple
@@ -26,44 +27,51 @@ def is_raspi() -> bool:
 # ========== Exceptions ==========
 
 
-class DriverNYI(Exception):
+class DriverError(Exception):
+    def __init__(self, msg):
+        super().__init__()
+        self.msg: str = msg
+
+
+class DriverNYI(DriverError):
     def __init__(self, msg: str = 'Not yet implemented.'):
-        super().__init__()
-        self.msg: str = msg
+        super().__init__(msg)
 
 
-class DriverParamError(Exception):
+class DriverParamError(DriverError):
     def __init__(self, msg: str = 'Invalid parameter value.'):
-        super().__init__()
-        self.msg: str = msg
+        super().__init__(msg)
 
 
-class DriverInvalidAddrError(Exception):
-    def __init__(self, msg: str = '', adr=None):
+class DriverInvalidAddrError(DriverError):
+    def __init__(self, adr: Any, msg: str = ''):
         if not msg:
             msg = 'Pin, channel or address %r does not exist.' % adr
-        super().__init__()
-        self.msg = msg
+        super().__init__(msg)
 
 
-class DriverPortInuseError(Exception):
-    def __init__(self, msg: str = '', port=None):
+class DriverInvalidPortError(DriverError):
+    def __init__(self, port: Any, msg: str = ''):
+        if not msg:
+            msg = 'There is no port named "%s"' % port
+        super().__init__(msg)
+
+
+class DriverPortInuseError(DriverError):
+    def __init__(self, port: Any, msg: str = ''):
         if not msg:
             msg = 'Pin or channel %r is already assigned.' % port
-        super().__init__()
-        self.msg = msg
+        super().__init__(msg)
 
 
-class DriverReadError(Exception):
+class DriverReadError(DriverError):
     def __init__(self, msg: str = 'Failed to read a valid value.'):
-        super().__init__()
-        self.msg: str = msg
+        super().__init__(msg)
 
 
-class DriverWriteError(Exception):
+class DriverWriteError(DriverError):
     def __init__(self, msg: str = 'Failed to write value to the output.'):
-        super().__init__()
-        self.msg: str = msg
+        super().__init__(msg)
 
 
 # ========== common types ==========

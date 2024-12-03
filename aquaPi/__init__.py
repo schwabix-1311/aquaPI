@@ -176,7 +176,11 @@ def create_app() -> Flask:
         return app
 
     from .machineroom import MachineRoom
-    app.extensions['machineroom'] = MachineRoom(app.config['CONFIG'])
+    try:
+        app.extensions['machineroom'] = MachineRoom(app.config['CONFIG'])
+    except:
+        log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
+        return None
 
     #FIXME bus is used by Python code in jinja template 'settings'
     @app.context_processor

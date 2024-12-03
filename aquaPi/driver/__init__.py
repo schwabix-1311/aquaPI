@@ -7,7 +7,7 @@ from os import path
 import glob
 
 from .base import (IoPort, PortFunc, Driver,
-                   DriverPortInuseError, DriverParamError)
+                   DriverPortInuseError, DriverInvalidPortError, DriverParamError)
 
 log = logging.getLogger('driver')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -79,11 +79,9 @@ class IoRegistry(object):
         for name in drv_mod_names:
             drv_module = sys.modules[name]
             log.debug('# module %s', drv_module)
-            dict_classes = [cl for cl in drv_module.__dict__.values() if type(cl) is type]
-            for mod_cl in dict_classes:
-                if issubclass(mod_cl, Driver):
-                    log.debug('found drv class %r', mod_cl)
-                    drv_classes.add(mod_cl)
+            mod_drivers = {cl for cl in drv_module.__dict__.values()
+                            if type(cl) is type and issubclass(cl, Driver)}
+            drv_classes |= mod_drivers
 
         for drv in drv_classes:
             if hasattr(drv, 'find_ports'):
@@ -112,11 +110,11 @@ class IoRegistry(object):
         """
         log.debug('create a driver for %r', port)
         if port not in IoRegistry._map:
-            raise DriverParamError('There is no port named %s' % port)
+            raise DriverInvalidPortError(port)
 
         io_port = IoRegistry._map[port]
         if io_port.used:
-            raise DriverPortInuseError(port=port)
+            raise DriverPortInuseError(port)
 
         try:
             if drv_options:
@@ -132,13 +130,13 @@ class IoRegistry(object):
 
             return driver
         except Exception:
-            log.exception('Failed to create driver: %s', port)
-            return None
+            log.exception('Failed to create port driver: %s' % port)
+            raise
 
     def driver_destruct(self, port: str, driver: Driver) -> None:
         log.debug('destruct driver for %r', port)
         if port not in IoRegistry._map:
-            raise DriverParamError('There is no driver for port %s' % port)
+            raise DriverInvalidPortError(port)
 
         io_port = IoRegistry._map[port]
         driver.close()
@@ -168,7 +166,7 @@ __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
 
 for drv_path in __path__:
     for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
-        log.debug('Found driver file %s', drv_file)
+        log.info('Found driver file %s', drv_file)
 
         drv_name = path.basename(drv_file)
         if drv_name.startswith(DRIVER_FILE_PREFIX):
@@ -177,7 +175,7 @@ for drv_path in __path__:
             drv_name = drv_name[:-3]
         drv_name = __name__ + '.' + drv_name.lower()
         drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
-        log.debug('Driver spec %s', drv_spec)
+        #log.debug('Driver spec %s', drv_spec)
 
         if drv_spec:
             drv_mod = importlib.util.module_from_spec(drv_spec)

@@ -18,15 +18,7 @@ class DriverDS1820(AInDriver):
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
-        if not is_raspi():
-            # name: IoPort('function', 'driver', 'cfg', 'dependants')
-            io_ports = {
-                'DS1820 xA2E9C': IoPort(PortFunc.Ain, DriverDS1820,
-                                        {'adr': '28-0119383a2e9c', 'fake': True}, []),
-                'DS1820 x7A71E': IoPort(PortFunc.Ain, DriverDS1820,
-                                        {'adr': '28-01193867a71e', 'fake': True}, [])
-            }
-        else:
+        if is_raspi():
             # TODO: GPIO 4 is the Raspi default, allow alternatives!
             deps = ['GPIO 4 in', 'GPIO 4 out']
 
@@ -36,6 +28,14 @@ class DriverDS1820(AInDriver):
                                              DriverDS1820,
                                              {'adr': sensor},
                                              deps)
+        else:
+            # name: IoPort('function', 'driver', 'cfg', 'dependants')
+            io_ports = {
+                'DS1820 xA2E9C': IoPort(PortFunc.Ain, DriverDS1820,
+                                        {'adr': '28-0119383a2e9c', 'fake': True}, []),
+                'DS1820 x7A71E': IoPort(PortFunc.Ain, DriverDS1820,
+                                        {'adr': '28-01193867a71e', 'fake': True}, [])
+            }
         return io_ports
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
@@ -64,7 +64,7 @@ class DriverDS1820(AInDriver):
             #                                  ../conv_time(750)
             self._sysfs_adr: str = cfg['adr']
             if not path.exists(self._sysfs_adr):
-                raise DriverInvalidAddrError(adr=self._sysfs_adr)
+                raise DriverInvalidAddrError(self._sysfs_adr)
             self._temp: str = path.join(self._sysfs_adr, 'temperature')
             if not path.exists(self._temp):
                 self._temp = path.join(self._sysfs_adr, 'w1_slave')
@@ -89,7 +89,7 @@ class DriverDS1820(AInDriver):
             elif self._err_cnt <= self._err_retry:
                 self._err_cnt += 1
             else:
-                raise DriverReadError(self.name)
+                raise DriverReadError()
 
         log.info('%s = %s', self.name, self._val)
         return float(self._val)

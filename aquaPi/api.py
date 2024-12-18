@@ -17,7 +17,7 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 bp = Blueprint('api', __name__)
 
 
-def the_bus() -> MsgBus|None:
+def the_bus() -> MsgBus | None:
     mr: MachineRoom = current_app.extensions['machineroom']
     return mr.bus
 
@@ -41,8 +41,6 @@ def api_node(node_id: str) -> Response:
         node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         node = bus.get_node(node_id)
 
-        #log.debug(str(node))
-
         if node:
             item = node.__getstate__()
             item['type'] = type(node).__name__
@@ -51,8 +49,8 @@ def api_node(node_id: str) -> Response:
             if hasattr(node, 'alert') and node.alert:
                 item['alert'] = node.alert
 
-            #log.debug(item)
-            body = jsonpickle.encode({'result': 'SUCCESS', 'data': item}, unpicklable=False, keys=True)
+            body = jsonpickle.encode({'result': 'SUCCESS', 'data': item},
+                                     unpicklable=False, keys=True)
             log.debug('API nodes/%s: %s', node_id, body)
             return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
         else:
@@ -84,7 +82,6 @@ def api_history(node_id: str) -> Response:
         start = int(request.args.get('start', 0))
         step = int(request.args.get('step', 0))
 
-        #log.debug('API %s start %d step %d', request.path, start, step)
         if node:
             if hasattr(node, 'get_history'):
                 hist = node.get_history(start, step)

@@ -21,7 +21,6 @@ except Exception:
     QUEST_DB = False
 
 from .msg_bus import (BusListener, BusRole, MsgData)
-# from ..driver import (PortFunc, io_registry, DriverReadError)
 
 
 log = logging.getLogger('machineroom.hist_nodes')
@@ -37,7 +36,6 @@ class TimeDb(ABC):
     fields: set[str] = set()
 
     ValueLst = list[str | float | None]
-    SeriesLst = list[tuple[int, float]]
 
     def __init__(self):
         pass
@@ -52,7 +50,7 @@ class TimeDb(ABC):
     @abstractmethod
     def query(self, node_names: Iterable[str], start: int = 0, step:  int = 0
               # ) -> dict[int, list[str | float]]:
-              ) -> dict[int, ValueLst] | dict[str, SeriesLst]:
+              ) -> dict[int, ValueLst]:
         pass
 
 
@@ -98,32 +96,13 @@ class TimeDbMemory(TimeDb):
 #TODO: add downsampling of returned data if step>1
 #TODO: add permanent downsampling after some period, e.g. 1h, to reduce mem consumption
 
-    def _query_old(self, node_names: Iterable[str]
-                   ) -> dict[str, TimeDb.SeriesLst]:
-        # just for reference, was never used with this API!
-        # previous struct:
-        #   {ser1: [(ts1, val1.1), (ts2, val1.2), ...],
-        #    ser2: [(ts1, val2.1), (ts2, val2.2),....],
-        #    ... }
-        result: dict[str, TimeDb.SeriesLst] = dict()
-        for name in node_names:
-            series = TimeDbMemory._store[name]
-            result[name] = [(v[0], v[1]) for v in series]
-        return result
-
     def query(self, node_names: Iterable[str],
-              start: int = 0, step: int = 0
+              start: int = 1, step: int = 0
               # ) -> dict[int, list[str | float | None]]:
-              ) -> dict[int, TimeDb.ValueLst] | dict[str, TimeDb.SeriesLst]:
+              ) -> dict[int, TimeDb.ValueLst]:
         with TimeDbMemory._store_lock:
 
             qry_begin = time()
-            if not start and not step:
-                log.warning('TimeDbMemory OLD API used for %r', node_names)
-                result_o = self._query_old(node_names)
-                log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result_o))
-                log.debug('TimeDbMemory.query start %r step %r: %r', start, step, result_o)
-                return result_o
 
             # new structure, about 0.7 * space:
             #   { 0:  ["ser1", "ser2", ...],
@@ -150,8 +129,9 @@ class TimeDbMemory(TimeDb):
                             result[ts] = TimeDb.ValueLst = [None] * len(result[0])
                         result[ts][idx] = val
 
+            log.debug('TimeDbMemory.query %r start %r step %r', node_names, start, step)
             log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
-            log.debug('TimeDbMemory.query start %r step %r: %r', start, step, result)
+            # log.debug('  : %r', result)
             return result
 
 
@@ -283,37 +263,15 @@ if QUEST_DB:
                 log.exception('TimeDbQuest.query')
                 return []
 
-        def _generate_old(self, node_names: Iterable[str],
-                          recs: list[tuple[datetime, str, float]]
-                          ) -> dict[str, TimeDb.SeriesLst]:
-            # old structure (start=0), each series is an array of data tuples:
-            # { "ser1": [(ts1, val1.1), (ts2: val1.2), ... ],
-            #   "ser2": [(ts1, val2.1), (ts3, val2.3), ... ],
-            #    ... }
-            result: dict[str, TimeDb.SeriesLst] = dict()
-            for node in node_names:
-                result[node] = [(int(r[0].timestamp()), r[2])
-                                for r in recs if r[1] == node]
-            return result
-
         def query(self, node_names: Iterable[str],
-                  start: int = 0, step:  int = 0
-                  # ) -> dict[int, list[str | float | None]]:
-                  ) -> dict[int, TimeDb.ValueLst] | dict[str, TimeDb.SeriesLst]:
+                  start: int = 1, step:  int = 0
+                  ) -> dict[int, TimeDb.ValueLst]:
             names: TimeDb.ValueLst = [n for n in node_names]  # make indexable
 
             qry_begin = time()
-            log.debug('TimeDbQuest qry: %s / %d / %d', names, start, step)
+            log.debug('TimeDbQuest qry: %s start %d  step %d', names, start, step)
             recs = self._query(node_names, start, step)
             log.debug('  qry time %fs', time() - qry_begin)
-
-            if start <= 0:
-                log.warning('TimeDbQuest OLD API used for %r', names)
-                result_o = self._generate_old(node_names, recs)
-                log.debug('  done, overall %fs, %d data points',
-                          time() - qry_begin, len(result_o))
-                # log.debug('TimeDbQuest.query start %r step %r: %r', start, step, result_o)
-                return result_o
 
             # new structure, typically about 30% less space:
             #   { 0:  ["ser1", "ser2", ...],
@@ -355,7 +313,7 @@ if QUEST_DB:
             result = {ts: result[ts] for ts in result if result[ts] != [None] * len(names)}
 
             log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
-            #log.debug('TimeDbQuest.query start %r step %r: %r', start, step, result)
+            # log.debug('  : %r', result)
             return result
 # end: if QUEST_DB
 
@@ -412,7 +370,7 @@ class History(BusListener):
         return super().listen(msg)
 
     def get_history(self, start: int, step: int
-                    ) -> dict[int, TimeDb.ValueLst] | dict[str, TimeDb.SeriesLst]:
+                    ) -> dict[int, TimeDb.ValueLst]:
         return self.db.query(self.receives, start, step) if self.db else dict()
 
     def get_settings(self) -> list[tuple]:

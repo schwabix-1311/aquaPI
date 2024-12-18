@@ -67,7 +67,7 @@ def api_history_nodes() -> Response:
         node_ids = [node.id for node in bus.get_nodes(BusRole.HISTORY)]
         if node_ids:
             body = json.dumps(node_ids)
-            log.debug('API history: %s', node_ids, body)
+            log.debug('API history: %s', body)
             return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
         else:
             return Response(status=HTTPStatus.NOT_FOUND)

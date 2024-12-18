@@ -47,6 +47,11 @@ class MultiInAux(AuxNode, ABC):
         state.update(unit=self.unit)
         return state
 
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.data = state['data']
+        MultiInAux.__init__(self, state['name'], state['receives'],
+                            _cont=True)
+
 
 # ========== auxiliary ==========
 
@@ -143,7 +148,8 @@ class AvgAux(MultiInAux):
             receives   - collection of input ids
             unfair_avg - 0 = equally weights all inputs
                          >0 = moving average of received input values,
-                              higher frequency increases weight
+                              higher frequency increases weight,
+                              thus unfair for unequally active senders
 
         Output:
             float - posts changes of arithmetic average of inputs
@@ -170,17 +176,17 @@ class AvgAux(MultiInAux):
                 if self.data == -1:
                     val = float(msg.data)
                 else:
-                    # unfair_avg-1 is the amount (count) of old data to keep
+                    # unfair_avg-1 is the amount of old data to factor in
                     old_data = self.data * (self.unfair_avg - 1)
                     val = (float(msg.data) + old_data) / self.unfair_avg
             else:
-                if self.values.get(msg.sender) != float(msg.data):
-                    self.values[msg.sender] = float(msg.data)
-                val = 0
+                self.values[msg.sender] = float(msg.data)
+                val = 0.
                 for k in self.values:
                     val += self.values[k] / len(self.values)
 
-            if (self.data != val) or True:
+            val = round(val, 4)
+            if True or (self.data != val):  #FIXME
                 self.data = val
                 log.info('AvgAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, round(self.data, 4)))
@@ -208,13 +214,12 @@ class MinAux(MultiInAux):
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
-            if self.values.get(msg.sender) != float(msg.data):
-                self.values[msg.sender] = float(msg.data)
-            val = 100.0
-            for k in self.values:
-                val = min(val, self.values[k])
+            val = float(msg.data)
+            self.values[msg.sender] = val
+            for v in self.values.values():
+                val = min(val, v)
             val = round(val, 4)
-            if self.data != val or True:
+            if True or (self.data != val):  #FIXME
                 self.data = val
                 self.post(MsgData(self.id, self.data))
         return super().listen(msg)
@@ -235,13 +240,12 @@ class MaxAux(MultiInAux):
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
-            if self.values.get(msg.sender) != float(msg.data):
-                self.values[msg.sender] = float(msg.data)
-            val = 0.0
-            for k in self.values:
-                val = max(val, self.values[k])
+            val = float(msg.data)
+            self.values[msg.sender] = val
+            for v in self.values.values():
+                val = max(val, v)
             val = round(val, 4)
-            if self.data != val or True:
+            if True or (self.data != val):  #FIXME
                 self.data = val
                 log.info('MaxAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))

@@ -54,38 +54,38 @@ log_default = {
   "loggers": {
     "root": {
       "level": "WARNING",
-      "handlers": ["stdout","file"]
+      "handlers": ["stdout", "file"]
     },
 
     "aquaPi":     {"level": "NOTSET"},
-    #"aquaPi.api": {"level": "NOTSET"},
+    # "aquaPi.api": {"level": "NOTSET"},
 
     "machineroom":             {"level": "NOTSET"},
-    #"machineroom.alert_nodes": {"level": "NOTSET"},
-    #"machineroom.aux_nodes":   {"level": "NOTSET"},
-    #"machineroom.ctrl_nodes":  {"level": "NOTSET"},
-    #"machineroom.hist_nodes":  {"level": "NOTSET"},
-    #"machineroom.in_nodes":    {"level": "NOTSET"},
-    #"machineroom.msg_bus":     {"level": "NOTSET"},
-    #"machineroom.msg_types":   {"level": "NOTSET"},
-    #"machineroom.out_nodes":   {"level": "NOTSET"},
+    # "machineroom.alert_nodes": {"level": "NOTSET"},
+    # "machineroom.aux_nodes":   {"level": "NOTSET"},
+    # "machineroom.ctrl_nodes":  {"level": "NOTSET"},
+    # "machineroom.hist_nodes":  {"level": "NOTSET"},
+    # "machineroom.in_nodes":    {"level": "NOTSET"},
+    # "machineroom.msg_bus":     {"level": "NOTSET"},
+    # "machineroom.msg_types":   {"level": "NOTSET"},
+    # "machineroom.out_nodes":   {"level": "NOTSET"},
 
     "driver":               {"level": "NOTSET"},
-    #"driver.base":          {"level": "NOTSET"},
-    #"driver.DriverADC":     {"level": "NOTSET"},
-    #"driver.DriverAlert":   {"level": "NOTSET"},
-    #"driver.DriverGPIO":    {"level": "NOTSET"},
-    #"driver.DriverOneWire": {"level": "NOTSET"},
-    #"driver.DriverPWM":     {"level": "NOTSET"},
-    #"driver.DriverTC420":   {"level": "NOTSET"},
+    # "driver.base":          {"level": "NOTSET"},
+    # "driver.DriverADC":     {"level": "NOTSET"},
+    # "driver.DriverAlert":   {"level": "NOTSET"},
+    # "driver.DriverGPIO":    {"level": "NOTSET"},
+    # "driver.DriverOneWire": {"level": "NOTSET"},
+    # "driver.DriverPWM":     {"level": "NOTSET"},
+    # "driver.DriverTC420":   {"level": "NOTSET"},
 
     "pages":          {"level": "NOTSET"},
-    #"pages.about":    {"level": "NOTSET"},
-    #"pages.config":   {"level": "NOTSET"},
-    #"pages.home":     {"level": "NOTSET"},
-    #"pages.settings": {"level": "NOTSET"},
-    #"pages.spa":      {"level": "NOTSET"},
-    #"pages.sse_util": {"level": "NOTSET"},
+    # "pages.about":    {"level": "NOTSET"},
+    # "pages.config":   {"level": "NOTSET"},
+    # "pages.home":     {"level": "NOTSET"},
+    # "pages.settings": {"level": "NOTSET"},
+    # "pages.spa":      {"level": "NOTSET"},
+    # "pages.sse_util": {"level": "NOTSET"},
 
     "werkzeug": {
       "comment": "werkzeug is noisy, reduce to >=WARNING, INFO shows all https requests",
@@ -178,7 +178,7 @@ def create_app() -> Flask:
     from .machineroom import MachineRoom
     try:
         app.extensions['machineroom'] = MachineRoom(app.config['CONFIG'])
-    except:
+    except Exception:
         log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
         return None
 

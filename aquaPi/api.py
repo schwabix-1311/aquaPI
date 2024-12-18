@@ -29,6 +29,7 @@ def api_nodes() -> Response:
         node_ids = [node.id for node in bus.get_nodes()]
         if node_ids:
             body = json.dumps(node_ids)
+            log.debug('API nodes: %s', body)
             return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
     return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
@@ -40,7 +41,7 @@ def api_node(node_id: str) -> Response:
         node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         node = bus.get_node(node_id)
 
-        log.debug(str(node))
+        #log.debug(str(node))
 
         if node:
             item = node.__getstate__()
@@ -50,8 +51,9 @@ def api_node(node_id: str) -> Response:
             if hasattr(node, 'alert') and node.alert:
                 item['alert'] = node.alert
 
-            log.debug(item)
+            #log.debug(item)
             body = jsonpickle.encode({'result': 'SUCCESS', 'data': item}, unpicklable=False, keys=True)
+            log.debug('API nodes/%s: %s', node_id, body)
             return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
         else:
             return Response(status=HTTPStatus.NOT_FOUND)
@@ -65,6 +67,7 @@ def api_history_nodes() -> Response:
         node_ids = [node.id for node in bus.get_nodes(BusRole.HISTORY)]
         if node_ids:
             body = json.dumps(node_ids)
+            log.debug('API history: %s', node_ids, body)
             return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
         else:
             return Response(status=HTTPStatus.NOT_FOUND)
@@ -81,12 +84,13 @@ def api_history(node_id: str) -> Response:
         start = int(request.args.get('start', 0))
         step = int(request.args.get('step', 0))
 
-        log.debug('API %s start %d step %d', request.path, start, step)
+        #log.debug('API %s start %d step %d', request.path, start, step)
         if node:
             if hasattr(node, 'get_history'):
                 hist = node.get_history(start, step)
 
                 body = json.dumps({'result': 'SUCCESS', 'data': hist}, sort_keys=False)
+                log.debug('API history/%s (%d/%d): %s', node_id, start, step, body)
                 return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
             else:
                 return Response(status=HTTPStatus.BAD_REQUEST)
@@ -104,7 +108,7 @@ def api_sse() -> Response:
 
     def sse_update():
         changed_ids = bus.wait_for_changes()
-        log.debug(changed_ids)
+        log.debug('API sse reply: %r', changed_ids)
         return json.dumps([id for id in changed_ids])
 
     return send_sse_events(sse_update)

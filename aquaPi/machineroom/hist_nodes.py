@@ -36,8 +36,8 @@ class TimeDb(ABC):
     """
     fields: set[str] = set()
 
-    val_lst = list[str | float | None]
-    ser_lst_o = list[tuple[int, float]]
+    ValueLst = list[str | float | None]
+    SeriesLst = list[tuple[int, float]]
 
     def __init__(self):
         pass
@@ -52,7 +52,7 @@ class TimeDb(ABC):
     @abstractmethod
     def query(self, node_names: Iterable[str], start: int = 0, step:  int = 0
               # ) -> dict[int, list[str | float]]:
-              ) -> dict[int, val_lst] | dict[str, ser_lst_o]:
+              ) -> dict[int, ValueLst] | dict[str, SeriesLst]:
         pass
 
 
@@ -99,13 +99,13 @@ class TimeDbMemory(TimeDb):
 #TODO: add permanent downsampling after some period, e.g. 1h, to reduce mem consumption
 
     def _query_old(self, node_names: Iterable[str]
-                   ) -> dict[str, TimeDb.ser_lst_o]:
+                   ) -> dict[str, TimeDb.SeriesLst]:
         # just for reference, was never used with this API!
         # previous struct:
         #   {ser1: [(ts1, val1.1), (ts2, val1.2), ...],
         #    ser2: [(ts1, val2.1), (ts2, val2.2),....],
         #    ... }
-        result: dict[str, TimeDb.ser_lst_o] = dict()
+        result: dict[str, TimeDb.SeriesLst] = dict()
         for name in node_names:
             series = TimeDbMemory._store[name]
             result[name] = [(v[0], v[1]) for v in series]
@@ -114,7 +114,7 @@ class TimeDbMemory(TimeDb):
     def query(self, node_names: Iterable[str],
               start: int = 0, step: int = 0
               # ) -> dict[int, list[str | float | None]]:
-              ) -> dict[int, TimeDb.val_lst] | dict[str, TimeDb.ser_lst_o]:
+              ) -> dict[int, TimeDb.ValueLst] | dict[str, TimeDb.SeriesLst]:
         with TimeDbMemory._store_lock:
 
             qry_begin = time()
@@ -132,12 +132,11 @@ class TimeDbMemory(TimeDb):
             #    ... }
             # each val may be null!
             # result: dict[int, list[str | float | None]] = dict()
-            result: dict[int, TimeDb.val_lst] = dict()
+            result: dict[int, TimeDb.ValueLst] = dict()
             result[0] = [nm for nm in node_names]
-            empty_list: TimeDb.val_lst = [None] * len(result[0])
 
             start = max(1, start)
-            result[start] = empty_list
+            result[start] = TimeDb.ValueLst = [None] * len(result[0])
             for idx, name in enumerate(node_names):
                 series = TimeDbMemory._store[name]
                 for measurement in series:
@@ -148,7 +147,7 @@ class TimeDbMemory(TimeDb):
                     else:
                         # past start, ensure a tupel for ts exists
                         if ts not in result:
-                            result[ts] = empty_list
+                            result[ts] = TimeDb.ValueLst = [None] * len(result[0])
                         result[ts][idx] = val
 
             log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
@@ -192,7 +191,7 @@ if QUEST_DB:
                       """)
             except pg.OperationalError as ex:
                 if log.level == logging.DEBUG:
-                    log.exception('TimeDbQuest')
+                    log.exception('FYI: TimeDbQuest failure')
                 raise ModuleNotFoundError() from ex
 
         @staticmethod
@@ -286,12 +285,12 @@ if QUEST_DB:
 
         def _generate_old(self, node_names: Iterable[str],
                           recs: list[tuple[datetime, str, float]]
-                          ) -> dict[str, TimeDb.ser_lst_o]:
+                          ) -> dict[str, TimeDb.SeriesLst]:
             # old structure (start=0), each series is an array of data tuples:
             # { "ser1": [(ts1, val1.1), (ts2: val1.2), ... ],
             #   "ser2": [(ts1, val2.1), (ts3, val2.3), ... ],
             #    ... }
-            result: dict[str, TimeDb.ser_lst_o] = dict()
+            result: dict[str, TimeDb.SeriesLst] = dict()
             for node in node_names:
                 result[node] = [(int(r[0].timestamp()), r[2])
                                 for r in recs if r[1] == node]
@@ -300,8 +299,8 @@ if QUEST_DB:
         def query(self, node_names: Iterable[str],
                   start: int = 0, step:  int = 0
                   # ) -> dict[int, list[str | float | None]]:
-                  ) -> dict[int, TimeDb.val_lst] | dict[str, TimeDb.ser_lst_o]:
-            names: TimeDb.val_lst = [n for n in node_names]  # make indexable
+                  ) -> dict[int, TimeDb.ValueLst] | dict[str, TimeDb.SeriesLst]:
+            names: TimeDb.ValueLst = [n for n in node_names]  # make indexable
 
             qry_begin = time()
             log.debug('TimeDbQuest qry: %s / %d / %d', names, start, step)
@@ -323,10 +322,10 @@ if QUEST_DB:
             #    ts3: [None,   val2.3, ...],
             #    ... }
             # each val may be null!
-            result: dict[int, TimeDb.val_lst] = {}
+            result: dict[int, TimeDb.ValueLst] = {}
             result[0] = names
 # FIXME: refactor!!
-            result[start] = [None] * len(names)
+            result[start] = TimeDb.ValueLst = [None] * len(result[0])
             for row in recs:
                 (dt_tm, node, val) = row
                 ts = int(dt_tm.timestamp())  # max resolution is 1sec
@@ -337,7 +336,7 @@ if QUEST_DB:
                 else:
                     # past start, ensure a tupel for ts exists
                     if ts not in result:
-                        result[ts] = [None] * len(names)
+                        result[ts] = TimeDb.ValueLst = [None] * len(result[0])
                     result[ts][idx] = val
 
             # null out the unchanged values,
@@ -389,9 +388,7 @@ class History(BusListener):
                 self.db = TimeDbQuest()
                 log.brief('Recording history %s in QuestDB', name)
             except (NotImplementedError, ModuleNotFoundError, ImportError):
-                if log.level == logging.DEBUG:
-                    log.exception("QuestDB failure:")
-                log.error('QuestDB failed, will keep history in memeory')
+                log.error('QuestDB failed, will keep history in memory')
         if not self.db:
             self.db = TimeDbMemory(duration)
             log.brief('Recording history %s in main memory with limited depth of %dh!', name, duration)
@@ -415,7 +412,7 @@ class History(BusListener):
         return super().listen(msg)
 
     def get_history(self, start: int, step: int
-                    ) -> dict[int, TimeDb.val_lst] | dict[str, TimeDb.ser_lst_o]:
+                    ) -> dict[int, TimeDb.ValueLst] | dict[str, TimeDb.SeriesLst]:
         return self.db.query(self.receives, start, step) if self.db else dict()
 
     def get_settings(self) -> list[tuple]:

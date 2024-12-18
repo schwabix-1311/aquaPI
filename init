@@ -7,6 +7,7 @@ MySelf=$(realpath "$BASH_SOURCE")
 MyHome=$(dirname "$MySelf")
 
 QuestRel="7.1.3"  # -> 7.4.0 ??
+JavaRel="17"
 Envir=${1:-"Devel"}   # else "Prod"
 
 if [[ $(basename -- "$BASH_ARGV0") = $(basename -- "${MySelf}") ]]
@@ -55,16 +56,15 @@ echo "====="
 
 if [ $(getconf LONG_BIT) == 64 ]
 then
-  if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
+  if ( grep -i "Raspberry Pi" /proc/cpuinfo >/dev/null )
   then
-    if ( grep -i "Raspberry Pi" /proc/cpuinfo >/dev/null )
+    if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
-      echo "===== install Quest DB & OpenJDK 17 JRE"
+      echo "===== install Quest DB & OpenJDK JRE"
       tar -xvf questdb-${QuestRel}-no-jre-bin.tar.gz
       mv questdb-${QuestRel}-no-jre-bin questdb-${QuestRel}
 
-      sudo apt install openjdk-17-jre-headless -y
-      export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+      sudo apt install openjdk-${JavaRel}-jre-headless -y
 
       if ( ! grep "-Xmx" questdb-${QuestRel}/bin/questdb.sh >/dev/null )
       then
@@ -73,7 +73,11 @@ then
 
       echo "===== ... and start QuestDB"
       "${MyHome}/questdb-${QuestRel}/questdb.sh" start
-    else
+    fi
+    export JAVA_HOME=/usr/lib/jvm/java-${JavaRel}-openjdk-arm64
+  else
+    if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
+    then
       echo "===== install Quest DB incl. JRE for AMD64"
       tar -xvf questdb-${QuestRel}-rt-linux-amd64.tar.gz
       mv questdb-${QuestRel}-rt-linux-amd64 questdb-${QuestRel}

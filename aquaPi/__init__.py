@@ -54,38 +54,38 @@ log_default = {
   "loggers": {
     "root": {
       "level": "WARNING",
-      "handlers": ["stdout","file"]
+      "handlers": ["stdout", "file"]
     },
 
     "aquaPi":     {"level": "NOTSET"},
-    #"aquaPi.api": {"level": "NOTSET"},
+    # "aquaPi.api": {"level": "NOTSET"},
 
     "machineroom":             {"level": "NOTSET"},
-    #"machineroom.alert_nodes": {"level": "NOTSET"},
-    #"machineroom.aux_nodes":   {"level": "NOTSET"},
-    #"machineroom.ctrl_nodes":  {"level": "NOTSET"},
-    #"machineroom.hist_nodes":  {"level": "NOTSET"},
-    #"machineroom.in_nodes":    {"level": "NOTSET"},
-    #"machineroom.msg_bus":     {"level": "NOTSET"},
-    #"machineroom.msg_types":   {"level": "NOTSET"},
-    #"machineroom.out_nodes":   {"level": "NOTSET"},
+    # "machineroom.alert_nodes": {"level": "NOTSET"},
+    # "machineroom.aux_nodes":   {"level": "NOTSET"},
+    # "machineroom.ctrl_nodes":  {"level": "NOTSET"},
+    # "machineroom.hist_nodes":  {"level": "NOTSET"},
+    # "machineroom.in_nodes":    {"level": "NOTSET"},
+    # "machineroom.msg_bus":     {"level": "NOTSET"},
+    # "machineroom.msg_types":   {"level": "NOTSET"},
+    # "machineroom.out_nodes":   {"level": "NOTSET"},
 
     "driver":               {"level": "NOTSET"},
-    #"driver.base":          {"level": "NOTSET"},
-    #"driver.DriverADC":     {"level": "NOTSET"},
-    #"driver.DriverAlert":   {"level": "NOTSET"},
-    #"driver.DriverGPIO":    {"level": "NOTSET"},
-    #"driver.DriverOneWire": {"level": "NOTSET"},
-    #"driver.DriverPWM":     {"level": "NOTSET"},
-    #"driver.DriverTC420":   {"level": "NOTSET"},
+    # "driver.base":          {"level": "NOTSET"},
+    # "driver.DriverADC":     {"level": "NOTSET"},
+    # "driver.DriverAlert":   {"level": "NOTSET"},
+    # "driver.DriverGPIO":    {"level": "NOTSET"},
+    # "driver.DriverOneWire": {"level": "NOTSET"},
+    # "driver.DriverPWM":     {"level": "NOTSET"},
+    # "driver.DriverTC420":   {"level": "NOTSET"},
 
     "pages":          {"level": "NOTSET"},
-    #"pages.about":    {"level": "NOTSET"},
-    #"pages.config":   {"level": "NOTSET"},
-    #"pages.home":     {"level": "NOTSET"},
-    #"pages.settings": {"level": "NOTSET"},
-    #"pages.spa":      {"level": "NOTSET"},
-    #"pages.sse_util": {"level": "NOTSET"},
+    # "pages.about":    {"level": "NOTSET"},
+    # "pages.config":   {"level": "NOTSET"},
+    # "pages.home":     {"level": "NOTSET"},
+    # "pages.settings": {"level": "NOTSET"},
+    # "pages.spa":      {"level": "NOTSET"},
+    # "pages.sse_util": {"level": "NOTSET"},
 
     "werkzeug": {
       "comment": "werkzeug is noisy, reduce to >=WARNING, INFO shows all https requests",
@@ -96,14 +96,13 @@ log_default = {
 }
 
 
-
-def create_app():
+def create_app() -> Flask:
     # TODO wrap in try/catch, but how should exceptions be handled?
     app = Flask(__name__, instance_relative_config=True)
 
     config_file = path.join(app.instance_path, "log_config.json")
     if path.exists(config_file):
-        with open(config_file) as f_in:
+        with open(config_file, encoding='ascii') as f_in:
             log_config = json.load(f_in)
     else:
         log_config = log_default
@@ -176,12 +175,16 @@ def create_app():
     if 'routes' in sys.argv:
         return app
 
-    from . import machineroom
-    app.machineroom = machineroom.init(app.config['CONFIG'])
-    app.bus = app.machineroom.bus
+    from .machineroom import MachineRoom
+    try:
+        app.extensions['machineroom'] = MachineRoom(app.config['CONFIG'])
+    except Exception:
+        log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
+        return None
 
+    #FIXME bus is used by Python code in jinja template 'settings'
     @app.context_processor
     def inject_globals():
-        return dict(bus=app.bus)
+        return dict(bus=app.extensions['machineroom'].bus)
 
     return app

@@ -91,6 +91,7 @@ const AquapiDashboardConfigurator = {
 				HISTORY: 'mdi-chart-line',
 				IN_ENDP: 'mdi-location-enter',
 				OUT_ENDP: 'mdi-location-exit',
+				ALERTS: 'mdi-alert',
 			}
 		}
 	},
@@ -117,7 +118,7 @@ const AquapiDashboardConfigurator = {
 			item.visible = !item.visible
 		},
 		typeLabel(item) {
-			return ['AUX', 'CTRL', 'HISTORY', 'IN_ENDP', 'OUT_ENDP'].includes(item.role)
+			return ['AUX', 'CTRL', 'HISTORY', 'IN_ENDP', 'OUT_ENDP', 'ALERTS'].includes(item.role)
 				? this.$t('misc.nodeTypes.' + item.role.toLowerCase())
 				: item.role
 		},
@@ -235,6 +236,7 @@ const AquapiDashboardWidget = {
 				HISTORY: 'mdi-chart-line',
 				IN_ENDP: 'mdi-location-enter',
 				OUT_ENDP: 'mdi-location-exit',
+				ALERTS: 'mdi-alert',
 			},
 			severityMap: {
 				'act': 'success',

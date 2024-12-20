@@ -47,9 +47,9 @@ const Config = {
 								</span>
 							</h3>
 
-							<template v-if="node.inputs">
+							<template v-if="node.receives">
 								<v-sheet outlined class="ba-1 ml-7">
-									INPUTS: {{ node.inputs }}
+									INPUTS: {{ node.receives }}
 								</v-sheet>
 							</template>
 						</div>

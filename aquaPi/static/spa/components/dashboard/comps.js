@@ -68,15 +68,15 @@ const AnyNode = {
 
 			return node.data
 		},
-		inputNodes() {
+		receivesNodes() {
 			const node = this.node
 			let nodes = []
 
-			if (node.inputs?.sender) {
-				node.inputs.sender.forEach(id => {
+			node.receives.forEach(id => {
+				if (id !== '*') {
 					nodes.push(this.$store.getters['dashboard/node'](id))
-				})
-			}
+				}
+			})
 
 			return nodes
 		},
@@ -129,7 +129,7 @@ const BusNode = {
 			</v-card-text>
 			
 			<template
-				v-if="inputNodes.length > 0"
+				v-if="receivesNodes.length > 0"
 			>
 				<template
 					v-if="level == 1"
@@ -145,7 +145,7 @@ const BusNode = {
 							</v-expansion-panel-header>
 							<v-expansion-panel-content>
 								<v-card
-									v-for="(item, index) in inputNodes"
+									v-for="(item, index) in receivesNodes"
 									:key="item.identifier"
 									outlined
 									tile
@@ -166,7 +166,7 @@ const BusNode = {
 					v-else
 				>
 					<v-card
-						v-for="(item, index) in inputNodes"
+						v-for="(item, index) in receivesNodes"
 						:key="item.identifier"
 						outlined
 						tile
@@ -187,6 +187,8 @@ const BusNode = {
 	computed: {},
 }
 Vue.component('BusNode', BusNode)
+
+//TODO: do we need derived nodes W/O any functional change? 
 
 
 const ControllerNode = {
@@ -223,7 +225,7 @@ const SunCtrl = {
 	computed: {
 		descript() {
 			//TODO: prefix a label: dusk/dawn  or ramp
-			return this.node.xscend.toString() + ' h'
+			return '/\\ ' + this.node.xscend.toString() + ' h'
 		},
 		value() {
 			let node = this.node
@@ -246,8 +248,8 @@ const FadeCtrl = {
 	computed: {
 		descript() {
 			//TODO: prefix a label: dusk/dawn  or ramp
-			return this.node.fade_time.toString() + ' h / '
-			       + this.node.fade_out.toString() + ' h'
+			return this.node.fade_time.toString() + ' s'
+			       + ' <=> ' + this.node.fade_out.toString() + ' sh'
 		},
 		value() {
 			let node = this.node
@@ -274,6 +276,7 @@ const AnalogInput = {
 	extends: BusNode,
 }
 Vue.component('AnalogInput', AnalogInput)
+
 
 const ScheduleInput = {
 	extends: BusNode,
@@ -798,6 +801,46 @@ const HistoryChart = {
 }
 Vue.component('HistoryChart', HistoryChart)
 
+
+const AlertNode = {
+	extends: AnyNode,
+	template: `
+		<div>
+			<v-card-title
+				v-if="addNodeTitle"
+			>
+				{{ node.name }}
+			</v-card-title>
+			<aquapi-node-description
+				:item="node"
+			>
+			</aquapi-node-description>
+			<v-card-text
+				class="text--secondary"
+			>
+				<aquapi-node-alert
+					:item="node"
+				>
+					<template v-slot:label>
+						<span>{{ label }}</span>
+					</template>
+					<template v-slot:value>
+						<span>{{ value }}</span>
+					</template>
+				</aquapi-node-data>
+			</v-card-text>
+		</div>
+	`,
+
+	computed: {
+		descript() {
+			return this.$parent?.conditions ?? ''
+		}
+	}
+}
+Vue.component('Alert', AlertNode)
+
+
 const AquapiNodeDescription = {
 	props: {
 		item: {
@@ -848,5 +891,32 @@ const AquapiNodeData = {
 	computed: {}
 }
 Vue.component('AquapiNodeData', AquapiNodeData)
+
+
+
+const AquapiNodeAlert = {
+	props: {
+		item: {
+			type: Object,
+			required: true
+		},
+	},
+	template: `
+		<slot name="value">
+			Value
+			<v-list-item
+				v-for="(item, index) in value"
+				:key="index"
+			>
+				<v-list-item-title>
+					!{{ item }}
+				</v-list-item-title>
+			</v-list-item>
+		</slot>
+	`,
+
+	computed: {}
+}
+Vue.component('AquapiNodeAlert', AquapiNodeAlert)
 
 // vim: set noet ts=4 sw=4:

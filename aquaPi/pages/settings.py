@@ -2,6 +2,7 @@
 
 import logging
 from flask import (Blueprint, current_app, flash, request, render_template)
+from typing import Any
 
 # from ..machineroom import msg_bus
 
@@ -15,9 +16,9 @@ bp = Blueprint('settings', __name__)
 
 # @bp.route('/settings')
 @bp.route('/settings', methods=['GET', 'POST'])
-def settings():
-    bus = current_app.bus
-    mr = current_app.machineroom
+def settings() -> str:
+    mr = current_app.extensions['machineroom']
+    bus = mr.bus
     sub_form = None
 
     if request.method == 'POST':
@@ -33,7 +34,7 @@ def settings():
             node_attr = key.split('.')
             if len(node_attr) == 2:
                 try:
-                    new_value = float(request.form[key])
+                    new_value: Any = float(request.form[key])
                 except ValueError:
                     new_value = request.form[key]
                 try:

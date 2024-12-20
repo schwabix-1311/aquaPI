@@ -1,35 +1,42 @@
 #!/usr/bin/env python3
 
+from abc import ABC
 import logging
+from typing import Any
 
 
 log = logging.getLogger('machineroom.msg_types')
 
 
-class Msg:
+class Msg(ABC):
     """ The base of all message classes, unusable by itself.
     """
-    def __init__(self, sender):
+    def __init__(self, sender: str):
         self.sender = sender
-        self.dbg_cnt = 0
+        self.dbg_cnt: int = 0
 
-    def __str__(self):
-        return '{}({})#{}'.format(type(self).__name__, self.sender, self.dbg_cnt)
+    def __str__(self) -> str:
+        return '{}({})#{}'.format(type(self).__name__,
+                                  self.sender,
+                                  self.dbg_cnt)
+
 
 # payload messages
-
 
 class MsgPayload(Msg):
     """ Base class for custom BusNode communication,
         e.g. sensor data, output control, message transformers.
         Payloads may have any data, it is the receiver's task to interpret it.
     """
-    def __init__(self, sender, data):
-        Msg.__init__(self, sender)
+    def __init__(self, sender: str, data: Any):
+        super().__init__(sender)
         self.data = data
 
-    def __str__(self):
-        return '{}({})#{}:{}'.format(type(self).__name__, self.sender, self.dbg_cnt, self.data)
+    def __str__(self) -> str:
+        return '{}({})#{}:{}'.format(type(self).__name__,
+                                     self.sender,
+                                     self.dbg_cnt,
+                                     self.data)
 
 
 class MsgData(MsgPayload):
@@ -44,7 +51,7 @@ class MsgData(MsgPayload):
 
 
 # TODO further Msg types
-# class MsgCommand(MsgPayload): # for ctrl parameters, in contrast to data values
+# class MsgCommand(MsgPayload): # for ctrl params, in contrast to data values
 # class MsgLog(MsgPayload):  # needed? anything should be loggable -> MsgData
 # class MsgWarning(MsgPayload):
 # class MsgError(MsgPayload):
@@ -76,8 +83,8 @@ class MsgBye(MsgInfra):
 class MsgReply(Msg):
     """ Base class for all reply messages, usually 1:1.
     """
-    def __init__(self, sender, send_to):
-        Msg.__init__(self, sender)
+    def __init__(self, sender: str, send_to: str):
+        super().__init__(sender)
         self.send_to = send_to
 
     def __str__(self):
@@ -88,31 +95,3 @@ class MsgReplyHello(MsgReply, MsgInfra):
     """ Reply from plugged-in nodes to MsgBorn.
         Used to let new nodes see who's present.
     """
-
-
-#############################
-
-
-class MsgFilter:
-    """ MsgFilter is used to select messages received
-        by BusListener via a list of sender names.
-        Empty list (actually an array) means no filtering.
-        sender_list may be None=all, a string or a list of strings.
-    """
-    # TODO add filtering by other attributes (group, category, sender role/type)
-    def __init__(self, sender):
-        if isinstance(sender, str):
-            self.sender = {sender}
-        else:
-            self.sender = sender
-
-    def __str__(self):
-        return '{}({})'.format(type(self).__name__, ','.join(self.sender))
-
-    def filter(self, msg):
-        if not self.sender:
-            log.warning('%s has empty sender list, msg %s', str(), str(msg))
-        if (self.sender == ['*']) or (msg.sender in self.sender):
-            # TODO add categories and/or groups
-            return True
-        return False

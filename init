@@ -6,7 +6,8 @@
 MySelf=$(realpath "$BASH_SOURCE")
 MyHome=$(dirname "$MySelf")
 
-QuestRel="7.1.3"
+QuestRel="7.1.3"  # -> 7.4.0 ??
+JavaRel="17"
 Envir=${1:-"Devel"}   # else "Prod"
 
 if [[ $(basename -- "$BASH_ARGV0") = $(basename -- "${MySelf}") ]]
@@ -32,6 +33,8 @@ then
 
   # Debian derivatives don't come with py3 venv by default
   grep -i debian /usr/lib/os-release && sudo apt-get install python3-venv
+  # ... likewise python3-dev, which is needed for "pip install --use-pep517 .."
+  grep -i debian /usr/lib/os-release && sudo apt-get install python3-dev
 
   # NOTE: You can append --system-site-packages to inherit all
   #       packages installed globally, e.g. your vim's jedi. The
@@ -48,28 +51,42 @@ echo "Activate aquaPi development env."
 cd "${MyHome}" || return 12
 . ./venv/bin/activate
 echo "===== get all python packages"
-pip3 install -r requirements.txt
+pip3 install --use-pep517 -r requirements.txt
 echo "====="
 
 if [ $(getconf LONG_BIT) == 64 ]
 then
-  if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
+  if ( grep -i "Raspberry Pi" /proc/cpuinfo >/dev/null )
   then
-    if ( grep -i arm /proc/cpuinfo >/dev/null )
+    if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
-      echo "===== install Quest DB & JRE 11"
+      echo "===== install Quest DB & OpenJDK JRE"
       tar -xvf questdb-${QuestRel}-no-jre-bin.tar.gz
       mv questdb-${QuestRel}-no-jre-bin questdb-${QuestRel}
-      apt install default-jre
-    else
+
+      sudo apt install openjdk-${JavaRel}-jre-headless -y
+
+      if ( ! grep "-Xmx" questdb-${QuestRel}/bin/questdb.sh >/dev/null )
+      then
+        sed "s/-XX:+UseParallelGC/-XX:+UseParallelGC\\n  -Xms32M\\n  -Xmx128M/" questdb-${QuestRel}/bin/questdb.sh
+      fi
+
+      echo "===== ... and start QuestDB"
+      "${MyHome}/questdb-${QuestRel}/questdb.sh" start
+    fi
+    export JAVA_HOME=/usr/lib/jvm/java-${JavaRel}-openjdk-arm64
+  else
+    if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
+    then
       echo "===== install Quest DB incl. JRE for AMD64"
       tar -xvf questdb-${QuestRel}-rt-linux-amd64.tar.gz
       mv questdb-${QuestRel}-rt-linux-amd64 questdb-${QuestRel}
+
+      echo "===== ... and start QuestDB"
+      "${MyHome}/questdb-${QuestRel}/bin/questdb.sh" start
     fi
   fi
   pip3 install 'psycopg[binary]>=3.1.9'
-  echo "===== ... and start QuestDB"
-  "${MyHome}/questdb-${QuestRel}/bin/questdb.sh" start
   echo "You can interact with Quest DB in your browser at localhost:9000"
   echo "====="
 fi

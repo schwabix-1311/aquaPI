@@ -3,11 +3,12 @@
 import logging
 import random
 
+#TODO: replace all with Adafruit Ports, keep unique GPIO.gpio_function
 try:
-    import RPi.GPIO as GPIO
+    import RPi.GPIO as GPIO  # type: ignore[import-untyped]
 except (RuntimeError, ModuleNotFoundError):
     # make lint happy with minimal non-funct facade
-    class GPIOdummy:
+    class GPIO:  # type: ignore[no-redef]
         BCM = None
         IN = None
         OUT = None
@@ -43,8 +44,6 @@ except (RuntimeError, ModuleNotFoundError):
             pin = not pin
             value = not value
 
-    GPIO = GPIOdummy
-
 from .base import (InDriver, OutDriver, IoPort, PortFunc, is_raspi, DriverWriteError)
 
 log = logging.getLogger('driver.DriverGPIO')
@@ -64,7 +63,7 @@ class DriverGPIO(OutDriver, InDriver):
     """
 
     @staticmethod
-    def find_ports():
+    def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
             for pin in range(28):
@@ -103,43 +102,41 @@ class DriverGPIO(OutDriver, InDriver):
             }
         return io_ports
 
-    def __init__(self, cfg, func):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self._pin = int(cfg['pin'])
+        self._pin: int | None = int(cfg['pin'])
         inout = 'in' if self._is_input_driver() else 'out'
-        self.name = 'GPIO %d %s' % (self._pin, inout)
+        self.name: str = 'GPIO %d %s' % (self._pin, inout)
 
         if not self._fake:
             GPIO.setup(self._pin, GPIO.IN if inout == 'in' else GPIO.OUT)
         else:
             self.name = '!' + self.name
 
-    def _is_input_driver(self):
+    def _is_input_driver(self) -> bool:
         return self.func == PortFunc.Bin
 
-    def close(self):
+    def close(self) -> None:
         log.debug('Closing %r', self)
         if not self._fake and self._pin is not None:
             GPIO.cleanup(self._pin)
             self._pin = None
 
-    def write(self, value):
+    def write(self, value: bool) -> None:
         if self._is_input_driver():
             raise DriverWriteError()
 
+        log.info('%s -> %d', self.name, bool(value))
         if not self._fake:
             GPIO.output(self._pin, bool(value))
-        else:
-            log.info('%s -> %d', self.name, bool(value))
-            self._val = bool(value)
+        self._val = bool(value)
 
-    def read(self):
+    def read(self) -> bool:
         if not self._fake:
-            val = GPIO.input(self._pin)
+            self._val = GPIO.input(self._pin)
         else:
             if self._is_input_driver():
-                val = False if random.random() <= 0.5 else True
-            else:
-                val = self._val
-            log.info('%s = %d', self.name, val)
-        return val
+                self._val = False if random.random() <= 0.5 else True
+
+        log.info('%s = %d', self.name, self._val)
+        return bool(self._val)

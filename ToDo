@@ -117,10 +117,10 @@ THOUGHTS
 DONE
 ====
 
-- manually, global: pip pip install pylint, vim-jedi, jedi-language-server, vim-ale
+- manually, global: pip pip install pylint, vim-jedi, mypy, jedi-language-server, vim-ale
 - manually modify .vimrc:
         let g:ale_linters = {
-                \ 'python': ['flake8', 'pylint', 'jedils'],
+                \ 'python': ['flake8', 'mypy', 'pylint', 'jedils'],
                 \ 'javascript': ['eslint'],
                 \}
         let g:ale_fixers = {
@@ -135,6 +135,7 @@ DONE
         python -m venv venv
         . ./venv/bin/activate
         pip install Flask sseclient ...
+        mypy --install-types
 - run
         export FLASK_APP=aquaPi
         export FLASK_ENV=development

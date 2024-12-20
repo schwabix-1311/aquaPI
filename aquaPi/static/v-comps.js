@@ -62,14 +62,12 @@ const AnyNode = {
 		await this.$root.updateNode(this.id, true)
 		//console.debug(`... Any create ${this.id} done`)
 
-		if (this.node.inputs?.sender != null) {
-			this.in_ids = this.node.inputs.sender
-			if (this.in_ids == '*')
-				this.in_ids = []
-			//console.debug(`... INs of ${this.id}:  ${this.in_ids}`)
-			for (let in_id of this.in_ids)
-				await this.$root.updateNode(in_id, true)
-		}
+		this.in_ids = this.node.receives
+		if (this.in_ids == '*')
+			this.in_ids = []
+		//console.debug(`... INs of ${this.id}:  ${this.in_ids}`)
+		for (let in_id of this.in_ids)
+			await this.$root.updateNode(in_id, true)
 	},
 	computed: {
 		node() {

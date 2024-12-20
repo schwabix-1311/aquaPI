@@ -2,10 +2,11 @@
 
 from abc import ABC, abstractmethod
 import logging
-# from time import time
+from typing import Any
 
-from .msg_bus import (BusListener, BusRole, MsgData, MsgFilter)
-from ..driver import (PortFunc, io_registry, DriverReadError)
+from .msg_types import (Msg, MsgPayload, MsgData)
+from .msg_bus import (BusListener, BusRole, DataRange)
+from ..driver import (PortFunc, io_registry, OutDriver)
 
 
 log = logging.getLogger('machineroom.alert_nodes')
@@ -21,53 +22,66 @@ class AlertCond(ABC):
         node_id   - id of node this condition applies to
         threshold - the limit _check() will use
     """
-    def __init__(self, node_id, threshold):
-        self.node_id = node_id
-        self.threshold = threshold
-        self._alerted = False
-
-    def check_change(self, msg):
-        alerted = self._check(msg)
-        if (alerted == self._alerted):
-            return None
-        self._alerted = alerted
-        return self._alerted
-
-    def is_alerted(self):
-        return self._alerted
+    def __init__(self, node_id: str, threshold: float):
+        self.node_id: str = node_id
+        self.threshold: float = threshold
+        self._alerted: bool = False
 
     @abstractmethod
-    def _check(self, msg):
-        pass
+    def _check(self, msg: MsgPayload) -> bool:
+        """ evaluate alert condition
+        """
 
-    def alert_text(self, msg, bus):
-        name = bus.get_node(msg.sender).name or msg.sender
-        return self._text(msg, name)
+    def check_for_change(self, msg: Msg) -> bool | None:
+        """ Check for change in alert text, return new state or None
+        """
+        if isinstance(msg, (MsgData)):  # might add other MsgPayload types
+            alerted = self._check(msg)
+            if (alerted == self._alerted):
+                log.debug('%s: alert unchanged %s', msg.sender, self._alerted)
+                return None
+            self._alerted = alerted
+            log.debug('%s: alert changed to %s', msg.sender, self._alerted)
+            return self._alerted
+        return None
+
+    def is_alerted(self) -> bool:
+        """ return current alert state
+        """
+        return self._alerted
+
+    def alert_text(self, msg: MsgPayload) -> str:
+        """ build a human readable alert message
+        """
+        #if node := bus.get_node(msg.sender):
+        #    name = node.name or msg.sender  #FIXME ?
+        return self._text(msg, msg.sender)
 
     @abstractmethod
-    def _text(self, msg, name):
-        pass
+    def _text(self, msg: MsgPayload, name: str) -> str:
+        """ build a human redable alert text
+        """
 
 
 class AlertAbove(AlertCond):
     """ Alert when data above threshold
     """
-    def _check(self, msg):
+    def _check(self, msg: MsgPayload) -> bool:
         return msg.data > self.threshold
 
-    def _text(self, msg, name):
-        return 'Value of %s is %s: %.4f  [limit %.4f]\n' \
+    def _text(self, msg: MsgPayload, name: str) -> str:
+        return 'Value of %s is %s: %.2f  [limit %.2f]' \
                % (name, 'too high' if self._alerted else 'OK', msg.data, self.threshold)
 
 
 class AlertBelow(AlertCond):
     """ Alert when data below threshold
     """
-    def _check(self, msg):
+    def _check(self, msg: MsgPayload) -> bool:
         return msg.data < self.threshold
 
-    def _text(self, msg, name):
-        return 'Value of %s is %s: %.4f  [limit %.4f]\n' \
+    def _text(self, msg: MsgPayload, name: str) -> str:
+        return 'Value of %s is %s: %.2f  [limit %.2f]' \
                % (name, 'too low' if self._alerted else 'OK', msg.data, self.threshold)
 
 
@@ -79,89 +93,98 @@ class AlertBelow(AlertCond):
 
 class Alert(BusListener):
     """ A multi-input node, checking alert conditions with output
-        to email/telegram/etc.
+        to email/telegram/etc. One instance can handle several conditions as
+        long as all have the same driver, e.g. all report thru email.
 
         Options:
-            name       - unique name of this output node in UI
+            name       - unique name of this alert handler node in UI
             conditions - collection of alert conditions
-            driver     - port name of driver of type S(tring)out or B(inary)out
+            port       - port name of driver of type S(tring)out or B(inary)out
 
         Output:
             - nothing -
     """
     ROLE = BusRole.ALERTS
+    data_range = DataRange.STRING
 
-    def __init__(self, name, conditions, port, _cont=False):
+    def __init__(self, name: str, conditions: set[AlertCond] | AlertCond,
+                 port: str, _cont: bool = False):
         super().__init__(name, _cont=_cont)
-        self.data = 0  # just anything for MsgBorn
-        self._driver = None
-        self._port = None
+        self.data: list[str] = []
+        self._driver: OutDriver | None = None
+        self._port: str = ''
         self.port = port
         if isinstance(conditions, AlertCond):
-            conditions = [conditions]
-        self.conditions = conditions
-        self._inputs = MsgFilter({c.node_id for c in self.conditions})
+            conditions = {conditions}
+        self.conditions: set[AlertCond] = conditions
+        self.receives: list[str] = [c.node_id for c in self.conditions]
 
-
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state.update(conditions=self.conditions)
         state.update(port=self.port)
         return state
 
-    def __setstate__(self, state):
-        self.__init__(state['name'], state['conditions'], state['port'],
-                      _cont=True)
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        Alert.__init__(self, state['name'], state['conditions'], state['port'],
+                       _cont=True)
 
     @property
-    def port(self):
+    def port(self) -> str:
         return self._port
 
     @port.setter
-    def port(self, port):
+    def port(self, port: str):
         if self._driver:
             io_registry.driver_destruct(self._port, self._driver)
+            self._driver = None
         if port:
-            self._driver = io_registry.driver_factory(port)
+            driver = io_registry.driver_factory(port)
+            if isinstance(driver, OutDriver):
+                self._driver = driver
+            else:
+                log.error('Port %s does not support writing alert messages. Alert %s will be ignored.',
+                          port, self.name)
         self._port = port
 
-    def listen(self, msg):
-        if isinstance(msg, MsgData):
+    def listen(self, msg: Msg):
+        if isinstance(msg, MsgData) and self._bus:
             any_alert = False
             any_change = False
-            all_msgs = ''
-            for cond in [c for c in self.conditions if c.node_id == msg.sender]:
+            self.data = []
+            for cond in {c for c in self.conditions if c.node_id == msg.sender}:
                 log.debug('## (%s) check %f against %f - %s', type(cond), msg.data, cond.threshold, cond.node_id)
-                cond_change = cond.check_change(msg)
+                cond_change = cond.check_for_change(msg)
 
-                cond_txt = cond.alert_text(msg, self._bus)
+                cond_txt = cond.alert_text(msg)
                 if cond_change is not None:
-                    all_msgs += cond_txt
+                    self.data.append(cond_txt)
                     any_alert |= cond_change
                     any_change = True
                     log.debug('## "%s" changed to "%s"', type(cond), cond_txt)
                 elif cond.is_alerted():
-                    all_msgs += cond_txt
+                    self.data.append(cond_txt + '  ... continued')
                     any_alert |= True
                     log.debug('## "%s" still is "%s"', type(cond), cond_txt)
 
             if any_alert or any_change:
-                log.warning(all_msgs)
+                log.warning('Alerts for %s\n%s', self.name, '\n'.join(self.data))
 
             # IDEA might add a repeat interval here
             if any_change:
-                if self._driver.func == PortFunc.Bout:
-                    self._driver.write(100 if any_alert else 0)
-                    log.info('Alert device "%s" set to %d', self._driver.name, 100 if any_alert else 0)
-                elif self._driver.func == PortFunc.Sout:
-                    self._driver.write(all_msgs)
-                    log.info('Alert receiver "%s" will get msg:  "%s"', self._driver.name, all_msgs)
-                self.post(MsgData(self.id, all_msgs))   #TODO MsgAlert ??
+                if self._driver:
+                    driver = self._driver
+                    if driver.func == PortFunc.Bout:
+                        driver.write(100 if any_alert else 0)
+                        log.info('Alert device "%s" set to %d', driver.name, 100 if any_alert else 0)
+                    elif driver.func == PortFunc.Sout:
+                        driver.write('\n'.join(self.data))
+                        log.info('Alert receiver "%s" will get msg:  "%s"', driver.name, '\n'.join(self.data))
+                self.post(MsgData(self.id, '\n'.join(self.data)))   #TODO MsgAlert ??
 
-    def get_settings(self):
+    def get_settings(self) -> list[tuple]:
         return []
-##        settings = super().get_settings()
-##        settings.append(('duration', 'max. Dauer', self.duration,
-##                         'type="number" min="0" max="%d"' % (24*60*60)))
-##        return settings
-
+        # settings = super().get_settings()
+        # settings.append(('duration', 'max. Dauer', self.duration,
+        #                  'type="number" min="0" max="%d"' % (24*60*60)))
+        # return settings

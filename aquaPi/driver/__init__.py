@@ -6,8 +6,8 @@ import sys
 from os import path
 import glob
 
-from .base import Driver, DriverParamError, DriverPortInuseError
-from .base import *
+from .base import (IoPort, PortFunc, Driver,
+                   DriverPortInuseError, DriverInvalidPortError, DriverParamError)
 
 log = logging.getLogger('driver')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
@@ -58,7 +58,7 @@ class IoRegistry(object):
     Very likely getting a higher level driver and a tupel of IoPorts.  TBD!
     """
 
-    _map = {}
+    _map: dict[str, IoPort] = {}
 
     def __init__(self):
         # iterate all class imports from a module, then call each class' port enumerator
@@ -79,11 +79,9 @@ class IoRegistry(object):
         for name in drv_mod_names:
             drv_module = sys.modules[name]
             log.debug('# module %s', drv_module)
-            dict_classes = [cl for cl in drv_module.__dict__.values() if type(cl) is type]
-            for mod_cl in dict_classes:
-                if issubclass(mod_cl, Driver):
-                    log.debug('found drv class %r', mod_cl)
-                    drv_classes.add(mod_cl)
+            mod_drivers = {cl for cl in drv_module.__dict__.values()
+                            if type(cl) is type and issubclass(cl, Driver)}
+            drv_classes |= mod_drivers
 
         for drv in drv_classes:
             if hasattr(drv, 'find_ports'):
@@ -97,24 +95,26 @@ class IoRegistry(object):
         log.brief('Port drivers found for:')
         log.brief('%r', [k for k in IoRegistry._map])
 
-    def get_ports_by_function(self, funcs, in_use=False):
+    def get_ports_by_function(self, funcs: list[PortFunc], in_use: bool = False
+                              ) -> dict[str, IoPort]:
         """ returns a view of free or used IoPorts filtered by iterable funcs.
         """
         mp = IoRegistry._map
         return {key: mp[key] for key in mp
                 if mp[key].func in funcs and bool(mp[key].used) == in_use}
 
-    def driver_factory(self, port, drv_options=None):
+    def driver_factory(self, port: str, drv_options: dict | None = None
+                       ) -> Driver | None:
         """ Create a driver for a port found in io_ports.keys().
             Drivers that use >1 port are created by a dedicated factory (later)
         """
         log.debug('create a driver for %r', port)
         if port not in IoRegistry._map:
-            raise DriverParamError('There is no port named %s' % port)
+            raise DriverInvalidPortError(port)
 
         io_port = IoRegistry._map[port]
         if io_port.used:
-            raise DriverPortInuseError(port=port)
+            raise DriverPortInuseError(port)
 
         try:
             if drv_options:
@@ -130,12 +130,13 @@ class IoRegistry(object):
 
             return driver
         except Exception:
-            log.exception('Failed to create driver: %s', port)
+            log.exception('Failed to create port driver: %s' % port)
+            raise
 
-    def driver_destruct(self, port, driver):
+    def driver_destruct(self, port: str, driver: Driver) -> None:
         log.debug('destruct driver for %r', port)
         if port not in IoRegistry._map:
-            raise DriverParamError('There is no driver for port %s' % port)
+            raise DriverInvalidPortError(port)
 
         io_port = IoRegistry._map[port]
         driver.close()
@@ -154,12 +155,18 @@ class IoRegistry(object):
 DRIVER_FILE_PREFIX = 'Driver'
 CUSTOM_DRIVERS = 'CustomDrivers'
 
-# import all files named Driver*.py into our package, including a subfolder CustomDrivers
+# flake8: noqa
+# - F403 allow import * for the runtime-imports
+# - F405 __path__ undefined or from import *
+from .base import *  # noqa: F403 allow import * for the runtime-imports
+
+# import all files named Driver*.py into our package,
+#  including a subfolder CustomDrivers
 __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
 
 for drv_path in __path__:
     for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
-        log.debug('Found driver file %s', drv_file)
+        log.info('Found driver file %s', drv_file)
 
         drv_name = path.basename(drv_file)
         if drv_name.startswith(DRIVER_FILE_PREFIX):
@@ -168,12 +175,15 @@ for drv_path in __path__:
             drv_name = drv_name[:-3]
         drv_name = __name__ + '.' + drv_name.lower()
         drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
-        log.debug('Driver spec %s', drv_spec)
+        #log.debug('Driver spec %s', drv_spec)
 
-        drv_mod = importlib.util.module_from_spec(drv_spec)
-        log.debug('Driver module %s', drv_mod)
+        if drv_spec:
+            drv_mod = importlib.util.module_from_spec(drv_spec)
+            log.debug('Driver module %s', drv_mod)
 
-        sys.modules[drv_name] = drv_mod
-        drv_spec.loader.exec_module(drv_mod)
+            sys.modules[drv_name] = drv_mod
+            if drv_spec.loader:
+                drv_spec.loader.exec_module(drv_mod)
+                log.debug('  loaded module %s', drv_mod)
 
 io_registry = IoRegistry()

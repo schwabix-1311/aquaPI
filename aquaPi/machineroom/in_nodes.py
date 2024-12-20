@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 
+from abc import ABC
 import logging
+from typing import Any
 import time
 from datetime import datetime
 from croniter import croniter
 from threading import Thread
 
-from .msg_bus import (BusNode, BusRole, DataRange, MsgData)
-from ..driver import (io_registry, DriverReadError)
+from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData)
+from ..driver import (io_registry, DriverReadError, InDriver)
 
 
 log = logging.getLogger('machineroom.in_nodes')
@@ -17,7 +19,7 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 # ========== inputs AKA sensors ==========
 
 
-class InputNode(BusNode):
+class InputNode(BusNode, ABC):
     """ Base class for IN_ENDP delivering measurments,
         e.g. temperature, pH, water level switch
         All use a reader thread, most reading from IoRegistry port
@@ -25,54 +27,64 @@ class InputNode(BusNode):
     """
     ROLE = BusRole.IN_ENDP
 
-    def __init__(self, name, port, interval, _cont=False):
+    def __init__(self, name: str, port: str,
+                 interval: float = 0.5, _cont: bool = False):
         super().__init__(name, _cont=_cont)
-        self._driver = None
+        self._driver: InDriver | None = None
         self._driver_opts = None
-        self._port = None
-        self._reader_thread = None
-        self._reader_stop = False
-        self.interval = max(0.1, float(interval))
-        self.port = port
+        self._port: str = ''
+        self._reader_thread: Thread | None = None
+        self._reader_stop: bool = False
+        self.interval: float = max(0.1, float(interval))
+        self.port: str = port
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state.update(port=self.port)
         state.update(interval=self.interval)
         return state
 
-    def __str__(self):
+    # def __setstate__(self, state: dict[str, Any]) -> None:
+    #     self.data = state['data']
+    #     InputNode.__init__(self, state, _cont=True)
+
+    def __str__(self) -> str:
         return '{}({})'.format(type(self).__name__, self.port)
 
     @property
-    def port(self):
+    def port(self) -> str:
         return self._port
 
     @port.setter
-    def port(self, port):
+    def port(self, port: str) -> None:
         if self._driver:
             io_registry.driver_destruct(self._port, self._driver)
         if port:
-            self._driver = io_registry.driver_factory(port, self._driver_opts)
+            driver = io_registry.driver_factory(port, self._driver_opts)
+            if isinstance(driver, InDriver):
+                self._driver = driver
+            else:
+                log.error('Port %s does not support reading data. %s will be ignored.',
+                          port, self.name)
         self._port = port
 
-    def plugin(self, bus):
+    def plugin(self, bus: MsgBus) -> None:
         super().plugin(bus)
         self._reader_thread = Thread(name=self.id, target=self._reader, daemon=True)
         self._reader_thread.start()
 
-    def pullout(self):
+    def pullout(self) -> bool:
         if self._reader_thread:
             self._reader_stop = True
             self._reader_thread.join(timeout=5)
             self._reader_thread = None
-        self.port = None
-        super().pullout()
+        self.port = ''
+        return super().pullout()
 
     def read(self):
         raise NotImplementedError()
 
-    def _reader(self):
+    def _reader(self) -> None:
         log.debug('InputNode.reader started')
         while not self._reader_stop:
             try:
@@ -90,7 +102,7 @@ class InputNode(BusNode):
         self._reader_thread = None
         self._reader_stop = False
 
-    def get_settings(self):
+    def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
         settings.append(('port', 'Input',
                          self.port, 'type="text"'))
@@ -114,23 +126,25 @@ class SwitchInput(InputNode):
     """
     data_range = DataRange.BINARY
 
-    def __init__(self, name, port, interval=0.5, inverted=0, _cont=False):
+    def __init__(self, name: str, port: str, 
+                 interval: float = 0.5, inverted: bool = False,
+                 _cont: bool = False):
         super().__init__(name, port, interval, _cont=_cont)
-        self.inverted = int(inverted)
+        self.inverted: bool = inverted
         ##self.unit = '⏻'
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state.update(inverted=self.inverted)
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['port'],
-                      interval=state['interval'], inverted=state['inverted'],
-                      _cont=True)
+        SwitchInput.__init__(self, state['name'], state['port'],
+                             interval=state['interval'], inverted=state['inverted'],
+                             _cont=True)
 
-    def read(self):
+    def read(self) -> bool:
         val = self.data
         # TODO: reduce load & improve response time by using interrupt-driven IO, either here or in DriverGPIO
         if self._driver:
@@ -140,7 +154,7 @@ class SwitchInput(InputNode):
             val = not val
         return val
 
-    def get_settings(self):
+    def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
         settings.append(('inverted', 'Invertiert', self.inverted))
         return settings
@@ -163,9 +177,9 @@ class AnalogInput(InputNode):
     """
     data_range = DataRange.ANALOG
 
-    def __init__(self, name, port, initval, unit,
-                 interval=10.0, avg=0,
-                 _cont=False):
+    def __init__(self, name: str, port: str, initval: float, unit: str,
+                 interval: float = 10.0, avg: int = 0,
+                 _cont: bool = False):
         super().__init__(name, port, interval, _cont=_cont)
         self.initval = initval
         if initval:
@@ -174,20 +188,20 @@ class AnalogInput(InputNode):
         self.unit = unit
         self.avg = min(max(1, avg), 5)
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state.update(initval=self.initval)
         state.update(avg=self.avg)
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['port'],
-                      state['initval'], state['unit'],
-                      interval=state['interval'], avg=state['avg'],
-                      _cont=True)
+        AnalogInput.__init__(self, state['name'], state['port'],
+                             state['initval'], state['unit'],
+                             interval=state['interval'], avg=state['avg'],
+                             _cont=True)
 
-    def read(self):
+    def read(self) -> float:
         val = self.data
         if self._driver:
             val = float(self._driver.read())
@@ -196,7 +210,7 @@ class AnalogInput(InputNode):
         val = round(val, 4)
         return val
 
-    def get_settings(self):
+    def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
         settings.append(('unit', 'Einheit',
                          self.unit, 'type="text"'))
@@ -234,34 +248,34 @@ class ScheduleInput(BusNode):
     # such as '0 4 1 1 fri' = Jan. 1st 4pm and Friday -> very rare!
     CRON_YEARS_DEPTH = 2
 
-    def __init__(self, name, cronspec, _cont=False):
+    def __init__(self, name: str, cronspec: str, _cont: bool = False):
         super().__init__(name, _cont=_cont)
-        self._scheduler_thread = None
-        self._scheduler_stop = False
+        self._scheduler_thread: Thread | None = None
+        self._scheduler_stop: bool = False
         self.cronspec = cronspec
-        self.hires = len(cronspec.split(' ')) > 5
+        self.hires: bool = len(cronspec.split(' ')) > 5
         if not _cont:
-            self.data = 0
+            self.data: int = 0
         ##self.unit = '⏻'
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state.update(cronspec=self.cronspec)
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        self.__init__(state['name'], state['cronspec'], _cont=True)
+        ScheduleInput.__init__(self, state['name'], state['cronspec'], _cont=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return '{}({})'.format(type(self).__name__, self.cronspec)
 
     @property
-    def cronspec(self):
+    def cronspec(self) -> str:
         return self._cronspec
 
     @cronspec.setter
-    def cronspec(self, cronspec):
+    def cronspec(self, cronspec: str) -> None:
         # validate it here, since the exception would be raised in our thread.
         now = datetime.now().astimezone()  # = local tz, this enables DST
         croniter(cronspec, now, day_or=False,
@@ -271,26 +285,26 @@ class ScheduleInput(BusNode):
         self._cronspec = cronspec
         self._start_thread()
 
-    def plugin(self, bus):
+    def plugin(self, bus: MsgBus) -> None:
         super().plugin(bus)
         self._start_thread()
 
-    def pullout(self):
+    def pullout(self) -> bool:
         self._stop_thread()
         return super().pullout()
 
-    def _start_thread(self):
+    def _start_thread(self) -> None:
         if self._bus:
             self._scheduler_thread = Thread(name=self.id, target=self._scheduler, daemon=True)
             self._scheduler_thread.start()
 
-    def _stop_thread(self):
+    def _stop_thread(self) -> None:
         if self._scheduler_thread:
             self._scheduler_stop = True
             self._scheduler_thread.join()
             self._scheduler_thread = None
 
-    def _scheduler(self):
+    def _scheduler(self) -> None:
         log.brief('ScheduleInput %s: start', self.id)
 
         now = datetime.now().astimezone()  # = local tz, this enables DST
@@ -302,13 +316,13 @@ class ScheduleInput(BusNode):
         try:
             cron.get_next()
             while True:
-                sec_now = time.time()  # reference for each loop to avoid drift
-                sec_prev = cron.get_prev()  # look one event back
+                sec_now: float = time.time()  # reference for each loop to avoid drift
+                sec_prev: float = cron.get_prev()  # look one event back
                 log.debug(' prev %s = %f',
                           str(cron.get_current(ret_type=datetime)),
                           sec_prev - sec_now)
 
-                sec_next = cron.get_next()  # seconds 'til future cron event
+                sec_next: float = cron.get_next()  # seconds 'til future cron event
                 log.debug(' next %s = %f',
                           str(cron.get_current(ret_type=datetime)),
                           sec_next - sec_now)
@@ -320,7 +334,7 @@ class ScheduleInput(BusNode):
                     # as we concatenate events <1 tick apart, must be a pause
                     self.data = 0
                     log.info('ScheduleInput %s: output 0 for %f s',
-                              self.id, sec_next - sec_now)
+                             self.id, sec_next - sec_now)
                     self.post(MsgData(self.id, self.data))
 
                     # while (sec_next > time.time()):
@@ -345,7 +359,7 @@ class ScheduleInput(BusNode):
 
                 self.data = 100
                 log.info('ScheduleInput %s: output 100 for %f s',
-                          self.id, sec_next - time.time())
+                         self.id, sec_next - time.time())
                 self.post(MsgData(self.id, self.data))
 
                 while (sec_next > time.time()):
@@ -358,7 +372,7 @@ class ScheduleInput(BusNode):
             self._scheduler_stop = False
             log.brief('ScheduleInput %s: end', self.id)
 
-    def get_settings(self):
+    def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
         settings.append(('cronspec', 'CRON (m h DoM M DoW)',
                          self.cronspec, 'type="text"'))

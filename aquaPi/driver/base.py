@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from typing import Any
 from os import path
 from enum import Enum
 from collections import namedtuple
@@ -14,10 +15,11 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 # ========== common functions ==========
 
 
-def is_raspi():
-    model = ''
-    if path.exists('/sys/firmware/devicetree/base/model'):
-        with open('/sys/firmware/devicetree/base/model', 'r', encoding='utf-8') as f:
+def is_raspi() -> bool:
+    model: str = ''
+    model_inf: str = '/sys/firmware/devicetree/base/model'
+    if path.exists(model_inf):
+        with open(model_inf, 'r', encoding='utf-8') as f:
             model = f.readline()
     return 'raspberry' in model.lower()
 
@@ -25,44 +27,51 @@ def is_raspi():
 # ========== Exceptions ==========
 
 
-class DriverNYI(Exception):
-    def __init__(self, msg='Not yet implemented.'):
+class DriverError(Exception):
+    def __init__(self, msg):
         super().__init__()
-        self.msg = msg
+        self.msg: str = msg
 
 
-class DriverParamError(Exception):
-    def __init__(self, msg='Invalid parameter value.'):
-        super().__init__()
-        self.msg = msg
+class DriverNYI(DriverError):
+    def __init__(self, msg: str = 'Not yet implemented.'):
+        super().__init__(msg)
 
 
-class DriverInvalidAddrError(Exception):
-    def __init__(self, msg=None, adr=None):
+class DriverParamError(DriverError):
+    def __init__(self, msg: str = 'Invalid parameter value.'):
+        super().__init__(msg)
+
+
+class DriverInvalidAddrError(DriverError):
+    def __init__(self, adr: Any, msg: str = ''):
         if not msg:
             msg = 'Pin, channel or address %r does not exist.' % adr
-        super().__init__()
-        self.msg = msg
+        super().__init__(msg)
 
 
-class DriverPortInuseError(Exception):
-    def __init__(self, msg=None, port=None):
+class DriverInvalidPortError(DriverError):
+    def __init__(self, port: Any, msg: str = ''):
+        if not msg:
+            msg = 'There is no port named "%s"' % port
+        super().__init__(msg)
+
+
+class DriverPortInuseError(DriverError):
+    def __init__(self, port: Any, msg: str = ''):
         if not msg:
             msg = 'Pin or channel %r is already assigned.' % port
-        super().__init__()
-        self.msg = msg
+        super().__init__(msg)
 
 
-class DriverReadError(Exception):
-    def __init__(self, msg='Failed to read a valid value.'):
-        super().__init__()
-        self.msg = msg
+class DriverReadError(DriverError):
+    def __init__(self, msg: str = 'Failed to read a valid value.'):
+        super().__init__(msg)
 
 
-class DriverWriteError(Exception):
-    def __init__(self, msg='Failed to write value to the output.'):
-        super().__init__()
-        self.msg = msg
+class DriverWriteError(DriverError):
+    def __init__(self, msg: str = 'Failed to write value to the output.'):
+        super().__init__(msg)
 
 
 # ========== common types ==========
@@ -97,21 +106,21 @@ class Driver:
     """
 
     # TODO this persistance approach could be transferred to MsgNodes!
-    def __init__(self, cfg, func):
-        self.name = '!abstract'
-        self.cfg = cfg
-        self.func = func
-        self._fake = not is_raspi()
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
+        self.name: str = '!abstract'
+        self.cfg: dict[str, str] = cfg
+        self.func: PortFunc = func
+        self._fake: bool = not is_raspi()
         if 'fake' in cfg:
             self._fake |= bool(cfg['fake'])
 
-    def __del__(self):  # ??
+    def __del__(self) -> None:
         self.close()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return '{}({})'.format(type(self).__name__, self.cfg)
 
-    def close(self):
+    def close(self) -> None:
         log.debug('Closing %r', self)
 
 
@@ -120,26 +129,26 @@ class InDriver(Driver):
         InDriver can be read, e.g. a temperature sensor.
     """
 
-    def __init__(self, cfg, func):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self.name = '!abstract IN'
-        self._interval = 0
+        self.namei: str = '!abstract IN'
+        self._interval: int = 0
 
-    def read(self):
-        return 0.0
+    def read(self) -> int | float:
+        return 0
 
 
 class AInDriver(InDriver):
     """ Base class for all AnalogDigitalConverters (ADC)
     """
-    def __init__(self, cfg, func):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self.name = '!ADC in'
-        self.initval = cfg.get('initval', None)
-        self._val = self.initval
-        self._dir = 1
+        self.name: str = '!ADC in'
+        self.initval: float = float(cfg.get('initval', 0.0))
+        self._val: float = self.initval
+        self._dir: float = 1
 
-    def read(self):
+    def read(self) -> float:
         rnd = random.random()
         if rnd < .1:
             self._dir = math.copysign(1, self.initval - self._val)
@@ -152,15 +161,15 @@ class AInDriver(InDriver):
 
 class OutDriver(Driver):
     """ base of all output drivers
-        OutDriver can be written, the last written value can be read.
+        OutDriver can be written to, the last written value can be read.
     """
 
-    def __init__(self, cfg, func):
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self.name = '!abstract OUT'
-        self._val = 0
+        self.name: str = '!abstract OUT'
+        self._val = 0.0
 
-    def write(self, value):
+    def write(self, value) -> None:
         self._val = value
 
     def read(self):

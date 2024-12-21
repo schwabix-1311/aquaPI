@@ -9,7 +9,7 @@ The project is based on Python/Flask as the backend, plus Vuetify as the reactiv
 
 To explain the building blocks, let's start with a simple temperature controller:
 
-You select an analog input node (reading values from a temperature sensor like DS1820) and connect it to a threshold node (switching on/off depending on the reading), which then is connected to a relay output node. That's all. Add a history node to get temperature graphs with selectable time period.
+You select an analog input node (reading values from a temperature sensor like DS1820) and connect it to a threshold node (switching on/off depending on the reading), which then is connected to a relay output node. That's all. Finally you may add a history node to get temperature graphs with selectable time period.
 
 Later, for improved reliability, you might want to have redundant sensors; you would simply add a 2nd input node reading another sensor, plus an averaging node to combine both readings. Finally, you would reconfigure your threshold node to listen to the average node instead of the sensor.
 

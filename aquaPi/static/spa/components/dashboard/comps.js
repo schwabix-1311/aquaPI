@@ -249,7 +249,7 @@ const FadeCtrl = {
 		descript() {
 			//TODO: prefix a label: dusk/dawn  or ramp
 			return this.node.fade_time.toString() + ' s'
-			       + ' <=> ' + this.node.fade_out.toString() + ' sh'
+			       + ' <=> ' + this.node.fade_out.toString() + ' s'
 		},
 		value() {
 			let node = this.node

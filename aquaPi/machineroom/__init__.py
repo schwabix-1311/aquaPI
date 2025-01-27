@@ -110,6 +110,7 @@ class MachineRoom:
         COMPLEX_TEMP = SIM_TEMP and False
 
         if REAL_CONFIG:
+            # __Lighting__ #
             # single PWM dimmed LED bar, perceptive correction
             light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
 
@@ -121,7 +122,7 @@ class MachineRoom:
             light_c = SunCtrl('Leuchtbalken', light_schedule.id, xscend=1.0)
 
             light_pwm = AnalogDevice('Dimmer', light_c.id,
-                                     'PWM 0', percept=True, maximum=85)
+                                     'PWM 0', percept=True, maximum=75)
             light_schedule.plugin(self.bus)
             light_c.plugin(self.bus)
             light_pwm.plugin(self.bus)
@@ -131,22 +132,29 @@ class MachineRoom:
                               [light_schedule.id, light_c.id])  # , light_pwm.id])
             history.plugin(self.bus)
 
-            # single water temp sensor, switched relay
-            wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
-                                   avg=1, interval=180)
+            # __Temperatures__ #
+            # single water temp sensor
+            # 2-point switched relay or triac ...
+            #wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+            #                       avg=1, interval=60)
             #wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
             #wasser_o = SwitchDevice('Heizstab', wasser.id,
-            #                        'GPIO 12 out', inverted=True)
+            #                        'GPIO 12 out', inverted=False)
+
+            # ... or PID driven triac (relay has increased wear, not recomm.)
+            # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
+            wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+                                   avg=1, interval=300)
             wasser = PidCtrl('PID Temperatur', wasser_i.id, 25.0,
-                             p_fact=1.5, i_fact=0.1, d_fact=0.)
+                             p_fact=1.0, i_fact=0.05, d_fact=5.0)
             wasser_o = SlowPwmDevice('Heizstab', wasser.id,
-                                     'GPIO 12 out', inverted=True, cycle=90)
+                                     'GPIO 12 out', inverted=False, cycle=10)
             wasser_i.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
 
             # air temperature, just for the diagram
-            wasser_i2 = AnalogInput('Wasser 2', 'DS1820 x7A71E', 25.0, '°C',
+            wasser_i2 = AnalogInput('Raumluft', 'DS1820 x7A71E', 25.0, '°C',
                                     avg=2, interval=60)
             wasser_i2.plugin(self.bus)
 
@@ -165,6 +173,7 @@ class MachineRoom:
                                  coolspeed.id])  # , cool.id])
             t_history.plugin(self.bus)
 
+            # __CO2__ #
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
                                  avg=3, interval=30)
             calib_ph = ScaleAux('pH Wert', adc_ph.id, 'pH',
@@ -172,7 +181,7 @@ class MachineRoom:
                                 points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH Steuerung', calib_ph.id, 6.7)
 
-            ph_broken = True
+            ph_broken = False   # True
             if ph_broken:
                 # WAR broken CO2 vent:
                 # pulse it, as CO2 only flows when partially opened
@@ -257,7 +266,7 @@ class MachineRoom:
                 wasser = PidCtrl('Temperaturregler', wasser_i.id, 25.0,
                                  p_fact=1.5, i_fact=0.1, d_fact=0.)
                 wasser_o = SlowPwmDevice('Heizstab', wasser.id,
-                                        'GPIO 12 out', inverted=True, cycle=20)
+                                        'GPIO 12 out', inverted=False, cycle=20)
                 wasser.plugin(self.bus)
                 wasser_o.plugin(self.bus)
                 wasser_i.plugin(self.bus)

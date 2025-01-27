@@ -7,6 +7,9 @@ aquaPi ToDo list
   # startup behaviour of bus isn't good - let everybody post its data as response to HELLO?
   # on Raspi driver TC420 finds a device although there's none
 
+- Logging to systemd journal?  see https://trstringer.com/systemd-logging-in-python/
+  This article also covers systemctl services
+
 - Navigation:
   /          Home, a configurable dashboard
   /settings  Controllers, with foldable groups containing Controllers & their in/out

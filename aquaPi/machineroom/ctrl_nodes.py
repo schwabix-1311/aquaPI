@@ -272,6 +272,7 @@ class PidCtrl(ControllerNode):
                 log.brief('PID -> %f (%+.1f)', self.data, -val * 100)
                 self.post(MsgData(self.id, round(self.data, 4)))
 
+                #FIXME: test a permanent err_sum leak of 1% or 10% , avoid windup
                 if self.data <= 0. or self.data >= 100.:
                     self._err_sum /= 2
             self._err_old = err

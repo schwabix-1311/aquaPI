@@ -234,9 +234,9 @@ class SlowPwmDevice(DeviceNode):
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
         settings.append(('cycle', 'PWM cycle time', self.cycle,
-                         'type="number" min="10" max="300" step="1"',
-                         'inverted', 'Inverted', self.inverted,
-                         'type="number" min="0" max="1"'))
+                         'type="number" min="10" max="300" step="1"'))
+        settings.append(('inverted', 'Inverted', self.inverted,
+                         'type="number" min="0" max="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
         return settings
 
 

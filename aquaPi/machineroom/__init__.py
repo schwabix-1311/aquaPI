@@ -135,21 +135,21 @@ class MachineRoom:
             # __Temperatures__ #
             # single water temp sensor
             # 2-point switched relay or triac ...
-            #wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+            #wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
             #                       avg=1, interval=60)
-            #wasser = MinimumCtrl('Temperatur', wasser_i.id, 25.0)
+            #wasser = MinimumCtrl('Temperatur', wasser_i1.id, 25.0)
             #wasser_o = SwitchDevice('Heizstab', wasser.id,
             #                        'GPIO 12 out', inverted=False)
 
             # ... or PID driven triac (relay has increased wear, not recomm.)
             # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
-            wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+            wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
                                    avg=1, interval=300)
-            wasser = PidCtrl('PID Temperatur', wasser_i.id, 25.0,
-                             p_fact=1.0, i_fact=0.05, d_fact=5.0)
+            wasser = PidCtrl('PID Temperatur', wasser_i1.id, 25.0,
+                             p_fact=1.0, i_fact=0.05, d_fact=0.0)
             wasser_o = SlowPwmDevice('Heizstab', wasser.id,
                                      'GPIO 12 out', inverted=False, cycle=10)
-            wasser_i.plugin(self.bus)
+            wasser_i1.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
 
@@ -159,7 +159,7 @@ class MachineRoom:
             wasser_i2.plugin(self.bus)
 
             # fancy: if water temp >26 a cooling fan spins dynamically up
-            coolspeed = ScaleAux('Lüftersteuerung', wasser_i.id, '%',
+            coolspeed = ScaleAux('Lüftersteuerung', wasser_i1.id, '%',
                                  points=[(26.0, 0), (28.0, 100)])
             cool = AnalogDevice('Kühlungslüfter', coolspeed.id,
                                 'PWM 1', minimum=10, maximum=80)
@@ -168,7 +168,7 @@ class MachineRoom:
 
             # ... and history for a diagram
             t_history = History('Temperaturen',
-                                [wasser_i.id, wasser_i2.id,
+                                [wasser_i1.id, wasser_i2.id,
                                  wasser.id,  # wasser_o.id,
                                  coolspeed.id])  # , cool.id])
             t_history.plugin(self.bus)

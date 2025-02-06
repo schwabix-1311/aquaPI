@@ -578,7 +578,6 @@ class SunCtrl(ControllerNode):
                 now = time()
             self.data = 0  # end of descend
 
-
         log.brief('SunCtrl %s: fader %s', self.id, 'DONE' if not self._fader_stop else 'stopped')
         self.post(MsgData(self.id, self.data))
         self.alert = None

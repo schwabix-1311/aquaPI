@@ -24,4 +24,4 @@ if [[ ${reset_cfg} ]]; then rm "instance/${AQUAPI_CFG}"; fi
 export FLASK_APP=aquaPi
 export FLASK_ENV=development
 
-nohup flask run --host "$(hostname -i|cut -d ' ' -f 1)" | tee run.log
+nohup flask run --host "$(hostname -i|cut -d ' ' -f 1)" | tee logs/run.log

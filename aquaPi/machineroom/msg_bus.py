@@ -73,7 +73,7 @@ class BusNode(ABC):
         state = {'name': self.name}
         state.update(id=self.id)
         state.update(identifier=self.identifier)
-        state.update(receives=self.receives)  #FIXME: "No overload var. of "update" of "MutableMapping" matches list[str]"
+        state.update(receives=self.receives)
         state.update(data=self.data)
         state.update(unit=self.unit)
         state.update(data_range=self.data_range.name)
@@ -225,9 +225,7 @@ class MsgBus:
             n.plugin(self)
 
     def __str__(self) -> str:
-        if not self._queue:
-            return '{}({} nodes)'.format(type(self).__name__, len(self.nodes))
-        return '{}({} nodes, {} queue\'d)'.format(type(self).__name__, len(self.nodes), self._queue.qsize())
+        return '{}({} nodes)'.format(type(self).__name__, len(self.nodes))
 
     def register(self, node: BusNode) -> None:
         """ Add a BusNode to the bus. Do not call directly,
@@ -295,7 +293,8 @@ class MsgBus:
             rcv_nodes = {n for n in self.nodes if n.id != msg.sender}
             # ... and apply each node's filter for non-Infra msgs
             if not isinstance(msg, MsgInfra):
-                rcv_nodes = {n for n in rcv_nodes if msg.sender in n.receives or '*' in n.receives}
+                rcv_nodes = {n for n in rcv_nodes
+                             if msg.sender in n.receives or '*' in n.receives}
         for n in rcv_nodes:
             log.debug('  -> %s', str(n))
             n.listen(msg)

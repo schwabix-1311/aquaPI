@@ -97,7 +97,6 @@ log_default = {
 
 
 def create_app() -> Flask:
-    # TODO wrap in try/catch, but how should exceptions be handled?
     app = Flask(__name__, instance_relative_config=True)
 
     config_file = path.join(app.instance_path, "log_config.json")
@@ -125,7 +124,7 @@ def create_app() -> Flask:
         CONFIG=os.path.join(app.instance_path, cfg_file)
     )
 
-    # FIXME: this would use app.debug before assignment
+    # FIXME: move this to the alert driver
     # if False:
     #    mail_handler = SMTPHandler(
     #        mailhost='127.0.0.1',
@@ -182,7 +181,7 @@ def create_app() -> Flask:
         log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
         return None
 
-    #FIXME bus is used by Python code in jinja template 'settings'
+    #FIXME bus is used by jinja template 'settings' only
     @app.context_processor
     def inject_globals():
         return dict(bus=app.extensions['machineroom'].bus)

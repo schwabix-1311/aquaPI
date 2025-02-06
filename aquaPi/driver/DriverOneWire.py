@@ -19,7 +19,7 @@ class DriverDS1820(AInDriver):
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
-            # TODO: GPIO 4 is the Raspi default, allow alternatives!
+            # TODO: GPIO 4 is the Raspi default, auto-detect alternatives!
             deps = ['GPIO 4 in', 'GPIO 4 out']
 
             for sensor in glob.glob('/sys/bus/w1/devices/28-*'):

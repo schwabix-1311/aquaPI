@@ -23,7 +23,6 @@ class InputNode(BusNode, ABC):
     """ Base class for IN_ENDP delivering measurments,
         e.g. temperature, pH, water level switch
         All use a reader thread, most reading from IoRegistry port
-        Semantically abstract - do not instantiate!
     """
     ROLE = BusRole.IN_ENDP
 

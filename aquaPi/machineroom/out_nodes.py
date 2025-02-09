@@ -162,7 +162,7 @@ class SlowPwmDevice(DeviceNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        SlowPwmDevice.__init__(self, state['name'], state['inputs'], state['port'],
+        SlowPwmDevice.__init__(self, state['name'], state['receives'], state['port'],
                                inverted=state['inverted'], cycle=state['cycle'],
                                _cont=True)
 

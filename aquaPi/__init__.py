@@ -178,6 +178,7 @@ def create_app() -> Flask:
     try:
         app.extensions['machineroom'] = MachineRoom(app.config['CONFIG'])
     except Exception:
+        log.exception('Oops')
         log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
         return None
 

@@ -78,11 +78,16 @@ export default
 		},
 		configuration: {
 			hintEmpty: 'Es sind noch keine Elemente für das Dashboard ausgewählt',
-			btnSetup: 'Widgets konfigurieren'
+			btnSetup: 'Elemente konfigurieren'
 		},
 		widget: {
 			inputs: {
 				label: 'Eingänge'
+			},
+			setpoint: {
+				minimum: 'Sollwert >= ',
+				maximum: 'Sollwert <= ',
+				equals: 'Sollwert = ',
 			},
 			history: {
 				period: {

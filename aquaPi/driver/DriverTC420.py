@@ -10,7 +10,7 @@ from threading import Lock, Timer
 sys.path.insert(1, path.join(os.path.dirname(os.path.abspath(__file__)), 'tc420','tc420'))
 from tc420 import TC420, PlayInitPacket, PlaySetChannels, ModeStopPacket, NoDeviceFoundError
 
-from .base import (OutDriver, IoPort, PortFunc)
+from .base import (OutDriver, IoPort, PortFunc, is_raspi)
 
 
 log = logging.getLogger('driver.DriverTC420')
@@ -47,7 +47,8 @@ class DriverTC420(OutDriver):
                                                  [])
                 idx += 1
         except NoDeviceFoundError:
-            if idx == 0:  # fake when no TC420 found
+            # fake when no TC420 found
+            if not is_raspi() and idx == 0:
                 io_ports = {
                     'TC420 #1 CH1': IoPort(PortFunc.Aout, DriverTC420,
                                            {'idx': '0', 'channel': '0', 'fake': True}, []),

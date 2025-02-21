@@ -82,7 +82,7 @@ const AnyNode = {
 		},
 	},
 }
-Vue.component('AnyNode', AnyNode)
+Vue.component('AnyNode', AnyNode)  //??
 
 const DebugNode = {
 	extends: AnyNode,
@@ -186,22 +186,23 @@ const BusNode = {
 
 	computed: {},
 }
-Vue.component('BusNode', BusNode)
+Vue.component('BusNode', BusNode)  //??
 
+//TODO: do we need Vue.components that are purely abstract? Would it save anything?
 //TODO: do we need derived nodes W/O any functional change? 
 
 
 const ControllerNode = {
 	extends: BusNode,
 }
-Vue.component('ControllerNode', ControllerNode)
+Vue.component('ControllerNode', ControllerNode)  //??
 
 
 const MinimumCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return 'Sollwert: >= ' + this.node.threshold.toString() // just a sample
+			return this.$t('dashboard.widget.setpoint.minimum') + this.node.setpoint.toString()
 		},
 	},
 }
@@ -212,12 +213,22 @@ const MaximumCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return 'Sollwert: <= ' + this.node.threshold.toString() // just a sample
+			return this.$t('dashboard.widget.setpoint.maximum') + this.node.setpoint.toString()
 		},
 	},
 }
 Vue.component('MaximumCtrl', MaximumCtrl)
-Vue.component('PidCtrl', MaximumCtrl)
+
+
+const PidCtrl = {
+	extends: ControllerNode,
+	computed: {
+		descript() {
+			return this.$t('dashboard.widget.setpoint.equals') + this.node.setpoint.toString()
+		},
+	},
+}
+Vue.component('PidCtrl', PidCtrl)
 
 
 const SunCtrl = {
@@ -315,7 +326,6 @@ Vue.component('SlowPwmDevice', AnalogDevice)
 const AuxNode = {
 	extends: BusNode,
 }
-Vue.component('AuxNode', AuxNode)
 
 const AvgAux = {
 	extends: AuxNode,

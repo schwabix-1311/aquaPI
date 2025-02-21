@@ -5,7 +5,7 @@ aquaPi ToDo list
   # logging: resolve the abuse of logging.WARNING as loglevel.BRIEF; log.verbose() could be a functools.partialmethod(log.log, loglevel.INFO-1,...)
   # REAL_CONFIG: GPIO13 must be permanently on (Filter!) - might need a new ConstInput(100), on kernel >=5.4 this may need 'pinctrl set 13 op dh', or add 'gpio=13=op,dh' in /boot/config.txt
   # startup behaviour of bus isn't good - let everybody post its data as response to HELLO?
-  # on Raspi driver TC420 finds a device although there's none
+  # many BusListener nodes must set their unit to same as their reiceive(s), ATM only MultiInputNodes do this
 
 - Logging to systemd journal?  see https://trstringer.com/systemd-logging-in-python/
   This article also covers systemctl services
@@ -44,6 +44,7 @@ aquaPi ToDo list
 - macros!?! = scheduled/triggered sender of msgs on the bus? wait for msgs?
   This will require affected nodes to supended their listening to avoid conflicts.
   Not fully clear how this can work.
+  Idea: a new MsgControl with suspend/overrule/resume might help
 
 - input/output drivers, auto-detect where possible:
     File in, Shelly in?
@@ -62,8 +63,8 @@ aquaPi ToDo list
 
 - REST API: some endpoints return text, others json, should be all json
 
-- wallneradam/tc420 is forked to shcwabix-1311/tc420, PRs 11/12/13 and more are applied there,
-  using a git submodule to integrate it, installation must be reviewd:
+- wallneradam/tc420 is forked to schwabix-1311/tc420, PRs 11/12/13 and more are applied there,
+  using a git submodule to integrate it, installation must be reviewed:
     pip install tc420 (->requirements.txt); (addgroup plugdev); adduser <user> plugdev; cp 99-7c420.rules /etc/udev/rules.d/
   adapter µUSB->USB A plus cable USB A -> USB B
 
@@ -94,7 +95,8 @@ aquaPi ToDo list
   OR simple sample without dedicated package!!:
     https://medium.com/codex/using-python-to-send-telegram-messages-in-3-simple-steps-419a8b5e5e2
 
-- packaging and deployment ... long way to there!
+- packaging and deployment:
+  look into github ReefSpy/ReefberryPi to freeze packages, for one-file packaging (pyinstaller), service creation, etc.
 
 - not so common features:
   multiple sensors can feed one control unit (redundancy=safety),

@@ -78,7 +78,7 @@ class MinimumCtrl(ControllerNode):
         Options:
             name       - unique name of this controller node in UI
             receives   - id of a single (!) input to receive measurements from
-            threshold  - the minimum measurement to maintain
+            setpoint   - the minimum measurement to maintain
             hysteresis - a tolerance, to reduce switch frequency
 
         Output:
@@ -86,39 +86,39 @@ class MinimumCtrl(ControllerNode):
               100 when input < (thr. - hyst./2),
               0 when input >= (thr. + hyst./2)
     """
-    # TODO: could have a threshold for max. active time -> warning
+    # TODO: could have a limit for max. active time -> warning
 
-    def __init__(self, name: str, receives: str, threshold: float,
+    def __init__(self, name: str, receives: str, setpoint: float,
                  hysteresis: float = 0, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
-        self.threshold: float = threshold
+        self.setpoint: float = setpoint
         self.hysteresis: float = hysteresis
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(threshold=self.threshold)
+        state.update(setpoint=self.setpoint)
         state.update(hysteresis=self.hysteresis)
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         MinimumCtrl.__init__(self, state['name'], state['receives'],
-                             state['threshold'], hysteresis=state['hysteresis'],
+                             state['setpoint'], hysteresis=state['hysteresis'],
                              _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
             new_val = self.data
-            if float(msg.data) < (self.threshold - self.hysteresis / 2):
+            if float(msg.data) < (self.setpoint - self.hysteresis / 2):
                 new_val = 100.0
-            elif float(msg.data) >= (self.threshold + self.hysteresis / 2):
+            elif float(msg.data) >= (self.setpoint + self.hysteresis / 2):
                 new_val = 0.0
 
             if (self.data != new_val) or True:  #FIXME WAR a startup problem
                 log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
 
-                if msg.data < (self.threshold - self.hysteresis / 2) * 0.95:
+                if msg.data < (self.setpoint - self.hysteresis / 2) * 0.95:
                     self.alert = ('LOW', 'err')
                     log.brief('MinimumCtrl %s: output %f - alert %r',
                               self.id, self.data, self.alert)
@@ -134,10 +134,10 @@ class MinimumCtrl(ControllerNode):
         limits = get_unit_limits(self.unit)
 
         settings = super().get_settings()
-        settings.append(('threshold', 'Minimum [%s]' % self.unit,
-                         self.threshold, 'type="number" %s' % limits))
-        settings.append(('hysteresis', 'Hysteresis [%s]' % self.unit,
-                         self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('setpoint', f'Minimum [{self.unit}]', self.setpoint,
+                         f'type="number" {limits}'))
+        settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
+                         'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
@@ -149,7 +149,7 @@ class MaximumCtrl(ControllerNode):
         Options:
             name       - unique name of this controller node in UI
             receives   - id of a single (!) input to receive measurements from
-            threshold  - the maximum measurement to maintain
+            setpoint   - the maximum measurement to maintain
             hysteresis - a tolerance, to reduce switch frequency
 
         Output:
@@ -157,37 +157,37 @@ class MaximumCtrl(ControllerNode):
               100 when input > (thr. - hyst./2),
               0 when input <= (thr. + hyst./2)
     """
-    def __init__(self, name: str, receives: str, threshold: float,
+    def __init__(self, name: str, receives: str, setpoint: float,
                  hysteresis: float = 0, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
-        self.threshold: float = threshold
+        self.setpoint: float = setpoint
         self.hysteresis: float = hysteresis
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(threshold=self.threshold)
+        state.update(setpoint=self.setpoint)
         state.update(hysteresis=self.hysteresis)
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         MaximumCtrl.__init__(self, state['name'], state['receives'],
-                             state['threshold'], hysteresis=state['hysteresis'],
+                             state['setpoint'], hysteresis=state['hysteresis'],
                              _cont=True)
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
             new_val = self.data
-            if float(msg.data) > (self.threshold + self.hysteresis / 2):
+            if float(msg.data) > (self.setpoint + self.hysteresis / 2):
                 new_val = 100.0
-            elif float(msg.data) <= (self.threshold - self.hysteresis / 2):
+            elif float(msg.data) <= (self.setpoint - self.hysteresis / 2):
                 new_val = 0.0
 
             if (self.data != new_val) or True:  #FIXME WAR a startup problem
                 log.debug('MaximumCtrl: %d -> %d', self.data, new_val)
                 self.data = new_val
 
-                if msg.data > (self.threshold + self.hysteresis / 2) * 1.05:
+                if msg.data > (self.setpoint + self.hysteresis / 2) * 1.05:
                     self.alert = ('HIGH', 'err')
                     log.brief('MaximumCtrl %s: output %f - alert %r',
                               self.id, self.data, self.alert)
@@ -203,10 +203,10 @@ class MaximumCtrl(ControllerNode):
         limits = get_unit_limits(self.unit)
 
         settings = super().get_settings()
-        settings.append(('threshold', 'Maximum [%s]' % self.unit,
-                         self.threshold, 'type="number" %s' % limits))
-        settings.append(('hysteresis', 'Hysteresis [%s]' % self.unit,
-                         self.hysteresis, 'type="number" min="0" max="5" step="0.01"'))
+        settings.append(('setpoint', f'Maximum [{self.unit}]', self.setpoint,
+                         f'type="number" {limits}'))
+        settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
+                         'type="number" min="0" max="5" step="0.01"'))
         return settings
 
 
@@ -266,13 +266,12 @@ class PidCtrl(ControllerNode):
                 val = p_dev + i_dev + d_dev
 
                 log.warning('PID err %f, e-sum %f | P %+.1f%% / I %+.1f%% / D %+.1f %%, ',
-                          err, self._err_sum,
-                          100 * p_dev, 100 * i_dev, 100 * d_dev)
+                            err, self._err_sum,
+                            100 * p_dev, 100 * i_dev, 100 * d_dev)
                 self.data = min(max(0., 50. - val*100.), 100.)
                 log.brief('PID -> %f (%+.1f)', self.data, -val * 100)
                 self.post(MsgData(self.id, round(self.data, 4)))
 
-                #FIXME: test a permanent err_sum leak of 1% or 10% , avoid windup
                 if self.data <= 0. or self.data >= 100.:
                     self._err_sum /= 2
             self._err_old = err
@@ -282,11 +281,14 @@ class PidCtrl(ControllerNode):
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
-        settings.append(('setpoint', 'Sollwert [%s]' % self.unit,
-                         self.setpoint, 'type="number" step="0.1"'))
-        settings.append(('p_fact', 'P Faktor', self.p_fact, 'type="number" min="-10" max="10" step="0.1"'))
-        settings.append(('i_fact', 'I Faktor', self.i_fact, 'type="number" min="-10" max="10" step="0.01"'))
-        settings.append(('d_fact', 'D Faktor', self.d_fact, 'type="number" min="-10" max="10" step="0.1"'))
+        settings.append(('setpoint', f'Sollwert [{self.unit}]', self.setpoint,
+                         'type="number" step="0.1"'))
+        settings.append(('p_fact', 'P Faktor', self.p_fact,
+                         'type="number" min="-10" max="10" step="0.1"'))
+        settings.append(('i_fact', 'I Faktor', self.i_fact,
+                         'type="number" min="-10" max="10" step="0.01"'))
+        settings.append(('d_fact', 'D Faktor', self.d_fact,
+                         'type="number" min="-10" max="10" step="0.1"'))
         return settings
 
 

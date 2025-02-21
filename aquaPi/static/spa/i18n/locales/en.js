@@ -84,6 +84,11 @@ export default
 			inputs: {
 				label: 'Inputs'
 			},
+			setpoint: {
+				minimum: 'Setpoint >= ',
+				maximum: 'Setpoint <= ',
+				equals: 'Setoint = ',
+			},
 			history: {
 				period: {
 					label: 'Period %s'

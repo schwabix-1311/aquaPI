@@ -19,12 +19,12 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 class AlertCond(ABC):
     """ Base class for all kind of alerting conditions
 
-        node_id   - id of node this condition applies to
-        threshold - the limit _check() will use
+        node_id - id of node this condition applies to
+        limit   - the limit _check() will use
     """
-    def __init__(self, node_id: str, threshold: float):
+    def __init__(self, node_id: str, limit: float):
         self.node_id: str = node_id
-        self.threshold: float = threshold
+        self.limit: float = limit
         self._alerted: bool = False
 
     @abstractmethod
@@ -64,29 +64,29 @@ class AlertCond(ABC):
 
 
 class AlertAbove(AlertCond):
-    """ Alert when data above threshold
+    """ Alert when data above limit
     """
     def _check(self, msg: MsgPayload) -> bool:
-        return msg.data > self.threshold
+        return msg.data > self.limit
 
     def _text(self, msg: MsgPayload, name: str) -> str:
         return 'Value of %s is %s: %.2f  [limit %.2f]' \
-               % (name, 'too high' if self._alerted else 'OK', msg.data, self.threshold)
+               % (name, 'too high' if self._alerted else 'OK', msg.data, self.limit)
 
 
 class AlertBelow(AlertCond):
-    """ Alert when data below threshold
+    """ Alert when data below limit
     """
     def _check(self, msg: MsgPayload) -> bool:
-        return msg.data < self.threshold
+        return msg.data < self.limit
 
     def _text(self, msg: MsgPayload, name: str) -> str:
         return 'Value of %s is %s: %.2f  [limit %.2f]' \
-               % (name, 'too low' if self._alerted else 'OK', msg.data, self.threshold)
+               % (name, 'too low' if self._alerted else 'OK', msg.data, self.limit)
 
 
-#class AlertLongActive    _check = now - _last_off > threshold, _text = "Overload/High utilization"
-#class AlertLongInactive  _check = now - _last_on > threshold
+#class AlertLongActive    _check = now - _last_off > limit, _text = "Overload/High utilization"
+#class AlertLongInactive  _check = now - _last_on > limit
 
 # ========== alert node ==========
 
@@ -153,7 +153,7 @@ class Alert(BusListener):
             any_change = False
             self.data = []
             for cond in {c for c in self.conditions if c.node_id == msg.sender}:
-                log.debug('## (%s) check %f against %f - %s', type(cond), msg.data, cond.threshold, cond.node_id)
+                log.debug('## (%s) check %f against %f - %s', type(cond), msg.data, cond.limit, cond.node_id)
                 cond_change = cond.check_for_change(msg)
 
                 cond_txt = cond.alert_text(msg)

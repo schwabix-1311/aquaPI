@@ -36,7 +36,7 @@ class MachineRoom:
 
         try:
             if not path.exists(self.bus_storage):
-                self.bus: MsgBus = MsgBus()  # threaded=True)
+                self.bus: MsgBus = MsgBus(threaded=False)
 
                 log.brief("=== There are no controllers defined, creating default")
                 self.create_default_nodes()
@@ -259,20 +259,30 @@ class MachineRoom:
 
         if SIM_TEMP:
             if not COMPLEX_TEMP:
-                # single temp sensor -> temp ctrl -> relay
-                wasser_i = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C', interval=61)
-                #wasser = MinimumCtrl('Temperaturregler', wasser_i.id, 25.0)
-                #wasser_o = SwitchDevice('Heizstab', wasser_pid.id, 'GPIO 12 out')
-                wasser = PidCtrl('Temperaturregler', wasser_i.id, 25.0,
-                                 p_fact=1.5, i_fact=0.1, d_fact=0.)
+                # __Temperatures__ #
+                # single water temp sensor
+                # 2-point switched relay or triac ...
+                # wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+                #                         avg=1, interval=60)
+                # wasser = MinimumCtrl('Temperatur', wasser_i1.id, 25.0)
+                # wasser_o = SwitchDevice('Heizstab', wasser.id,
+                #                         'GPIO 12 out', inverted=False)
+
+                # ... or PID driven triac (relay has increased wear, not recomm.)
+                # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
+                wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+                                       avg=1, interval=30)
+                wasser = PidCtrl('Heizleistung (PID)', wasser_i1.id, 25.0,
+                                 p_fact=1.0, i_fact=0.05, d_fact=0.0)
                 wasser_o = SlowPwmDevice('Heizstab', wasser.id,
-                                        'GPIO 12 out', inverted=False, cycle=20)
+                                         'GPIO 12 out', inverted=False, cycle=10)
+                wasser_i1.plugin(self.bus)
                 wasser.plugin(self.bus)
                 wasser_o.plugin(self.bus)
-                wasser_i.plugin(self.bus)
 
+                # ... and history for a diagram
                 t_history = History('Temperaturen',
-                                    [wasser_i.id, wasser.id, wasser_o.id])
+                                    [wasser_i1.id, wasser.id,  wasser_o.id])
                 t_history.plugin(self.bus)
 
             else:

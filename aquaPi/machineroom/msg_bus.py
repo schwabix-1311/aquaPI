@@ -57,12 +57,12 @@ class BusNode(ABC):
         self.id = self.id.replace('Ö', 'Oe').replace('ö', 'oe')
         self.id = self.id.replace('Ü', 'Ue').replace('ü', 'ue')
         self.id = self.id.replace('-', '_').replace('ß', 'ss')
-        # this is a bit of abuse: replace all non-ASCII with xml refs, then back to utf-8
+        # hack: replace non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         self.identifier = self.__class__.__qualname__ + '.' + self.id
         log.debug(self.id)
 
-        self.receives = ['*']
+        self.receives = []
         self._bus: 'MsgBus' | None = None  # forward ref to class MsgBus
         if not _cont:
             self.data: Any = 0
@@ -110,7 +110,7 @@ class BusNode(ABC):
 
     def listen(self, msg: Msg) -> bool:
         # standard reactions for unhandled messages
-        log.debug('%s.listen %s', str(self), str(msg))
+        log.debug('%s.listen got %s', str(self), str(msg))
         if isinstance(msg, MsgBorn):
             self.post(MsgReplyHello(self.id, msg.sender))
             return True
@@ -122,7 +122,7 @@ class BusNode(ABC):
             for rcv in self.receives:
                 node = self._bus.get_node(rcv)
                 if node:
-                    log.debug('%s receives %r', self.name, rcv)
+                    log.debug('%s.get_receives %r', str(self), rcv)
                     receives.append(node)
             if recurse:
                 for s_node in receives:
@@ -174,10 +174,6 @@ class BusListener(BusNode, ABC):
         BusListener.__init__(self, state['name'],
                              receives=state['receives'],
                              _cont=True)
-
-    def listen(self, msg: Msg) -> bool:
-        log.debug('%s.listen got %s', str(self), str(msg))
-        return super().listen(msg)
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
@@ -277,12 +273,13 @@ class MsgBus:
     def _dispatch_one(self, msg: Msg) -> None:
         """ Dispatch one message to all listeners in a blocking loop.
         """
+        # FIXME: might be early, could notify after dispatch
         if isinstance(msg, (MsgData, MsgBorn)):
-            log.debug('  notify the change event about %s', str(msg))
+            log.debug('  send change notification for %s', str(msg))
             self.report_change(msg.sender)
 
         # dispatch the message
-        log.debug('%s ->', str(msg))
+        log.info('%s ->', str(msg))
         rcv_nodes: set[BusNode] = set()
         if isinstance(msg, MsgReply):
             # directed message sender -> receiver
@@ -294,10 +291,13 @@ class MsgBus:
             # ... and apply each node's filter for non-Infra msgs
             if not isinstance(msg, MsgInfra):
                 rcv_nodes = {n for n in rcv_nodes
-                             if msg.sender in n.receives or '*' in n.receives}
+                             if {msg.sender, '*'}.intersection(n.receives)}
+        log.debug('===== %s listeners: %s', str(msg), str(rcv_nodes))
+
         for n in rcv_nodes:
-            log.debug('  -> %s', str(n))
+            log.info('  %s -> %s', str(msg), str(n))
             n.listen(msg)
+        log.debug('===== %s DONE', str(msg))
 
     def teardown(self) -> None:
         """ Prepare for shutdown, e.g. unplug all.
@@ -370,7 +370,7 @@ class MsgBus:
         with self._changed:
             self._changed.wait_for(lambda: len(self._changes))
             change = {id for id in self._changes}
-            log.debug('self._changes len: %d, report len %d', len(self._changes), len(change))
+            log.info('self.wait_for_changes returns %d: %s', len(self._changes), str(change))
             self._changes.clear()
             log.debug('cleared change_list: %r', change)
         return change

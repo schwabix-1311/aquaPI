@@ -141,7 +141,7 @@ class SlowPwmDevice(DeviceNode):
                  inverted: bool = False, cycle: float = 60.,
                  _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
-        self.data = 50.0
+        self.data: float = 50.0
         ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
         self.cycle = float(cycle)
         self._driver = None
@@ -189,14 +189,16 @@ class SlowPwmDevice(DeviceNode):
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):
+            log.debug('%s: ======= received %f from %s', self.id, msg.data, msg.sender)
             self.set(float(msg.data))
         return super().listen(msg)
 
-    def _pulse(self, hi_sec: float) -> None:
+    def _pulse(self, hi_sec: float, cycle: float) -> None:
         def toggle_and_wait(state: bool, end: float) -> bool:
             start = time.time()
             if self._driver:
                 self._driver.write(state  if not self._inverted else not state)
+            log.debug('%s: ======= posts %d', self.id, 100 if state else 0)
             self.post(MsgData(self.id, 100  if state else 0))
             # avoid error accumulation by exact final sleep()
             while time.time() < end - .1:
@@ -214,21 +216,22 @@ class SlowPwmDevice(DeviceNode):
             if hi_sec > 0.1:
                 if not toggle_and_wait(True, lead_edge + hi_sec):
                     return
-            if hi_sec < self.cycle:
-                if not toggle_and_wait(False, lead_edge + self.cycle):
+            if hi_sec < cycle:
+                if not toggle_and_wait(False, lead_edge + cycle):
                     return
         return
 
     def set(self, perc: float) -> None:
-        self.data: float = perc
 
         log.info('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
-                 self.id, self.data, self.cycle * perc/100, self.cycle)
+                 self.id, perc, self.cycle * perc/100, self.cycle)
         if self._thread:
             self._thread_stop = True
             self._thread.join()
+        self.data = perc
         self._thread = Thread(name='PIDpulse', target=self._pulse,
-                              args=[self.data / 100 * self.cycle], daemon=True)
+                              args=[perc / 100 * self.cycle, self.cycle],
+                              daemon=True)
         self._thread.start()
 
     def get_settings(self) -> list[tuple]:

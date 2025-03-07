@@ -13,7 +13,17 @@ log = logging.getLogger('driver')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
+# ========== global config ==========
+
+
+driver_config: dict[str, str] = dict()
+
+
 # ========== IO registry ==========
+
+
+# IoRegistry is a singleton, access it through a class method IoRegistry.get()
+_io_reg: 'IoRegistry'
 
 
 class IoRegistry(object):
@@ -59,6 +69,10 @@ class IoRegistry(object):
     """
 
     _map: dict[str, IoPort] = {}
+
+    @classmethod
+    def get(cls) -> 'IoRegistry':
+        return _io_reg
 
     def __init__(self):
         # iterate all class imports from a module, then call each class' port enumerator
@@ -130,7 +144,7 @@ class IoRegistry(object):
 
             return driver
         except Exception:
-            log.exception('Failed to create port driver: %s' % port)
+            log.exception('Failed to create port driver: %s', port)
             raise
 
     def driver_destruct(self, port: str, driver: Driver) -> None:
@@ -152,38 +166,45 @@ class IoRegistry(object):
 # ========== IoRegistry is a singleton -> 1 global instance ==========
 
 
-DRIVER_FILE_PREFIX = 'Driver'
-CUSTOM_DRIVERS = 'CustomDrivers'
 
 # flake8: noqa
-# - F403 allow import * for the runtime-imports
-# - F405 __path__ undefined or from import *
 from .base import *  # noqa: F403 allow import * for the runtime-imports
 
-# import all files named Driver*.py into our package,
-#  including a subfolder CustomDrivers
-__path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
 
-for drv_path in __path__:
-    for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
-        log.info('Found driver file %s', drv_file)
+def create_io_registry():
+    """ Create the singleton _io_registry, which is accessible as
+        IoRegistry.get()
+    """
+    # pylint: disable-next=W0603
+    global _io_reg
 
-        drv_name = path.basename(drv_file)
-        if drv_name.startswith(DRIVER_FILE_PREFIX):
-            drv_name = drv_name[len(DRIVER_FILE_PREFIX):]
-        if drv_name.endswith('.py'):
-            drv_name = drv_name[:-3]
-        drv_name = __name__ + '.' + drv_name.lower()
-        drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
-        #log.debug('Driver spec %s', drv_spec)
+    DRIVER_FILE_PREFIX = 'Driver'
+    CUSTOM_DRIVERS = 'CustomDrivers'
 
-        if drv_spec:
-            drv_mod = importlib.util.module_from_spec(drv_spec)
-            log.debug('Driver module %s', drv_mod)
+    # import all files named Driver*.py into our package,
+    #  including from subfolder CustomDrivers
+    __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
 
-            sys.modules[drv_name] = drv_mod
-            if drv_spec.loader:
-                drv_spec.loader.exec_module(drv_mod)
-                log.debug('  loaded module %s', drv_mod)
+    for drv_path in __path__:
+        for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
+            log.info('Found driver file %s', drv_file)
 
-io_registry = IoRegistry()
+            drv_name = path.basename(drv_file)
+            if drv_name.startswith(DRIVER_FILE_PREFIX):
+                drv_name = drv_name[len(DRIVER_FILE_PREFIX):]
+            if drv_name.endswith('.py'):
+                drv_name = drv_name[:-3]
+            drv_name = __name__ + '.' + drv_name.lower()
+            drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
+            #log.debug('Driver spec %s', drv_spec)
+
+            if drv_spec:
+                drv_mod = importlib.util.module_from_spec(drv_spec)
+                log.debug('Driver module %s', drv_mod)
+
+                sys.modules[drv_name] = drv_mod
+                if drv_spec.loader:
+                    drv_spec.loader.exec_module(drv_mod)
+                    log.debug('  loaded module %s', drv_mod)
+
+    _io_reg = IoRegistry()

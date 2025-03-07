@@ -34,6 +34,8 @@ aquaPi ToDo list
 
 - simple UI & advanced UI, to allow easy start; simple = no AUX nodes!?
 
+- remove all Jinja templating in favor of Vuetify
+
 - Nodes:
     controller: null (out=in), delay
     input: schedule analog?, random
@@ -57,9 +59,7 @@ aquaPi ToDo list
 
 - add 'click' cmdline options, e.g. --resetfactory --list ...
 
-- use Flask-Babel for backend i18n & l10 / frontend is prepared
-  ref: https://github.com/python-babel/flask-babel
-  ref: https://flask-babel.tkte.ch/
+- use package gettext for backend i18n & l10 / frontend is prepared
 
 - REST API: some endpoints return text, others json, should be all json
 
@@ -109,14 +109,6 @@ aquaPi ToDo list
     temperature diffs, rotating wave?
   utilization -> heater dimension, CO2 valve setting/empty
   luxmeter??
-
-
-THOUGHTS
-========
-
-- python & Flask are closer to my skills and work style, than NodeJS and its huge library of tiny modules (introduces many dependencies requiring permanent updates). Same might be the case with Django.
-
-- Task Queues like huey could be used instead of my own MsgBus, but it requires exploration until I know where its limits are. For MsgBus I know them and can hopefully solve them.
 
 
 DONE
@@ -193,4 +185,15 @@ DONE
 - unique feature is a driver interface to a TC420 light controller,
   wallneradam/tc420 on github is a Linux shell tool to interact with TC420
 - thanks to Thomas migrated most from Jinja templates via Vue to Vuetify
-
+- Email from python, verified with gmail(meffis.org) and manitu - from https://stackoverflow.com/questions/10147455/how-to-send-an-email-with-gmail-as-provider-using-python:
+  >  import smtplib
+  > fromaddr = 'user_me@gmail.com'
+  > toaddrs  = 'user_you@gmail.com'
+  > msg = 'Why,Oh why!'
+  > username = 'user_me@gmail.com'  # your user name on below server
+  > password = 'pwd'  # for gmail generate app-specific pwd at https://security.google.com/settings/security/apppasswords, see ToDo_secret
+  > server = smtplib.SMTP('smtp.gmail.com:587')
+  > server.starttls()
+  > server.login(username,password)
+  > server.sendmail(fromaddr, toaddrs, msg)
+  > server.close()

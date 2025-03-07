@@ -9,7 +9,7 @@ from croniter import croniter
 from threading import Thread
 
 from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData)
-from ..driver import (io_registry, DriverReadError, InDriver)
+from ..driver import (IoRegistry, DriverReadError, InDriver)
 
 
 log = logging.getLogger('machineroom.in_nodes')
@@ -57,9 +57,9 @@ class InputNode(BusNode, ABC):
     @port.setter
     def port(self, port: str) -> None:
         if self._driver:
-            io_registry.driver_destruct(self._port, self._driver)
+            IoRegistry.get().driver_destruct(self._port, self._driver)
         if port:
-            driver = io_registry.driver_factory(port, self._driver_opts)
+            driver = IoRegistry.get().driver_factory(port, self._driver_opts)
             if isinstance(driver, InDriver):
                 self._driver = driver
             else:
@@ -103,7 +103,7 @@ class InputNode(BusNode, ABC):
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
-        settings.append(('port', 'Input',
+        settings.append(('port', 'Input port',
                          self.port, 'type="text"'))
         settings.append(('interval', 'Leseintervall [s]',
                          self.interval, 'type="number" min="1" max="600" step="1"'))

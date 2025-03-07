@@ -12,7 +12,7 @@ from .out_nodes import SwitchDevice, SlowPwmDevice, AnalogDevice
 from .aux_nodes import ScaleAux, MinAux, MaxAux, AvgAux
 from .hist_nodes import History
 from .alert_nodes import Alert, AlertAbove, AlertBelow
-from ..driver import DriverError
+from ..driver import (driver_config, create_io_registry, DriverError)
 
 
 log = logging.getLogger('machineroom')
@@ -28,11 +28,15 @@ class MachineRoom:
         works in msg handlers and callbacks.
     """
 
-    def __init__(self, bus_storage: str) -> None:
+    def __init__(self, app_config: dict[str, str]) -> None:
         """ Create everything needed to get the machinery going.
             So far the only thing here is the bus.
         """
-        self.bus_storage: str = bus_storage
+        self.bus_storage: str = app_config['BUS_TOPO']
+
+        if 'EMAIL' in app_config:
+            driver_config['EMAIL'] = app_config['EMAIL']
+        create_io_registry()
 
         try:
             if not path.exists(self.bus_storage):
@@ -102,8 +106,8 @@ class MachineRoom:
         REAL_CONFIG = True  # this disables the other test configs
         #REAL_CONFIG = False
 
-        TEST_ALERT = False  # True
-        TEST_PH = False  # True
+        TEST_ALERT = True
+        TEST_PH = TEST_ALERT or False  # True
         SIM_LIGHT = False  # True
         DAWN_LIGHT = SIM_LIGHT and False  # True
         SIM_TEMP = True
@@ -119,7 +123,7 @@ class MachineRoom:
             #                    fade_time=15 * 60)
 
             # ... with "realistic" dawn & dusk for 1h each
-            light_c = SunCtrl('Leuchtbalken', light_schedule.id, xscend=1.0)
+            light_c = SunCtrl('Licht', light_schedule.id, xscend=1.0)
 
             light_pwm = AnalogDevice('Dimmer', light_c.id,
                                      'PWM 0', percept=True, maximum=75)
@@ -144,9 +148,9 @@ class MachineRoom:
             # ... or PID driven triac (relay has increased wear, not recomm.)
             # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
             wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
-                                   avg=1, interval=300)
-            wasser = PidCtrl('PID Temperatur', wasser_i1.id, 25.0,
-                             p_fact=1.0, i_fact=0.05, d_fact=0.0)
+                                    avg=1, interval=300)
+            wasser = PidCtrl('Heizleistung', wasser_i1.id, 25.0,
+                             p_fact=1.1, i_fact=0.07, d_fact=0.0)
             wasser_o = SlowPwmDevice('Heizstab', wasser.id,
                                      'GPIO 12 out', inverted=False, cycle=10)
             wasser_i1.plugin(self.bus)
@@ -175,7 +179,7 @@ class MachineRoom:
 
             # __CO2__ #
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
-                                 avg=3, interval=30)
+                                 avg=3, interval=60)
             calib_ph = ScaleAux('pH Wert', adc_ph.id, 'pH',
                                 limit=(4.0, 10.0),
                                 points=[(2.99, 4.0), (2.51, 6.9)])
@@ -203,11 +207,18 @@ class MachineRoom:
                                  [adc_ph.id, calib_ph.id, ph.id])  # , out_ph.id])
             ph_history.plugin(self.bus)
 
+            # Alert system
+            led_alert = Alert('Email-Warnungen',
+                              {AlertAbove(calib_ph.id, 7.5), AlertBelow(calib_ph.id, 6.5),
+                               AlertAbove(wasser_i1.id, 26.0), AlertBelow(wasser_i1.id, 24.5)},
+                              'Email #1', repeat=30 * 60)
+            led_alert.plugin(self.bus)
+
             return
 
         if TEST_PH:
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
-                                 avg=1, interval=10)
+                                 avg=1, interval=30)
             calib_ph = ScaleAux('pH Kalibrierung', adc_ph.id, 'pH',
                                 limit=(4.0, 10.0),
                                 points=[(2.99, 4.0), (2.51, 6.9)])
@@ -271,7 +282,7 @@ class MachineRoom:
                 # ... or PID driven triac (relay has increased wear, not recomm.)
                 # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
                 wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
-                                       avg=1, interval=30)
+                                        avg=1, interval=30)
                 wasser = PidCtrl('Heizleistung (PID)', wasser_i1.id, 25.0,
                                  p_fact=1.0, i_fact=0.05, d_fact=0.0)
                 wasser_o = SlowPwmDevice('Heizstab', wasser.id,
@@ -282,24 +293,24 @@ class MachineRoom:
 
                 # ... and history for a diagram
                 t_history = History('Temperaturen',
-                                    [wasser_i1.id, wasser.id,  wasser_o.id])
+                                    [wasser_i1.id, wasser.id])  # , wasser_o.id])
                 t_history.plugin(self.bus)
 
             else:
                 # 2 temp sensors -> average -> temp ctrl -> relay
-                w1_temp = AnalogInput('T-Sensor 1', 'DS1820 xA2E9C', 25.0, '°C')
-                w1_temp.plugin(self.bus)
+                wasser_i1 = AnalogInput('T-Sensor 1', 'DS1820 xA2E9C', 25.0, '°C')
+                wasser_i1.plugin(self.bus)
 
-                w2_temp = AnalogInput('T-Sensor 2', 'DS1820 x7A71E', 25.0, '°C')
-                w2_temp.plugin(self.bus)
+                wasser_i2 = AnalogInput('T-Sensor 2', 'DS1820 x7A71E', 25.0, '°C')
+                wasser_i2.plugin(self.bus)
 
-                w_temp = AvgAux('T-Mittel', {w1_temp.id, w2_temp.id})
+                w_temp = AvgAux('T-Mittel', {wasser_i1.id, wasser_i2.id})
                 w_temp.plugin(self.bus)
 
                 w1_ctrl = MinimumCtrl('W-Heizung', w_temp.id, 25.0)
                 w1_ctrl.plugin(self.bus)
 
-                w2_ctrl = MaximumCtrl('W-Kühlung', w2_temp.id, 26.5)
+                w2_ctrl = MaximumCtrl('W-Kühlung', wasser_i2.id, 26.5)
                 w2_ctrl.plugin(self.bus)
 
                 w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 12 out')
@@ -315,17 +326,17 @@ class MachineRoom:
                 w_coolspeed.plugin(self.bus)
 
                 t_history = History('Temperaturen',
-                                    [w1_temp.id, w2_temp.id, w_temp.id,
+                                    [wasser_i1.id, wasser_i2.id, w_temp.id,
                                      w_heat.id, w_cool.id])
                 t_history.plugin(self.bus)
 
         if TEST_ALERT:
             led_alert = Alert('Alert LED',
-                              {AlertAbove(calib_ph.id, 6.5), AlertBelow(calib_ph.id, 6.3),
-                               AlertAbove(wasser_i.id, 25.2), AlertBelow(wasser_i.id, 24.9)},
-                              'GPIO 1 out')
+                              {AlertAbove(calib_ph.id, 7.5), AlertBelow(calib_ph.id, 6.5),
+                               AlertAbove(wasser_i1.id, 26.0), AlertBelow(wasser_i1.id, 24.5)},
+                              'Email #2', repeat=30 * 60)
             led_alert.plugin(self.bus)
-            mail_alert = Alert('Alert Mail',
-                               {AlertAbove(wasser_i.id, 25.2), AlertBelow(wasser_i.id, 24.9)},
-                               'GPIO 0 out')  #TEMP, no drivers for email/Telegram yet
-            mail_alert.plugin(self.bus)
+#            mail_alert = Alert('Alert Mail',
+#                               {AlertAbove(wasser_i1.id, 25.2), AlertBelow(wasser_i1.id, 24.9)},
+#                               'Email #1')  #TEMP, no drivers for Telegram yet
+#            mail_alert.plugin(self.bus)

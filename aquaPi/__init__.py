@@ -78,6 +78,7 @@ log_default = {
     # "driver.DriverOneWire": {"level": "NOTSET"},
     # "driver.DriverPWM":     {"level": "NOTSET"},
     # "driver.DriverTC420":   {"level": "NOTSET"},
+    # "driver.DriverText":    {"level": "NOTSET"},
 
     "pages":          {"level": "NOTSET"},
     # "pages.about":    {"level": "NOTSET"},
@@ -99,30 +100,34 @@ log_default = {
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
-    config_file = path.join(app.instance_path, "log_config.json")
-    if path.exists(config_file):
-        with open(config_file, encoding='ascii') as f_in:
+    # no luck with command line parsing:
+    # 1. Flask uses "click", which conflicts with the simple argparse
+    # 2. click is complex, I simply didn't succeed to add options to Flask's command groups
+    # for now use env. vars instead
+    try:
+        topo_file = os.environ['AQUAPI_TOPO']
+    except KeyError:
+        topo_file = 'topo.pickle'
+
+    app.config.from_mapping(
+        SECRET_KEY='ToDo during installation',   # TODO !!
+        BUS_TOPO=os.path.join(app.instance_path, topo_file)
+    )
+    cfg_file = path.join(app.instance_path, "config.json")
+    if path.exists(cfg_file):
+        with open(cfg_file, encoding='utf8') as f_in:
+            custom_cfg = json.load(f_in)
+        app.config.update(custom_cfg)
+
+    logcfg_file = path.join(app.instance_path, "log_config.json")
+    if path.exists(logcfg_file):
+        with open(logcfg_file, encoding='ascii') as f_in:
             log_config = json.load(f_in)
     else:
         log_config = log_default
     logging.config.dictConfig(log_config)
 
     logging.warning("Press CTRL+C to quit")
-    log.brief("... und los geht's")
-
-    # no luck with command line parsing:
-    # 1. Flask uses "click", which conflicts with the simple argparse
-    # 2. click is complex, I simply didn't succeed to add options to Flask's command groups
-    # for now use env. vars instead
-    try:
-        cfg_file = os.environ['AQUAPI_CFG']
-    except KeyError:
-        cfg_file = 'config.pickle'
-
-    app.config.from_mapping(
-        SECRET_KEY='ToDo during installation',   # TODO !!
-        CONFIG=os.path.join(app.instance_path, cfg_file)
-    )
 
     # FIXME: move this to the alert driver
     # if False:
@@ -151,6 +156,24 @@ def create_app() -> Flask:
     except OSError:
         pass
 
+    # Is there a better way? We won't start, so no reason to construct
+    # and finally save the bus.
+    if 'routes' in sys.argv:
+        return app
+
+    from .machineroom import MachineRoom
+    try:
+        app.extensions['machineroom'] = MachineRoom(app.config)
+    except Exception:
+        log.exception('Oops')
+        log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
+        return None
+
+    #FIXME bus is used by jinja template 'settings' only
+    @app.context_processor
+    def inject_globals():
+        return dict(bus=app.extensions['machineroom'].bus)
+
     from . import api
     app.register_blueprint(api.bp)
 
@@ -168,23 +191,5 @@ def create_app() -> Flask:
 
     from .pages import spa
     app.register_blueprint(spa.bp)
-
-    # Is there a better way? We won't start, so no reason to construct
-    # and finally save the bus.
-    if 'routes' in sys.argv:
-        return app
-
-    from .machineroom import MachineRoom
-    try:
-        app.extensions['machineroom'] = MachineRoom(app.config['CONFIG'])
-    except Exception:
-        log.exception('Oops')
-        log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
-        return None
-
-    #FIXME bus is used by jinja template 'settings' only
-    @app.context_processor
-    def inject_globals():
-        return dict(bus=app.extensions['machineroom'].bus)
 
     return app

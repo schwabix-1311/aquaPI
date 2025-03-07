@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 
-cfg_file='config'
-while getopts "hrc:" arg; do
+topo_file='topo'
+while getopts "hrt:" arg; do
   case $arg in
     h)
       echo "Parameters:"
-      echo "-c CONFIG  use CONFIG.pickle to store configuration"
-      echo "-r         reset configuration"
+      echo "-t TOPO  use TOPO.pickle to store topology"
+      echo "-r       reset topology"
       exit 1
       ;;
     r)
-      reset_cfg=1
+      reset_topo=1
       ;;
-    c)
-      cfg_file=$OPTARG
+    t)
+      topo_file=$OPTARG
       ;;
     esac
   done
 
-export AQUAPI_CFG="${cfg_file}.pickle"
-if [[ ${reset_cfg} ]]; then rm "instance/${AQUAPI_CFG}"; fi
+export AQUAPI_TOPO="${topo_file}.pickle"
+if [[ ${reset_topo} ]]; then rm "instance/${AQUAPI_TOPO}"; fi
 
 export FLASK_APP=aquaPi
 export FLASK_ENV=development

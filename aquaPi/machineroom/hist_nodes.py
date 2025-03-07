@@ -155,7 +155,6 @@ if QUEST_DB:
                               + 'dbname=aquaPi application_name=aquaPi'
                 self.timezone = self._get_local_tz()
 
-# pylint: disable-next=E1129
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     conn.execute("SET TIME ZONE %s", [self.timezone])
                     conn.execute("""
@@ -190,7 +189,6 @@ if QUEST_DB:
         def add_field(self, name: str) -> None:
             super().add_field(name)
             try:
-                # pylint: disable-next=E1129
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     with conn.cursor() as curs:
                         qry = SQL("SELECT node_id FROM {} WHERE node_id=%s;"
@@ -206,7 +204,6 @@ if QUEST_DB:
 
         def feed(self, name: str, value: int | float) -> None:
             try:
-                # pylint: disable-next=E1129
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     qry = SQL("INSERT INTO {} VALUES (now(), %s, %s)"
                               ).format(Identifier('value'))
@@ -221,7 +218,6 @@ if QUEST_DB:
                 if start <= 0:
                     start = int(time()) - 24 * 60 * 60  # default to now-24h
 
-# pylint: disable-next=E1129
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     with conn.cursor() as curs:
                         q_names = SQL(',').join(map(Literal, node_names))

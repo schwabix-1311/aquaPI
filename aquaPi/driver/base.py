@@ -74,6 +74,11 @@ class DriverWriteError(DriverError):
         super().__init__(msg)
 
 
+class DriverEmailError(DriverError):
+    def __init__(self, msg: str = 'Failed to send email.'):
+        super().__init__(msg)
+
+
 # ========== common types ==========
 
 
@@ -81,9 +86,9 @@ IoPort = namedtuple('IoPort', 'func driver cfg deps used', defaults=([], 0))
 
 
 class PortFunc(Enum):
-    """ Function of a port driver: Bool/Analog/String + In/Out
+    """ Function of a port driver: Bool/Analog/Text + In/Out
     """
-    Bin, Bout, Ain, Aout, Sin, Sout = range(1, 7)
+    Bin, Bout, Ain, Aout, Tin, Tout = range(1, 7)
 
 
 class PinFunc(Enum):

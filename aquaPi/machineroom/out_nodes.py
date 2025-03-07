@@ -8,7 +8,7 @@ import time
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange)
-from ..driver import (io_registry, OutDriver)
+from ..driver import (IoRegistry, OutDriver)
 
 
 log = logging.getLogger('machineroom.out_nodes')
@@ -26,12 +26,44 @@ class DeviceNode(BusListener, ABC):
     """
     ROLE = BusRole.OUT_ENDP
 
-    # def __getstate__(self) -> dict[str, Any]:
-    #     return super().__getstate__()
+    def __init__(self, name: str, receives: str, port: str,
+                 _cont=False):
+        super().__init__(name, receives, _cont=_cont)
+        self._driver: OutDriver | None = None
+        self._port: str = ''
+        self.port = port
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state.update(port=self.port)
+        return state
 
     # def __setstate__(self, state: dict[str, Any]) -> None:
     #     self.data = state['data']
     #     DeviceNode.__init__(self, state, _cont=True)
+
+    @property
+    def port(self) -> str:
+        return self._port
+
+    @port.setter
+    def port(self, port: str) -> None:
+        if self._driver:
+            IoRegistry.get().driver_destruct(self._port, self._driver)
+        if port:
+            driver = IoRegistry.get().driver_factory(port)
+            if isinstance(driver, OutDriver):
+                self._driver = driver
+            else:
+                log.error('Port %s does not support writing data. %s will be ignored.',
+                          port, self.name)
+        self._port = port
+
+    def get_settings(self) -> list[tuple]:
+        settings = super().get_settings()
+        settings.append(('port', 'Output port',
+                         self.port, 'type="text"'))
+        return settings
 
 
 class SwitchDevice(DeviceNode):
@@ -50,18 +82,14 @@ class SwitchDevice(DeviceNode):
 
     def __init__(self, name: str, receives: str, port: str,
                  inverted: bool = False, _cont: bool = False):
-        super().__init__(name, receives, _cont=_cont)
-        self._driver: OutDriver | None = None
-        self._port: str = ''
+        super().__init__(name, receives, port, _cont=_cont)
         self._inverted = inverted
         ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
-        self.port = port
         self.switch(self.data if _cont else False)
         log.info('%s init to %f|%r', self.name, self.data, inverted)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(port=self.port)
         state.update(inverted=self.inverted)
         return state
 
@@ -69,23 +97,6 @@ class SwitchDevice(DeviceNode):
         self.data = state['data']
         SwitchDevice.__init__(self, state['name'], state['receives'], state['port'],
                               inverted=state['inverted'], _cont=True)
-
-    @property
-    def port(self) -> str:
-        return self._port
-
-    @port.setter
-    def port(self, port: str) -> None:
-        if self._driver:
-            io_registry.driver_destruct(self._port, self._driver)
-        if port:
-            driver = io_registry.driver_factory(port)
-            if isinstance(driver, OutDriver):
-                self._driver = driver
-            else:
-                log.error('Port %s does not support writing data. %s will be ignored.',
-                          port, self.name)
-        self._port = port
 
     @property
     def inverted(self) -> bool:
@@ -140,23 +151,19 @@ class SlowPwmDevice(DeviceNode):
     def __init__(self, name: str, receives: str, port: str,
                  inverted: bool = False, cycle: float = 60.,
                  _cont: bool = False):
-        super().__init__(name, receives, _cont=_cont)
+        super().__init__(name, receives, port, _cont=_cont)
         self.data: float = 50.0
         ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
         self.cycle = float(cycle)
-        self._driver = None
-        self._port = ''
         self._inverted = inverted
         self._thread = None
         self._thread_stop = False
-        self.port = port
         self.set(self.data)
         log.info('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state.update(cycle=self.cycle)
-        state.update(port=self.port)
         state.update(inverted=self._inverted)
         return state
 
@@ -165,18 +172,6 @@ class SlowPwmDevice(DeviceNode):
         SlowPwmDevice.__init__(self, state['name'], state['receives'], state['port'],
                                inverted=state['inverted'], cycle=state['cycle'],
                                _cont=True)
-
-    @property
-    def port(self) -> str:
-        return self._port
-
-    @port.setter
-    def port(self, port: str) -> None:
-        if self._driver:
-            io_registry.driver_destruct(self._port, self._driver)
-        if port:
-            self._driver = io_registry.driver_factory(port)
-        self._port = port
 
     @property
     def inverted(self) -> bool:
@@ -263,20 +258,16 @@ class AnalogDevice(DeviceNode):
     def __init__(self, name: str, receives: str, port: str,
                  percept: bool = False, minimum: float = 0, maximum: float = 100,
                  _cont=False):
-        super().__init__(name, receives, _cont=_cont)
-        self._driver: OutDriver | None = None
-        self._port: str = ''
+        super().__init__(name, receives, port, _cont=_cont)
         self.unit: str = '%'  ## if self.data_range != DataRange.BINARY else '⏻'
         self.percept = percept
         self.minimum = min(max(0., minimum), 90.)
         self.maximum = min(max(minimum + 1., maximum), 100.)
-        self.port = port
         self.set_percent(self.data if _cont else 0)
         log.info('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(port=self.port)
         state.update(percept=self.percept)
         state.update(minimum=self.minimum)
         state.update(maximum=self.maximum)
@@ -287,23 +278,6 @@ class AnalogDevice(DeviceNode):
         AnalogDevice.__init__(self, state['name'], state['receives'],
                               state['port'], percept=state['percept'],
                               minimum=state['minimum'], maximum=state['maximum'], _cont=True)
-
-    @property
-    def port(self) -> str:
-        return self._port
-
-    @port.setter
-    def port(self, port: str) -> None:
-        if self._driver:
-            io_registry.driver_destruct(self._port, self._driver)
-        if port:
-            driver = io_registry.driver_factory(port)
-            if isinstance(driver, OutDriver):
-                self._driver = driver
-            else:
-                log.error('Port %s does not support writing data. %s will be ignored.',
-                          port, self.name)
-        self._port = port
 
     def listen(self, msg: Msg) -> bool:
         if isinstance(msg, MsgData):

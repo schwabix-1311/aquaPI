@@ -74,8 +74,8 @@ class DriverWriteError(DriverError):
         super().__init__(msg)
 
 
-class DriverEmailError(DriverError):
-    def __init__(self, msg: str = 'Failed to send email.'):
+class DriverConfigError(DriverError):
+    def __init__(self, msg: str = 'Failed to send message'):
         super().__init__(msg)
 
 

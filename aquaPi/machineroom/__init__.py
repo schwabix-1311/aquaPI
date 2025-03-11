@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 import logging
-from os import path
+from os import (environ, path)
+import json
 import pickle
 import atexit
 
@@ -28,28 +29,75 @@ class MachineRoom:
         works in msg handlers and callbacks.
     """
 
-    def __init__(self, app_config: dict[str, str]) -> None:
-        """ Create everything needed to get the machinery going.
-            So far the only thing here is the bus.
+    def __init__(self, global_cfg: dict[str, str]) -> None:
+        """ Create everything needed to get the machinery going:
+            the Bus, global config and the IoRegistry for drivers
         """
-        self.bus_storage: str = app_config['BUS_TOPO']
+        self.globals = global_cfg
+        instance_path = global_cfg['INSTANCE_PATH']
 
-        if 'EMAIL' in app_config:
-            driver_config['EMAIL'] = app_config['EMAIL']
+        # merge customized config from this file
+        cfg_file = 'config.json'
+        if 'AQUAPI_CFG' in environ:
+            cfg_file = environ['AQUAPI_CFG']
+        cfg_file = path.join(instance_path, cfg_file)
+
+        if path.exists(cfg_file):
+            with open(cfg_file, 'r', encoding='utf8') as f_in:
+                custom_cfg = json.load(f_in)
+            self.globals.update(custom_cfg)
+
+        topo_file = 'topo.pickle'
+        if 'AQUAPI_TOPO' in environ:
+            topo_file = environ['AQUAPI_TOPO']
+        topo_file = path.join(instance_path, topo_file)
+
+        self.globals['CUSTOM_CFG'] = cfg_file
+        self.globals['BUS_TOPO'] = topo_file
+
+        if 'Email' in self.globals:
+            driver_config['Email'] = self.globals['Email']
+        if 'Telegram' in self.globals:
+            driver_config['Telegram'] = self.globals['Telegram']
         create_io_registry()
 
         try:
-            if not path.exists(self.bus_storage):
+            if not path.exists(self.globals['BUS_TOPO']):
                 self.bus: MsgBus = MsgBus(threaded=False)
 
                 log.brief("=== There are no controllers defined, creating default")
+
+# this constructs all nodes contained in this file, including all side effects of
+# construction such as port driver creation, just it isn't plugged in yet
+#                with open('phsteuerung.chain', 'r', encoding='utf8') as p:
+#                    ch = jsonpickle.loads(p.read())
+#                breakpoint()
+#                print(ch)
+
                 self.create_default_nodes()
                 self.save_nodes(self.bus)
+
+# thoughts on chains:
+# - could have a couple of jsonpickeled chain files
+# - before decoding them (instantiate by loads), the file contents could run through a
+#   parser, interactively filling in variables
+# - with appropriate variable syntax the parser could offer choices from appropriate types or data from the live system
+# - should go through all possible variables to learn requirements
+# - same parser could later be used to pre-select choices of a nicer API
+
+                # instead iterate with bus.get_nodes().intersect(chain) until empty?
+#                for c in self.bus.get_nodes(BusRole.CTRL):
+#                    chain = {c}
+#                    chain |= {rcv for rcv in c.get_receives(True)}
+#                    chain |= {lst for lst in c.get_listeners(True)}
+#                    with open(c.id + '.chain', 'w', encoding='utf8') as p:
+#                        p.write(jsonpickle.dumps(chain, indent=2))
+
                 log.brief("=== Successfully created Bus and default Nodes")
-                log.brief("  ... and saved to %s", self.bus_storage)
+                log.brief("  ... and saved to %s", self.globals['BUS_TOPO'])
 
             else:
-                log.brief("=== Loading Bus & Nodes from %s", self.bus_storage)
+                log.brief("=== Loading Bus & Nodes from %s", self.globals['BUS_TOPO'])
                 self.bus = self.restore_nodes()
 
         except DriverError as ex:
@@ -67,6 +115,24 @@ class MachineRoom:
         """ Prepare for shutdown, save bus state etc.
         """
         log.brief('Preparing shutdown ...')
+
+        # write our changed (onyl our!) data back self.globals['CUSTOM_CFG']
+        # thus, load from file, update our dynamic keys, then write back
+        custom_cfg: dict[str, str] = {}
+        cfg_file = self.globals['CUSTOM_CFG']
+        if path.exists(cfg_file):
+            with open(cfg_file, 'r', encoding='utf8') as f_in:
+                custom_cfg = json.load(f_in)
+        # if 'Email' in custom_cfg:
+        #     for idx in range(len(custom_cfg['Email'])):
+        #         custom_cfg['Email'][idx].update(self.globals['Email'][idx])
+        if 'Telegram' in custom_cfg:
+            for idx in range(len(custom_cfg['Telegram'])):
+                custom_cfg['Telegram'][idx].update(self.globals['Telegram'][idx])
+        if custom_cfg:
+            with open(cfg_file, 'w', encoding='utf8') as p:
+                p.write(json.dumps(custom_cfg, indent=2))
+
         if self.bus:
             # this does not work completely, teardown aborts half-way.
             # My theory: we run multi-threaded as a daemon and have only
@@ -83,7 +149,7 @@ class MachineRoom:
         """
         if container:
             if not fname:
-                fname = self.bus_storage
+                fname = self.globals['BUS_TOPO']
             with open(fname, 'wb') as p:
                 pickle.dump(container, p, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -92,7 +158,7 @@ class MachineRoom:
             or a controller template in a container from some file
         """
         if not fname:
-            fname = self.bus_storage
+            fname = self.globals['BUS_TOPO']
         with open(fname, 'rb') as p:
             container = pickle.load(p)
         return container
@@ -100,8 +166,8 @@ class MachineRoom:
     def create_default_nodes(self) -> None:
         """ "let there be light" and heating of course, what
             else do my fish(es) need?
-            Distraction: interesting fact on English:
-              "fish" is plural, "fishes" is several species of fish
+            Distraction: interesting fact about English:
+              "fish" is plural, "fishes" are several species of fish
         """
         REAL_CONFIG = True  # this disables the other test configs
         #REAL_CONFIG = False
@@ -208,11 +274,20 @@ class MachineRoom:
             ph_history.plugin(self.bus)
 
             # Alert system
-            led_alert = Alert('Email-Warnungen',
-                              {AlertAbove(calib_ph.id, 7.5), AlertBelow(calib_ph.id, 6.5),
-                               AlertAbove(wasser_i1.id, 26.0), AlertBelow(wasser_i1.id, 24.5)},
-                              'Email #1', repeat=30 * 60)
-            led_alert.plugin(self.bus)
+            email_alert = Alert('Email-Warnungen',
+                                {AlertAbove(calib_ph.id, 7.5),
+                                 AlertBelow(calib_ph.id, 6.5),
+                                 AlertAbove(wasser_i1.id, 26.0),
+                                 AlertBelow(wasser_i1.id, 24.5)},
+                                'Email #1', repeat=30 * 60)
+            email_alert.plugin(self.bus)
+            telegram_alert = Alert('Telegram-Warnungen',
+                                   {AlertAbove(calib_ph.id, 7.3),
+                                    AlertBelow(calib_ph.id, 6.8),
+                                    AlertAbove(wasser_i1.id, 25.2),
+                                    AlertBelow(wasser_i1.id, 24.7)},
+                                   'Telegram #1', repeat=30 * 60)
+            telegram_alert.plugin(self.bus)
 
             return
 

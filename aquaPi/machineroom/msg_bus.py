@@ -315,7 +315,7 @@ class MsgBus:
 
     # former BusBroker functions, i.e. the interface for Flask backend
 
-    def get_nodes(self, roles=None):
+    def get_nodes(self, roles: set[BusRole] = None) -> list[BusNode]:
         """ return list of current nodes: { id:BusNode, ... }
             filtered by set of roles, or all
         """

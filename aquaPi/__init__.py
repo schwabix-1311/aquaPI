@@ -100,28 +100,31 @@ log_default = {
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
-    # no luck with command line parsing:
-    # 1. Flask uses "click", which conflicts with the simple argparse
-    # 2. click is complex, I simply didn't succeed to add options to Flask's command groups
-    # for now use env. vars instead
-    try:
-        topo_file = os.environ['AQUAPI_TOPO']
-    except KeyError:
-        topo_file = 'topo.pickle'
-
     app.config.from_mapping(
         SECRET_KEY='ToDo during installation',   # TODO !!
-        BUS_TOPO=os.path.join(app.instance_path, topo_file)
+        INSTANCE_PATH=app.instance_path
     )
-    cfg_file = path.join(app.instance_path, "config.json")
-    if path.exists(cfg_file):
-        with open(cfg_file, encoding='utf8') as f_in:
-            custom_cfg = json.load(f_in)
-        app.config.update(custom_cfg)
+
+    # in debug mode, app starts a 2nd instance and thus we
+    # would duplicate all our threads, which then compete,  AVOID THIS!
+    # https://stackoverflow.com/questions/17552482/hook-when-flask-restarts-in-debug-mode
+    import werkzeug
+    if app.debug and not werkzeug.serving.is_running_from_reloader():
+        return app
+
+    # Is there a better way? We won't start, so no reason to construct
+    # and finally save the bus.
+    if 'routes' in sys.argv:
+        return app
+
+    try:
+        os.makedirs(app.instance_path)
+    except OSError:
+        pass
 
     logcfg_file = path.join(app.instance_path, "log_config.json")
     if path.exists(logcfg_file):
-        with open(logcfg_file, encoding='ascii') as f_in:
+        with open(logcfg_file, 'r', encoding='ascii') as f_in:
             log_config = json.load(f_in)
     else:
         log_config = log_default
@@ -143,23 +146,6 @@ def create_app() -> Flask:
     #    ))
     #    if not app.debug:
     #        app.logger.addHandler(mail_handler)
-
-    # in debug mode, app starts a 2nd instance and thus we
-    # would duplicate all our threads, which then compete,  AVOID THIS!
-    # https://stackoverflow.com/questions/17552482/hook-when-flask-restarts-in-debug-mode
-    import werkzeug
-    if app.debug and not werkzeug.serving.is_running_from_reloader():
-        return app
-
-    try:
-        os.makedirs(app.instance_path)
-    except OSError:
-        pass
-
-    # Is there a better way? We won't start, so no reason to construct
-    # and finally save the bus.
-    if 'routes' in sys.argv:
-        return app
 
     from .machineroom import MachineRoom
     try:

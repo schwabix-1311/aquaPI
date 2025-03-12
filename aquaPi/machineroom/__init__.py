@@ -205,7 +205,7 @@ class MachineRoom:
             # __Temperatures__ #
             # single water temp sensor
             # 2-point switched relay or triac ...
-            #wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+            #wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
             #                       avg=1, interval=60)
             #wasser = MinimumCtrl('Temperatur', wasser_i1.id, 25.0)
             #wasser_o = SwitchDevice('Heizstab', wasser.id,
@@ -213,7 +213,7 @@ class MachineRoom:
 
             # ... or PID driven triac (relay has increased wear, not recomm.)
             # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
-            wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+            wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
                                     avg=1, interval=300)
             wasser = PidCtrl('Heizleistung', wasser_i1.id, 25.0,
                              p_fact=1.1, i_fact=0.07, d_fact=0.0)
@@ -224,7 +224,7 @@ class MachineRoom:
             wasser_o.plugin(self.bus)
 
             # air temperature, just for the diagram
-            wasser_i2 = AnalogInput('Raumluft', 'DS1820 x7A71E', 25.0, '°C',
+            wasser_i2 = AnalogInput('Raumluft', 'DS1820 #1', 25.0, '°C',
                                     avg=2, interval=60)
             wasser_i2.plugin(self.bus)
 
@@ -348,7 +348,7 @@ class MachineRoom:
                 # __Temperatures__ #
                 # single water temp sensor
                 # 2-point switched relay or triac ...
-                # wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+                # wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
                 #                         avg=1, interval=60)
                 # wasser = MinimumCtrl('Temperatur', wasser_i1.id, 25.0)
                 # wasser_o = SwitchDevice('Heizstab', wasser.id,
@@ -356,7 +356,7 @@ class MachineRoom:
 
                 # ... or PID driven triac (relay has increased wear, not recomm.)
                 # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
-                wasser_i1 = AnalogInput('Wasser', 'DS1820 xA2E9C', 25.0, '°C',
+                wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
                                         avg=1, interval=30)
                 wasser = PidCtrl('Heizleistung (PID)', wasser_i1.id, 25.0,
                                  p_fact=1.0, i_fact=0.05, d_fact=0.0)
@@ -373,10 +373,10 @@ class MachineRoom:
 
             else:
                 # 2 temp sensors -> average -> temp ctrl -> relay
-                wasser_i1 = AnalogInput('T-Sensor 1', 'DS1820 xA2E9C', 25.0, '°C')
+                wasser_i1 = AnalogInput('T-Sensor 1', 'DS1820 #2', 25.0, '°C')
                 wasser_i1.plugin(self.bus)
 
-                wasser_i2 = AnalogInput('T-Sensor 2', 'DS1820 x7A71E', 25.0, '°C')
+                wasser_i2 = AnalogInput('T-Sensor 2', 'DS1820 #1', 25.0, '°C')
                 wasser_i2.plugin(self.bus)
 
                 w_temp = AvgAux('T-Mittel', {wasser_i1.id, wasser_i2.id})

@@ -22,19 +22,22 @@ class DriverDS1820(AInDriver):
             # TODO: GPIO 4 is the Raspi default, auto-detect alternatives!
             deps = ['GPIO 4 in', 'GPIO 4 out']
 
-            for sensor in glob.glob('/sys/bus/w1/devices/28-*'):
-                port_name = 'DS1820 x%s' % sensor[-5:].upper()
-                io_ports[port_name] = IoPort(PortFunc.Ain,
-                                             DriverDS1820,
-                                             {'adr': sensor},
-                                             deps)
+            idx = 0
+            for sensor in sorted(glob.glob('/sys/bus/w1/devices/28-*')):
+                port_key = f'DS1820 #{idx + 1}'
+                #port_name = f'DS1820 x{sensor[-5:].upper()}'
+                io_ports[port_key] = IoPort(PortFunc.Ain,
+                                            DriverDS1820,
+                                            {'adr': sensor},
+                                            deps)
+                idx += 1
         else:
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
             io_ports = {
-                'DS1820 xA2E9C': IoPort(PortFunc.Ain, DriverDS1820,
-                                        {'adr': '28-0119383a2e9c', 'fake': True}, []),
-                'DS1820 x7A71E': IoPort(PortFunc.Ain, DriverDS1820,
-                                        {'adr': '28-01193867a71e', 'fake': True}, [])
+                'DS1820 #1': IoPort(PortFunc.Ain, DriverDS1820,
+                                    {'adr': '28-01193867a71e', 'name': 'DS1820 x7A71E', 'fake': True}, []),
+                'DS1820 #2': IoPort(PortFunc.Ain, DriverDS1820,
+                                    {'adr': '28-0119383a2e9c', 'name': 'DS1820 xA2E9C', 'fake': True}, [])
             }
         return io_ports
 

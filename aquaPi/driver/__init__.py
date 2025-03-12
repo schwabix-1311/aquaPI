@@ -30,6 +30,8 @@ class IoRegistry(object):
     """
     example
 
+#TODO review this, some is not up to date!
+
     "GPIO 0..xx in":  { Bin,  DriverGPIO,   {pin: 0..x} }           - unused, func IN, x entries
     "GPIO 0..xx out": { Bout, DriverGPIO,   {pin: 0..x} }           - unused, func IN, x entries
 --    "IOext 1..7 in":  { Bin,  DriverPCFxx,  {adr: 0x47, ch: x} }    - unused, x entries
@@ -50,7 +52,7 @@ class IoRegistry(object):
 --    "TC420 #1 CH3-5": { Aout, DriverTC420,  {device:0, ch:(3,4,5)}} - RGB Licht
 --    "ShellyDim":      { Aout, DriverShelly, {ip: '192..', ch:X} }   - Ambilight
 
-    "DS1820 xABCDE":  { Ain,  DriverDS1820,  {adr:'28-..abcde'} }   - Wassertemperatur"
+    "DS1820 #1":      { Ain,  DriverDS1820,  {adr:'28-..abcde'} }   - Wassertemperatur"
     "ADC #1 in 3":    { Ain,  DriverADS1115,{adr:0x7E, cnt:1, ch:3} }   - pH Sonde"
 
     Constructor calls each driver's find_ports() to fill io_registry with io_ports.
@@ -83,7 +85,7 @@ class IoRegistry(object):
         # We load all modules Driver*.py from specific folders, then lookup all
         # descendants of class Driver found in the module dicts.
         # Those with a method find_ports() can report "their" IoPorts to IoRegistry.
-        # Maybe there's a much simpler ways to achieve the same though.
+        # Maybe there's a much simpler way to achieve the same though.
 
         # all driver modules are dynamically imported in __init__.py and added to sys.modules
         drv_mod_names = [mod for mod in sys.modules if 'driver.' in mod]
@@ -107,7 +109,7 @@ class IoRegistry(object):
                 IoRegistry._map.update(drv_ports)
 
         log.brief('Port drivers found for:')
-        log.brief('%r', [k for k in IoRegistry._map])
+        log.brief('%r', [k for k in sorted(IoRegistry._map)])
 
     def get_ports_by_function(self, funcs: list[PortFunc], in_use: bool = False
                               ) -> dict[str, IoPort]:

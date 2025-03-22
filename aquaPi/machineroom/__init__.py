@@ -116,7 +116,7 @@ class MachineRoom:
         """
         log.brief('Preparing shutdown ...')
 
-        # write our changed (onyl our!) data back self.globals['CUSTOM_CFG']
+        # write changed data (onyl our!) back to self.globals['CUSTOM_CFG']
         # thus, load from file, update our dynamic keys, then write back
         custom_cfg: dict[str, str] = {}
         cfg_file = self.globals['CUSTOM_CFG']
@@ -134,9 +134,6 @@ class MachineRoom:
                 p.write(json.dumps(custom_cfg, indent=2))
 
         if self.bus:
-            # this does not work completely, teardown aborts half-way.
-            # My theory: we run multi-threaded as a daemon and have only
-            # limited time until we're killed.
             self.save_nodes(self.bus)
             self.bus.teardown()
             # self.bus = None
@@ -170,13 +167,13 @@ class MachineRoom:
               "fish" is plural, "fishes" are several species of fish
         """
         REAL_CONFIG = True  # this disables the other test configs
-        #REAL_CONFIG = False
+        # REAL_CONFIG = False
 
         TEST_ALERT = True
         TEST_PH = TEST_ALERT or False  # True
         SIM_LIGHT = False  # True
         DAWN_LIGHT = SIM_LIGHT and False  # True
-        SIM_TEMP = True
+        SIM_TEMP = False  # True
         COMPLEX_TEMP = SIM_TEMP and False
 
         if REAL_CONFIG:
@@ -205,15 +202,15 @@ class MachineRoom:
             # __Temperatures__ #
             # single water temp sensor
             # 2-point switched relay or triac ...
-            #wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
-            #                       avg=1, interval=60)
-            #wasser = MinimumCtrl('Temperatur', wasser_i1.id, 25.0)
-            #wasser_o = SwitchDevice('Heizstab', wasser.id,
-            #                        'GPIO 12 out', inverted=False)
+            # wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
+            #                         avg=1, interval=60)
+            # wasser = MinimumCtrl('Temperatur', wasser_i1.id, 25.0)
+            # wasser_o = SwitchDevice('Heizstab', wasser.id,
+            #                         'GPIO 12 out', inverted=False)
 
             # ... or PID driven triac (relay has increased wear, not recomm.)
             # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
-            wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
+            wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
                                     avg=1, interval=300)
             wasser = PidCtrl('Heizleistung', wasser_i1.id, 25.0,
                              p_fact=1.1, i_fact=0.07, d_fact=0.0)
@@ -224,7 +221,7 @@ class MachineRoom:
             wasser_o.plugin(self.bus)
 
             # air temperature, just for the diagram
-            wasser_i2 = AnalogInput('Raumluft', 'DS1820 #1', 25.0, '°C',
+            wasser_i2 = AnalogInput('Raumluft', 'DS1820 #2', 25.0, '°C',
                                     avg=2, interval=60)
             wasser_i2.plugin(self.bus)
 
@@ -245,7 +242,7 @@ class MachineRoom:
 
             # __CO2__ #
             adc_ph = AnalogInput('pH Sonde', 'ADC #1 in 3', 2.49, 'V',
-                                 avg=3, interval=60)
+                                 avg=3, interval=120)
             calib_ph = ScaleAux('pH Wert', adc_ph.id, 'pH',
                                 limit=(4.0, 10.0),
                                 points=[(2.99, 4.0), (2.51, 6.9)])
@@ -298,7 +295,7 @@ class MachineRoom:
                                 limit=(4.0, 10.0),
                                 points=[(2.99, 4.0), (2.51, 6.9)])
             ph = MaximumCtrl('pH', calib_ph.id, 7.0)
-            #ph = PidCtrl('pH', calib_ph.id, 7.0)
+            # ph = PidCtrl('pH', calib_ph.id, 7.0)
             out_ph = SwitchDevice('CO2 Ventil', ph.id, 'GPIO 20 out')
             out_ph.plugin(self.bus)
             ph.plugin(self.bus)
@@ -348,7 +345,7 @@ class MachineRoom:
                 # __Temperatures__ #
                 # single water temp sensor
                 # 2-point switched relay or triac ...
-                # wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
+                # wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
                 #                         avg=1, interval=60)
                 # wasser = MinimumCtrl('Temperatur', wasser_i1.id, 25.0)
                 # wasser_o = SwitchDevice('Heizstab', wasser.id,
@@ -356,7 +353,7 @@ class MachineRoom:
 
                 # ... or PID driven triac (relay has increased wear, not recomm.)
                 # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
-                wasser_i1 = AnalogInput('Wasser', 'DS1820 #2', 25.0, '°C',
+                wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
                                         avg=1, interval=30)
                 wasser = PidCtrl('Heizleistung (PID)', wasser_i1.id, 25.0,
                                  p_fact=1.0, i_fact=0.05, d_fact=0.0)
@@ -373,10 +370,10 @@ class MachineRoom:
 
             else:
                 # 2 temp sensors -> average -> temp ctrl -> relay
-                wasser_i1 = AnalogInput('T-Sensor 1', 'DS1820 #2', 25.0, '°C')
+                wasser_i1 = AnalogInput('T-Sensor 1', 'DS1820 #1', 25.0, '°C')
                 wasser_i1.plugin(self.bus)
 
-                wasser_i2 = AnalogInput('T-Sensor 2', 'DS1820 #1', 25.0, '°C')
+                wasser_i2 = AnalogInput('T-Sensor 2', 'DS1820 #2', 25.0, '°C')
                 wasser_i2.plugin(self.bus)
 
                 w_temp = AvgAux('T-Mittel', {wasser_i1.id, wasser_i2.id})
@@ -407,9 +404,12 @@ class MachineRoom:
 
         if TEST_ALERT:
             led_alert = Alert('Alert LED',
-                              {AlertAbove(calib_ph.id, 7.5), AlertBelow(calib_ph.id, 6.5),
-                               AlertAbove(wasser_i1.id, 26.0), AlertBelow(wasser_i1.id, 24.5)},
-                              'Email #2', repeat=30 * 60)
+                              {AlertAbove(calib_ph.id, limit=7.5, duration=1),
+                               AlertBelow(calib_ph.id, 6.5),
+                               AlertAbove(ph.id, duration=15)
+                               #AlertAbove(wasser_i1.id, 26.0), AlertBelow(wasser_i1.id, 24.5)
+                               },
+                              'Telegram #1', repeat=10)  # 30 * 60)
             led_alert.plugin(self.bus)
 #            mail_alert = Alert('Alert Mail',
 #                               {AlertAbove(wasser_i1.id, 25.2), AlertBelow(wasser_i1.id, 24.9)},

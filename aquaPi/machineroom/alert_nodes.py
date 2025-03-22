@@ -69,29 +69,115 @@ class AlertCond(ABC):
 
 
 class AlertAbove(AlertCond):
-    """ Alert when data above limit
+    """ Alert when source >= limit for longer than duration.
+
+        node_id  - id of node this condition applies to
+        limit    - optional threshold to cause an alert [50%]
+        duration - optional duration (mins) the limit must be exceeded [0]
+
+        With both opt. params unset this alert will trigger instantly
+        when the source is >= 50. This may not be what you intend.
+        Either give a limit, e.g. for immediate temperature warnings,
+        or a duration and maybe a limit, to be warned if e.g. the heating was
+        active longer than expected (overload?) or your pH stays
+        higher than specified for the given time span (CO2 bottle empty).
     """
+    def __init__(self, node_id: str, limit: float = 50., duration: int = 0):
+        super().__init__(node_id, limit)
+        self.duration: int = duration
+
+        self._starttime: float | None = None
+
+    def __str__(self) -> str:
+        if self.duration:
+            return f'{type(self).__name__}(>={self.limit} for {self.duration}min)'
+        else:
+            return f'{type(self).__name__}(>={self.limit})'
+
     def _check(self, msg: MsgPayload) -> bool:
-        return msg.data > self.limit
+        log.debug("AlertAbove.check %s", msg)
+        if msg.data >= self.limit:
+            if not self._starttime:
+                log.debug("  started")
+                self._starttime = time()
+        else:
+            if self._starttime:
+                log.debug("  ended")
+                self._starttime = None
+        if self._starttime:
+            log.debug("  %.1f >= %.1f + %.1f = %r",
+                      time(), self._starttime, self.duration * 60,
+                      (time() >= self._starttime + self.duration * 60))
+        return (time() >= self._starttime + self.duration * 60) if self._starttime else False
 
     def _text(self, msg: MsgPayload) -> str:
-        #return f'Value of {msg.sender} is {"HIGH" if self._alerted else "OK"}: ' \
-        #       + f'{msg.data:.2f}  [limit {self.limit:.2f}]'
-        return f'{msg.sender}: Messwert {"zu HOCH" if self._alerted else "OK"}: ' \
-               + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
+        if self._alerted:
+            if self.duration:
+                minutes = (time() - self._starttime) / 60
+                return f'{msg.sender}: Messwort zu HOCH: ' \
+                       + f' {msg.data:.2f} seit {minutes:.1f} min   [Grenzwert {self.limit:.2f} für max. {self.duration} min'
+            else:
+                return f'{msg.sender}: Messwert zu HOCH: ' \
+                       + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
+        else:
+            return f'{msg.sender}: Messwert OK: ' \
+                   + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
 
 
+#TODO refactor: almost identical to AlertAbove except for comparison operator and some messages
 class AlertBelow(AlertCond):
-    """ Alert when data below limit
+    """ Alert when source <= limit for longer than duration.
+
+        node_id  - id of node this condition applies to
+        limit    - optional threshold to cause an alert [50%]
+        duration - optional duration (mins) the limit must be exceeded [0]
+
+        With both opt. params unset this alert will trigger instantly
+        when the source is <= 50. This may not be what you intend.
+        Either give a limit, e.g. for immediate temperature warnings,
+        or a duration and maybe a limit, to be warned if the pH stays
+        lower than specified for the given time span.
     """
+    def __init__(self, node_id: str, limit: float = 50., duration: int = 0):
+        super().__init__(node_id, limit)
+        self.duration: int = duration
+
+        self._starttime: float | None = None
+
+    def __str__(self) -> str:
+        if self.duration:
+            return f'{type(self).__name__}(<={self.limit} for {self.duration}min)'
+        else:
+            return f'{type(self).__name__}(<={self.limit})'
+
     def _check(self, msg: MsgPayload) -> bool:
-        return msg.data < self.limit
+        log.debug("AlertBelow.check %s", msg)
+        if msg.data <= self.limit:
+            if not self._starttime:
+                log.debug("  started")
+                self._starttime = time()
+        else:
+            if self._starttime:
+                log.debug("  ended")
+                self._starttime = None
+        if self._starttime:
+            log.debug("  %.1f >= %.1f + %.1f = %r",
+                      time(), self._starttime, self.duration * 60,
+                      (time() >= self._starttime + self.duration * 60))
+        return (time() >= self._starttime + self.duration * 60) if self._starttime else False
 
     def _text(self, msg: MsgPayload) -> str:
-        #return f'Value of {msg.sender} is {"LOW" if self._alerted else "OK"}: ' \
-        #       + f'{msg.data:.2f}  [limit {self.limit:.2f}]'
-        return f'{msg.sender}: Messwert {"zu NIEDRIG" if self._alerted else "OK"}: ' \
-               + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
+        if self._alerted:
+            if self.duration:
+                minutes = (time() - self._starttime) / 60
+                return f'{msg.sender}: Messwort zu NIEDRIG ' \
+                       + f' {msg.data:.2f} seit {minutes:.1f} min   [Grenzwert {self.limit:.2f} für max. {self.duration} min'
+            else:
+                return f'{msg.sender}: Messwert zu NIEDRIG: ' \
+                       + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
+        else:
+            return f'{msg.sender}: Messwert OK: ' \
+                   + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
 
 
 #class AlertLongActive    _check = now - _last_off > limit, _text = "Overload/High utilization"
@@ -162,19 +248,20 @@ class Alert(BusListener):
 
     def listen(self, msg: Msg):
         if isinstance(msg, MsgData) and self._bus:
-            log.debug("## Alert %s check %.4f from %s",
-                      self.name, msg.data, msg.sender)
+            log.info("## Alert %s check %.4f from %s",
+                     self.name, msg.data, msg.sender)
             any_alert = False
             any_change = False
             self.data = []
-            for cond in {c for c in self.conditions}:
+            #for cond in {c for c in self.conditions}:
+            for cond in self.conditions:
                 # log.debug('## %s check %s', cond, msg)
                 cond_change = cond.check_for_change(msg)
                 if cond.alerted:
                     any_alert |= True
                     if cond_change is True:   # is not None and True!
-                        log.debug('## %s changed to "%s"',
-                                  cond, cond.alert_text)
+                        log.info('## %s changed to "%s"',
+                                 cond, cond.alert_text)
                         any_change |= True
                         #self.data.insert(0, f'{cond.node_id} Alert: {cond}\n'
                         #                    f'{cond.alert_text}')
@@ -188,7 +275,7 @@ class Alert(BusListener):
                                          f'{cond.alert_text}  ... besteht weiterhin')
                 else:
                     if cond_change is False:
-                        log.debug('## %s cleared "%s"', cond, cond.alert_text)
+                        log.info('## %s cleared "%s"', cond, cond.alert_text)
                         any_change |= True
                         #self.data.insert(0, f'{cond.node_id} Alert: {cond}\n'
                         #                    f'{cond.alert_text}  ... cleareed')
@@ -202,6 +289,7 @@ class Alert(BusListener):
                 log.warning('Alerts by %s\n"%s"', self.name, '\n'.join(self.data))
             self.post(MsgData(self.id, '\n'.join(self.data)))
 
+#FIXME repeat scheint nicht korrekt zu funktionieren
             if any_change \
                or (self._repeat_time and (time() > self._repeat_time)):
                 self._repeat_time = time() + self.repeat
@@ -222,4 +310,7 @@ class Alert(BusListener):
         settings = super().get_settings()
         settings.append(('repeat', 'Wiederholung [s]', self.repeat,
                          'type="number" min="0" max="%d" step="60"' % (24*60*60)))
+# ??        for cond in self.conditions:
+#            settings.append(('cond.limit', f'{str(cond)} [min]', cond.limit,
+#                             'type="number" min="1" max="%d" step="1"'))
         return settings

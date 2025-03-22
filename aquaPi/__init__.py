@@ -73,7 +73,6 @@ log_default = {
     "driver":               {"level": "NOTSET"},
     # "driver.base":          {"level": "NOTSET"},
     # "driver.DriverADC":     {"level": "NOTSET"},
-    # "driver.DriverAlert":   {"level": "NOTSET"},
     # "driver.DriverGPIO":    {"level": "NOTSET"},
     # "driver.DriverOneWire": {"level": "NOTSET"},
     # "driver.DriverPWM":     {"level": "NOTSET"},

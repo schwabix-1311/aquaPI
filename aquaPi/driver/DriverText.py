@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from socket import gaierror
 import smtplib
 from email.message import EmailMessage
 import requests
@@ -62,7 +63,13 @@ class DriverEmail(DriverText):
                     # smtp.set_debuglevel(1)
                     smtp.starttls()
                     smtp.login(cfg['login'], cfg['pwd'])
+
+            except gaierror:
+                log.error("There's no connection to the internet, thus no email")
+                return io_ports
+
             except Exception as ex:
+                log.error(str(ex))
                 raise DriverConfigError('Email failure! Check error message:'
                                         + str(ex)) from ex
 
@@ -175,9 +182,19 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
             try:
                 res = DriverTelegram._bot_request(url, 'getMe')
 # res = {"id":813504918,"is_bot":true,"first_name":"zuHause","username":"Schwabix_bot","can_join_groups":true,"can_read_all_group_messages":false,"supports_inline_queries":false,"can_connect_to_business":false,"has_main_web_app":false}
+
+            except requests.exceptions.ConnectionError:
+                log.error("There's no connection to the internet, thus no Telegram")
+                return io_ports
+
             except DriverConfigError:
                 log.error("The bot token %s for Telegram is invalid! Server replied: %s",
                           cfg['bot_token'], res)
+
+            except Exception as ex:
+                log.error(str(ex))
+                raise DriverConfigError('Telegram failure! Check error message:'
+                                        + str(ex)) from ex
 
             # try user-assisted detection,
             # user must send the word "aquaPi" to a chat or group chat where his bot has membership

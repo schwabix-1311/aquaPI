@@ -67,7 +67,12 @@ class ControllerNode(BusListener, ABC):
         return False
 
     def get_settings(self) -> list[tuple]:
-        return []  # don't inherit inputs!
+        if not self.unit:
+            for rcv in self.get_receives():
+                self.unit = rcv.unit
+                break
+
+        return []  # don't inherit inputs!  Why not????
 
 
 class MinimumCtrl(ControllerNode):
@@ -106,34 +111,34 @@ class MinimumCtrl(ControllerNode):
                              state['setpoint'], hysteresis=state['hysteresis'],
                              _cont=True)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
+        log.error('MinCtrl got %s', msg)
         if isinstance(msg, MsgData):
+            log.error('MinCtrl handling it')
             new_val = self.data
             if float(msg.data) < (self.setpoint - self.hysteresis / 2):
                 new_val = 100.0
             elif float(msg.data) >= (self.setpoint + self.hysteresis / 2):
                 new_val = 0.0
 
-            if (self.data != new_val) or True:  #FIXME WAR a startup problem
-                log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
-                self.data = new_val
+            log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
+            self.data = new_val
 
-                if msg.data < (self.setpoint - self.hysteresis / 2) * 0.95:
-                    self.alert = ('LOW', 'err')
-                    log.brief('MinimumCtrl %s: output %f - alert %r',
-                              self.id, self.data, self.alert)
-                else:
-                    self.alert = ('*', 'act')  if self.data else None
-                    log.brief('MinimumCtrl %s: output %f', self.id, self.data)
+            if msg.data < (self.setpoint - self.hysteresis / 2) * 0.95:
+                self.alert = ('LOW', 'err')
+                log.brief('MinimumCtrl %s: output %f - alert %r',
+                          self.id, self.data, self.alert)
+            else:
+                self.alert = ('*', 'act')  if self.data else None
+                log.brief('MinimumCtrl %s: output %f', self.id, self.data)
 
-                # only on data change? or always = 1 level outdented?
-                self.post(MsgData(self.id, self.data))
-        return super().listen(msg)
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
 
     def get_settings(self) -> list[tuple]:
-        limits = get_unit_limits(self.unit)
-
         settings = super().get_settings()
+        limits = get_unit_limits(self.unit)
         settings.append(('setpoint', f'Minimum [{self.unit}]', self.setpoint,
                          f'type="number" {limits}'))
         settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
@@ -175,7 +180,7 @@ class MaximumCtrl(ControllerNode):
                              state['setpoint'], hysteresis=state['hysteresis'],
                              _cont=True)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             new_val = self.data
             if float(msg.data) > (self.setpoint + self.hysteresis / 2):
@@ -183,26 +188,24 @@ class MaximumCtrl(ControllerNode):
             elif float(msg.data) <= (self.setpoint - self.hysteresis / 2):
                 new_val = 0.0
 
-            if (self.data != new_val) or True:  #FIXME WAR a startup problem
-                log.debug('MaximumCtrl: %d -> %d', self.data, new_val)
-                self.data = new_val
+            log.debug('MaximumCtrl: %d -> %d', self.data, new_val)
+            self.data = new_val
 
-                if msg.data > (self.setpoint + self.hysteresis / 2) * 1.05:
-                    self.alert = ('HIGH', 'err')
-                    log.brief('MaximumCtrl %s: output %f - alert %r',
-                              self.id, self.data, self.alert)
-                else:
-                    self.alert = ('*', 'act')  if self.data else None
-                    log.brief('MaximumCtrl %s: output %f', self.id, self.data)
+            if msg.data > (self.setpoint + self.hysteresis / 2) * 1.05:
+                self.alert = ('HIGH', 'err')
+                log.brief('MaximumCtrl %s: output %f - alert %r',
+                          self.id, self.data, self.alert)
+            else:
+                self.alert = ('*', 'act')  if self.data else None
+                log.brief('MaximumCtrl %s: output %f', self.id, self.data)
 
-                # only on data change? or always = 1 level outdented?
-                self.post(MsgData(self.id, self.data))
-        return super().listen(msg)
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
 
     def get_settings(self) -> list[tuple]:
-        limits = get_unit_limits(self.unit)
-
         settings = super().get_settings()
+        limits = get_unit_limits(self.unit)
         settings.append(('setpoint', f'Maximum [{self.unit}]', self.setpoint,
                          f'type="number" {limits}'))
         settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
@@ -235,7 +238,7 @@ class PidCtrl(ControllerNode):
         self._err_sum: float = 0
         self._err_old: float = 0
         self._tm_old: float = 0
-        self.data: float = 0.
+        self.data: float = 50.
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -252,7 +255,7 @@ class PidCtrl(ControllerNode):
                          p_fact=state['p_fact'], i_fact=state['i_fact'], d_fact=state['d_fact'],
                          _cont=True)
 
-    def listen(self, msg) -> bool:
+    def listen(self, msg) -> None:
         if isinstance(msg, MsgData):
             log.debug('PID got %s', msg)
             now = time()
@@ -277,7 +280,7 @@ class PidCtrl(ControllerNode):
             self._err_old = err
             self._tm_old = now
 
-        return super().listen(msg)
+        super().listen(msg)
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
@@ -347,7 +350,7 @@ class FadeCtrl(ControllerNode):
                           fade_time=state['fade_time'], fade_out=state['fade_out'],
                           _cont=True)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             log.info('FadeCtrl: got %f', msg.data)
             self.target = float(msg.data)
@@ -367,7 +370,8 @@ class FadeCtrl(ControllerNode):
                     log.debug('_fader %f -> %f', self.data, self.target)
                     self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
                     self._fader_thread.start()
-        return super().listen(msg)
+
+        super().listen(msg)
 
     def _fader(self):
         """ This fader uses constant steps of 0.1% unless this would be >10 steps/sec
@@ -505,7 +509,7 @@ class SunCtrl(ControllerNode):
                          xscend=state['xscend'],
                          _cont=True)
 
-    def listen(self, msg):
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             log.info('SunCtrl: got %f', msg.data)
             if self._fader_thread:
@@ -522,7 +526,9 @@ class SunCtrl(ControllerNode):
                 self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
                 self._fader_thread.start()
 
-    def _make_next_step(self, phase, new_data):
+        super().listen(msg)
+
+    def _make_next_step(self, phase: str, new_data: float) -> None:
         if abs(new_data - self.data) >= 0.1:
             self.data = new_data
             log.info('SunCtrl %s: %s %f%%', self.id, phase, self.data)
@@ -547,7 +553,7 @@ class SunCtrl(ControllerNode):
         log.debug('SunCtrl %s: cloud factor %f', self.id, shadow)
         return shadow
 
-    def _fader(self):
+    def _fader(self) -> None:
         """ This fader updates every second in low range, less often >30%
             Changes are delayed until <0.1%
         """

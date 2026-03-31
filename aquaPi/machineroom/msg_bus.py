@@ -8,9 +8,7 @@ from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
 from threading import (Condition, Thread)
 
-from .msg_types import (Msg, MsgInfra, MsgBorn, MsgBye,
-                        MsgReply, MsgReplyHello,
-                        MsgData)
+from .msg_types import (Msg, MsgInfra, MsgHello, MsgData, MsgBye)
 
 
 log = logging.getLogger('machineroom.msg_bus')
@@ -42,7 +40,7 @@ class DataRange(Enum):
 class BusNode(ABC):
     """ BusNode is a minimal bus participant
         It has little overhead, can only post messages.
-        The bus protocol (MsgBorn/MsgBye/MsgReplyHello)
+        The bus protocol (MsgHello/MsgBye)
         is handled internally. Overload if you need one of them,
         but don't forget to call super().listen(...)
     """
@@ -60,7 +58,7 @@ class BusNode(ABC):
         # hack: replace non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         self.identifier = self.__class__.__qualname__ + '.' + self.id
-        log.debug(self.id)
+        # log.debug(self.id)
 
         self.receives = []
         self._bus: 'MsgBus' | None = None  # forward ref to class MsgBus
@@ -84,7 +82,7 @@ class BusNode(ABC):
         BusNode.__init__(self, state['name'], _cont=True)
 
     def __str__(self) -> str:
-        return '{}({})'.format(type(self).__name__, ','.join(self.receives))
+        return f'{type(self).__name__}({self.name})'
 
     def plugin(self, bus: 'MsgBus') -> None:
         if self._bus:
@@ -92,8 +90,8 @@ class BusNode(ABC):
             self._bus = None
         bus.register(self)
         self._bus = bus
-        self.post(MsgBorn(self.id, self.data))
-        log.info('%s plugged, role %s', str(self), str(self.ROLE))
+        self.post(MsgHello(self.id))
+        log.info('%s plugged in, role %s', str(self), str(self.ROLE))
 
     def pullout(self) -> bool:
         if not self._bus:
@@ -108,13 +106,17 @@ class BusNode(ABC):
         if self._bus:
             self._bus.post(msg)
 
-    def listen(self, msg: Msg) -> bool:
-        # standard reactions for unhandled messages
-        log.debug('%s.listen got %s', str(self), str(msg))
-        if isinstance(msg, MsgBorn):
-            self.post(MsgReplyHello(self.id, msg.sender))
-            return True
-        return False
+    def listen(self, msg: Msg) -> None:
+        # standard reactions to messages
+        #if isinstance(msg, MsgHello) and not self.receives:
+        if isinstance(msg, MsgHello) \
+           and self.ROLE == BusRole.IN_ENDP:
+            sender = self._bus.get_node(msg.sender)
+            if self in sender.get_receives(True):
+                log.debug('%s.causes %s to post MsgData', str(msg), str(self))
+                self.post(MsgData(self.id, self.data))
+
+        #TODO: should we inherit sender.unit if we receive 'em? How about reverse order of birth? Currently only aux nodes inherit the the sources' unit, get_settings might be a better place
 
     def get_receives(self, recurse: bool = False) -> list['BusNode']:
         receives: list['BusNode'] = []
@@ -221,7 +223,7 @@ class MsgBus:
             n.plugin(self)
 
     def __str__(self) -> str:
-        return '{}({} nodes)'.format(type(self).__name__, len(self.nodes))
+        return f'{type(self).__name__}({len(self.nodes)} nodes)'
 
     def register(self, node: BusNode) -> None:
         """ Add a BusNode to the bus. Do not call directly,
@@ -256,7 +258,7 @@ class MsgBus:
         """
         self.dbg_cnt += 1
         msg.dbg_cnt = self.dbg_cnt
-        log.debug('%s   + %s', str(self), str(msg))
+        log.debug('%s   post + %s', str(self), str(msg))
         if self._queue:
             self._queue.put(msg, block=True, timeout=5)
         else:
@@ -273,30 +275,32 @@ class MsgBus:
     def _dispatch_one(self, msg: Msg) -> None:
         """ Dispatch one message to all listeners in a blocking loop.
         """
-        # FIXME: might be early, could notify after dispatch
-        if isinstance(msg, (MsgData, MsgBorn)):
-            log.debug('  send change notification for %s', str(msg))
-            self.report_change(msg.sender)
-
         # dispatch the message
-        log.info('%s ->', str(msg))
+        log.info('%s =>', str(msg))
         rcv_nodes: set[BusNode] = set()
-        if isinstance(msg, MsgReply):
-            # directed message sender -> receiver
-            if node := self.get_node(msg.send_to):
-                rcv_nodes = {node}
-        else:
-            # broadcast message: all but sender
-            rcv_nodes = {n for n in self.nodes if n.id != msg.sender}
-            # ... and apply each node's filter for non-Infra msgs
-            if not isinstance(msg, MsgInfra):
-                rcv_nodes = {n for n in rcv_nodes
-                             if {msg.sender, '*'}.intersection(n.receives)}
-        log.debug('===== %s listeners: %s', str(msg), str(rcv_nodes))
+
+#        if isinstance(msg, MsgReply):
+#            # directed message sender -> receiver
+#            if node := self.get_node(msg.send_to):
+#                rcv_nodes = {node}
+#        else:
+        # broadcast message: all but sender
+        rcv_nodes = {n for n in self.nodes if n.id != msg.sender}
+        # ... and apply each node's filter for non-Infra msgs
+        if not isinstance(msg, MsgInfra):
+            rcv_nodes = {n for n in rcv_nodes
+                         if {msg.sender, '*'}.intersection(n.receives)}
+
+        log.debug('===== %s to be received by: %s', str(msg), str(rcv_nodes))
 
         for n in rcv_nodes:
             log.info('  %s -> %s', str(msg), str(n))
             n.listen(msg)
+
+        if isinstance(msg, MsgData):
+            log.debug('  send change notification for %s', str(msg))
+            self.report_change(msg.sender)
+
         log.debug('===== %s DONE', str(msg))
 
     def teardown(self) -> None:

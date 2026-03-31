@@ -333,7 +333,7 @@ class History(BusListener):
                  duration: int = 24, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.duration = duration
-        self.data: int = 0  # just anything for MsgBorn
+        self.data: int = 0  # just anything for MsgHello
         self._nextrefresh = time()
         self.db: TimeDb | None = None
         if QUEST_DB:
@@ -355,14 +355,15 @@ class History(BusListener):
     def __setstate__(self, state: dict[str, Any]) -> None:
         History.__init__(self, state['name'], state['receives'], _cont=True)
 
-    def listen(self, msg) -> bool:
+    def listen(self, msg) -> None:
         if isinstance(msg, MsgData):
             if self.db:
                 self.db.feed(msg.sender, msg.data)
             if time() >= self._nextrefresh:
                 self.post(MsgData(self.id, 0))
                 self._nextrefresh = int(time()) + 10
-        return super().listen(msg)
+
+        super().listen(msg)
 
     def get_history(self, start: int, step: int
                     ) -> dict[int, TimeDb.ValueLst]:

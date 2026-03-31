@@ -42,6 +42,9 @@ class DeviceNode(BusListener, ABC):
     #     self.data = state['data']
     #     DeviceNode.__init__(self, state, _cont=True)
 
+    def __str__(self) -> str:
+        return f'{type(self).__name__}({self.name}/{self.port})'
+
     @property
     def port(self) -> str:
         return self._port
@@ -107,13 +110,14 @@ class SwitchDevice(DeviceNode):
         self._inverted = inverted
         self.switch(self.data)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             #if self.data != bool(msg.data):
             data = (msg.data > 50.)
             if self.data != data:
                 self.switch(data)
-        return super().listen(msg)
+
+        super().listen(msg)
 
     def switch(self, state: bool) -> None:
         self.data: bool = state
@@ -182,11 +186,12 @@ class SlowPwmDevice(DeviceNode):
         self._inverted = inverted
         self.set(self.data)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             log.debug('%s: ======= received %f from %s', self.id, msg.data, msg.sender)
             self.set(float(msg.data))
-        return super().listen(msg)
+
+        super().listen(msg)
 
     def _pulse(self, hi_sec: float, cycle: float) -> None:
         def toggle_and_wait(state: bool, end: float) -> bool:
@@ -214,10 +219,8 @@ class SlowPwmDevice(DeviceNode):
             if hi_sec < cycle:
                 if not toggle_and_wait(False, lead_edge + cycle):
                     return
-        return
 
     def set(self, perc: float) -> None:
-
         log.info('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
                  self.id, perc, self.cycle * perc/100, self.cycle)
         if self._thread:
@@ -279,11 +282,12 @@ class AnalogDevice(DeviceNode):
                               state['port'], percept=state['percept'],
                               minimum=state['minimum'], maximum=state['maximum'], _cont=True)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             if self.data != float(msg.data):
                 self.set_percent(float(msg.data))
-        return super().listen(msg)
+
+        super().listen(msg)
 
     def set_percent(self, percent: float) -> None:
         out_val = percent

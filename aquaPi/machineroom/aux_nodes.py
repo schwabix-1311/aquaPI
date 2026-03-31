@@ -37,6 +37,7 @@ class MultiInAux(AuxNode, ABC):
     def __init__(self, name: str, receives: Iterable[str], _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.values: dict[str, float] = {}
+        self.data = -1
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -114,13 +115,14 @@ class ScaleAux(SingleInAux):
                           limit=state['limit'],
                           _cont=True)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             self.data = self.factor * float(msg.data) + self.offset
             self.data = min(max(self.limit[0], self.data), self.limit[1])
             log.info('ScaleAux %s: output %f', self.id, self.data)
             self.post(MsgData(self.id, self.data))
-        return super().listen(msg)
+
+        super().listen(msg)
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
@@ -170,7 +172,7 @@ class AvgAux(MultiInAux):
         AvgAux.__init__(self, state['name'], state['receives'],
                         unfair_avg=state['unfair_avg'], _cont=True)
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             if self.unfair_avg:
                 if self.data == -1:
@@ -185,12 +187,11 @@ class AvgAux(MultiInAux):
                 for k in self.values:
                     val += self.values[k] / len(self.values)
 
-            val = round(val, 4)
-            if True or (self.data != val):  #FIXME
-                self.data = val
-                log.info('AvgAux %s: output %f', self.id, self.data)
-                self.post(MsgData(self.id, round(self.data, 4)))
-        return super().listen(msg)
+            self.data = round(val, 4)
+            log.info('AvgAux %s: output %f', self.id, self.data)
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
@@ -212,18 +213,17 @@ class MinAux(MultiInAux):
             float - posts changes of minimum value of all inputs
     """
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             val = float(msg.data)
             self.values[msg.sender] = val
             for v in self.values.values():
                 val = min(val, v)
-            val = round(val, 4)
-            if True or (self.data != val):  #FIXME
-                self.data = val
-##                log.info('MinAux %s: output %f', self.id, self.data)
-                self.post(MsgData(self.id, self.data))
-        return super().listen(msg)
+            self.data = round(val, 4)
+            log.info('MinAux %s: output %f', self.id, self.data)
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
 
 
 class MaxAux(MultiInAux):
@@ -239,15 +239,14 @@ class MaxAux(MultiInAux):
             float - posts changes of maximum value of all inputs
     """
 
-    def listen(self, msg: Msg) -> bool:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             val = float(msg.data)
             self.values[msg.sender] = val
             for v in self.values.values():
                 val = max(val, v)
-            val = round(val, 4)
-            if True or (self.data != val):  #FIXME
-                self.data = val
-                log.info('MaxAux %s: output %f', self.id, self.data)
-                self.post(MsgData(self.id, self.data))
-        return super().listen(msg)
+            self.data = round(val, 4)
+            log.info('MaxAux %s: output %f', self.id, self.data)
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)

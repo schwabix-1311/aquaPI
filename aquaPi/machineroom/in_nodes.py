@@ -48,7 +48,7 @@ class InputNode(BusNode, ABC):
     #     InputNode.__init__(self, state, _cont=True)
 
     def __str__(self) -> str:
-        return '{}({})'.format(type(self).__name__, self.port)
+        return f'{type(self).__name__}({self.name}/{self.port})'
 
     @property
     def port(self) -> str:
@@ -66,6 +66,7 @@ class InputNode(BusNode, ABC):
                 log.error('Port %s does not support reading data. %s will be ignored.',
                           port, self.name)
         self._port = port
+        self.data = self.read()
 
     def plugin(self, bus: MsgBus) -> None:
         super().plugin(bus)
@@ -87,12 +88,10 @@ class InputNode(BusNode, ABC):
         log.debug('InputNode.reader started')
         while not self._reader_stop:
             try:
-                val = self.read()
+                self.data = self.read()
                 self.alert = None
-                if self.data != val or True:
-                    self.data = val
-                    log.brief('%s: read %f', self.id, self.data)
-                    self.post(MsgData(self.id, self.data))
+                log.brief('%s: read %f', self.id, self.data)
+                self.post(MsgData(self.id, self.data))
             except (DriverReadError, Exception):
                 log.exception('Reader exception')
                 self.alert = ('Read error!', 'err')
@@ -128,9 +127,9 @@ class SwitchInput(InputNode):
     def __init__(self, name: str, port: str, 
                  interval: float = 0.5, inverted: bool = False,
                  _cont: bool = False):
-        super().__init__(name, port, interval, _cont=_cont)
         self.inverted: bool = inverted
         ##self.unit = '⏻'
+        super().__init__(name, port, interval, _cont=_cont)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -144,8 +143,8 @@ class SwitchInput(InputNode):
                              _cont=True)
 
     def read(self) -> bool:
-        val = self.data
         # TODO: reduce load & improve response time by using interrupt-driven IO, either here or in DriverGPIO
+        val = self.data
         if self._driver:
             val = bool(self._driver.read())
             log.debug('Bin.read %f', val)
@@ -179,13 +178,13 @@ class AnalogInput(InputNode):
     def __init__(self, name: str, port: str, initval: float, unit: str,
                  interval: float = 10.0, avg: int = 0,
                  _cont: bool = False):
+        self.avg = min(max(1, avg), 5)
+        self.unit = unit
         super().__init__(name, port, interval, _cont=_cont)
         self.initval = initval
         if initval:
             self._driver_opts = {'initval': initval}
-            self.port = self.port  # re-create with new opts!
-        self.unit = unit
-        self.avg = min(max(1, avg), 5)
+            self.port = self.port  # re-create with initval
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -267,7 +266,7 @@ class ScheduleInput(BusNode):
         ScheduleInput.__init__(self, state['name'], state['cronspec'], _cont=True)
 
     def __str__(self) -> str:
-        return '{}({})'.format(type(self).__name__, self.cronspec)
+        return f'{type(self).__name__}({self.name}/{self.cronspec})'
 
     @property
     def cronspec(self) -> str:

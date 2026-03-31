@@ -5,7 +5,7 @@ import logging
 from typing import Any
 from time import time
 
-from .msg_types import (Msg, MsgPayload, MsgData)
+from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange)
 from ..driver import (IoRegistry, PortFunc, OutDriver)
 
@@ -45,12 +45,12 @@ class AlertCond(ABC):
         return self._alert_text
 
     @abstractmethod
-    def _check(self, msg: MsgPayload) -> bool:
+    def _check(self, msg: MsgData) -> bool:
         """ evaluate alert condition
         """
 
     @abstractmethod
-    def _text(self, msg: MsgPayload) -> str:
+    def _text(self, msg: MsgData) -> str:
         """ build a human redable alert text
         """
 
@@ -58,8 +58,7 @@ class AlertCond(ABC):
         """ Check for change in alert status, update alert_text,
             return state changed to, or None if inappropriate msg or no change
         """
-        # might add other MsgPayload types
-        if isinstance(msg, (MsgData)) and msg.sender == self.node_id:
+        if isinstance(msg, MsgData) and msg.sender == self.node_id:
             old_alerted = self._alerted
             self._alerted = self._check(msg)
             self._alert_text = self._text(msg)
@@ -94,7 +93,7 @@ class AlertAbove(AlertCond):
         else:
             return f'{type(self).__name__}(>={self.limit})'
 
-    def _check(self, msg: MsgPayload) -> bool:
+    def _check(self, msg: MsgData) -> bool:
         log.debug("AlertAbove.check %s", msg)
         if msg.data >= self.limit:
             if not self._starttime:
@@ -110,7 +109,7 @@ class AlertAbove(AlertCond):
                       (time() >= self._starttime + self.duration * 60))
         return (time() >= self._starttime + self.duration * 60) if self._starttime else False
 
-    def _text(self, msg: MsgPayload) -> str:
+    def _text(self, msg: MsgData) -> str:
         if self._alerted:
             if self.duration:
                 minutes = (time() - self._starttime) / 60
@@ -150,7 +149,7 @@ class AlertBelow(AlertCond):
         else:
             return f'{type(self).__name__}(<={self.limit})'
 
-    def _check(self, msg: MsgPayload) -> bool:
+    def _check(self, msg: MsgData) -> bool:
         log.debug("AlertBelow.check %s", msg)
         if msg.data <= self.limit:
             if not self._starttime:
@@ -166,7 +165,7 @@ class AlertBelow(AlertCond):
                       (time() >= self._starttime + self.duration * 60))
         return (time() >= self._starttime + self.duration * 60) if self._starttime else False
 
-    def _text(self, msg: MsgPayload) -> str:
+    def _text(self, msg: MsgData) -> str:
         if self._alerted:
             if self.duration:
                 minutes = (time() - self._starttime) / 60
@@ -233,7 +232,7 @@ class Alert(BusListener):
         return self._port
 
     @port.setter
-    def port(self, port: str):
+    def port(self, port: str) -> None:
         if self._driver:
             IoRegistry.get().driver_destruct(self._port, self._driver)
             self._driver = None
@@ -246,14 +245,13 @@ class Alert(BusListener):
                           port, self.name)
         self._port = port
 
-    def listen(self, msg: Msg):
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData) and self._bus:
             log.info("## Alert %s check %.4f from %s",
                      self.name, msg.data, msg.sender)
             any_alert = False
             any_change = False
             self.data = []
-            #for cond in {c for c in self.conditions}:
             for cond in self.conditions:
                 # log.debug('## %s check %s', cond, msg)
                 cond_change = cond.check_for_change(msg)
@@ -305,6 +303,9 @@ class Alert(BusListener):
                                  driver.name, '\n'.join(self.data))
             else:
                 self._repeat_time = None
+
+        super().listen(msg)
+
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()

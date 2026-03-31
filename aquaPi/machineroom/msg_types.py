@@ -16,59 +16,36 @@ class Msg(ABC):
         self.dbg_cnt: int = 0
 
     def __str__(self) -> str:
-        return '{}({})#{}'.format(type(self).__name__,
-                                  self.sender,
-                                  self.dbg_cnt)
+        return f'{type(self).__name__}({self.sender})#{self.dbg_cnt}'
 
 
-# payload messages
+class MsgInfra(Msg, ABC):
+    """ Inherit from this, to let a msg bypass filtering (node.receives)
+    """
 
-class MsgPayload(Msg):
-    """ Base class for custom BusNode communication,
-        e.g. sensor data, output control, message transformers.
-        Payloads may have any data, it is the receiver's task to interpret it.
+
+class MsgData(Msg):
+    """ The workhorse on the bus: broadcast data values
+        e.g. sensor data, output control, data transforms.
+        Data may have any type, receiver must interpret it in
+        an expectable way, close to Python truthness,
+        Caveat: data='off' -> True
+        Non-binary outputs should use 0=off, 100=full on (%)
     """
     def __init__(self, sender: str, data: Any):
         super().__init__(sender)
         self.data = data
 
     def __str__(self) -> str:
-        return '{}({})#{}:{}'.format(type(self).__name__,
-                                     self.sender,
-                                     self.dbg_cnt,
-                                     self.data)
+        return super().__str__() + f':{self.data}'
 
 
-class MsgData(MsgPayload):
-    """ Transport for data items
-        Output of sensors and input for relays.
-        All using same type allows to chain BusListeners
-        Data can have any type, receiver must interpret it in
-        an expectable way, close to Python truthness,
-        Caveat: data='off' -> True
-        Non-binary outputs should use 0=off, 100=full on (%)
-    """
-
-
-# TODO further Msg types
-# class MsgCommand(MsgPayload): # for ctrl params, in contrast to data values
-# class MsgLog(MsgPayload):  # needed? anything should be loggable -> MsgData
-# class MsgWarning(MsgPayload):
-# class MsgError(MsgPayload):
-
-
-# infrastructure messages
-
-class MsgInfra(Msg):
-    """ Base for basic protocol msgs, may not be filtered
-    """
-
-
-class MsgBorn(MsgInfra, MsgPayload):
-    """ Announces a new node plugged into the bus and
-        make initial data known to others.
-        All nodes return a MsgReplyHello to show their presence.
-        Can be used to adjust MsgFilter.
+class MsgHello(MsgInfra):
+    """ Announces a new node plugged into the bus.
+        As a reaction nodes with role IN_ENDP (or with empty node.reiceives?)
+        will post their data and by that update all their listeners.
+        Once a node chain is complete, this will start the chain's function,
+        usually processing the IN_ENDP up to the OUT_ENDP.
     """
 
 
@@ -78,20 +55,5 @@ class MsgBye(MsgInfra):
     """
 
 
-# reply messages
-
-class MsgReply(Msg):
-    """ Base class for all reply messages, usually 1:1.
-    """
-    def __init__(self, sender: str, send_to: str):
-        super().__init__(sender)
-        self.send_to = send_to
-
-    def __str__(self):
-        return Msg.__str__(self) + '->' + self.send_to
-
-
-class MsgReplyHello(MsgReply, MsgInfra):
-    """ Reply from plugged-in nodes to MsgBorn.
-        Used to let new nodes see who's present.
-    """
+# possible further Msg types
+# class MsgCommand(MsgData): # for ctrl params, in contrast to data values

@@ -11,8 +11,11 @@ else:
 
 import board  # type: ignore[import-untyped]
 import busio  # type: ignore[import-untyped]
-from adafruit_ads1x15.ads1115 import ADS1115, P0, P1, P2, P3
-from adafruit_ads1x15.analog_in import AnalogIn
+
+# from adafruit_ads1x15 import ADS1x15
+# from adafruit_ads1x15 import ADS1015
+from adafruit_ads1x15 import ADS1115
+from adafruit_ads1x15 import AnalogIn
 
 
 from .base import (AInDriver, IoPort, PortFunc)
@@ -39,7 +42,6 @@ class DriverADS1115(AInDriver):
     """
 
     ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
-    CHANNELS = [P0, P1, P2, P3]  # ATM no differential channels
 
     @staticmethod
     def is_ads111x(ads: ADS1115) -> bool:
@@ -59,7 +61,7 @@ class DriverADS1115(AInDriver):
                 # default is: in 0-1 differential, gain 2, 1 shot, 128SPS, comp low, no latch, disable comp
                 if buf[2:8] == bytearray.fromhex('8583 8000 7FFF'):
                     return True
-                # TODO: DBG REMOVE_ME!
+                # TODO: DBG REMOVE_ME!  this ignores OS|MUX|PGA|MODE
                 if buf[3:8] == bytearray.fromhex('83 8000 7FFF'):
                     return True
                 log.debug('I²C device @ 0x%02X returns 0x%s 0x%s 0x%s' +
@@ -93,9 +95,9 @@ class DriverADS1115(AInDriver):
                     ads = ADS1115(i2c, address=adr)
                     if DriverADS1115.is_ads111x(ads):
                         adc_count += 1
-                        for ch in DriverADS1115.CHANNELS:
-                            port_name = f'ADC #{adc_count} in {ch}'
-                            port_cfg = {'adr': adr, 'cnt': adc_count, 'in': ch}
+                        for a_in in ADS1115.Pin:
+                            port_name = f'ADC #{adc_count} in {a_in}'
+                            port_cfg = {'adr': adr, 'cnt': adc_count, 'in': a_in}
                             io_ports[port_name] = IoPort(PortFunc.Ain,
                                                          DriverADS1115,
                                                          port_cfg,

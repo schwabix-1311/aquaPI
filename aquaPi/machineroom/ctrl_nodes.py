@@ -19,16 +19,14 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 def get_unit_limits(unit: str) -> str:
     if ('°C') in unit:
-        limits = 'min="15" max="35" step="0.1"'
+        return 'min="15" max="35" step="0.1"'
     elif ('°F') in unit:
-        limits = 'min="59" max="95" step="0.2"'
+        return 'min="59" max="95" step="0.2"'
     elif ('pH') in unit:
-        limits = 'min="5.0" max="9.0" step="0.05"'
+        return 'min="5.0" max="9.0" step="0.05"'
     elif ('%') in unit:
-        limits = 'min="0" max="100" step="1"'
-    else:
-        limits = ''
-    return limits
+        return 'min="0" max="100" step="1"'
+    return ''
 
 
 # ========== controllers ==========
@@ -45,6 +43,7 @@ class ControllerNode(BusListener, ABC):
     def __init__(self, name: str, receives: str, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.data: float = 0.0
+        self.unit: str = '%'
 
     # def __getstate__(self) -> dict[str, Any]:
     #    return super().__getstate__()
@@ -112,9 +111,7 @@ class MinimumCtrl(ControllerNode):
                              _cont=True)
 
     def listen(self, msg: Msg) -> None:
-        log.error('MinCtrl got %s', msg)
         if isinstance(msg, MsgData):
-            log.error('MinCtrl handling it')
             new_val = self.data
             if float(msg.data) < (self.setpoint - self.hysteresis / 2):
                 new_val = 100.0
@@ -264,7 +261,7 @@ class PidCtrl(ControllerNode):
             if self._tm_old >= 1.:
                 self._err_sum = self._err_sum / 1 + err
                 p_dev = self.p_fact * err
-                i_dev = self.i_fact * ta * self._err_sum  / 100 #??
+                i_dev = self.i_fact * ta * self._err_sum / 100  # ??
                 d_dev = self.d_fact / ta * (err - self._err_old)
                 val = p_dev + i_dev + d_dev
 
@@ -336,7 +333,6 @@ class FadeCtrl(ControllerNode):
         if not _cont:
             self.data = 0.0
         self.target: float = self.data
-        self.unit: str = '%'
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -389,7 +385,7 @@ class FadeCtrl(ControllerNode):
             self.data += step_d
             log.debug('_fader %f ...', self.data)
 
-            self.alert = ('\u2197' if self.target > self.data else '\u2198', 'act')
+            self.alert = ('\u2197'  if self.target > self.data else '\u2198', 'act')
             self.post(MsgData(self.id, round(self.data, 4)))
             sleep(max(0, next_t - time()))
             next_t += step_t
@@ -494,7 +490,6 @@ class SunCtrl(ControllerNode):
         if not _cont:
             self.data = 0.0
         self.target: float = self.data
-        self.unit: str = '%'
         self.clouds: list[Cloud] = []
         self.cloudiness = 0
 

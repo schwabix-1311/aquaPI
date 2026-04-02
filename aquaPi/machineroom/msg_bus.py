@@ -71,8 +71,8 @@ class BusNode(ABC):
         state = {'name': self.name}
         state.update(id=self.id)
         state.update(identifier=self.identifier)
-        state.update(receives=self.receives)
         state.update(data=self.data)
+        state.update(receives=self.receives)
         state.update(unit=self.unit)
         state.update(data_range=self.data_range.name)
         return state
@@ -80,6 +80,8 @@ class BusNode(ABC):
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         BusNode.__init__(self, state['name'], _cont=True)
+        self.receives = state['receives']
+        self.unit = state['unit']
 
     def __str__(self) -> str:
         return f'{type(self).__name__}({self.name})'
@@ -108,7 +110,6 @@ class BusNode(ABC):
 
     def listen(self, msg: Msg) -> None:
         # standard reactions to messages
-        #if isinstance(msg, MsgHello) and not self.receives:
         if isinstance(msg, MsgHello) \
            and self.ROLE == BusRole.IN_ENDP:
             sender = self._bus.get_node(msg.sender)

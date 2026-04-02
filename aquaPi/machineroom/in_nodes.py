@@ -128,8 +128,8 @@ class SwitchInput(InputNode):
                  interval: float = 0.5, inverted: bool = False,
                  _cont: bool = False):
         self.inverted: bool = inverted
-        ##self.unit = '⏻'
         super().__init__(name, port, interval, _cont=_cont)
+        ##self.unit = '⏻'
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -179,8 +179,8 @@ class AnalogInput(InputNode):
                  interval: float = 10.0, avg: int = 0,
                  _cont: bool = False):
         self.avg = min(max(1, avg), 5)
-        self.unit = unit
         super().__init__(name, port, interval, _cont=_cont)
+        self.unit = unit
         self.initval = initval
         if initval:
             self._driver_opts = {'initval': initval}

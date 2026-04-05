@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+import statistics
 
 # latest Blinka supports x86 LinuxPC, but we don't at least not chips on I²C
 from adafruit_platformdetect import Detector  # type: ignore[import-untyped]
@@ -12,11 +13,9 @@ else:
 import board  # type: ignore[import-untyped]
 import busio  # type: ignore[import-untyped]
 
-# from adafruit_ads1x15 import ADS1x15
 # from adafruit_ads1x15 import ADS1015
 from adafruit_ads1x15 import ADS1115
 from adafruit_ads1x15 import AnalogIn
-
 
 from .base import (AInDriver, IoPort, PortFunc)
 
@@ -29,6 +28,29 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 adc_count: int = 0
+
+
+def _scan_i2c(i2c, addresses):
+    """Yield all devices that respond on the given addresses."""
+    for adr in addresses:
+        try:
+            yield adr, ADS1115(i2c, address=adr)
+        except Exception:
+            continue
+
+
+def _detect_ads111x(ads):
+    try:
+        return DriverADS1115.is_ads111x(ads)
+    except Exception:
+        return False
+
+
+def _create_port(adr, adc_index: int, ch: int) -> IoPort:
+    deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id,
+            'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
+    cfg = {"adr": adr, "cnt": adc_index, "in": ch}
+    return IoPort(PortFunc.Ain, DriverADS1115, cfg, deps)
 
 
 class DriverADS1115(AInDriver):
@@ -80,49 +102,47 @@ class DriverADS1115(AInDriver):
     def find_ports() -> dict[str, IoPort]:
         global adc_count  # pylint: disable=W0603
 
-        io_ports = {}
-        if not SIMULATED:
-            # autodetect of I²C is undefined and risky, as some chips may react
-            # on read as if it was a write! We're on a pretty well defined HW though.
-            i2c = busio.I2C(board.SCL, board.SDA)
-            deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id,
-                    'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
+        if SIMULATED:
+            return DriverADS1115._simulated_ports()
 
-            # one loop for each chip type
-            log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
-            for adr in DriverADS1115.ADDRESSES:
-                try:
-                    ads = ADS1115(i2c, address=adr)
-                    if DriverADS1115.is_ads111x(ads):
-                        adc_count += 1
-                        for a_in in ADS1115.Pin:
-                            port_name = f'ADC #{adc_count} in {a_in}'
-                            port_cfg = {'adr': adr, 'cnt': adc_count, 'in': a_in}
-                            io_ports[port_name] = IoPort(PortFunc.Ain,
-                                                         DriverADS1115,
-                                                         port_cfg,
-                                                         deps)
-                    else:
-                        log.brief('I²C device at 0x%02X seems not to be an '
-                                  'ADS1x15, probably a different device, '
-                                  'or already in use.', adr)
-                except ValueError as ex:
-                    log.info(ex)
-                except Exception as ex:
-                    # pass  # whatever it is, ignore this device
-                    log.debug('%r', ex)
-        else:  # SIMULATED
-            deps = ['GPIO 2 in', 'GPIO 2 out']
-            adc_count += 1
-            port_name = 'ADC #%d in ' % adc_count
-            # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
-            io_ports = {
-                port_name + '0': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 0, 'fake': True}, deps),
-                port_name + '1': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 1, 'fake': True}, deps),
-                port_name + '2': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 2, 'fake': True}, deps),
-                port_name + '3': IoPort(PortFunc.Ain, AInDriver, {'cnt': adc_count, 'in': 3, 'fake': True}, deps)
-            }
-        return io_ports
+        i2c = busio.I2C(board.SCL, board.SDA)
+        ports = {}
+
+        log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
+        # autodetect of I²C is undefined and risky, as some chips may react on
+        # read as if it was a write! We're on a pretty well defined HW though.
+        for adr, ads in _scan_i2c(i2c, DriverADS1115.ADDRESSES):
+            try:
+                if _detect_ads111x(ads):
+                    adc_count += 1
+                    for ch in range(4):
+                        name = f"ADC #{adc_count} in {ch}"
+                        ports[name] = _create_port(adr, adc_count, ch)
+                else:
+                    log.brief('I²C device at 0x%02X seems not to be an ADS1x15,'
+                              'probably a different device, or already in use.', adr)
+            except ValueError as ex:
+                log.info(ex)
+            except Exception as ex:
+                # pass  # whatever it is, ignore this device
+                log.debug('%r', ex)
+
+        return ports
+
+    @staticmethod
+    def _simulated_ports():
+        global adc_count  # pylint: disable=W0603
+
+        adc_count += 1
+        deps = ['GPIO 2 in', 'GPIO 2 out']
+        base = f"ADC #{adc_count} in "
+        return {
+            base + str(i):
+            IoPort(PortFunc.Ain, AInDriver,
+                   {"cnt": adc_count, "in": i, "fake": True},
+                   deps)
+            for i in range(4)
+        }
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
@@ -157,12 +177,23 @@ class DriverADS1115(AInDriver):
             median = [self._ana_in.voltage,
                       self._ana_in.voltage,
                       self._ana_in.voltage]
-            median.sort()
             log.debug('median %f %f %f', median[0], median[1], median[2])
-            self._val = median[2]
+            self._val = statistics.median(median)
 
         log.info('%s = %f', self.name, self._val)
         return self._val
+
+    def _increase_gain(self):
+        ads = self._ads
+        lower = [g for g in ads.gains if g < ads.gain]
+        if lower:
+            ads.gain = lower[-1]
+
+    def _decrease_gain(self):
+        ads = self._ads
+        higher = [g for g in ads.gains if g > ads.gain]
+        if higher:
+            ads.gain = higher[0]
 
     def _adjust_gain(self) -> None:
         """ gain <= 0 is auto-gain.
@@ -173,15 +204,14 @@ class DriverADS1115(AInDriver):
         ads.gain = abs(self.gain)
         if self.gain <= 0:
             val = self._ana_in.value
+
             while abs(val) > 32300:
-                l_gain = [ads.gains[0]] + \
-                    [g for g in ads.gains if g < ads.gain]
-                ads.gain = l_gain[-1]
+                self._increase_gain()
                 val = self._ana_in.value
+
             while abs(val) < 16000:
-                h_gain = [g for g in ads.gains if g <
-                          ads.gain] + [ads.gains[-1]]
-                ads.gain = h_gain[0]
+                self._decrease_gain()
                 val = self._ana_in.value
+
             self.gain = -ads.gain
             log.debug('ADS gain %d (%d), digits %f', ads.gain, self.gain, val)

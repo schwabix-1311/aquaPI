@@ -5,7 +5,7 @@ aquaPi ToDo list
   # logging: resolve the abuse of logging.WARNING as loglevel.BRIEF; log.verbose() could be a functools.partialmethod(log.log, loglevel.INFO-1,...)
   # REAL_CONFIG: GPIO13 must be permanently on (Filter!) - might need a new ConstInput(100), on kernel >=5.4 this may need 'pinctrl set 13 op dh', or add 'gpio=13=op,dh' in /boot/config.txt
   # some kind of heartbeat/repeated MsgData would improve diagrams
-  # many BusListener nodes must set their unit to same as their reiceive(s), ATM only MultiInputNodes do this
+  # BusNode.unit now is the node's posted result, not the setpoint or similar. Page settings must be correctd -> do not use BusNode.unit here!
 
 - Logging to systemd journal?  see https://trstringer.com/systemd-logging-in-python/
   This article also covers systemctl services

@@ -3,7 +3,8 @@
 from abc import ABC, abstractmethod
 import logging
 from typing import Any
-from time import time
+import operator
+from time import monotonic
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange)
@@ -15,6 +16,11 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 
 # ========== alert conditions ==========
+
+
+OP_SYMBOL = {operator.ge: ">=", operator.le: "<=",
+             operator.gt: ">", operator.lt: "<",
+             operator.eq: "=="}
 
 
 class AlertCond(ABC):
@@ -67,8 +73,8 @@ class AlertCond(ABC):
         return None
 
 
-class AlertAbove(AlertCond):
-    """ Alert when source >= limit for longer than duration.
+class AlertThreshold(AlertCond):
+    """ Alert when source beyond limit for longer than duration.
 
         node_id  - id of node this condition applies to
         limit    - optional threshold to cause an alert [50%]
@@ -81,102 +87,60 @@ class AlertAbove(AlertCond):
         active longer than expected (overload?) or your pH stays
         higher than specified for the given time span (CO2 bottle empty).
     """
-    def __init__(self, node_id: str, limit: float = 50., duration: int = 0):
+    def __init__(self, node_id: str, cmp: callable, direction: str,
+                 limit: float = 50., duration: int = 0):
         super().__init__(node_id, limit)
         self.duration: int = duration
-
+        self._cmp = cmp
+        self._direction = direction
         self._starttime: float | None = None
 
     def __str__(self) -> str:
+        txt = f'{type(self).__name__}({OP_SYMBOL[self._cmp]}{self.limit})'
         if self.duration:
-            return f'{type(self).__name__}(>={self.limit} for {self.duration}min)'
-        else:
-            return f'{type(self).__name__}(>={self.limit})'
+            txt += f' for {self.duration} min)'
+        return txt
 
     def _check(self, msg: MsgData) -> bool:
-        log.debug("AlertAbove.check %s", msg)
-        if msg.data >= self.limit:
-            if not self._starttime:
-                log.debug("  started")
-                self._starttime = time()
+        log.debug("%s.check %s", type(self).__name__, msg)
+        if self._cmp(msg.data, self.limit):
+            log.debug("  started")
+            self._starttime = self._starttime or monotonic()
         else:
-            if self._starttime:
-                log.debug("  ended")
-                self._starttime = None
-        if self._starttime:
-            log.debug("  %.1f >= %.1f + %.1f = %r",
-                      time(), self._starttime, self.duration * 60,
-                      (time() >= self._starttime + self.duration * 60))
-        return (time() >= self._starttime + self.duration * 60) if self._starttime else False
+            log.debug("  ended")
+            self._starttime = None
+
+        if not self._starttime:
+            return False
+
+        log.debug("  %.1f >= %.1f + %.1f = %r",
+                  monotonic(), self._starttime, self.duration * 60,
+                  (monotonic() >= self._starttime + self.duration * 60))
+        return monotonic() >= self._starttime + self.duration * 60
 
     def _text(self, msg: MsgData) -> str:
-        if self._alerted:
+        if self.alerted:
             if self.duration:
-                minutes = (time() - self._starttime) / 60
-                return f'{msg.sender}: Messwort zu HOCH: ' \
-                       + f' {msg.data:.2f} seit {minutes:.1f} min   [Grenzwert {self.limit:.2f} für max. {self.duration} min'
+                minutes = (monotonic() - self._starttime) / 60
+                return (f'{msg.sender}: Messwert zu {self._direction}: '
+                        f'{msg.data:.2f} seit {minutes:.1f} min'
+                        f'  [Grenzwert {self.limit:.2f} für max. {self.duration} min]')
             else:
-                return f'{msg.sender}: Messwert zu HOCH: ' \
-                       + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
+                return (f'{msg.sender}: Messwert zu {self._direction}: '
+                        f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]')
         else:
-            return f'{msg.sender}: Messwert OK: ' \
-                   + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
+            return (f'{msg.sender}: Messwert OK: '
+                    f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]')
 
 
-#TODO refactor: almost identical to AlertAbove except for comparison operator and some messages
-class AlertBelow(AlertCond):
-    """ Alert when source <= limit for longer than duration.
-
-        node_id  - id of node this condition applies to
-        limit    - optional threshold to cause an alert [50%]
-        duration - optional duration (mins) the limit must be exceeded [0]
-
-        With both opt. params unset this alert will trigger instantly
-        when the source is <= 50. This may not be what you intend.
-        Either give a limit, e.g. for immediate temperature warnings,
-        or a duration and maybe a limit, to be warned if the pH stays
-        lower than specified for the given time span.
-    """
+class AlertAbove(AlertThreshold):
     def __init__(self, node_id: str, limit: float = 50., duration: int = 0):
-        super().__init__(node_id, limit)
-        self.duration: int = duration
+        super().__init__(node_id, operator.ge, "HOCH", limit, duration)
 
-        self._starttime: float | None = None
 
-    def __str__(self) -> str:
-        if self.duration:
-            return f'{type(self).__name__}(<={self.limit} for {self.duration}min)'
-        else:
-            return f'{type(self).__name__}(<={self.limit})'
-
-    def _check(self, msg: MsgData) -> bool:
-        log.debug("AlertBelow.check %s", msg)
-        if msg.data <= self.limit:
-            if not self._starttime:
-                log.debug("  started")
-                self._starttime = time()
-        else:
-            if self._starttime:
-                log.debug("  ended")
-                self._starttime = None
-        if self._starttime:
-            log.debug("  %.1f >= %.1f + %.1f = %r",
-                      time(), self._starttime, self.duration * 60,
-                      (time() >= self._starttime + self.duration * 60))
-        return (time() >= self._starttime + self.duration * 60) if self._starttime else False
-
-    def _text(self, msg: MsgData) -> str:
-        if self._alerted:
-            if self.duration:
-                minutes = (time() - self._starttime) / 60
-                return f'{msg.sender}: Messwort zu NIEDRIG ' \
-                       + f' {msg.data:.2f} seit {minutes:.1f} min   [Grenzwert {self.limit:.2f} für max. {self.duration} min'
-            else:
-                return f'{msg.sender}: Messwert zu NIEDRIG: ' \
-                       + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
-        else:
-            return f'{msg.sender}: Messwert OK: ' \
-                   + f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]'
+class AlertBelow(AlertThreshold):
+    def __init__(self, node_id: str, limit: float = 50., duration: int = 0):
+        super().__init__(node_id, operator.le, "NIEDRIG", limit, duration)
 
 
 #class AlertLongActive    _check = now - _last_off > limit, _text = "Overload/High utilization"
@@ -245,6 +209,18 @@ class Alert(BusListener):
                           port, self.name)
         self._port = port
 
+    def _send_alert(self, alert_active: bool, alert_lst: list[str]):
+        if self._driver:
+            driver = self._driver
+            if driver.func == PortFunc.Bout:
+                driver.write(100 if alert_active else 0)
+                log.info('Alert device "%s" set to %d',
+                         driver.name, 100 if alert_active else 0)
+            elif driver.func == PortFunc.Tout:
+                driver.write(' \n'.join(alert_lst))
+                log.info('Alert receiver "%s" will get msg:  "%s"',
+                         driver.name, '\n'.join(alert_lst))
+
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData) and self._bus:
             log.info("## Alert %s check %.4f from %s",
@@ -255,53 +231,28 @@ class Alert(BusListener):
             for cond in self.conditions:
                 # log.debug('## %s check %s', cond, msg)
                 cond_change = cond.check_for_change(msg)
+                if cond_change is not None:
+                    any_change |= True
+                any_alert |= cond.alerted
+
+                self.data.insert(0, f'Warnung: {cond}\n{cond.alert_text}')
                 if cond.alerted:
-                    any_alert |= True
-                    if cond_change is True:   # is not None and True!
-                        log.info('## %s changed to "%s"',
-                                 cond, cond.alert_text)
-                        any_change |= True
-                        #self.data.insert(0, f'{cond.node_id} Alert: {cond}\n'
-                        #                    f'{cond.alert_text}')
-                        self.data.insert(0, f'{cond.node_id} Warnung: {cond}\n'
-                                            f'{cond.alert_text}')
-                    else:
-                        log.debug('## %s still is "%s"', cond, cond.alert_text)
-                        #self.data.append(f'{cond.node_id} Alert: {cond}\n'
-                        #                 f'{cond.alert_text}  ... continues')
-                        self.data.append(f'{cond.node_id} Warnung: {cond}\n'
-                                         f'{cond.alert_text}  ... besteht weiterhin')
+                    if cond_change is None:   # is not None and True!
+                        self.data[0] += '  ... besteht weiterhin'
                 else:
                     if cond_change is False:
-                        log.info('## %s cleared "%s"', cond, cond.alert_text)
-                        any_change |= True
-                        #self.data.insert(0, f'{cond.node_id} Alert: {cond}\n'
-                        #                    f'{cond.alert_text}  ... cleareed')
-                        self.data.insert(0, f'{cond.node_id} Warnung: {cond}\n'
-                                            f'{cond.alert_text}  ... beseitigt')
-
-            # log.debug("%s : finally anyAlrt %r, anyChng %r: %r",
-            #           self.name, any_alert, any_change, self.data)
+                        self.data[0] += '  ... beseitigt'
+                log.info(f'## {cond} re-checked: "{cond.alert_text}",\nchange to: {cond_change}')
 
             if any_alert:
-                log.warning('Alerts by %s\n"%s"', self.name, '\n'.join(self.data))
+                log.warning('Alerts by %s:\n"%s"', self.name, '\n'.join(self.data))
             self.post(MsgData(self.id, '\n'.join(self.data)))
 
-#FIXME repeat scheint nicht korrekt zu funktionieren
             if any_change \
-               or (self._repeat_time and (time() > self._repeat_time)):
-                self._repeat_time = time() + self.repeat
-                if self._driver:
-                    driver = self._driver
-                    if driver.func == PortFunc.Bout:
-                        driver.write(100 if any_alert else 0)
-                        log.info('Alert device "%s" set to %d',
-                                 driver.name, 100 if any_alert else 0)
-                    elif driver.func == PortFunc.Tout:
-                        driver.write(' \n'.join(self.data))
-                        log.info('Alert receiver "%s" will get msg:  "%s"',
-                                 driver.name, '\n'.join(self.data))
-            else:
+               or (self._repeat_time and (monotonic() > self._repeat_time)):
+                self._send_alert(any_alert, self.data)
+                self._repeat_time = monotonic() + self.repeat
+            elif not any_alert:
                 self._repeat_time = None
 
         super().listen(msg)

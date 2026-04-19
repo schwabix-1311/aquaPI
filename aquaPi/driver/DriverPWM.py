@@ -72,6 +72,7 @@ class DriverPWM(DriverPWMbase):
 
         self.name: str = 'PWM %d @ pin %d' % (self._channel, self._pin)
         if not self._fake:
+            ##breakpoint()
             self.name = 'PWM %d @ sysfs' % self._channel
             self._pwmchip: str = '/sys/class/pwm/pwmchip0'
             self._pwmchannel: str = path.join(self._pwmchip, 'pwm%d' % self._channel)
@@ -80,7 +81,9 @@ class DriverPWM(DriverPWMbase):
                 log.debug('Creating sysfs PWM channel %d ...', self._channel)
                 with open(path.join(self._pwmchip, 'export'), 'wt', encoding='ascii') as p:
                     p.write('%d' % self._channel)
-                sleep(.1)  # sombody (kernel?) needs a bit of time to finish it!
+                sleep(.5)  # sombody (kernel?) needs a bit of time to finish it!
+                if not path.exists(self._pwmchannel):
+                    log.fatal('Unable to create sysfs PWM channel %d', self._channel)
                 log.debug('Created sysfs PWM channel %d', self._channel)
 
             with open(path.join(self._pwmchannel, 'period'), 'wt', encoding='ascii') as p:
@@ -97,14 +100,13 @@ class DriverPWM(DriverPWMbase):
         if not self._fake:
             with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
                 p.write('0')
-            log.debug('Removing sysfs PWM channel %d ...', self._channel)
-            with open(path.join(self._pwmchip, 'unexport'), 'wt', encoding='ascii') as p:
-                p.write('%d' % self._channel)
             log.debug('Removed sysfs PWM channel %d', self._channel)
 
-    def write(self, value:float) -> None:
+    def write(self, value: float) -> None:
         log.info('%s -> %f', self.name, float(value))
         if not self._fake:
+            if not path.exists(self._pwmchannel):
+                breakpoint()
             with open(path.join(self._pwmchannel, 'duty_cycle'), 'wt', encoding='ascii') as p:
                 p.write('%d' % int(value / 100.0 * 3333333))
             with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:

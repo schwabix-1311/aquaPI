@@ -10,6 +10,7 @@ aquaPi ToDo list
 - consider the change from __setstate__/__getstate to __reduce__. remove all __setstate__s except for those who start threads. __reduce__ in base class only. child classes introducing new data members might need __reduce__!??
   OR __getstate__(self): return { 'args': (self.name,self.receives,...)}
      __setstate(seld, state): args = state['args'] self.__init(*args, _cont=True)
+  # Pi zero2 looses WLAN after some days: https://forums.raspberrypi.com/viewtopic.php?t=357703 -> tried "sudo iw wlan0 set power_save off"
 
 - Logging to systemd journal?  see https://trstringer.com/systemd-logging-in-python/
   This article also covers systemctl services

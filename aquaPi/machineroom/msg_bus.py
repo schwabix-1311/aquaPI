@@ -69,12 +69,12 @@ class BusNode(ABC):
 
     def __getstate__(self) -> dict[str, Any]:
         state = {'name': self.name}
-        state.update(id=self.id)
-        state.update(identifier=self.identifier)
-        state.update(data=self.data)
-        state.update(receives=self.receives)
-        state.update(unit=self.unit)
-        state.update(data_range=self.data_range.name)
+        state["id"] = self.id
+        state["identifier"] = self.identifier
+        state["data"] = self.data
+        state["receives"] = self.receives
+        state["unit"] = self.unit
+        state["data_range"] = self.data_range.name
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:

@@ -39,8 +39,8 @@ class InputNode(BusNode, ABC):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(port=self.port)
-        state.update(interval=self.interval)
+        state["port"] = self.port
+        state["interval"] = self.interval
         return state
 
     # def __setstate__(self, state: dict[str, Any]) -> None:
@@ -133,7 +133,7 @@ class SwitchInput(InputNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(inverted=self.inverted)
+        state["inverted"] = self.inverted
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -188,8 +188,8 @@ class AnalogInput(InputNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(initval=self.initval)
-        state.update(avg=self.avg)
+        state["initval"] = self.initval
+        state["avg"] = self.avg
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -258,7 +258,7 @@ class ScheduleInput(BusNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(cronspec=self.cronspec)
+        state["cronspec"] = self.cronspec
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:

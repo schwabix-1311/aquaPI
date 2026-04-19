@@ -24,10 +24,7 @@ OP_SYMBOL = {operator.ge: ">=", operator.le: "<=",
 
 
 class AlertCond(ABC):
-    """ Base class for all kind of alerting conditions
-
-        node_id - id of node this condition applies to
-        limit   - the limit _check() will use
+    """ Base class for all alerting conditions
     """
     def __init__(self, node_id: str, limit: float):
         self.node_id: str = node_id
@@ -65,11 +62,11 @@ class AlertCond(ABC):
             return state changed to, or None if inappropriate msg or no change
         """
         if isinstance(msg, MsgData) and msg.sender == self.node_id:
-            old_alerted = self._alerted
+            old = self._alerted
             self._alerted = self._check(msg)
             self._alert_text = self._text(msg)
 
-            return self._alerted if old_alerted != self._alerted else None
+            return self._alerted if old != self._alerted else None
         return None
 
 
@@ -87,7 +84,8 @@ class AlertThreshold(AlertCond):
         active longer than expected (overload?) or your pH stays
         higher than specified for the given time span (CO2 bottle empty).
     """
-    def __init__(self, node_id: str, cmp: callable, direction: str,
+    def __init__(self, node_id: str,
+                 cmp: callable[[float, float], bool], direction: str,
                  limit: float = 50., duration: int = 0):
         super().__init__(node_id, limit)
         self.duration: int = duration
@@ -96,27 +94,30 @@ class AlertThreshold(AlertCond):
         self._starttime: float | None = None
 
     def __str__(self) -> str:
-        txt = f'{type(self).__name__}({OP_SYMBOL[self._cmp]}{self.limit})'
+        txt = f'{type(self).__name__}({OP_SYMBOL[self._cmp]}{self.limit}'
         if self.duration:
-            txt += f' for {self.duration} min)'
-        return txt
+            txt += f' for {self.duration} min'
+        return txt + ')'
 
     def _check(self, msg: MsgData) -> bool:
         log.debug("%s.check %s", type(self).__name__, msg)
+        now = monotonic()
         if self._cmp(msg.data, self.limit):
             log.debug("  started")
-            self._starttime = self._starttime or monotonic()
+            self._starttime = now
         else:
             log.debug("  ended")
             self._starttime = None
-
-        if not self._starttime:
             return False
 
+        if self.duration == 0:
+            return True
+
+        triggered = (now >= self._starttime + self.duration * 60)
+
         log.debug("  %.1f >= %.1f + %.1f = %r",
-                  monotonic(), self._starttime, self.duration * 60,
-                  (monotonic() >= self._starttime + self.duration * 60))
-        return monotonic() >= self._starttime + self.duration * 60
+                  now, self._starttime, self.duration * 60, triggered)
+        return triggered
 
     def _text(self, msg: MsgData) -> str:
         if self.alerted:
@@ -182,9 +183,9 @@ class Alert(BusListener):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(conditions=self.conditions)
-        state.update(port=self.port)
-        state.update(repeat=self.repeat)
+        state["conditions"] = self.conditions
+        state["port"] = self.port
+        state["repeat"] = self.repeat
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -232,31 +233,34 @@ class Alert(BusListener):
                 # log.debug('## %s check %s', cond, msg)
                 cond_change = cond.check_for_change(msg)
                 if cond_change is not None:
-                    any_change |= True
+                    any_change = True
                 any_alert |= cond.alerted
 
-                self.data.insert(0, f'Warnung: {cond}\n{cond.alert_text}')
+                entry = f'Warnung: {cond}\n{cond.alert_text}'
                 if cond.alerted:
                     if cond_change is None:   # is not None and True!
-                        self.data[0] += '  ... besteht weiterhin'
+                        entry += '  ... besteht weiterhin'
                 else:
                     if cond_change is False:
-                        self.data[0] += '  ... beseitigt'
+                        entry += '  ... beseitigt'
+                if cond.alerted or cond_change is False:
+                    self.data.insert(0, entry)
                 log.info(f'## {cond} re-checked: "{cond.alert_text}",\nchange to: {cond_change}')
 
             if any_alert:
                 log.warning('Alerts by %s:\n"%s"', self.name, '\n'.join(self.data))
+
             self.post(MsgData(self.id, '\n'.join(self.data)))
 
+            now = monotonic()
             if any_change \
-               or (self._repeat_time and (monotonic() > self._repeat_time)):
+            or (self._repeat_time and (now > self._repeat_time)):
                 self._send_alert(any_alert, self.data)
-                self._repeat_time = monotonic() + self.repeat
+                self._repeat_time = now + self.repeat
             elif not any_alert:
                 self._repeat_time = None
 
         super().listen(msg)
-
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()

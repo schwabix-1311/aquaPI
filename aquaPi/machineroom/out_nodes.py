@@ -35,7 +35,7 @@ class DeviceNode(BusListener, ABC):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(port=self.port)
+        state["port"] = self.port
         return state
 
     # def __setstate__(self, state: dict[str, Any]) -> None:
@@ -93,7 +93,7 @@ class SwitchDevice(DeviceNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(inverted=self.inverted)
+        state["inverted"] = self.inverted
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -167,8 +167,8 @@ class SlowPwmDevice(DeviceNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(cycle=self.cycle)
-        state.update(inverted=self._inverted)
+        state["cycle"] = self.cycle
+        state["inverted"] = self._inverted
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -271,9 +271,9 @@ class AnalogDevice(DeviceNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(percept=self.percept)
-        state.update(minimum=self.minimum)
-        state.update(maximum=self.maximum)
+        state["percept"] = self.percept
+        state["minimum"] = self.minimum
+        state["maximum"] = self.maximum
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:

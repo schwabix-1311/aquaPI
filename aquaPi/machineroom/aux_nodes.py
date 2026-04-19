@@ -45,7 +45,7 @@ class MultiInAux(AuxNode, ABC):
             self.unit = rcv.unit
             self.data_range = rcv.data_range  # depends on inputs
             break
-        state.update(unit=self.unit)
+        state["unit"] = self.unit
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -102,10 +102,10 @@ class ScaleAux(SingleInAux):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(unit=self.unit)
-        state.update(offset=self.offset)
-        state.update(factor=self.factor)
-        state.update(limit=self.limit)
+        state["unit"] = self.unit
+        state["offset"] = self.offset
+        state["factor"] = self.factor
+        state["limit"] = self.limit
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -160,11 +160,11 @@ class AvgAux(MultiInAux):
     def __init__(self, name: str, receives: Iterable[str],
                  unfair_avg: int = 0, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
-        self.unfair_avg: int = 0 or int(unfair_avg)
+        self.unfair_avg: int = unfair_avg
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(unfair_avg=self.unfair_avg)
+        state["unfair_avg"] = self.unfair_avg
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -217,9 +217,7 @@ class MinAux(MultiInAux):
         if isinstance(msg, MsgData):
             val = float(msg.data)
             self.values[msg.sender] = val
-            for v in self.values.values():
-                val = min(val, v)
-            self.data = round(val, 4)
+            self.data = round(min(self.values.values()), 4)
             log.info('MinAux %s: output %f', self.id, self.data)
             self.post(MsgData(self.id, self.data))
 
@@ -243,9 +241,7 @@ class MaxAux(MultiInAux):
         if isinstance(msg, MsgData):
             val = float(msg.data)
             self.values[msg.sender] = val
-            for v in self.values.values():
-                val = max(val, v)
-            self.data = round(val, 4)
+            self.data = round(max(self.values.values()), 4)
             log.info('MaxAux %s: output %f', self.id, self.data)
             self.post(MsgData(self.id, self.data))
 

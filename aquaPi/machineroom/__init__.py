@@ -181,15 +181,22 @@ class MachineRoom:
         # traffic during startup
 
         if TEST_BUS:
-            wasser_i1 = AnalogInput('INPUT', 'DS1820 #1', 24.0, '°C',
-                                    avg=1, interval=300)
-            wasser = MinimumCtrl('CTRL', wasser_i1.id, 25.0)
-            wasser_o = SwitchDevice('OUTPUT', wasser.id,
+            wasser_i1 = AnalogInput('Input', 'DS1820 #1', 24.6, '°C',
+                                    avg=1, interval=10)
+            wasser = MinimumCtrl('Ctrl', wasser_i1.id, 25.0)
+            wasser_o = SwitchDevice('Output', wasser.id,
                                     'GPIO 12 out', inverted=False)
             wasser_i1.plugin(self.bus)
             wasser.plugin(self.bus)
             wasser_o.plugin(self.bus)
 
+            telegram_alert = Alert('Telegram-Warnungen',
+                                   {  # AlertAbove(calib_ph.id, 7.3),
+                                      # AlertBelow(calib_ph.id, 6.8),
+#                                     AlertAbove(wasser_i1.id, 25.2),
+                                     AlertBelow(wasser_i1.id, 24.7)},
+                                   'Telegram #1', repeat=30 * 60)
+            telegram_alert.plugin(self.bus)
             return
 
         if REAL_CONFIG:

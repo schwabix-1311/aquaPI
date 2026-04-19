@@ -2,7 +2,8 @@
 
 from abc import ABC
 import logging
-from typing import Any
+from typing import Any, Callable
+import operator
 from time import (time, sleep)
 import math
 import random
@@ -74,10 +75,90 @@ class ControllerNode(BusListener, ABC):
         return []  # don't inherit inputs!  Why not????
 
 
-class MinimumCtrl(ControllerNode):
-    """ A controller switching an output to keep a minimum input value.
+class ThresholdCtrl(ControllerNode):
+    """ A controler switching when passing a threshold
+    """
+    def __init__(self, name: str, receives: str,
+                 setpoint: float, hysteresis: float,
+                 cmp_on: Callable[[float, float], bool],
+                 cmp_off: Callable[[float, float], bool],
+                 direction: str,
+                 _cont: bool = False):
+        super().__init__(name, receives, _cont=_cont)
+        self.setpoint: float = setpoint
+        self.hysteresis: float = hysteresis
+        self._cmp_on = cmp_on
+        self._cmp_off = cmp_off
+        self._dir = direction
+        self.alert: tuple[str, str] | None = None
+
+    # --- Pickling ---
+#    def __reduce__(self):
+#        ctor = self.__class__
+#        args = (self.name, self.receives, self.setpoint, self.hysteresis, True)
+#        state = {"data": self.data,
+#                 "alert": self.alert}
+#        return (ctor, args, state)
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state["setpoint"] = self.setpoint
+        state["hysteresis"] = self.hysteresis
+        state["alert"] = self.alert
+        return state
+
+#    def __setstate__(self, state: dict[str, Any]) -> None:
+#        self.data = state['data']
+#        ThresholdCtrl.__init__(self, state['name'], state['receives'],
+#                               state['setpoint'], hysteresis=state['hysteresis'],
+#                               _cont=True)
+#        self.alert = state['alert']
+
+    def _threshold_on(self) -> float:
+        raise NotImplementedError
+
+    def _threshold_off(self) -> float:
+        raise NotImplementedError
+
+    def listen(self, msg: Msg) -> None:
+        if isinstance(msg, MsgData):
+            val = float(msg.data)
+            new_val = self.data
+            if self._cmp_on(val, self._threshold_on()):
+                new_val = 100.0
+            elif self._cmp_off(val, self._threshold_off()):
+                new_val = 0.0
+
+            log.debug('%s: %.2f -> %.2f', type(self).__name__, self.data, new_val)
+            self.data = new_val
+
+            if self._cmp_on(val, self._threshold_on() * 0.95):
+                self.alert = (self._dir, 'err')
+                log.brief('%s %s: output %f - alert %r',
+                          type(self).__name__, self.id, self.data, self.alert)
+            else:
+                self.alert = ('*', 'act')  if self.data else None
+                log.brief('%s %s: output %f',
+                          type(self).__name__, self.id, self.data)
+
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
+
+    def get_settings(self) -> list[tuple]:
+        settings = super().get_settings()
+        limits = get_unit_limits(self.unit)
+        settings.append(('setpoint', f'Setpoint [{self.unit}]', self.setpoint,
+                         f'type="number" {limits}'))
+        settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
+                         'type="number" min="0" max="5" step="0.01"'))
+        return settings
+
+
+class MinimumCtrl(ThresholdCtrl):
+    """ A controller keeping a minimum threshold.
         Should usually drive an output changing the input in the appropriate
-        direction. Can also be used to generate warning or error states.
+        direction.
 
         Options:
             name       - unique name of this controller node in UI
@@ -90,63 +171,43 @@ class MinimumCtrl(ControllerNode):
               100 when input < (thr. - hyst./2),
               0 when input >= (thr. + hyst./2)
     """
-    # TODO: could have a limit for max. active time -> warning
+    def __init__(self, name: str, receives: str,
+                 setpoint: float, hysteresis: float = 0,
+                 _cont: bool = False):
+        super().__init__(name, receives,
+                         setpoint, hysteresis,
+                         cmp_on=operator.lt, cmp_off=operator.ge,
+                         direction='LOW',
+                         _cont=_cont)
 
-    def __init__(self, name: str, receives: str, setpoint: float,
-                 hysteresis: float = 0, _cont: bool = False):
-        super().__init__(name, receives, _cont=_cont)
-        self.setpoint: float = setpoint
-        self.hysteresis: float = hysteresis
-
-    def __getstate__(self) -> dict[str, Any]:
-        state = super().__getstate__()
-        state.update(setpoint=self.setpoint)
-        state.update(hysteresis=self.hysteresis)
-        return state
+    # --- Pickling ---
+#    def __reduce__(self):
+#        ctor = MinimumCtrl
+#        args = (self.name, self.receives, self.setpoint, self.hysteresis, True)
+#        state = {
+#            "data": self.data,
+#            "alert": self.alert,
+#        }
+#        return (ctor, args, state)
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         MinimumCtrl.__init__(self, state['name'], state['receives'],
                              state['setpoint'], hysteresis=state['hysteresis'],
                              _cont=True)
+        self.alert = state['alert']
 
-    def listen(self, msg: Msg) -> None:
-        if isinstance(msg, MsgData):
-            new_val = self.data
-            if float(msg.data) < (self.setpoint - self.hysteresis / 2):
-                new_val = 100.0
-            elif float(msg.data) >= (self.setpoint + self.hysteresis / 2):
-                new_val = 0.0
+    def _threshold_on(self) -> float:
+        return self.setpoint - self.hysteresis / 2
 
-            log.debug('MinimumCtrl: %d -> %d', self.data, new_val)
-            self.data = new_val
-
-            if msg.data < (self.setpoint - self.hysteresis / 2) * 0.95:
-                self.alert = ('LOW', 'err')
-                log.brief('MinimumCtrl %s: output %f - alert %r',
-                          self.id, self.data, self.alert)
-            else:
-                self.alert = ('*', 'act')  if self.data else None
-                log.brief('MinimumCtrl %s: output %f', self.id, self.data)
-
-            self.post(MsgData(self.id, self.data))
-
-        super().listen(msg)
-
-    def get_settings(self) -> list[tuple]:
-        settings = super().get_settings()
-        limits = get_unit_limits(self.unit)
-        settings.append(('setpoint', f'Minimum [{self.unit}]', self.setpoint,
-                         f'type="number" {limits}'))
-        settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
-                         'type="number" min="0" max="5" step="0.01"'))
-        return settings
+    def _threshold_off(self) -> float:
+        return self.setpoint + self.hysteresis / 2
 
 
-class MaximumCtrl(ControllerNode):
-    """ A controller switching an output to keep a maximum input value.
+class MaximumCtrl(ThresholdCtrl):
+    """ A controller keeping a maximum threshold.
         Should usually drive an output changing the input in the appropriate
-        direction. Can also be used to generate warning or error states.
+        direction.
 
         Options:
             name       - unique name of this controller node in UI
@@ -156,58 +217,40 @@ class MaximumCtrl(ControllerNode):
 
         Output:
             posts a single
-              100 when input > (thr. - hyst./2),
-              0 when input <= (thr. + hyst./2)
+              100 when input > (thr. + hyst./2),
+              0 when input <= (thr. - hyst./2)
     """
-    def __init__(self, name: str, receives: str, setpoint: float,
-                 hysteresis: float = 0, _cont: bool = False):
-        super().__init__(name, receives, _cont=_cont)
-        self.setpoint: float = setpoint
-        self.hysteresis: float = hysteresis
+    def __init__(self, name: str, receives: str,
+                 setpoint: float, hysteresis: float = 0,
+                 _cont: bool = False):
+        super().__init__(name, receives,
+                         setpoint, hysteresis,
+                         cmp_on=operator.gt, cmp_off=operator.le,
+                         direction='HIGH',
+                         _cont=_cont)
 
-    def __getstate__(self) -> dict[str, Any]:
-        state = super().__getstate__()
-        state.update(setpoint=self.setpoint)
-        state.update(hysteresis=self.hysteresis)
-        return state
+    # --- Pickling ---
+#    def __reduce__(self):
+#        ctor = MinimumCtrl
+#        args = (self.name, self.receives, self.setpoint, self.hysteresis, True)
+#        state = {
+#            "data": self.data,
+#            "alert": self.alert,
+#        }
+#        return (ctor, args, state)
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         MaximumCtrl.__init__(self, state['name'], state['receives'],
                              state['setpoint'], hysteresis=state['hysteresis'],
                              _cont=True)
+        self.alert = state['alert']
 
-    def listen(self, msg: Msg) -> None:
-        if isinstance(msg, MsgData):
-            new_val = self.data
-            if float(msg.data) > (self.setpoint + self.hysteresis / 2):
-                new_val = 100.0
-            elif float(msg.data) <= (self.setpoint - self.hysteresis / 2):
-                new_val = 0.0
+    def _threshold_on(self) -> float:
+        return self.setpoint + self.hysteresis / 2
 
-            log.debug('MaximumCtrl: %d -> %d', self.data, new_val)
-            self.data = new_val
-
-            if msg.data > (self.setpoint + self.hysteresis / 2) * 1.05:
-                self.alert = ('HIGH', 'err')
-                log.brief('MaximumCtrl %s: output %f - alert %r',
-                          self.id, self.data, self.alert)
-            else:
-                self.alert = ('*', 'act')  if self.data else None
-                log.brief('MaximumCtrl %s: output %f', self.id, self.data)
-
-            self.post(MsgData(self.id, self.data))
-
-        super().listen(msg)
-
-    def get_settings(self) -> list[tuple]:
-        settings = super().get_settings()
-        limits = get_unit_limits(self.unit)
-        settings.append(('setpoint', f'Maximum [{self.unit}]', self.setpoint,
-                         f'type="number" {limits}'))
-        settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
-                         'type="number" min="0" max="5" step="0.01"'))
-        return settings
+    def _threshold_off(self) -> float:
+        return self.setpoint - self.hysteresis / 2
 
 
 class PidCtrl(ControllerNode):
@@ -239,10 +282,10 @@ class PidCtrl(ControllerNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(setpoint=self.setpoint)
-        state.update(p_fact=self.p_fact)
-        state.update(i_fact=self.i_fact)
-        state.update(d_fact=self.d_fact)
+        state["setpoint"] = self.setpoint
+        state["p_fact"] = self.p_fact
+        state["i_fact"] = self.i_fact
+        state["d_fact"] = self.d_fact
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -252,14 +295,14 @@ class PidCtrl(ControllerNode):
                          p_fact=state['p_fact'], i_fact=state['i_fact'], d_fact=state['d_fact'],
                          _cont=True)
 
-    def listen(self, msg) -> None:
+    def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             log.debug('PID got %s', msg)
             now = time()
             ta = now - self._tm_old
             err = float(msg.data) - self.setpoint
             if self._tm_old >= 1.:
-                self._err_sum = self._err_sum / 1 + err
+                self._err_sum += err
                 p_dev = self.p_fact * err
                 i_dev = self.i_fact * ta * self._err_sum / 100  # ??
                 d_dev = self.d_fact / ta * (err - self._err_old)
@@ -336,8 +379,8 @@ class FadeCtrl(ControllerNode):
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(fade_time=self.fade_time)
-        state.update(fade_out=self.fade_out)
+        state["fade_time"] = self.fade_time
+        state["fade_out"] = self.fade_out
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -482,20 +525,21 @@ class SunCtrl(ControllerNode):
                  xscend: float = 1, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.xscend = xscend
-        if xscend and isinstance(xscend, timedelta):
+        if isinstance(xscend, timedelta):
             self.xscend = xscend.total_seconds() / 60 / 60
         self._fader_thread: Thread | None = None
         self._fader_stop: bool = False
         self._high: float = 0.0
+        self.clouds: list[Cloud] = []
+        self.cloudiness: int = 0
+
         if not _cont:
             self.data = 0.0
         self.target: float = self.data
-        self.clouds: list[Cloud] = []
-        self.cloudiness = 0
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state.update(xscend=self.xscend)
+        state["xscend"] = self.xscend
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:

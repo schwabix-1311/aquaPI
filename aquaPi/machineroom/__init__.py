@@ -7,12 +7,12 @@ import pickle
 import atexit
 
 from .msg_bus import MsgBus
-from .ctrl_nodes import MinimumCtrl, MaximumCtrl, PidCtrl, SunCtrl, FadeCtrl
-from .in_nodes import AnalogInput, ScheduleInput
-from .out_nodes import SwitchDevice, SlowPwmDevice, AnalogDevice
-from .aux_nodes import ScaleAux, MinAux, MaxAux, AvgAux
+from .ctrl_nodes import *  # noqa
+from .in_nodes import *  # noqa
+from .out_nodes import *  # noqa
+from .aux_nodes import *  # noqa
 from .hist_nodes import History
-from .alert_nodes import Alert, AlertAbove, AlertBelow
+from .alert_nodes import *  # noqa
 from ..driver import (driver_config, create_io_registry, DriverError)
 
 

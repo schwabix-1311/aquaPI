@@ -393,6 +393,18 @@ const AquapiDashboard = {
 				this.widgets = result
 			}
 		},
+		async loadConfig() {
+            const result = await this.$store.dispatch('dashboard/loadConfig')
+            if (result) {
+                const sorted = [...result].sort((a, b) =>
+                    this.$t('misc.nodeTypes.' + a.role.toLowerCase())
+                        .localeCompare(
+                            this.$t('misc.nodeTypes.' + b.role.toLowerCase())
+                        )
+                )
+                this.widgets = sorted
+            }
+        },
 	},
 	async mounted() {
 		await this.loadConfig()

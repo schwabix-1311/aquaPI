@@ -232,8 +232,8 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
         try:
             payload = {"chat_id": self.cfg['chat_id'], 'text': subj_text}
             res = DriverTelegram._bot_request(self.cfg['url'], 'sendMessage', json=payload)
+            log.info('%s -> %r : %r', self.name, subj_text, res)
         except Exception:
             log.exception('%s failed to send Telegram message with error: ', self.name)
 
-        log.info('%s -> %r : %r', self.name, subj_text, res)
         self._val = subj_text

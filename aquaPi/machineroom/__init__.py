@@ -301,18 +301,18 @@ class MachineRoom:
             ph_history.plugin(self.bus)
 
             # Alert system
- #            email_alert = Alert('Email-Warnungen',
- #                                {AlertAbove(calib_ph.id, 7.5),
- #                                 AlertBelow(calib_ph.id, 6.5),
- #                                 AlertAbove(wasser_i1.id, 26.0),
- #                                 AlertBelow(wasser_i1.id, 24.5)},
- #                                'Email #1', repeat=30 * 60)
- #           email_alert.plugin(self.bus)
+            email_alert = Alert('Email-Warnungen',
+                                { # AlertAbove(calib_ph.id, 7.5),
+                                  # AlertBelow(calib_ph.id, 6.5),
+                                  AlertAbove(wasser_i1.id, 26.0),
+                                  AlertBelow(wasser_i1.id, 24.0)},
+                                'Email #1', repeat=60 * 60)
+            email_alert.plugin(self.bus)
             telegram_alert = Alert('Telegram-Warnungen',
                                    {  # AlertAbove(calib_ph.id, 7.3),
                                       # AlertBelow(calib_ph.id, 6.8),
-                                     AlertAbove(wasser_i1.id, 25.2),
-                                     AlertBelow(wasser_i1.id, 24.7)},
+                                     AlertAbove(wasser_i1.id, 25.5),
+                                     AlertBelow(wasser_i1.id, 24.5)},
                                    'Telegram #1', repeat=30 * 60)
             telegram_alert.plugin(self.bus)
 

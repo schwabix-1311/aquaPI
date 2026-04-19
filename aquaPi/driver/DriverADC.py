@@ -14,8 +14,8 @@ import board  # type: ignore[import-untyped]
 import busio  # type: ignore[import-untyped]
 
 # from adafruit_ads1x15 import ADS1015
-from adafruit_ads1x15 import ADS1115
-from adafruit_ads1x15 import AnalogIn
+from adafruit_ads1x15.ads1115 import ADS1115
+from adafruit_ads1x15.analog_in import AnalogIn
 
 from .base import (AInDriver, IoPort, PortFunc)
 

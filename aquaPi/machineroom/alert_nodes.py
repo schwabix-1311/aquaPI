@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 import logging
-from typing import Any
+from typing import Any, Callable
 import operator
 from time import monotonic
 
@@ -85,7 +85,7 @@ class AlertThreshold(AlertCond):
         higher than specified for the given time span (CO2 bottle empty).
     """
     def __init__(self, node_id: str,
-                 cmp: callable[[float, float], bool], direction: str,
+                 cmp: Callable[[float, float], bool], direction: str,
                  limit: float = 50., duration: int = 0):
         super().__init__(node_id, limit)
         self.duration: int = duration

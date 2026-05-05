@@ -514,7 +514,7 @@ class SunCtrl(ControllerNode):
         Options:
             name     - unique name of this controller node in UI
             receives - id of a single (!) input to receive measurements from
-            xscend   - duration of each of ascend and descend
+            xscend   - duration of each of ascend and descend, [h]
 
         Output:
             float - posts series of percentages after input state change

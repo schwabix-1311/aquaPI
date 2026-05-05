@@ -81,6 +81,24 @@ const AnyNode = {
 			return nodes
 		},
 	},
+	methods: {
+		humanPeriod(val) {
+			let value = (val / 60 / 1000)
+			let unit = (value == 1) ? this.$t('misc.duration.min')
+									: this.$t('misc.duration.mins')
+			if (value >= 60) {
+				value /= 60
+				unit = (value == 1) ? this.$t('misc.duration.hour')
+									: this.$t('misc.duration.hours')
+				if (value >= 24) {
+					value /= 24
+					unit = (value == 1) ? this.$t('misc.duration.day')
+										: this.$t('misc.duration.days')
+				}
+			}
+			return `${value} ${unit}`
+		},
+	},
 }
 Vue.component('AnyNode', AnyNode)  //??
 
@@ -236,7 +254,8 @@ const SunCtrl = {
 	computed: {
 		descript() {
 			//TODO: prefix a label: dusk/dawn  or ramp
-			return '/\\ ' + this.node.xscend.toString() + ' h'
+			let xscend = this.node.xscend
+			return '/~~\\ ' + this.humanPeriod(this.node.xscend * 60 * 60 * 1000)
 		},
 		value() {
 			let node = this.node
@@ -259,8 +278,7 @@ const FadeCtrl = {
 	computed: {
 		descript() {
 			//TODO: prefix a label: dusk/dawn  or ramp
-			return this.node.fade_time.toString() + ' s'
-			       + ' <=> ' + this.node.fade_out.toString() + ' s'
+			return this.humanPeriod(this.node.fade_time) + ' /==\\ ' + this.humanPeriod(this.node.fade_out)
 		},
 		value() {
 			let node = this.node
@@ -295,6 +313,9 @@ const ScheduleInput = {
 		label() {
 			let node = this.node
 			return this.$t('misc.dataRange.cronspec.label')
+		},
+		descript() {
+			return this.node.cronspec  // beautify!!
 		},
 		value() {
 			let node = this.node
@@ -462,7 +483,7 @@ const HistoryChart = {
 									class="text-none"
 									:loading="isLoading"
 								>
-									{{ humanPeriod() }}
+			                        {{ $t('dashboard.widget.history.period.label').replace('%s', humanPeriod(period)) }}
 								</v-btn>
 							</template>
 							<v-list
@@ -603,9 +624,9 @@ const HistoryChart = {
 		},
 		periods() {
 			const vm = this
-			return [0.25, 1, 4, 8, 12, 24].map((h) => {
+			return [0.25, 1, 4, 8, 12, 24, 48, 168].map((h) => {
 				const value = (h * 60 * 60 * 1000)
-				return { value: value, label: vm.humanPeriod(false, value) }
+				return { value: value, label: vm.humanPeriod(value) }
 			})
 		},
 
@@ -746,17 +767,6 @@ const HistoryChart = {
 				}
 			}
 		},
-		humanPeriod(addLabel = true, val = null) {
-			const label = this.$t('dashboard.widget.history.period.label')
-			let value = (val !== null ? (val / 60 / 1000) : (this.period / 60 / 1000))
-			let unit = 'h'
-			if (value < 60) {
-				unit = 'min'
-				return (addLabel ? label.replace('%s', `${value} ${unit}`) : `${value} ${unit}`)
-			}
-			value /= 60
-			return (addLabel ? label.replace('%s', `${value} ${unit}`) : `${value} ${unit}`)
-		},
 		async openModal() {
 			await this.$store.dispatch('ui/showDialog', this.modalDialogName, true)
 			await this.loadHistory()
@@ -856,7 +866,7 @@ const AquapiNodeDescription = {
 		item: {
 			type: Object,
 			required: true
-		}
+		},
 	},
 	template: `
 		<v-card-subtitle

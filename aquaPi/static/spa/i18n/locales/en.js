@@ -98,6 +98,14 @@ export default
 	},
 
 	misc: {
+		duration: {
+			min: 'min',
+			mins: 'min',
+			hour: 'h',
+			hours: 'h',
+			day: 'day',
+			days: 'days',
+		},
 		nodeTypes: {
 			aux: 'Connection',
 			ctrl: 'Control',

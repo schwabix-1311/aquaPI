@@ -98,6 +98,14 @@ export default
 	},
 
 	misc: {
+		duration: {
+			min: 'min',
+			mins: 'min',
+			hour: 'h',
+			hours: 'h',
+			day: 'Tag',
+			days: 'Tage',
+		},
 		nodeTypes: {
 			aux: 'Verknüpfung',
 			ctrl: 'Steuerung',

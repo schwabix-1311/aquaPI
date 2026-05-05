@@ -171,7 +171,6 @@ const AquapiDashboardWidget = {
 				>
 					<v-spacer />
 					<v-chip
-						v-if="alert"
 						label
 						:ripple="false"
 						small

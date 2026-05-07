@@ -42,6 +42,7 @@ const AnyNode = {
 				case 'ANALOG':
 				case 'BINARY':
 				case 'PERCENT':
+				case 'CRONSPEC':
 					return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.label')
 				default:
 					return this.$t('misc.dataRange.default.label')
@@ -127,24 +128,28 @@ const BusNode = {
 			>
 				{{ node.name }}
 			</v-card-title>
-			<aquapi-node-description
-				:item="node"
+			<template
+				v-if="true"
 			>
-			</aquapi-node-description>
-			<v-card-text
-				class="text--secondary"
-			>
-				<aquapi-node-data
+				<aquapi-node-description
 					:item="node"
 				>
-					<template v-slot:label>
-						<span>{{ label }}</span>
-					</template>
-					<template v-slot:value>
-						<span>{{ value }}</span>
-					</template>
-				</aquapi-node-data>
-			</v-card-text>
+				</aquapi-node-description>
+				<v-card-text
+					class="text--secondary"
+				>
+					<aquapi-node-data
+						:item="node"
+					>
+						<template v-slot:label>
+							<span>{{ label }}</span>
+						</template>
+						<template v-slot:value>
+							<span>{{ value }}</span>
+						</template>
+					</aquapi-node-data>
+				</v-card-text>
+			</template>
 			
 			<template
 				v-if="receivesNodes.length > 0"
@@ -310,24 +315,9 @@ Vue.component('AnalogInput', AnalogInput)
 const ScheduleInput = {
 	extends: BusNode,
 	computed: {
-		label() {
-			let node = this.node
-			return this.$t('misc.dataRange.cronspec.label')
-		},
 		descript() {
 			return this.node.cronspec  // beautify!!
 		},
-		value() {
-			let node = this.node
-			switch (node.data) {
-				case 100:
-					return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.on')
-				case 0:
-					return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.off')
-				default:
-					return node.data.toFixed(2).toString() + (node.unit ? ' ' + node.unit : '')
-			}
-		}
 	}
 }
 Vue.component('ScheduleInput', ScheduleInput)
@@ -346,6 +336,11 @@ Vue.component('SlowPwmDevice', AnalogDevice)
 
 const AuxNode = {
 	extends: BusNode,
+	computed: {
+		label() {
+			return this.$t('misc.dataRange.aux.label')
+		},
+	},
 }
 
 const AvgAux = {
@@ -483,7 +478,7 @@ const HistoryChart = {
 									class="text-none"
 									:loading="isLoading"
 								>
-			                        {{ $t('dashboard.widget.history.period.label').replace('%s', humanPeriod(period)) }}
+									{{ $t('dashboard.widget.history.period.label').replace('%s', humanPeriod(period)) }}
 								</v-btn>
 							</template>
 							<v-list
@@ -718,7 +713,7 @@ const HistoryChart = {
 						if (data[ts][dsIdx] !== null) {
 							val = data[ts][dsIdx]
 							values[dsIdx][ts] = {x: ts * 1000, y: val}
-//	 						console.log('  data ' + dsIdx + ': ' + ts + '/' + val)
+//							console.log('  data ' + dsIdx + ': ' + ts + '/' + val)
 						}
 					}
 					if (val !== null) {
@@ -847,7 +842,7 @@ const AlertNode = {
 					<template v-slot:value>
 						<span>{{ value }}</span>
 					</template>
-				</aquapi-node-data>
+				</aquapi-node-alert>
 			</v-card-text>
 		</div>
 	`,
@@ -939,4 +934,4 @@ const AquapiNodeAlert = {
 }
 Vue.component('AquapiNodeAlert', AquapiNodeAlert)
 
-// vim: set noet ts=4 sw=4:
+// vim: set noet sts ts=4 sw=4:

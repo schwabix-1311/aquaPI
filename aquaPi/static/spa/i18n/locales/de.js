@@ -141,7 +141,10 @@ export default
 					on: 'An',
 					off: 'Aus'
 				}
-			}
+			},
+			aux: {
+				label: 'Berechnet',
+			},
 		}
 	}
 }

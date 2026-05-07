@@ -141,6 +141,9 @@ export default
 					on: 'On',
 					off: 'Off'
 				}
+			},
+			aux: {
+				label: 'Calculated',
 			}
 		}
 	}

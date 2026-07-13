@@ -53,18 +53,18 @@ class AlertCond(ABC):
         """
 
     @abstractmethod
-    def _text(self, msg: MsgData) -> str:
+    def _text(self, msg: MsgData, snd_name: str) -> str:
         """ build a human redable alert text
         """
 
-    def check_for_change(self, msg: Msg) -> bool | None:
+    def check_for_change(self, msg: Msg, snd_name: str) -> bool | None:
         """ Check for change in alert status, update alert_text,
             return state changed to, or None if inappropriate msg or no change
         """
         if isinstance(msg, MsgData) and msg.sender == self.node_id:
             old = self._alerted
             self._alerted = self._check(msg)
-            self._alert_text = self._text(msg)
+            self._alert_text = self._text(msg, snd_name)
 
             return self._alerted if old != self._alerted else None
         return None
@@ -119,18 +119,18 @@ class AlertThreshold(AlertCond):
                   now, self._starttime, self.duration * 60, triggered)
         return triggered
 
-    def _text(self, msg: MsgData) -> str:
+    def _text(self, msg: MsgData, snd_name: str) -> str:
         if self.alerted:
             if self.duration:
                 minutes = (monotonic() - self._starttime) / 60
-                return (f'{msg.sender}: Messwert zu {self._direction}: '
+                return (f'{snd_name}: Messwert zu {self._direction}: '
                         f'{msg.data:.2f} seit {minutes:.1f} min'
                         f'  [Grenzwert {self.limit:.2f} für max. {self.duration} min]')
             else:
-                return (f'{msg.sender}: Messwert zu {self._direction}: '
+                return (f'{snd_name}: Messwert zu {self._direction}: '
                         f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]')
         else:
-            return (f'{msg.sender}: Messwert OK: '
+            return (f'{snd_name}: Messwert OK: '
                     f'{msg.data:.2f}  [Grenzwert {self.limit:.2f}]')
 
 
@@ -224,14 +224,15 @@ class Alert(BusListener):
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData) and self._bus:
+            snd_name = self._bus.get_node(msg.sender).name or msg.sender
             log.info("## Alert %s check %.4f from %s",
-                     self.name, msg.data, msg.sender)
+                     self.name, msg.data, snd_name)
             any_alert = False
             any_change = False
             self.data = []
             for cond in self.conditions:
                 # log.debug('## %s check %s', cond, msg)
-                cond_change = cond.check_for_change(msg)
+                cond_change = cond.check_for_change(msg, snd_name)
                 if cond_change is not None:
                     any_change = True
                 any_alert |= cond.alerted

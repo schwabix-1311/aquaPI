@@ -7,12 +7,12 @@ import pickle
 import atexit
 
 from .msg_bus import MsgBus
-from .ctrl_nodes import *  # noqa
-from .in_nodes import *  # noqa
-from .out_nodes import *  # noqa
-from .aux_nodes import *  # noqa
+from .ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl, SunCtrl, FadeCtrl)  # noqa
+from .in_nodes import (AnalogInput, SwitchInput, ScheduleInput)  # noqa
+from .out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)  # noqa
+from .aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux)  # noqa
 from .hist_nodes import History
-from .alert_nodes import *  # noqa
+from .alert_nodes import (Alert, AlertAbove, AlertBelow)  # noqa
 from ..driver import (driver_config, create_io_registry, DriverError)
 
 
@@ -166,9 +166,9 @@ class MachineRoom:
             Distraction: interesting fact about English:
               "fish" is plural, "fishes" are several species of fish
         """
-        TEST_BUS = False      # prio 1: this disables everything else
+        TEST_BUS = False      # prio 1: disables everything else
         # TEST_BUS = True
-        REAL_CONFIG = True    # prio 2: this disables the remaining test configs
+        REAL_CONFIG = True    # prio 2: disables the remaining test configs
         # REAL_CONFIG = False
 
         TEST_PH = False  # True
@@ -193,7 +193,7 @@ class MachineRoom:
             telegram_alert = Alert('Telegram-Warnungen',
                                    {  # AlertAbove(calib_ph.id, 7.3),
                                       # AlertBelow(calib_ph.id, 6.8),
-#                                     AlertAbove(wasser_i1.id, 25.2),
+                                      # AlertAbove(wasser_i1.id, 25.2),
                                      AlertBelow(wasser_i1.id, 24.7)},
                                    'Telegram #1', repeat=30 * 60)
             telegram_alert.plugin(self.bus)
@@ -219,7 +219,7 @@ class MachineRoom:
 
             # ... and history for a diagram
             history = History('Beleuchtung',
-                              [light_schedule.id, light_c.id])  # , light_pwm.id])
+                              [light_schedule.id, light_c.id])
             history.plugin(self.bus)
 
             # __Temperatures__ #
@@ -234,7 +234,7 @@ class MachineRoom:
             # ... or PID driven triac (relay has increased wear, not recomm.)
             # PID for my 60cm/100W: sensor cycle 300s, PID 1.0/0.05/5, PWM 10s
             wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
-                                    avg=1, interval=300)
+                                    interval=300)
             wasser = PidCtrl('Heizleistung', wasser_i1.id, 25.0,
                              p_fact=1.1, i_fact=0.07, d_fact=0.0)
             wasser_o = SlowPwmDevice('Heizstab', wasser.id,
@@ -256,7 +256,6 @@ class MachineRoom:
             cool.plugin(self.bus)
             coolspeed.plugin(self.bus)
 
-
             # ... and history for a diagram
             t_history = History('Temperaturen',
                                 [wasser_i1.id, wasser_i2.id,
@@ -273,10 +272,11 @@ class MachineRoom:
             adc_ph.plugin(self.bus)
             calib_ph.plugin(self.bus)
 
-            ph_broken = False   # True
-            if True:  ## False:
+            PH_BROKEN = False   # True
+            PH_PID = False
+            if not PH_PID:
                 ph = MaximumCtrl('pH Steuerung', calib_ph.id, 6.7)
-                if ph_broken:
+                if PH_BROKEN:
                     # WAR broken CO2 vent:
                     # pulse it, as CO2 only flows when partially opened
                     ph_ticker = ScheduleInput('pH Blinker', '* * * * * */15')
@@ -302,8 +302,8 @@ class MachineRoom:
 
             # Alert system
             email_alert = Alert('Email-Warnungen',
-                                { # AlertAbove(calib_ph.id, 7.5),
-                                  # AlertBelow(calib_ph.id, 6.5),
+                                {  # AlertAbove(calib_ph.id, 7.5),
+                                   # AlertBelow(calib_ph.id, 6.5),
                                   AlertAbove(wasser_i1.id, 26.0),
                                   AlertBelow(wasser_i1.id, 24.0)},
                                 'Email #1', repeat=60 * 60)
@@ -358,7 +358,8 @@ class MachineRoom:
             if not COMPLEX_TEMP:
                 # __Temperatures__ #
                 # single water temp sensor
-                if True:
+                TEMP_PID = False
+                if not TEMP_PID:
                     # 2-point switched relay or triac ...
                     wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
                                             avg=1, interval=60)
@@ -394,7 +395,7 @@ class MachineRoom:
 
                 w_heat = SwitchDevice('W-Heizer', w1_ctrl.id, 'GPIO 12 out')
 
-                #FIXME: a node chain like this one has no *Ctrl and is thus \
+                # FIXME: a node chain like this one has no *Ctrl and is thus \
                 #       invisible in UI, although totally valid
                 w_coolspeed = ScaleAux('Lüftergeschwindigkeit', w_temp.id, '%',
                                        points=[(25.1, 0), (26, 100)])

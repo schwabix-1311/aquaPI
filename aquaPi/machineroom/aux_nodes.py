@@ -30,6 +30,18 @@ class SingleInAux(AuxNode, ABC):
         super().__init__(name, receives, _cont=_cont)
         self.data = -1
 
+#   def __getstate__(self) -> dict[str, Any]:
+#       state = super().__getstate__()
+#       if not self.rcv_unit:
+#       if not self.rcv_unit:
+#           for rcv in self.get_receives():
+#               self.rcv_unit = self.rcv_unit
+#  ?            self.unit = rcv.unit
+#  ?            self.data_range = rcv.data_range  # depends on inputs
+#               break
+#       state["unit"] = self.unit
+#       return state
+
 
 class MultiInAux(AuxNode, ABC):
     """ subtype of AuxNode listening to more than 1 input
@@ -37,11 +49,13 @@ class MultiInAux(AuxNode, ABC):
     def __init__(self, name: str, receives: Iterable[str], _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.values: dict[str, float] = {}
+        self.rcv_unit: str = ''
         self.data = -1
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         for rcv in self.get_receives():
+            self.rcv_unit = rcv.unit
             self.unit = rcv.unit
             self.data_range = rcv.data_range  # depends on inputs
             break
@@ -64,6 +78,7 @@ class ScaleAux(SingleInAux):
         And quite a few other creative use cases ...
 
         Options:
+            unit   - the unit after scaling the received data
             offset - a simple offset:  in + offset = out
             factor - a scaling factor: in * factor = out
             points - alternate way to define offset and factor

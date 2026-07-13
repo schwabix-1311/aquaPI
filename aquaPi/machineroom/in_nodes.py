@@ -129,7 +129,7 @@ class SwitchInput(InputNode):
                  _cont: bool = False):
         self.inverted: bool = inverted
         super().__init__(name, port, interval, _cont=_cont)
-        ##self.unit = '⏻'
+        self.unit = '%'
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -167,7 +167,7 @@ class AnalogInput(InputNode):
             port     - name of a IoRegistry port driver to read input
             initval  - initial value (for faked drivers!)
             interval - delay of reader loop, conversion time adds to this!
-            unit     - unit of measurement for labels
+            unit     - unit of posted data
             avg      - floating average, 1=no average, 2..5=depth of averaging
 
         Output:
@@ -254,7 +254,7 @@ class ScheduleInput(BusNode):
         self.hires: bool = len(cronspec.split(' ')) > 5
         if not _cont:
             self.data: int = 0
-        ##self.unit = '⏻'
+        self.unit = '%'
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()

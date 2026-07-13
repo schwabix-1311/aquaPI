@@ -262,7 +262,7 @@ const AquapiDashboardWidget = {
 			let w_key = this.item.role + '.' + this.item.type
 
 			if (this.node) {
-				w_key += '.' + this.node.unit.trim()
+				w_key += '.' + this.node.rcv_unit.trim()
 			}
 
 			for (const k in this.typeIcons) {

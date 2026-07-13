@@ -46,6 +46,15 @@ class ControllerNode(BusListener, ABC):
         self.data: float = 0.0
         self.unit: str = '%'
 
+    def __getstate__(self) -> dict[str, Any]:
+        if not self.rcv_unit:
+            for rcv in self.get_receives():
+                self.rcv_unit = rcv.unit
+                break
+        state = super().__getstate__()
+        state["rcv_unit"] = self.rcv_unit
+        return state
+
     # def __getstate__(self) -> dict[str, Any]:
     #    return super().__getstate__()
 
@@ -67,9 +76,9 @@ class ControllerNode(BusListener, ABC):
         return False
 
     def get_settings(self) -> list[tuple]:
-        if not self.unit:
+        if not self.rcv_unit:
             for rcv in self.get_receives():
-                self.unit = rcv.unit
+                self.rcv_unit = rcv.unit
                 break
 
         return []  # don't inherit inputs!  Why not????
@@ -147,10 +156,10 @@ class ThresholdCtrl(ControllerNode):
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
-        limits = get_unit_limits(self.unit)
-        settings.append(('setpoint', f'Setpoint [{self.unit}]', self.setpoint,
+        limits = get_unit_limits(self.rcv_unit)
+        settings.append(('setpoint', f'Setpoint [{self.rcv_unit}]', self.setpoint,
                          f'type="number" {limits}'))
-        settings.append(('hysteresis', f'Hysteresis [{self.unit}]', self.hysteresis,
+        settings.append(('hysteresis', f'Hysteresis [{self.rcv_unit}]', self.hysteresis,
                          'type="number" min="0" max="5" step="0.01"'))
         return settings
 
@@ -324,7 +333,7 @@ class PidCtrl(ControllerNode):
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()
-        settings.append(('setpoint', f'Sollwert [{self.unit}]', self.setpoint,
+        settings.append(('setpoint', f'Sollwert [{self.rcv_unit}]', self.setpoint,
                          'type="number" step="0.1"'))
         settings.append(('p_fact', 'P Faktor', self.p_fact,
                          'type="number" min="-10" max="10" step="0.1"'))

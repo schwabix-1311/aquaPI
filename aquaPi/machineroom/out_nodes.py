@@ -29,6 +29,7 @@ class DeviceNode(BusListener, ABC):
     def __init__(self, name: str, receives: str, port: str,
                  _cont=False):
         super().__init__(name, receives, _cont=_cont)
+        self.unit: str = '%'
         self._driver: OutDriver | None = None
         self._port: str = ''
         self.port = port
@@ -87,7 +88,6 @@ class SwitchDevice(DeviceNode):
                  inverted: bool = False, _cont: bool = False):
         super().__init__(name, receives, port, _cont=_cont)
         self._inverted = inverted
-        ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
         self.switch(self.data if _cont else False)
         log.info('%s init to %f|%r', self.name, self.data, inverted)
 
@@ -157,7 +157,6 @@ class SlowPwmDevice(DeviceNode):
                  _cont: bool = False):
         super().__init__(name, receives, port, _cont=_cont)
         self.data: float = 50.0
-        ##self.unit = '%' if self.data_range != DataRange.BINARY else '⏻'
         self.cycle = float(cycle)
         self._inverted = inverted
         self._thread = None
@@ -262,7 +261,6 @@ class AnalogDevice(DeviceNode):
                  percept: bool = False, minimum: float = 0, maximum: float = 100,
                  _cont=False):
         super().__init__(name, receives, port, _cont=_cont)
-        self.unit: str = '%'  ## if self.data_range != DataRange.BINARY else '⏻'
         self.percept = percept
         self.minimum = min(max(0., minimum), 90.)
         self.maximum = min(max(minimum + 1., maximum), 100.)

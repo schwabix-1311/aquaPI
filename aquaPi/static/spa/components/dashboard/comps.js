@@ -54,6 +54,7 @@ const AnyNode = {
 			let node = this.node
 			switch (node.data_range) {
 				case 'ANALOG':
+				case 'PERCENT':
 					return node.data.toFixed(2).toString() + (node.unit ? ' ' + node.unit : '')
 				case 'BINARY':
 					// return '<i aria-hidden="true" class="v-icon notranslate v-icon--left mdi mdi-chart-line theme--light blue-grey--text text--lighten-4"></i>'
@@ -61,8 +62,6 @@ const AnyNode = {
 							? this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.on')
 							: this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.value.off')
 					)
-				case 'PERCENT':
-					return node.data.toFixed(2).toString() + (node.unit ? ' ' + node.unit : '')
 				default:
 					return node.data
 			}
@@ -85,19 +84,19 @@ const AnyNode = {
 	methods: {
 		humanPeriod(val) {
 			let value = (val / 60 / 1000)
-			let unit = (value == 1) ? this.$t('misc.duration.min')
-									: this.$t('misc.duration.mins')
+			let duration = (value == 1) ? this.$t('misc.duration.min')
+										: this.$t('misc.duration.mins')
 			if (value >= 60) {
 				value /= 60
-				unit = (value == 1) ? this.$t('misc.duration.hour')
-									: this.$t('misc.duration.hours')
+				duration = (value == 1) ? this.$t('misc.duration.hour')
+										: this.$t('misc.duration.hours')
 				if (value >= 24) {
 					value /= 24
-					unit = (value == 1) ? this.$t('misc.duration.day')
-										: this.$t('misc.duration.days')
+					duration = (value == 1) ? this.$t('misc.duration.day')
+											: this.$t('misc.duration.days')
 				}
 			}
-			return `${value} ${unit}`
+			return `${value} ${duration}`
 		},
 	},
 }
@@ -209,7 +208,7 @@ const BusNode = {
 
 	computed: {},
 }
-Vue.component('BusNode', BusNode)  //??
+//Vue.component('BusNode', BusNode)  //??
 
 //TODO: do we need Vue.components that are purely abstract? Would it save anything?
 //TODO: do we need derived nodes W/O any functional change? 
@@ -218,7 +217,7 @@ Vue.component('BusNode', BusNode)  //??
 const ControllerNode = {
 	extends: BusNode,
 }
-Vue.component('ControllerNode', ControllerNode)  //??
+//Vue.component('ControllerNode', ControllerNode)  //??
 
 
 const MinimumCtrl = {
@@ -360,6 +359,15 @@ Vue.component('MaxAux', MaxAux)
 
 const ScaleAux = {
 	extends: AuxNode,
+//	computed: {
+//		descript() {
+//			return 'data * ' + this.node.factor.toFixed(2).toString()
+//			         + ' + ' + this.node.offset.toFixed(2).toString()
+//					 + '  [' + this.node.limit[0].toFixed(0).toString()
+//					   + '-' + this.node.limit[1].toFixed(0).toString()
+//					   + ']'
+//		},
+//	},
 }
 Vue.component('ScaleAux', ScaleAux)
 

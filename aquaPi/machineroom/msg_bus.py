@@ -64,7 +64,8 @@ class BusNode(ABC):
         self._bus: 'MsgBus' | None = None  # forward ref to class MsgBus
         if not _cont:
             self.data: Any = 0
-        self.unit = ''
+        self.unit: str = ''
+        self.rcv_unit: str = ''
         self.alert: tuple[str, str] | None = None
 
     def __getstate__(self) -> dict[str, Any]:
@@ -74,6 +75,7 @@ class BusNode(ABC):
         state["data"] = self.data
         state["receives"] = self.receives
         state["unit"] = self.unit
+        state["rcv_unit"] = self.rcv_unit
         state["data_range"] = self.data_range.name
         return state
 
@@ -116,8 +118,6 @@ class BusNode(ABC):
             if self in sender.get_receives(True):
                 log.debug('%s.causes %s to post MsgData', str(msg), str(self))
                 self.post(MsgData(self.id, self.data))
-
-        #TODO: should we inherit sender.unit if we receive 'em? How about reverse order of birth? Currently only aux nodes inherit the the sources' unit, get_settings might be a better place
 
     def get_receives(self, recurse: bool = False) -> list['BusNode']:
         receives: list['BusNode'] = []

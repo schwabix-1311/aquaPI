@@ -424,7 +424,7 @@ Sicherstellen, dass Login-Schutz und Rollenprüfung korrekt greifen, ohne die Si
 - Test: Viewer-Rolle kann lesen aber keine Nutzer verwalten (`403`); Operator/Admin haben erweiterten Zugriff auf die neuen `/api/users/`-Routen (`Schreibende Setpoint-Routen` folgen erst in Step 11/12). (verifiziert manuell + `tests/test_auth.py`)
 - Regressionstest: Simulation (13 Knoten) läuft nach Login weiterhin fehlerfrei (manuell gegen die reale `instance/`-Konfiguration verifiziert, danach zurückgesetzt).
 
-###   Step 7: Benachrichtigungs-Parameter und User-Präferenzen in SQLite
+### * Step 7: Benachrichtigungs-Parameter und User-Präferenzen in SQLite
 Telegram-/Mail-Konfiguration aus `config.json` in die DB überführen, mit User-Zuordnung je Alert.
 - Tabellen `notification_config` und `user_notification_prefs` über `aquaPi/db.py` anlegen.
 - Einmalige Migration bestehender `config.json`-Werte (Email/Telegram) nach `notification_config`.

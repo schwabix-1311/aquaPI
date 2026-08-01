@@ -146,6 +146,9 @@ def create_app() -> Flask:
     #    if not app.debug:
     #        app.logger.addHandler(mail_handler)
 
+    from . import auth
+    auth.init_app(app)
+
     from .machineroom import MachineRoom
     try:
         app.extensions['machineroom'] = MachineRoom(app.config)
@@ -158,6 +161,8 @@ def create_app() -> Flask:
     @app.context_processor
     def inject_globals():
         return dict(bus=app.extensions['machineroom'].bus)
+
+    app.register_blueprint(auth.bp)
 
     from . import api
     app.register_blueprint(api.bp)

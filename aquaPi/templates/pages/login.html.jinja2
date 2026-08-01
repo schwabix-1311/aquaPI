@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="de">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Login - aquaPi</title>
+        <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+        <style>
+            body {
+                font-family: sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                background: #263238;
+            }
+            .login-box {
+                background: #fff;
+                border-radius: 4px;
+                padding: 2em;
+                width: 20em;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            }
+            .login-box h1 {
+                font-size: 1.4em;
+                margin-top: 0;
+            }
+            .login-box label {
+                display: block;
+                margin-top: 1em;
+                font-size: 0.9em;
+            }
+            .login-box input {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 0.5em;
+                margin-top: 0.25em;
+            }
+            .login-box button {
+                margin-top: 1.5em;
+                width: 100%;
+                padding: 0.6em;
+                background: #00838f;
+                color: #fff;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .flash {
+                color: #c62828;
+                font-size: 0.9em;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-box">
+            <h1>aquaPi Login</h1>
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for msg in messages %}
+                        <p class="flash">{{ msg }}</p>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="post">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" autofocus required>
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </body>
+</html>

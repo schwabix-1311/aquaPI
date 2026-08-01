@@ -404,25 +404,25 @@ Funktionsfähigkeit und Datenintegrität nachweisen.
 - Testlauf mit frischer Umgebung: Default-Topologie wird korrekt in SQLite angelegt.
 - Neustart-Test: Konfiguration bleibt nach mehrfachem Neustart konsistent.
 
-### * Step 4: Flask-Login-Integration (Authentifizierung)
+### ✓ Step 4: Flask-Login-Integration (Authentifizierung)
 Backend und SPA hinter einem echten Login absichern, aufbauend auf der neuen SQLite-Infrastruktur.
 - `users`-Tabelle (inkl. `role`-Spalte) über `aquaPi/db.py` anlegen, Default-Admin-Account mit gehashtem Passwort erzeugen.
 - Neues Modul `aquaPi/auth.py`: `LoginManager`, `User`-Model mit `role`-Attribut, Login-/Logout-Blueprint.
 - `@login_required` auf `api.py`- und `spa.py`-Routen anwenden, `SECRET_KEY` persistent konfigurieren.
 
-###   Step 5: Benutzerrollen (Viewer/Operator/Admin) und Rechteprüfung
+### ✓ Step 5: Benutzerrollen (Viewer/Operator/Admin) und Rechteprüfung
 Drei Berechtigungsstufen gemäß ToDo-Liste einführen und auf bestehende Routen anwenden.
 - Decorator `@roles_required(*roles)` in `aquaPi/auth.py` implementieren, der `current_user.role` prüft und bei unzureichender Rolle `403` liefert.
-- Schreibende Setpoint-Routen mit `@roles_required('operator', 'admin')` schützen.
+- Schreibende Setpoint-Routen mit `@roles_required('operator', 'admin')` schützen. (Hinweis: solche Routen existieren aktuell noch nicht in `api.py`, werden erst in Step 11/12 ergänzt - dort dann direkt mit `@roles_required` versehen.)
 - Nutzerverwaltungs- und volle Konfigurations-Routen mit `@roles_required('admin')` schützen.
-- Einfache Verwaltungsroute/-funktion ergänzen, mit der ein Admin weitere Nutzer samt Rolle anlegen kann.
+- Einfache Verwaltungsroute/-funktion ergänzt (`GET/POST /api/users/`), mit der ein Admin weitere Nutzer samt Rolle anlegen kann.
 
-###   Step 6: Verifikation der Authentifizierung und Rollenrechte
+### ✓ Step 6: Verifikation der Authentifizierung und Rollenrechte
 Sicherstellen, dass Login-Schutz und Rollenprüfung korrekt greifen, ohne die Simulation zu blockieren.
-- Test: Zugriff auf `/api/nodes/` ohne Session wird abgewiesen.
-- Test: Login mit Default-Admin-Zugangsdaten gewährt Zugriff, falsches Passwort nicht.
-- Test: Viewer-Rolle kann lesen aber keine Setpoints ändern (`403`); Operator kann Setpoints ändern aber keine Nutzer verwalten (`403`); Admin kann beides.
-- Regressionstest: Simulation (13+ Knoten) läuft nach Login weiterhin fehlerfrei.
+- Test: Zugriff auf `/api/nodes/` ohne Session wird abgewiesen. (verifiziert: 401 unauthenticated, manuell per curl gegen laufende Simulation und automatisiert in `tests/test_auth.py`)
+- Test: Login mit Default-Admin-Zugangsdaten gewährt Zugriff, falsches Passwort nicht. (verifiziert)
+- Test: Viewer-Rolle kann lesen aber keine Nutzer verwalten (`403`); Operator/Admin haben erweiterten Zugriff auf die neuen `/api/users/`-Routen (`Schreibende Setpoint-Routen` folgen erst in Step 11/12). (verifiziert manuell + `tests/test_auth.py`)
+- Regressionstest: Simulation (13 Knoten) läuft nach Login weiterhin fehlerfrei (manuell gegen die reale `instance/`-Konfiguration verifiziert, danach zurückgesetzt).
 
 ###   Step 7: Benachrichtigungs-Parameter und User-Präferenzen in SQLite
 Telegram-/Mail-Konfiguration aus `config.json` in die DB überführen, mit User-Zuordnung je Alert.

@@ -2,6 +2,7 @@
 
 import logging
 from flask import (Blueprint, render_template)
+from flask_login import login_required
 
 
 log = logging.getLogger('pages.spa')
@@ -12,6 +13,7 @@ bp = Blueprint('spa', __name__)
 
 
 @bp.route('/')
+@login_required
 def spa():
 
     return render_template('pages/spa.html.jinja2')

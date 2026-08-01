@@ -5,6 +5,7 @@ import logging
 from http import HTTPStatus
 import jsonpickle  # type: ignore[import-untyped]
 from flask import (Blueprint, current_app, json, Response, request)
+from flask_login import login_required
 
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import BusRole
@@ -26,6 +27,7 @@ def the_bus() -> MsgBus | None:
 
 
 @bp.route('/api/nodes/')
+@login_required
 def api_nodes() -> Response:
     """ return array of all node's ids
     """
@@ -41,6 +43,7 @@ def api_nodes() -> Response:
 
 
 @bp.route('/api/nodes/<node_id>')
+@login_required
 def api_node(node_id: str) -> Response:
     """ return state of a single node
     """
@@ -68,6 +71,7 @@ def api_node(node_id: str) -> Response:
 
 
 @bp.route('/api/history/')
+@login_required
 def api_history_nodes() -> Response:
     """ return array of all history node ids
     """
@@ -85,6 +89,7 @@ def api_history_nodes() -> Response:
 
 
 @bp.route('/api/history/<node_id>')
+@login_required
 def api_history(node_id: str) -> Response:
     """ return a single history, may contains several series
         optionally starting at specified age, and clustered by step.
@@ -114,6 +119,7 @@ def api_history(node_id: str) -> Response:
 
 
 @bp.route('/api/sse', methods=['GET'])
+@login_required
 def api_sse() -> Response:
     """ API to get SSE updates as an array of ids of modified nodes
     """

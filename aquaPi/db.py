@@ -22,9 +22,12 @@
 
 import json
 import logging
+import secrets
 import sqlite3
 from os import path, replace
 from typing import Any
+
+from werkzeug.security import generate_password_hash
 
 from .machineroom.msg_bus import MsgBus, BusNode
 from .machineroom.ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl,
@@ -41,6 +44,9 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 DEFAULT_DB_FILENAME = 'topo.sqlite'
+DEFAULT_USERS_DB_FILENAME = 'users.sqlite'
+
+VALID_ROLES = ('viewer', 'operator', 'admin')
 
 # Fixed, explicit whitelist of node classes that may be reconstructed
 # from the database. This is the core safety guarantee: only these
@@ -235,3 +241,122 @@ def migrate_pickle_to_sqlite(pickle_path: str, db_path: str) -> bool:
     replace(pickle_path, backup_path)
     log.brief('Migration done, legacy file kept as %s', backup_path)
     return True
+
+
+# --- users / authentication -------------------------------------------
+
+def get_users_db_path(instance_path: str, filename: str = DEFAULT_USERS_DB_FILENAME) -> str:
+    """ build the full path of the users SQLite database file
+    """
+    return path.join(instance_path, filename)
+
+
+def get_users_connection(db_path: str) -> sqlite3.Connection:
+    """ open a SQLite connection to the users database, ensuring the
+        schema exists
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    with conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                username      TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role          TEXT NOT NULL DEFAULT 'viewer'
+                    CHECK (role IN ('viewer', 'operator', 'admin')),
+                created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+    return conn
+
+
+def create_user(db_path: str, username: str, password: str,
+                role: str = 'viewer') -> int:
+    """ create a new user with a securely hashed password.
+        Raises ValueError if the username already exists or the role
+        is invalid.
+    """
+    if role not in VALID_ROLES:
+        raise ValueError(f'Invalid role: {role!r}')
+
+    conn = get_users_connection(db_path)
+    try:
+        password_hash = generate_password_hash(password)
+        try:
+            with conn:
+                cur = conn.execute(
+                    'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+                    (username, password_hash, role)
+                )
+                return cur.lastrowid
+        except sqlite3.IntegrityError:
+            raise ValueError(f'Username already exists: {username!r}') from None
+    finally:
+        conn.close()
+
+
+def get_user_by_id(db_path: str, user_id: int) -> dict[str, Any] | None:
+    """ fetch a single user (without password hash exposure concerns,
+        the caller decides what to expose)
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_user_by_username(db_path: str, username: str) -> dict[str, Any] | None:
+    """ fetch a single user by username (case-sensitive)
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def list_users(db_path: str) -> list[dict[str, Any]]:
+    """ return all users, ordered by username
+    """
+    conn = get_users_connection(db_path)
+    try:
+        rows = conn.execute('SELECT * FROM users ORDER BY username').fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def count_admins(db_path: str) -> int:
+    """ number of users with role 'admin', used to prevent
+        locking everyone out by removing the last admin
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").fetchone()
+        return row['n'] if row else 0
+    finally:
+        conn.close()
+
+
+def ensure_default_admin(db_path: str) -> tuple[str, str] | None:
+    """ on first start (no users table content yet), create a default
+        admin account with a freshly generated random password.
+        Returns (username, password) if a default admin was created,
+        None if users already exist.
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute('SELECT COUNT(*) AS n FROM users').fetchone()
+        if row and row['n'] > 0:
+            return None
+    finally:
+        conn.close()
+
+    username = 'admin'
+    password = secrets.token_urlsafe(12)
+    create_user(db_path, username, password, role='admin')
+    return username, password

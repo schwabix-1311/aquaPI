@@ -3,9 +3,9 @@
 import logging
 from os import (environ, path)
 import json
-import pickle
 import atexit
 
+from .. import db
 from .msg_bus import MsgBus
 from .ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl, SunCtrl, FadeCtrl)  # noqa
 from .in_nodes import (AnalogInput, SwitchInput, ScheduleInput)  # noqa
@@ -47,10 +47,17 @@ class MachineRoom:
                 custom_cfg = json.load(f_in)
             self.globals.update(custom_cfg)
 
-        topo_file = 'topo.pickle'
+        # AQUAPI_TOPO used to name the pickle file directly (e.g. 'topo.pickle'
+        # or, via `run -t nodes`, 'nodes.pickle'). It now names the *base*
+        # topology, whose legacy '.pickle' file (if any) gets migrated once
+        # into an equally named '.sqlite' database.
+        topo_base = 'topo.pickle'
         if 'AQUAPI_TOPO' in environ:
-            topo_file = environ['AQUAPI_TOPO']
-        topo_file = path.join(instance_path, topo_file)
+            topo_base = environ['AQUAPI_TOPO']
+        topo_base, _ = path.splitext(topo_base)
+
+        legacy_topo_file = path.join(instance_path, topo_base + '.pickle')
+        topo_file = path.join(instance_path, topo_base + '.sqlite')
 
         self.globals['CUSTOM_CFG'] = cfg_file
         self.globals['BUS_TOPO'] = topo_file
@@ -62,7 +69,11 @@ class MachineRoom:
         create_io_registry()
 
         try:
-            if not path.exists(self.globals['BUS_TOPO']):
+            if db.migrate_pickle_to_sqlite(legacy_topo_file, self.globals['BUS_TOPO']):
+                log.brief("=== Migrated legacy %s to SQLite %s",
+                          legacy_topo_file, self.globals['BUS_TOPO'])
+
+            if not db.topology_exists(self.globals['BUS_TOPO']):
                 self.bus: MsgBus = MsgBus(threaded=False)
 
                 log.brief("=== There are no controllers defined, creating default")
@@ -139,26 +150,23 @@ class MachineRoom:
             # self.bus = None
             log.brief('... shutdown completed')
 
-    def save_nodes(self, container, fname: str = '') -> None:
-        """ save the Bus, Nodes and Drivers to storage
+    def save_nodes(self, container: MsgBus, fname: str = '') -> None:
+        """ save the Bus, Nodes and Drivers to SQLite storage
             Parameters allow usage for controller templates,
             contained in "something", not a bus
         """
         if container:
             if not fname:
                 fname = self.globals['BUS_TOPO']
-            with open(fname, 'wb') as p:
-                pickle.dump(container, p, protocol=pickle.HIGHEST_PROTOCOL)
+            db.save_topology(container, fname)
 
-    def restore_nodes(self, fname: str = ''):
-        """ recreate the Bus, Nodes and Drivers from storage,
+    def restore_nodes(self, fname: str = '') -> MsgBus:
+        """ recreate the Bus, Nodes and Drivers from SQLite storage,
             or a controller template in a container from some file
         """
         if not fname:
             fname = self.globals['BUS_TOPO']
-        with open(fname, 'rb') as p:
-            container = pickle.load(p)
-        return container
+        return db.load_topology(fname)
 
     def create_default_nodes(self) -> None:
         """ "let there be light" and heating of course, what
@@ -168,12 +176,12 @@ class MachineRoom:
         """
         TEST_BUS = False      # prio 1: disables everything else
         # TEST_BUS = True
-        REAL_CONFIG = True    # prio 2: disables the remaining test configs
-        # REAL_CONFIG = False
+        REAL_CONFIG = False    # prio 2: disables the remaining test configs
+        # REAL_CONFIG = True
 
-        TEST_PH = False  # True
-        SIM_LIGHT = False  # True
-        SIM_TEMP = False  # True
+        TEST_PH = True  # True
+        SIM_LIGHT = True  # True
+        SIM_TEMP = True  # True
         COMPLEX_TEMP = SIM_TEMP and False
 
         # NOTE:

@@ -57,7 +57,7 @@ const AquapiDashboardConfigurator = {
 										flat
 										dense
 										hide-details="auto"
-										:background-color="($vuetify.theme.dark ? 'grey darken-4' : 'grey lighten-5')"
+										:background-color="($vuetify.theme.global.current.dark ? 'grey darken-4' : 'grey lighten-5')"
 										class="pa-0 ma-0"
 									></v-text-field>
 								</v-col>
@@ -160,7 +160,7 @@ const AquapiDashboardWidget = {
 					<v-icon
 						v-else
 						:color="'blue-grey'"
-						:class="($vuetify.theme.dark ? 'text--darken-2' : 'text--lighten-4')"
+						:class="($vuetify.theme.global.current.dark ? 'text--darken-2' : 'text--lighten-4')"
 						left
 					>
 						{{ widgetTitleIcon }}

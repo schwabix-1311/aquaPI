@@ -13,6 +13,19 @@ const vuetify = Vuetify.createVuetify({
 		defaultTheme: 'light',
 		themes: {
 			light: {
+				dark: false,
+				colors: {
+					primary: '#1976D2',
+					secondary: '#424242',
+					accent: '#82B1FF',
+					error: '#FF5252',
+					info: '#2196F3',
+					success: '#4CAF50',
+					warning: '#FFC107',
+				},
+			},
+			dark: {
+				dark: true,
 				colors: {
 					primary: '#1976D2',
 					secondary: '#424242',
@@ -47,11 +60,11 @@ const app = Vue.createApp({
 			}
 		},
 		toggleDarkMode() {
-			if (this.$vuetify.theme.dark) {
-				this.$vuetify.theme.dark = false
+			if (this.$vuetify.theme.global.name === 'dark') {
+				this.$vuetify.theme.global.name = 'light'
 				this.$store.dispatch('ui/setDarkMode', false)
 			} else {
-				this.$vuetify.theme.dark = true
+				this.$vuetify.theme.global.name = 'dark'
 				this.$store.dispatch('ui/setDarkMode', true)
 			}
 		},
@@ -105,7 +118,7 @@ const app = Vue.createApp({
 		try {
 			const itemTheme = window.localStorage.getItem('aquapi.theme')
 			if (itemTheme) {
-				this.$vuetify.theme.dark = (itemTheme == 'dark')
+				this.$vuetify.theme.global.name = (itemTheme == 'dark') ? 'dark' : 'light'
 				this.$store.dispatch('ui/setDarkMode', (itemTheme == 'dark'))
 			}
 		} catch(e) {}

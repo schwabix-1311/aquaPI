@@ -4,7 +4,7 @@ const AquapiNavDrawer = {
 	template: `
 		<v-navigation-drawer 
 			v-model="navDrawerVisible" 
-			:color="($vuetify.theme.dark ? $store.state.ui.colors.darkMode.bg.navDrawer : $store.state.ui.colors.lightMode.bg.navDrawer)"
+			:color="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.navDrawer : $store.state.ui.colors.lightMode.bg.navDrawer)"
 			app
 			dark
 			fixed

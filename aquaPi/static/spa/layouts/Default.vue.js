@@ -33,7 +33,7 @@ const DefaultLayout = {
 
 			<v-app-bar
 				app
-				:color="($vuetify.theme.dark ? $store.state.ui.colors.darkMode.bg.appBar : $store.state.ui.colors.lightMode.bg.appBar)"
+				:color="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.appBar : $store.state.ui.colors.lightMode.bg.appBar)"
 				elevation="4"
 			>
 				<v-app-bar-nav-icon class="white--text" @click="$root.toggleNavDrawer"></v-app-bar-nav-icon>
@@ -71,7 +71,7 @@ const DefaultLayout = {
 				</v-container>
 			</v-main>
 
-			<v-footer dark :class="($vuetify.theme.dark ? $store.state.ui.colors.darkMode.bg.footer : $store.state.ui.colors.lightMode.bg.footer)" app elevation="4">
+			<v-footer dark :class="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.footer : $store.state.ui.colors.lightMode.bg.footer)" app elevation="4">
 				<app-foo-comp></app-foo-comp>
 				<v-spacer></v-spacer>
 				<v-icon ref="sse_signal" :color="sseSignalColor">{{ sseSignalIcon }}</v-icon>

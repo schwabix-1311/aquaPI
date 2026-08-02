@@ -1,5 +1,6 @@
 import './comps.js'
 import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './comps.js'
+import {registerGlobalComponent} from '../app/registry.js'
 
 const CANVAS_MIN_WIDTH = 1200
 const CANVAS_MIN_HEIGHT = 700
@@ -300,7 +301,7 @@ const AquapiConfig = {
 	},
 }
 
-Vue.component('AquapiConfig', AquapiConfig)
+registerGlobalComponent('AquapiConfig', AquapiConfig)
 export {AquapiConfig}
 
 // vim: set noet ts=4 sw=4:

@@ -148,7 +148,7 @@ const DefaultLayout = {
 	created() {
 		EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.showSSESignal)
 	},
-	destroyed() {
+	unmounted() {
 		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.showSSESignal)
 	}
 }

@@ -1,4 +1,5 @@
 import './AquapiNavDrawer.vue.js'
+import {registerGlobalComponent} from './registry.js'
 
 const AquapiPageHeading = {
 	template: `
@@ -43,7 +44,7 @@ const AquapiPageHeading = {
 		}
 	}
 }
-Vue.component('AquapiPageHeading', AquapiPageHeading)
+registerGlobalComponent('AquapiPageHeading', AquapiPageHeading)
 
 const AquapiLoadingIndicator = {
 	template: `
@@ -72,7 +73,7 @@ const AquapiLoadingIndicator = {
 		}
 	}
 }
-Vue.component('AquapiLoadingIndicator', AquapiLoadingIndicator)
+registerGlobalComponent('AquapiLoadingIndicator', AquapiLoadingIndicator)
 const AquapiDummy = {
 	template: `
 		<v-hover
@@ -91,7 +92,7 @@ const AquapiDummy = {
 		</v-hover>
 	`
 }
-Vue.component('AquapiDummy', AquapiDummy)
+registerGlobalComponent('AquapiDummy', AquapiDummy)
 
 export {AquapiPageHeading, AquapiDummy}
 

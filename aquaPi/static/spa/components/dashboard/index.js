@@ -1,4 +1,6 @@
 import './comps.js'
+import {registerGlobalComponent} from '../app/registry.js'
+
 const AquapiDashboardConfigurator = {
 	template: `
 		<v-navigation-drawer
@@ -133,7 +135,7 @@ const AquapiDashboardConfigurator = {
 		},
 	}
 }
-Vue.component('AquapiDashboardConfigurator', AquapiDashboardConfigurator)
+registerGlobalComponent('AquapiDashboardConfigurator', AquapiDashboardConfigurator)
 
 const AquapiDashboardWidget = {
 	template: `
@@ -295,7 +297,7 @@ const AquapiDashboardWidget = {
 		},
 	}
 }
-Vue.component('AquapiDashboardWidget', AquapiDashboardWidget)
+registerGlobalComponent('AquapiDashboardWidget', AquapiDashboardWidget)
 
 const AquapiDashboard = {
 	template: `
@@ -397,7 +399,7 @@ const AquapiDashboard = {
 		await this.loadConfig()
 	},
 }
-Vue.component('AquapiDashboard', AquapiDashboard)
+registerGlobalComponent('AquapiDashboard', AquapiDashboard)
 export {AquapiDashboard, AquapiDashboardConfigurator}
 
 // vim: set noet sts ts=4 sw=4:

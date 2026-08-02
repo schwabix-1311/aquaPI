@@ -64,7 +64,7 @@ const App = {
 		this.initEventListeners()
 	},
 
-	destroyed() {
+	unmounted() {
 		this.detachEventListeners()
 	}
 };

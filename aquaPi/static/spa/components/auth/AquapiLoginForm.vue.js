@@ -1,3 +1,5 @@
+import {registerGlobalComponent} from '../app/registry.js'
+
 const AquapiLoginForm = {
 	name: 'AquapiLoginForm',
 	template: `
@@ -92,7 +94,7 @@ const AquapiLoginForm = {
 	},
 }
 
-Vue.component('AquapiLoginForm', AquapiLoginForm)
+registerGlobalComponent('AquapiLoginForm', AquapiLoginForm)
 export {AquapiLoginForm}
 
 // vim: set noet ts=4 sw=4:

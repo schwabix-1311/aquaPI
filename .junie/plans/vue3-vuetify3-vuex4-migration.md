@@ -124,7 +124,7 @@ The static libs directory contains Vue-3-compatible global browser builds and th
 - Update `aquaPi/templates/pages/spa.html.jinja2` script `<script>`/CSS `<link>` references to the new files, removing the old Vue-2 CDN/local script tags.
 - Leave `chart.js`, `luxon`, `sortablejs`/`vuedraggable`, `vue-masonry-css` untouched at this stage.
 
-### * Step 2: Build the shared component registry and mini EventBus, and rename lifecycle hooks
+### ✓ Step 2: Build the shared component registry and mini EventBus, and rename lifecycle hooks
 The app has a working, Vue-3-safe mechanism for global component registration and cross-component events, and no component still uses removed Vue-2 lifecycle hooks.
 - Add `components/app/registry.js` with `registerGlobalComponent(name, def)` / `installGlobalComponents(app)`.
 - Replace all ~30 `Vue.component('Name', Def)` call sites (across `components/app/`, `components/auth/`, `components/config/`, `components/dashboard/`, `components/settings/`) with `registerGlobalComponent('Name', Def)`.
@@ -132,7 +132,7 @@ The app has a working, Vue-3-safe mechanism for global component registration an
 - Remove the dead `this.$root.$on('test-clicked', ...)` block from `AppFooComp` in `aquaPi/static/spa/comps.js`.
 - Rename `destroyed()` → `unmounted()` and `beforeDestroy()` → `beforeUnmount()` in `App.vue.js`, `components/app/AquapiConfirmDialog.vue.js`, `layouts/Default.vue.js`, and `components/dashboard/comps.js`.
 
-###   Step 3: Rewrite the app bootstrap for the Vue 3 / Vuex 4 / Router 4 / I18n 9 / Vuetify 3 APIs
+### * Step 3: Rewrite the app bootstrap for the Vue 3 / Vuex 4 / Router 4 / I18n 9 / Vuetify 3 APIs
 The application boots via `Vue.createApp()` and all core plugins are wired up through the new v3/v4/v9 APIs.
 - `store/index.js`: switch to `Vuex.createStore({modules})`, dropping `Vue.use(Vuex)`.
 - `router/index.js`: switch to `VueRouter.createRouter({history: VueRouter.createWebHashHistory(), routes, scrollBehavior})`, keeping the existing `beforeEach` guard logic.

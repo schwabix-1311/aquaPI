@@ -35,7 +35,7 @@ const Home = {
 	created() {
 		// EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 	},
-	destroyed() {
+	unmounted() {
 		// EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 	}
 };

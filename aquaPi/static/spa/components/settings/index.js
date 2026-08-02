@@ -1,4 +1,5 @@
 import './comps.js'
+import {registerGlobalComponent} from '../app/registry.js'
 
 const AquapiSettings = {
 	template: `
@@ -91,7 +92,7 @@ const AquapiSettings = {
 	},
 }
 
-Vue.component('AquapiSettings', AquapiSettings)
+registerGlobalComponent('AquapiSettings', AquapiSettings)
 export {AquapiSettings}
 
 // vim: set noet ts=4 sw=4:

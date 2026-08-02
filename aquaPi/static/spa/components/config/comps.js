@@ -4,6 +4,8 @@
 // sortable *lists*, not absolute x/y placement) - no new dependency,
 // works fully offline/without a build step like the rest of the SPA.
 
+import {registerGlobalComponent} from '../app/registry.js'
+
 const NODE_BOX_WIDTH = 190
 const NODE_BOX_HEIGHT = 76
 
@@ -99,7 +101,7 @@ const ConfigNodeBox = {
 		},
 	},
 }
-Vue.component('ConfigNodeBox', ConfigNodeBox)
+registerGlobalComponent('ConfigNodeBox', ConfigNodeBox)
 
 const ConfigConnections = {
 	props: {
@@ -178,7 +180,7 @@ const ConfigConnections = {
 		},
 	},
 }
-Vue.component('ConfigConnections', ConfigConnections)
+registerGlobalComponent('ConfigConnections', ConfigConnections)
 
 const ConfigNodeDialog = {
 	props: {
@@ -368,7 +370,7 @@ const ConfigNodeDialog = {
 		},
 	},
 }
-Vue.component('ConfigNodeDialog', ConfigNodeDialog)
+registerGlobalComponent('ConfigNodeDialog', ConfigNodeDialog)
 
 const ConfigTemplatesDialog = {
 	props: {
@@ -589,7 +591,7 @@ const ConfigTemplatesDialog = {
 		},
 	},
 }
-Vue.component('ConfigTemplatesDialog', ConfigTemplatesDialog)
+registerGlobalComponent('ConfigTemplatesDialog', ConfigTemplatesDialog)
 
 export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT}
 

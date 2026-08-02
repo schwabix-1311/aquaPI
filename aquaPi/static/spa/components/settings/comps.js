@@ -1,3 +1,5 @@
+import {registerGlobalComponent} from '../app/registry.js'
+
 const SettingNumber = {
 	props: {
 		item: {type: Object, required: true},
@@ -39,7 +41,7 @@ const SettingNumber = {
 		}
 	}
 }
-Vue.component('SettingNumber', SettingNumber)
+registerGlobalComponent('SettingNumber', SettingNumber)
 
 const SettingSlider = {
 	props: {
@@ -85,7 +87,7 @@ const SettingSlider = {
 		}
 	}
 }
-Vue.component('SettingSlider', SettingSlider)
+registerGlobalComponent('SettingSlider', SettingSlider)
 
 const SettingSwitch = {
 	props: {
@@ -118,7 +120,7 @@ const SettingSwitch = {
 		}
 	}
 }
-Vue.component('SettingSwitch', SettingSwitch)
+registerGlobalComponent('SettingSwitch', SettingSwitch)
 
 const SettingSchedule = {
 	props: {
@@ -153,7 +155,7 @@ const SettingSchedule = {
 		}
 	}
 }
-Vue.component('SettingSchedule', SettingSchedule)
+registerGlobalComponent('SettingSchedule', SettingSchedule)
 
 const SettingText = {
 	props: {
@@ -187,7 +189,7 @@ const SettingText = {
 		}
 	}
 }
-Vue.component('SettingText', SettingText)
+registerGlobalComponent('SettingText', SettingText)
 
 const SettingReadonly = {
 	props: {
@@ -200,7 +202,7 @@ const SettingReadonly = {
 		</div>
 	`
 }
-Vue.component('SettingReadonly', SettingReadonly)
+registerGlobalComponent('SettingReadonly', SettingReadonly)
 
 function settingWidgetType(item) {
 	if (!item.editable) {
@@ -287,6 +289,6 @@ const NodeSettingsCard = {
 			.finally(() => { this.loading = false })
 	},
 }
-Vue.component('NodeSettingsCard', NodeSettingsCard)
+registerGlobalComponent('NodeSettingsCard', NodeSettingsCard)
 
 // vim: set noet ts=4 sw=4:

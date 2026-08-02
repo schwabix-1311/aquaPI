@@ -56,7 +56,7 @@ const AquapiConfirmDialog = {
 	created() {
 		EventBus.$on(AQUAPI_EVENTS.CONFIRM_REQUESTED, this.onRequest)
 	},
-	destroyed() {
+	unmounted() {
 		EventBus.$off(AQUAPI_EVENTS.CONFIRM_REQUESTED, this.onRequest)
 	},
 }

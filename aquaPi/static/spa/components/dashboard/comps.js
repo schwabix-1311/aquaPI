@@ -3,6 +3,7 @@
 // TODO: change masonry direction, if possible; maybe use other masonry plugin
 
 import {AQUAPI_EVENTS, EventBus} from '../app/EventBus.js';
+import {registerGlobalComponent} from '../app/registry.js';
 
 const AnyNode = {
 	props: {
@@ -100,7 +101,7 @@ const AnyNode = {
 		},
 	},
 }
-Vue.component('AnyNode', AnyNode)  //??
+registerGlobalComponent('AnyNode', AnyNode)  //??
 
 const DebugNode = {
 	extends: AnyNode,
@@ -115,7 +116,7 @@ const DebugNode = {
 		</div>
 	`
 }
-Vue.component('DebugNode', DebugNode)
+registerGlobalComponent('DebugNode', DebugNode)
 
 
 const BusNode = {
@@ -228,7 +229,7 @@ const MinimumCtrl = {
 		},
 	},
 }
-Vue.component('MinimumCtrl', MinimumCtrl)
+registerGlobalComponent('MinimumCtrl', MinimumCtrl)
 
 
 const MaximumCtrl = {
@@ -239,7 +240,7 @@ const MaximumCtrl = {
 		},
 	},
 }
-Vue.component('MaximumCtrl', MaximumCtrl)
+registerGlobalComponent('MaximumCtrl', MaximumCtrl)
 
 
 const PidCtrl = {
@@ -250,7 +251,7 @@ const PidCtrl = {
 		},
 	},
 }
-Vue.component('PidCtrl', PidCtrl)
+registerGlobalComponent('PidCtrl', PidCtrl)
 
 
 const SunCtrl = {
@@ -274,7 +275,7 @@ const SunCtrl = {
 		}
 	}
 }
-Vue.component('SunCtrl', SunCtrl);
+registerGlobalComponent('SunCtrl', SunCtrl);
 
 
 const FadeCtrl = {
@@ -297,18 +298,18 @@ const FadeCtrl = {
 		}
 	}
 }
-Vue.component('FadeCtrl', FadeCtrl)
+registerGlobalComponent('FadeCtrl', FadeCtrl)
 
 
 const SwitchInput = {
 	extends: BusNode,
 }
-Vue.component('SwitchInput', SwitchInput)
+registerGlobalComponent('SwitchInput', SwitchInput)
 
 const AnalogInput = {
 	extends: BusNode,
 }
-Vue.component('AnalogInput', AnalogInput)
+registerGlobalComponent('AnalogInput', AnalogInput)
 
 
 const ScheduleInput = {
@@ -319,19 +320,19 @@ const ScheduleInput = {
 		},
 	}
 }
-Vue.component('ScheduleInput', ScheduleInput)
+registerGlobalComponent('ScheduleInput', ScheduleInput)
 
 
 const SwitchDevice = {
 	extends: BusNode,
 }
-Vue.component('SwitchDevice', SwitchDevice)
+registerGlobalComponent('SwitchDevice', SwitchDevice)
 
 const AnalogDevice = {
 	extends: BusNode,
 }
-Vue.component('AnalogDevice', AnalogDevice)
-Vue.component('SlowPwmDevice', AnalogDevice)
+registerGlobalComponent('AnalogDevice', AnalogDevice)
+registerGlobalComponent('SlowPwmDevice', AnalogDevice)
 
 const AuxNode = {
 	extends: BusNode,
@@ -345,17 +346,17 @@ const AuxNode = {
 const AvgAux = {
 	extends: AuxNode,
 }
-Vue.component('AvgAux', AvgAux);
+registerGlobalComponent('AvgAux', AvgAux);
 
 const MinAux = {
 	extends: AuxNode,
 }
-Vue.component('MinAux', MinAux)
+registerGlobalComponent('MinAux', MinAux)
 
 const MaxAux = {
 	extends: AuxNode,
 }
-Vue.component('MaxAux', MaxAux)
+registerGlobalComponent('MaxAux', MaxAux)
 
 const ScaleAux = {
 	extends: AuxNode,
@@ -369,7 +370,7 @@ const ScaleAux = {
 //		},
 //	},
 }
-Vue.component('ScaleAux', ScaleAux)
+registerGlobalComponent('ScaleAux', ScaleAux)
 
 
 const History = {
@@ -439,7 +440,7 @@ const History = {
 		}
 	}
 }
-Vue.component('History', History)
+registerGlobalComponent('History', History)
 
 
 const HistoryChart = {
@@ -812,7 +813,7 @@ const HistoryChart = {
 		}
 	},
 
-	destroyed() {
+	unmounted() {
 		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
 
 		if (this.chart != null) {
@@ -822,7 +823,7 @@ const HistoryChart = {
 		this.chartContainerWidth = null
 	}
 }
-Vue.component('HistoryChart', HistoryChart)
+registerGlobalComponent('HistoryChart', HistoryChart)
 
 
 const AlertNode = {
@@ -861,7 +862,7 @@ const AlertNode = {
 		}
 	}
 }
-Vue.component('Alert', AlertNode)
+registerGlobalComponent('Alert', AlertNode)
 
 
 const AquapiNodeDescription = {
@@ -886,7 +887,7 @@ const AquapiNodeDescription = {
 		}
 	}
 }
-Vue.component('AquapiNodeDescription', AquapiNodeDescription)
+registerGlobalComponent('AquapiNodeDescription', AquapiNodeDescription)
 
 
 const AquapiNodeData = {
@@ -913,7 +914,7 @@ const AquapiNodeData = {
 
 	computed: {}
 }
-Vue.component('AquapiNodeData', AquapiNodeData)
+registerGlobalComponent('AquapiNodeData', AquapiNodeData)
 
 
 
@@ -940,6 +941,6 @@ const AquapiNodeAlert = {
 
 	computed: {}
 }
-Vue.component('AquapiNodeAlert', AquapiNodeAlert)
+registerGlobalComponent('AquapiNodeAlert', AquapiNodeAlert)
 
 // vim: set noet sts ts=4 sw=4:

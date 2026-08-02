@@ -3,7 +3,6 @@
 import logging
 
 from http import HTTPStatus
-import jsonpickle  # type: ignore[import-untyped]
 from flask import (Blueprint, current_app, json, Response, request, jsonify)
 from flask_login import (login_required, current_user)
 
@@ -43,6 +42,23 @@ def api_nodes() -> Response:
     return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
 
+def _node_to_dict(node) -> dict:
+    """ build the plain, JSON-serializable dict for a single node, as
+        returned by the REST API. Reuses db.serialize_node() (also used
+        for SQLite persistence) so node-type specific quirks (currently
+        only Alert.conditions) are normalized in a single place, instead
+        of relying on jsonpickle's generic object introspection.
+    """
+    item = db.serialize_node(node)
+    item['type'] = type(node).__name__
+    item['role'] = str(node.ROLE).rsplit('.', 1)[1]
+
+    if hasattr(node, 'alert') and node.alert:
+        item['alert'] = node.alert
+
+    return item
+
+
 @bp.route('/api/nodes/<node_id>')
 @login_required
 def api_node(node_id: str) -> Response:
@@ -54,15 +70,9 @@ def api_node(node_id: str) -> Response:
         node = bus.get_node(node_id)
 
         if node:
-            item = node.__getstate__()
-            item['type'] = type(node).__name__
-            item['role'] = str(node.ROLE).rsplit('.', 1)[1]
+            item = _node_to_dict(node)
 
-            if hasattr(node, 'alert') and node.alert:
-                item['alert'] = node.alert
-
-            body = jsonpickle.encode({'result': 'SUCCESS', 'data': item},
-                                     unpicklable=False, keys=True)
+            body = json.dumps({'result': 'SUCCESS', 'data': item})
             log.debug('API nodes/%s: %s', node_id, body)
             return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
 

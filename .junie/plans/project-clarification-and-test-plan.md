@@ -440,13 +440,14 @@ Dashboard-Konfiguration und Controller-Gruppierung gemäß ToDo umsetzen.
 - `/api/nodes/<id>` (Einzelabruf) liefert `group` bereits mit, da es Teil von `__getstate__()` ist; die Liste `/api/nodes/` bleibt unverändert (Umstellung auf volles JSON/`group`-Filterung dort ist Teil von Step 9/11).
 - 14 neue Tests in `tests/test_dashboards.py` (Dashboard-CRUD, Isolation zwischen Usern, Cascade-Delete, `group`-Persistenz durch die SQLite-Topologie, API-Roundtrip inkl. Rollen/401) - alle 61 Tests im Projekt grün.
 
-### * Step 9: Umstellung der REST-API von jsonpickle auf reines JSON
+### ✓ Step 9: Umstellung der REST-API von jsonpickle auf reines JSON
 API-Antworten explizit und ohne Objekt-Introspektion gestalten.
-- Explizite `to_dict()`-Methoden für die relevanten Node-Typen ergänzen (statt generischer `jsonpickle.encode`).
-- `api.py` auf `json.dumps` mit den neuen `to_dict()`-Ergebnissen umstellen.
-- Regressionstest: Bestehende Frontend-Aufrufe (`/api/nodes/`) funktionieren unverändert mit dem neuen, expliziten JSON-Format.
+- `aquaPi/db.py`: `_serialize_node()` in die öffentliche Funktion `serialize_node()` umbenannt und um einen Docstring-Hinweis ergänzt, dass sie sowohl von der SQLite-Persistenz (`save_topology`) als auch von der REST-API genutzt wird; die bestehende `Alert.conditions`-Normalisierung (`_cond_to_dict`, Klasse/`node_id`/`limit`/`duration` statt roher `AlertCond`-Objekte mit `operator.ge`/`operator.le`-Callables) wird dadurch wiederverwendet statt dupliziert.
+- `aquaPi/api.py`: `jsonpickle`-Import entfernt; neue Hilfsfunktion `_node_to_dict()` baut das Node-Dict über `db.serialize_node()` plus `type`/`role`/`alert`; `GET /api/nodes/<id>` nutzt jetzt `json.dumps` statt `jsonpickle.encode(..., unpicklable=False, keys=True)`. `GET /api/nodes/` nutzte bereits zuvor reines `json.dumps` und war unverändert korrekt.
+- `requirements.txt`: nicht mehr benötigten Eintrag `jsonpickle>=3.0.0` entfernt (keine aktiven Imports mehr im Projekt, nur historische Kommentare in `machineroom/__init__.py`).
+- 6 neue Tests in `tests/test_api_nodes.py` (reines JSON ohne `py/object`/`py/id`-Marker für Liste und Einzel-Node, `group`/`unit`-Felder, 401 ohne Login, 404 für unbekannte ID, `Alert.conditions` als saubere Dict-Liste ohne rohe `operator.ge`-Callables) - alle 67 Tests im Projekt grün.
 
-###   Step 10: Gesamtverifikation in der Simulationsumgebung
+### * Step 10: Gesamtverifikation in der Simulationsumgebung
 Sicherstellen, dass alle neuen Funktionen zusammen fehlerfrei laufen.
 - Testlauf: Migration von `config.json` und `topo.pickle` gemeinsam, Simulation startet fehlerfrei.
 - Testlauf: Zwei simulierte User mit unterschiedlichen Dashboards und Alert-Kanälen zeigen korrekt getrennte Ergebnisse.

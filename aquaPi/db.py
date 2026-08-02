@@ -134,10 +134,12 @@ def _dict_to_cond(d: dict[str, Any]) -> Any:
     return cls(d['node_id'], limit=d['limit'], duration=d.get('duration', 0))
 
 
-def _serialize_node(node: BusNode) -> dict[str, Any]:
+def serialize_node(node: BusNode) -> dict[str, Any]:
     """ build the JSON-able state dict for a single node,
         node-type specific quirks (currently only Alert.conditions)
-        are normalized here
+        are normalized here. Used both for SQLite persistence
+        (save_topology) and for the REST API (aquaPi/api.py), so the
+        API never needs jsonpickle/object introspection.
     """
     state = dict(node.__getstate__())
     if isinstance(node, Alert):
@@ -176,7 +178,7 @@ def save_topology(bus: MsgBus, db_path: str) -> None:
         with conn:
             conn.execute('DELETE FROM nodes')
             for node in bus.nodes:
-                state = _serialize_node(node)
+                state = serialize_node(node)
                 params = json.dumps(state)
                 conn.execute(
                     'INSERT INTO nodes (id, type, name, params) VALUES (?, ?, ?, ?)',

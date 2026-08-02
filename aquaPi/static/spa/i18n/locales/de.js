@@ -86,6 +86,8 @@ export default
 			label: 'Benutzer',
 			heading: 'Benutzerverwaltung',
 			username: 'Benutzername',
+			email: 'E-Mail',
+			emailHint: 'Optional, wird nur für den Passwort-Reset-Link benötigt',
 			password: 'Passwort',
 			newPassword: 'Neues Passwort',
 			passwordHintOptional: 'Leer lassen, um das Passwort nicht zu ändern',

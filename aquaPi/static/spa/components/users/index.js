@@ -66,6 +66,7 @@ const AquapiUsers = {
 		headers() {
 			return [
 				{text: this.$t('pages.users.username'), value: 'username'},
+				{text: this.$t('pages.users.email'), value: 'email'},
 				{text: this.$t('pages.users.role'), value: 'role'},
 				{text: '', value: 'actions', sortable: false, align: 'end'},
 			]

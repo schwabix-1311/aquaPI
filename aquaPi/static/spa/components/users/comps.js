@@ -23,6 +23,15 @@ const UserDialog = {
 					></v-text-field>
 
 					<v-text-field
+						v-model="form.email"
+						:label="$t('pages.users.email')"
+						:hint="$t('pages.users.emailHint')"
+						persistent-hint
+						outlined dense
+						class="mb-2"
+					></v-text-field>
+
+					<v-text-field
 						v-model="form.password"
 						:label="editUser ? $t('pages.users.newPassword') : $t('pages.users.password')"
 						type="password"
@@ -48,7 +57,7 @@ const UserDialog = {
 	`,
 	data() {
 		return {
-			form: {username: '', password: '', role: 'viewer'},
+			form: {username: '', email: '', password: '', role: 'viewer'},
 			roles: ['viewer', 'operator', 'admin'],
 			error: null,
 			saving: false,
@@ -69,8 +78,8 @@ const UserDialog = {
 			if (visible) {
 				this.error = null
 				this.form = this.editUser
-					? {username: this.editUser.username, password: '', role: this.editUser.role}
-					: {username: '', password: '', role: 'viewer'}
+					? {username: this.editUser.username, email: this.editUser.email || '', password: '', role: this.editUser.role}
+					: {username: '', email: '', password: '', role: 'viewer'}
 			}
 		},
 	},
@@ -82,7 +91,7 @@ const UserDialog = {
 			this.error = null
 
 			if (this.editUser) {
-				const changes = {role: this.form.role}
+				const changes = {role: this.form.role, email: this.form.email || null}
 				if (this.form.password) {
 					changes.password = this.form.password
 				}
@@ -101,6 +110,7 @@ const UserDialog = {
 				this.saving = true
 				const result = await this.$store.dispatch('users/create', {
 					username: this.form.username,
+					email: this.form.email || null,
 					password: this.form.password,
 					role: this.form.role,
 				})

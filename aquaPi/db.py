@@ -23,7 +23,10 @@
 import json
 import logging
 import secrets
+import smtplib
 import sqlite3
+from datetime import datetime, timedelta
+from email.message import EmailMessage
 from os import path, replace
 from typing import Any
 
@@ -48,6 +51,12 @@ DEFAULT_DB_FILENAME = 'topo.sqlite'
 DEFAULT_USERS_DB_FILENAME = 'users.sqlite'
 
 VALID_ROLES = ('viewer', 'operator', 'admin')
+
+# --- login security (Step 22) ---------------------------------------
+PASSWORD_RESET_TOKEN_TTL_MINUTES = 30
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_ATTEMPT_WINDOW_MINUTES = 15
+LOGIN_LOCKOUT_MINUTES = 15
 
 # Fixed, explicit whitelist of node classes that may be reconstructed
 # from the database. This is the core safety guarantee: only these
@@ -1056,6 +1065,11 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 created_at    TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
+        # 'email' was added in Step 22 (password reset delivery) - migrate
+        # existing DBs that were created before this column existed
+        user_cols = {row['name'] for row in conn.execute('PRAGMA table_info(users)')}
+        if 'email' not in user_cols:
+            conn.execute('ALTER TABLE users ADD COLUMN email TEXT')
         conn.execute("""
             CREATE TABLE IF NOT EXISTS notification_config (
                 channel TEXT PRIMARY KEY,
@@ -1077,14 +1091,31 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 layout  TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                token      TEXT PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                expires_at TEXT NOT NULL,
+                used       INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                key          TEXT PRIMARY KEY,
+                count        INTEGER NOT NULL DEFAULT 0,
+                window_start TEXT NOT NULL,
+                locked_until TEXT
+            )
+        """)
     return conn
 
 
 def create_user(db_path: str, username: str, password: str,
-                role: str = 'viewer') -> int:
+                role: str = 'viewer', email: str | None = None) -> int:
     """ create a new user with a securely hashed password.
         Raises ValueError if the username already exists or the role
-        is invalid.
+        is invalid. 'email' is optional and only used to deliver
+        self-service password reset links (Step 22).
     """
     if role not in VALID_ROLES:
         raise ValueError(f'Invalid role: {role!r}')
@@ -1095,8 +1126,8 @@ def create_user(db_path: str, username: str, password: str,
         try:
             with conn:
                 cur = conn.execute(
-                    'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
-                    (username, password_hash, role)
+                    'INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)',
+                    (username, password_hash, role, email or None)
                 )
                 return cur.lastrowid
         except sqlite3.IntegrityError:
@@ -1184,6 +1215,22 @@ def set_user_password(db_path: str, user_id: int, password: str) -> None:
         conn.close()
 
 
+def set_user_email(db_path: str, user_id: int, email: str | None) -> None:
+    """ set (or clear, if email is falsy) a user's email address, used
+        to deliver self-service password reset links (Step 22).
+        Raises ValueError if the user does not exist.
+    """
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            cur = conn.execute('UPDATE users SET email = ? WHERE id = ?',
+                               (email or None, user_id))
+            if cur.rowcount == 0:
+                raise ValueError(f'No such user: {user_id!r}')
+    finally:
+        conn.close()
+
+
 def delete_user(db_path: str, user_id: int) -> None:
     """ remove a user. Raises ValueError if the user does not exist.
         Callers are responsible for preventing removal of the last
@@ -1217,6 +1264,175 @@ def ensure_default_admin(db_path: str) -> tuple[str, str] | None:
     password = secrets.token_urlsafe(12)
     create_user(db_path, username, password, role='admin')
     return username, password
+
+
+# --- self-service password reset (Step 22) -------------------------------
+
+def create_password_reset_token(db_path: str, user_id: int,
+                                ttl_minutes: int = PASSWORD_RESET_TOKEN_TTL_MINUTES) -> str:
+    """ create a fresh, single-use password reset token for a user,
+        valid for ttl_minutes. Old, still-valid tokens of the same user
+        remain valid too (simplicity over strict single-token-per-user).
+    """
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat()
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO password_reset_tokens (token, user_id, expires_at, used)
+                VALUES (?, ?, ?, 0)
+            """, (token, user_id, expires_at))
+    finally:
+        conn.close()
+    return token
+
+
+def get_password_reset_token(db_path: str, token: str) -> dict[str, Any] | None:
+    """ return the token row if it exists, is unused and not expired,
+        else None
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute(
+            'SELECT * FROM password_reset_tokens WHERE token = ?', (token,)
+        ).fetchone()
+        if not row or row['used']:
+            return None
+        if datetime.fromisoformat(row['expires_at']) < datetime.utcnow():
+            return None
+        return dict(row)
+    finally:
+        conn.close()
+
+
+def consume_password_reset_token(db_path: str, token: str, new_password: str) -> None:
+    """ validate the token (raises ValueError if invalid/expired/used),
+        set the new password for its user and mark the token as used
+        (single-use)
+    """
+    row = get_password_reset_token(db_path, token)
+    if not row:
+        raise ValueError('Invalid or expired token')
+
+    password_hash = generate_password_hash(new_password)
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                        (password_hash, row['user_id']))
+            conn.execute('UPDATE password_reset_tokens SET used = 1 WHERE token = ?', (token,))
+    finally:
+        conn.close()
+
+
+def send_password_reset_email(db_path: str, to_email: str, reset_url: str) -> bool:
+    """ send a password reset link by email, reusing the Email
+        credentials already configured for alert notifications
+        (aquaPi/db.py: notification_config table, channel 'Email').
+        Returns True if the email was handed off to the SMTP server,
+        False if no Email channel is configured or sending failed
+        (both are logged, never raised - the caller always shows the
+        same generic "check your email" message to avoid leaking
+        account existence, see auth.py).
+    """
+    configs = get_notification_config(db_path, 'Email')
+    if not configs:
+        log.error('Password reset requested but no Email notification channel is configured')
+        return False
+
+    cfg = configs[0]
+    msg = EmailMessage()
+    msg['Subject'] = 'aquaPi password reset'
+    msg['From'] = cfg['from']
+    msg['To'] = to_email
+    msg.set_content(
+        'Someone requested a password reset for your aquaPi account.\n'
+        f'Click the following link to set a new password:\n\n{reset_url}\n\n'
+        f'This link expires in {PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes.\n'
+        'If you did not request this, you can safely ignore this email.'
+    )
+
+    try:
+        with smtplib.SMTP(cfg['server']) as smtp:
+            smtp.starttls()
+            smtp.login(cfg['login'], cfg['pwd'])
+            smtp.send_message(msg)
+        return True
+    except Exception:
+        log.exception('Failed to send password reset email to %r', to_email)
+        return False
+
+
+# --- login rate limiting / lockout (Step 22) ------------------------------
+
+def is_login_locked_out(db_path: str, key: str) -> tuple[bool, int]:
+    """ return (locked, seconds_remaining) for a given lockout key
+        (typically the lower-cased username, or the remote IP as
+        fallback for unknown usernames)
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute(
+            'SELECT locked_until FROM login_attempts WHERE key = ?', (key,)
+        ).fetchone()
+        if row and row['locked_until']:
+            locked_until = datetime.fromisoformat(row['locked_until'])
+            now = datetime.utcnow()
+            if now < locked_until:
+                return True, int((locked_until - now).total_seconds()) + 1
+        return False, 0
+    finally:
+        conn.close()
+
+
+def register_failed_login(db_path: str, key: str,
+                          max_attempts: int = LOGIN_MAX_ATTEMPTS,
+                          window_minutes: int = LOGIN_ATTEMPT_WINDOW_MINUTES,
+                          lockout_minutes: int = LOGIN_LOCKOUT_MINUTES) -> None:
+    """ record one failed login attempt for a key, locking it out for
+        lockout_minutes once max_attempts is reached within
+        window_minutes; the attempt counter/window resets if the
+        window has already expired
+    """
+    now = datetime.utcnow()
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            row = conn.execute(
+                'SELECT count, window_start FROM login_attempts WHERE key = ?', (key,)
+            ).fetchone()
+
+            if row and now - datetime.fromisoformat(row['window_start']) <= timedelta(minutes=window_minutes):
+                count = row['count'] + 1
+                window_start = datetime.fromisoformat(row['window_start'])
+            else:
+                count = 1
+                window_start = now
+
+            locked_until = (now + timedelta(minutes=lockout_minutes)).isoformat() \
+                if count >= max_attempts else None
+
+            conn.execute("""
+                INSERT INTO login_attempts (key, count, window_start, locked_until)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET count = excluded.count,
+                    window_start = excluded.window_start, locked_until = excluded.locked_until
+            """, (key, count, window_start.isoformat(), locked_until))
+    finally:
+        conn.close()
+
+
+def clear_login_attempts(db_path: str, key: str) -> None:
+    """ reset a key's failed-attempt counter/lockout, called on a
+        successful login
+    """
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            conn.execute('DELETE FROM login_attempts WHERE key = ?', (key,))
+    finally:
+        conn.close()
 
 
 # --- notification config (Email/Telegram credentials) ------------------

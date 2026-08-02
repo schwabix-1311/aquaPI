@@ -284,3 +284,149 @@ def test_secret_key_persists_across_app_instances(tmp_path):
     auth.init_app(app2)
 
     assert app1.config['SECRET_KEY'] == app2.config['SECRET_KEY']
+
+
+# --- login lockout (Step 22) -----------------------------------------------
+
+def test_login_locks_out_after_too_many_failed_attempts(client, app, default_admin_password, monkeypatch):
+    monkeypatch.setattr(db, 'LOGIN_MAX_ATTEMPTS', 3)
+
+    for _ in range(3):
+        resp = _login(client, 'viewer1', 'wrong-password')
+        assert resp.status_code == HTTPStatus.OK
+
+    # 3rd failure triggered the lockout - even the correct password is now rejected
+    resp = _login(client, 'viewer1', 'viewerPass1')
+    assert resp.status_code == HTTPStatus.OK  # re-renders login form, no redirect
+    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_login_lockout_is_per_username(client, default_admin_password, monkeypatch):
+    monkeypatch.setattr(db, 'LOGIN_MAX_ATTEMPTS', 2)
+
+    for _ in range(2):
+        _login(client, 'viewer1', 'wrong-password')
+
+    # viewer1 is now locked out, but operator1 must be unaffected
+    resp = _login(client, 'operator1', 'operatorPass1')
+    assert resp.status_code == 302
+
+
+def test_successful_login_clears_previous_failed_attempts(client, app, default_admin_password, monkeypatch):
+    monkeypatch.setattr(db, 'LOGIN_MAX_ATTEMPTS', 3)
+
+    _login(client, 'viewer1', 'wrong-password')
+    _login(client, 'viewer1', 'wrong-password')
+    resp = _login(client, 'viewer1', 'viewerPass1')
+    assert resp.status_code == 302  # successful login, attempts were not yet exhausted
+
+    client.get('/logout')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    key = 'viewer1'
+    assert db.is_login_locked_out(users_db, key) == (False, 0)
+
+
+# --- self-service password reset (Step 22) ---------------------------------
+
+def test_request_password_reset_page_loads(client):
+    resp = client.get('/reset-password')
+    assert resp.status_code == HTTPStatus.OK
+
+
+def test_request_password_reset_shows_generic_confirmation_for_unknown_user(client):
+    resp = client.post('/reset-password', data={'username': 'nobody-here'})
+    assert resp.status_code == HTTPStatus.OK
+    assert b'password reset link has been sent' in resp.data.lower() \
+        or b'reset link has been sent'.lower() in resp.data.lower()
+
+
+def test_request_password_reset_creates_token_for_user_with_email(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+    db.set_user_email(users_db, user_id, 'viewer1@example.com')
+
+    resp = client.post('/reset-password', data={'username': 'viewer1'})
+    assert resp.status_code == HTTPStatus.OK
+    # no Email channel configured in this test app -> sending fails, but the
+    # generic confirmation is shown either way, and no token/exception leaks
+    assert b'password reset' in resp.data.lower()
+
+
+def test_confirm_password_reset_with_valid_token_sets_new_password(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+    token = db.create_password_reset_token(users_db, user_id)
+
+    resp = client.post(f'/reset-password/{token}',
+                       data={'password': 'brandNewPass1', 'password2': 'brandNewPass1'})
+    assert resp.status_code == 302
+
+    resp = _login(client, 'viewer1', 'brandNewPass1')
+    assert resp.status_code == 302
+
+
+def test_confirm_password_reset_mismatched_passwords_rejected(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+    token = db.create_password_reset_token(users_db, user_id)
+
+    resp = client.post(f'/reset-password/{token}',
+                       data={'password': 'brandNewPass1', 'password2': 'somethingElse'})
+    assert resp.status_code == HTTPStatus.OK  # re-renders the form
+
+    # original password must still work
+    resp = _login(client, 'viewer1', 'viewerPass1')
+    assert resp.status_code == 302
+
+
+def test_confirm_password_reset_invalid_token_shows_invalid_state(client):
+    resp = client.get('/reset-password/not-a-real-token')
+    assert resp.status_code == HTTPStatus.OK
+    assert b'invalid' in resp.data.lower() or b'expired' in resp.data.lower()
+
+
+def test_confirm_password_reset_token_is_single_use(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+    token = db.create_password_reset_token(users_db, user_id)
+
+    client.post(f'/reset-password/{token}',
+               data={'password': 'brandNewPass1', 'password2': 'brandNewPass1'})
+
+    resp = client.post(f'/reset-password/{token}',
+                       data={'password': 'anotherPass2', 'password2': 'anotherPass2'})
+    assert resp.status_code == HTTPStatus.OK
+    assert b'invalid' in resp.data.lower() or b'expired' in resp.data.lower()
+
+
+# --- email field on user CRUD API (Step 22) ---------------------------------
+
+def test_admin_can_create_user_with_email(client, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    resp = client.post('/api/users/', json={
+        'username': 'withemail', 'password': 'pwd12345', 'role': 'viewer',
+        'email': 'withemail@example.com',
+    })
+    assert resp.status_code == HTTPStatus.CREATED
+    assert resp.get_json()['email'] == 'withemail@example.com'
+
+
+def test_admin_can_update_user_email(client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+
+    resp = client.put(f'/api/users/{user_id}', json={'email': 'viewer1@example.com'})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json()['email'] == 'viewer1@example.com'
+
+
+def test_current_user_endpoint_includes_email(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'operator1')['id']
+    db.set_user_email(users_db, user_id, 'operator1@example.com')
+
+    _login(client, 'operator1', 'operatorPass1')
+    resp = client.get('/api/users/me')
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json()['email'] == 'operator1@example.com'

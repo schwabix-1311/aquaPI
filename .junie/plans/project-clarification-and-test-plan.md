@@ -447,14 +447,15 @@ API-Antworten explizit und ohne Objekt-Introspektion gestalten.
 - `requirements.txt`: nicht mehr benötigten Eintrag `jsonpickle>=3.0.0` entfernt (keine aktiven Imports mehr im Projekt, nur historische Kommentare in `machineroom/__init__.py`).
 - 6 neue Tests in `tests/test_api_nodes.py` (reines JSON ohne `py/object`/`py/id`-Marker für Liste und Einzel-Node, `group`/`unit`-Felder, 401 ohne Login, 404 für unbekannte ID, `Alert.conditions` als saubere Dict-Liste ohne rohe `operator.ge`-Callables) - alle 67 Tests im Projekt grün.
 
-### * Step 10: Gesamtverifikation in der Simulationsumgebung
+### ✓ Step 10: Gesamtverifikation in der Simulationsumgebung
 Sicherstellen, dass alle neuen Funktionen zusammen fehlerfrei laufen.
-- Testlauf: Migration von `config.json` und `topo.pickle` gemeinsam, Simulation startet fehlerfrei.
-- Testlauf: Zwei simulierte User mit unterschiedlichen Dashboards und Alert-Kanälen zeigen korrekt getrennte Ergebnisse.
-- Regressionstest: Alle 13+ simulierten Knoten weiterhin korrekt über die neue JSON-API abrufbar.
-- Branch-Check: Sicherstellen, dass alle Commits ausschließlich auf `dev_thk` liegen und `main` weiterhin unverändert im alten Stand startet.
+- Neue `tests/test_step10_integration.py` (5 Tests) deckt alle vier Szenarien ab: kombinierte Migration von `config.json` (Email/Telegram) und `topo.pickle` in einem echten `MachineRoom`-Lauf (Migration wird korrekt erkannt, Original als `.bak` erhalten, Notification-Config landet in `users.sqlite`), Neustart-Stabilität (zweite `MachineRoom`-Instanz lädt dieselbe SQLite-Topologie, keine erneute Migration), Frischstart ohne Legacy-Dateien (13 Default-Knoten).
+- Zwei simulierte User (`alice`/`bob`, Rollen `viewer`/`operator`) mit unterschiedlichen Dashboards (`/api/dashboard/`) und Alert-Kanälen (`/api/notifications/prefs`) zeigen nachweislich getrennte Ergebnisse, sowohl über die API als auch direkt über `db.get_prefs_for_alert()`.
+- Regressionstest: Alle Knoten (`wasser`, `heizen`, `warnung`) sind über `GET /api/nodes/` und `GET /api/nodes/<id>` als reines JSON ohne `jsonpickle`-Marker abrufbar - volle Suite jetzt 72/72 grün.
+- Branch-Check: `git log dev_thk --not main` zeigt, dass alle 7 Commits seit dem gemeinsamen Vorfahren ausschließlich auf `dev_thk` liegen (`git merge-base dev_thk main` == aktueller `main`-HEAD); `main`s `aquaPi/api.py` enthält weiterhin unverändert `jsonpickle`, `aquaPi/db.py` existiert dort gar nicht - bestätigt, dass `main` von der gesamten Arbeit unberührt blieb. Ein Testlauf von `main` in einem separaten Git-Worktree bestätigte zusätzlich, dass dessen (unveränderter, alter) Code weiterhin genauso funktioniert/versagt wie vor Beginn dieser Arbeiten (eigene, ältere Konfigurationsanforderungen wie das TC420-Submodul und "Email #1"-Port sind vorbestehende Eigenheiten von `main`, keine Regression).
+- Wichtiger Hinweis für zukünftige lokale Testläufe: eine Umgebungsvariable `AQUAPI_TOPO` (aus einem früheren manuellen Testlauf in dieser Session gesetzt) überschreibt den Topologie-Dateinamen und muss vor Tests/Serverstarts mit `unset AQUAPI_TOPO` entfernt werden, sonst werden falsche Dateien migriert/geladen.
 
-###   Step 11: `/settings`-Seite mit generischen Steuerelementen
+### * Step 11: `/settings`-Seite mit generischen Steuerelementen
 Die Platzhalter-Seite `AquapiSettings` durch echte Bedienelemente auf Basis des bestehenden `get_settings()`-Mechanismus ersetzen.
 - Neue Routen `GET/PUT /api/nodes/<id>/settings` in `api.py`, die `get_settings()` als JSON exponieren bzw. Werte serverseitig validiert (`min`/`max`/Typ) zurückschreiben (Rolle mind. `operator`).
 - Generische Widget-Komponenten (`SettingSlider`, `SettingNumber`, `SettingSwitch`, `SettingSchedule`) in `components/settings/comps.js` ergänzen, die je nach `attrs.type` (`number`, `range`, `checkbox`, `cronspec`) das passende Vuetify-Element (`v-slider`, `v-text-field`, `v-switch`, Cron-Editor) rendern.

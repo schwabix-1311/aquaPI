@@ -193,14 +193,16 @@ def test_two_users_have_separated_dashboards_and_alert_prefs(app, client):
     resp = client.get('/api/dashboard/')
     assert resp.get_json() == [{'controller_id': 'heizen', 'group': 'Becken 1'}]
     resp = client.get('/api/notifications/prefs')
-    assert resp.get_json() == [{'alert_node_id': 'warnung', 'channel': 'email'}]
+    assert resp.get_json() == [{'alert_node_id': 'warnung', 'channel': 'email',
+                                'escalation_channel': 'none', 'escalation_after_minutes': 0}]
     client.get('/logout')
 
     _login(client, 'bob', 'bobPass123')
     resp = client.get('/api/dashboard/')
     assert resp.get_json() == [{'controller_id': 'warnung', 'group': 'Becken 1'}]
     resp = client.get('/api/notifications/prefs')
-    assert resp.get_json() == [{'alert_node_id': 'warnung', 'channel': 'telegram'}]
+    assert resp.get_json() == [{'alert_node_id': 'warnung', 'channel': 'telegram',
+                                'escalation_channel': 'none', 'escalation_after_minutes': 0}]
 
     # underlying storage is confirmed separated too, not just via API
     prefs = db.get_prefs_for_alert(users_db, 'warnung')

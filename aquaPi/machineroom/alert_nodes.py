@@ -104,8 +104,9 @@ class AlertThreshold(AlertCond):
         log.debug("%s.check %s", type(self).__name__, msg)
         now = monotonic()
         if self._cmp(msg.data, self.limit):
-            log.debug("  started")
-            self._starttime = now
+            if self._starttime is None:
+                log.debug("  started")
+                self._starttime = now
         else:
             log.debug("  ended")
             self._starttime = None

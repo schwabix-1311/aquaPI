@@ -2,9 +2,13 @@
 
 import logging
 import re
+import shutil
+import tempfile
+from os import path
 
 from http import HTTPStatus
-from flask import (Blueprint, current_app, json, Response, request, jsonify)
+from flask import (Blueprint, current_app, json, Response, request, jsonify,
+                   send_file, after_this_request)
 from flask_login import (login_required, current_user)
 
 from . import db
@@ -790,3 +794,35 @@ def api_audit_log() -> Response:
                                action=request.args.get('action') or None,
                                username=request.args.get('username') or None)
     return jsonify(result)
+
+
+# --- database backup (Step 24) ------------------------------------------
+
+
+@bp.route('/api/backup', methods=['GET'])
+@roles_required('admin')
+def api_backup() -> Response:
+    """ build a fresh, consistent backup archive (topology + users
+        SQLite databases) on the fly and offer it as a file download,
+        admin only. Uses the same db.create_backup_archive() code path
+        as the daily scheduled backup (MachineRoom), just written to a
+        throwaway temp directory that is removed again once the
+        response has been sent.
+    """
+    mr: MachineRoom = current_app.extensions['machineroom']
+    tmp_dir = tempfile.mkdtemp(prefix='aquapi-backup-dl-')
+
+    @after_this_request
+    def _cleanup(response: Response) -> Response:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return response
+
+    archive_path = db.create_backup_archive(
+        mr.globals['BUS_TOPO'], mr.globals['USERS_DB'], tmp_dir)
+
+    log.info('User %r downloaded a database backup', current_user.username)
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'download_backup')
+
+    return send_file(archive_path, as_attachment=True,
+                     download_name=path.basename(archive_path))

@@ -620,12 +620,13 @@ Nachvollziehbarkeit von Änderungen für Admins geschaffen. **(war zuvor Step 19
 - `aquaPi/auth.py`: Benutzerverwaltungs-Routen (`POST /api/users/`, `PUT /api/users/<id>` für Rolle/Passwort/E-Mail, `DELETE /api/users/<id>`) protokollieren jetzt ebenfalls (`create_user`/`update_user_role`/`reset_user_password`/`set_user_email`/`delete_user`).
 - Verifikation: neue Testdatei `tests/test_audit_log.py` (12 Tests grün: DB-Funktionen inkl. Paginierung/Filterung/Fehlertoleranz bei ungültigem Pfad, Integration mit Node-CRUD/Setpoints/Config-Apply/Nutzerverwaltung, Endpoint-Zugriffsschutz für Nicht-Admins, Paginierung/Filterung über die Route); Regressionschecks `tests/test_config_apply.py` + `tests/test_auth.py` + `tests/test_auth_db.py` (77/77 grün) sowie `tests/test_node_crud_api.py` (24/24 grün); `python3 -m py_compile` für `db.py`/`api.py`/`auth.py` erfolgreich.
 
-###   Step 24: Backup/Export der SQLite-DB und automatisiertes Scheduling
-Datensicherheit für die neue Persistenzschicht herstellen. **(war zuvor Step 20)**
-- Funktion in `aquaPi/db.py` für konsistentes Backup via `sqlite3.Connection.backup()`.
-- Route `GET /api/backup` (Rolle `admin`) zum manuellen Download der aktuellen DB als Datei.
-- Einfacher Scheduler (z.B. via bestehendem Hintergrund-Thread-Muster der Simulation) für tägliches, rotierendes Backup in `instance/backups/`.
-- Verifikation: Manueller Export liefert eine ladbare SQLite-Datei; automatisiertes Backup legt nach Ablauf des Intervalls eine neue Generation an und rotiert alte Stände.
+### ✓ Step 24: Backup/Export der SQLite-DB und automatisiertes Scheduling
+Datensicherheit für die neue Persistenzschicht hergestellt. **(war zuvor Step 20)**
+- `aquaPi/db.py`: neue Funktionen `backup_sqlite_file()` (konsistente Kopie via `sqlite3.Connection.backup()`, sicher auch während die Quelle vom laufenden Prozess offen gehalten wird), `create_backup_archive()` (bündelt konsistente Kopien von Topologie- und Users-DB als ein `.zip`, überspringt fehlende Dateien), `rotate_backups()` (löscht die ältesten `aquapi-backup-*.zip`-Dateien bis nur noch `keep` Generationen übrig sind) und `create_scheduled_backup()` (Archiv erzeugen + rotieren in einem Aufruf, von Scheduler und manuellem Endpunkt gemeinsam genutzt).
+- `aquaPi/api.py`: neue admin-only Route `GET /api/backup` erzeugt das Archiv on-the-fly in einem Temp-Verzeichnis und liefert es per `send_file(..., as_attachment=True)` aus (Cleanup via `after_this_request`); protokolliert einen `download_backup`-Audit-Log-Eintrag.
+- `aquaPi/machineroom/__init__.py`: `MachineRoom` legt `self.globals['BACKUP_DIR']` (`instance/backups/`, override via `AQUAPI_BACKUP_DIR`) an und startet nach dem Bus-Setup einen selbst-rearmierenden `threading.Timer` (`_schedule_backup()`/`_run_backup()`, Intervall 24h via `AQUAPI_BACKUP_INTERVAL`, Generationen via `AQUAPI_BACKUP_KEEP`, Default 7) als Daemon-Thread; der Timer wird in `shutdown()` sauber `cancel()`elt.
+- Neue Testdatei `tests/test_backup.py` (10 Tests: `backup_sqlite_file`/`create_backup_archive`/`rotate_backups`/`create_scheduled_backup` inkl. fehlender Quelldatei und Rotations-Grenzfällen; `GET /api/backup` Zugriffsschutz für Nicht-Admins/nicht eingeloggt, sowie ein Ende-zu-Ende-Test, der das heruntergeladene Archiv entpackt und beide SQLite-Dateien tatsächlich lädt).
+- Verifikation: `tests/test_backup.py` (10/10 grün); Regressionschecks `tests/test_audit_log.py` + `tests/test_config_apply.py` (21/21 grün) sowie `tests/test_step10_integration.py` (5/5 grün, deckt den geänderten `MachineRoom.__init__`/`shutdown()` ab); `python3 -m py_compile` für `db.py`/`api.py`/`machineroom/__init__.py` erfolgreich.
 
 ###   Step 25: Health-Check-Endpoint und Graceful Degradation ohne Internet
 Robustheit und Monitoring-Fähigkeit verbessern. **(war zuvor Step 21)**

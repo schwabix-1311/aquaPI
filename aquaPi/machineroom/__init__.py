@@ -4,6 +4,7 @@ import logging
 from os import (environ, path)
 import json
 import atexit
+from threading import Timer
 
 from .. import db
 from .msg_bus import MsgBus
@@ -81,6 +82,15 @@ class MachineRoom:
         # needing Flask's app context (mirrors driver_config's pattern)
         db.set_current_users_db_path(users_db_path)
 
+        # database backups (Step 24): daily rotating backup of both
+        # SQLite databases into instance/backups/, in addition to the
+        # on-demand GET /api/backup download (aquaPi/api.py)
+        self.globals['BACKUP_DIR'] = environ.get(
+            'AQUAPI_BACKUP_DIR', path.join(instance_path, 'backups'))
+        self._backup_interval = int(environ.get('AQUAPI_BACKUP_INTERVAL', 24 * 60 * 60))
+        self._backup_keep = int(environ.get('AQUAPI_BACKUP_KEEP', db.DEFAULT_BACKUP_KEEP))
+        self._backup_timer: Timer | None = None
+
         create_io_registry()
 
         try:
@@ -133,14 +143,42 @@ class MachineRoom:
         # Our __del__ would not be called after Ctrl-C.
         atexit.register(self.shutdown)
 
+        self._schedule_backup()
+
         log.brief("%s", str(self.bus))
         if self.bus:
             log.info(self.bus.get_nodes())
+
+    def _run_backup(self) -> None:
+        """ create one scheduled, rotating backup generation, then
+            reschedule the next run - runs in the Timer's own thread
+        """
+        try:
+            archive = db.create_scheduled_backup(
+                self.globals['BUS_TOPO'], self.globals['USERS_DB'],
+                self.globals['BACKUP_DIR'], keep=self._backup_keep)
+            log.brief('=== Scheduled backup created: %s', archive)
+        except Exception:
+            log.exception('Scheduled backup failed')
+        finally:
+            self._schedule_backup()
+
+    def _schedule_backup(self) -> None:
+        """ (re-)arm the daily backup timer; a daemon thread so it
+            never blocks process shutdown on its own
+        """
+        self._backup_timer = Timer(self._backup_interval, self._run_backup)
+        self._backup_timer.daemon = True
+        self._backup_timer.start()
 
     def shutdown(self) -> None:
         """ Prepare for shutdown, save bus state etc.
         """
         log.brief('Preparing shutdown ...')
+
+        if self._backup_timer:
+            self._backup_timer.cancel()
+            self._backup_timer = None
 
         # write changed data (onyl our!) back to self.globals['CUSTOM_CFG']
         # thus, load from file, update our dynamic keys, then write back

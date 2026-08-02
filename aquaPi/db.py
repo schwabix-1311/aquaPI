@@ -25,9 +25,11 @@ import logging
 import secrets
 import smtplib
 import sqlite3
+import tempfile
+import zipfile
 from datetime import datetime, timedelta
 from email.message import EmailMessage
-from os import path, replace
+from os import path, replace, makedirs, remove, listdir
 from typing import Any
 
 from werkzeug.security import generate_password_hash
@@ -1715,3 +1717,94 @@ def set_current_users_db_path(db_path: str | None) -> None:
 
 def get_current_users_db_path() -> str | None:
     return _current_users_db_path
+
+
+# --- database backup & restore (Step 24) ---------------------------------
+#
+# Creates a consistent, point-in-time backup of both SQLite databases
+# (topology + users) using sqlite3.Connection.backup() - the correct way
+# to copy a SQLite database that may be open/in use by the running app,
+# unlike a plain file copy which could grab a half-written page. Both
+# backups are packaged together into a single, downloadable/rotatable
+# .zip archive, so a manual GET /api/backup and the daily scheduled
+# backup share the exact same code path.
+
+BACKUP_FILENAME_PREFIX = 'aquapi-backup-'
+DEFAULT_BACKUP_KEEP = 7
+
+
+def backup_sqlite_file(src_path: str, dest_path: str) -> None:
+    """ create a consistent copy of the SQLite database at 'src_path'
+        into a new file at 'dest_path', using sqlite3's own online
+        backup API (safe to call while 'src_path' is open/in use by
+        the running app, unlike a plain file copy).
+    """
+    makedirs(path.dirname(dest_path) or '.', exist_ok=True)
+    src_conn = sqlite3.connect(src_path)
+    try:
+        dest_conn = sqlite3.connect(dest_path)
+        try:
+            src_conn.backup(dest_conn)
+        finally:
+            dest_conn.close()
+    finally:
+        src_conn.close()
+
+
+def create_backup_archive(topo_db_path: str, users_db_path: str,
+                          dest_dir: str, filename: str | None = None) -> str:
+    """ create one .zip archive in 'dest_dir', containing a consistent
+        backup of both the topology and the users SQLite databases
+        (whichever of the two actually exist), named after their
+        original basenames. Returns the full path of the created
+        archive.
+    """
+    makedirs(dest_dir, exist_ok=True)
+    if not filename:
+        filename = f'{BACKUP_FILENAME_PREFIX}{datetime.now():%Y%m%d-%H%M%S}.zip'
+    archive_path = path.join(dest_dir, filename)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        entries = []
+        for src_db_path in (topo_db_path, users_db_path):
+            if src_db_path and path.exists(src_db_path):
+                tmp_copy = path.join(tmp_dir, path.basename(src_db_path))
+                backup_sqlite_file(src_db_path, tmp_copy)
+                entries.append(tmp_copy)
+
+        with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for entry in entries:
+                zf.write(entry, arcname=path.basename(entry))
+
+    return archive_path
+
+
+def rotate_backups(backup_dir: str, keep: int = DEFAULT_BACKUP_KEEP) -> None:
+    """ delete the oldest backup archives (matched by
+        BACKUP_FILENAME_PREFIX) in 'backup_dir' until at most 'keep'
+        generations remain
+    """
+    if not path.isdir(backup_dir):
+        return
+    backups = sorted(
+        (path.join(backup_dir, f) for f in listdir(backup_dir)
+         if f.startswith(BACKUP_FILENAME_PREFIX) and f.endswith('.zip')),
+        key=path.getmtime,
+    )
+    for old in backups[:max(0, len(backups) - keep)]:
+        try:
+            remove(old)
+        except OSError:
+            log.exception('Failed to remove old backup %r', old)
+
+
+def create_scheduled_backup(topo_db_path: str, users_db_path: str,
+                            backup_dir: str, keep: int = DEFAULT_BACKUP_KEEP) -> str:
+    """ create a new dated backup archive in 'backup_dir' and rotate
+        away old generations beyond 'keep'. Returns the path of the
+        newly created archive. Used both by the daily scheduler
+        (MachineRoom) and can be called manually/from tests.
+    """
+    archive_path = create_backup_archive(topo_db_path, users_db_path, backup_dir)
+    rotate_backups(backup_dir, keep=keep)
+    return archive_path

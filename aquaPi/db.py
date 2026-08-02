@@ -68,6 +68,255 @@ ALERT_COND_FACTORY: dict[str, type] = {
 }
 
 
+# --- node type metadata for the /config graph editor ---------------------
+#
+# Describes, for every *creatable* node type (a subset of NODE_FACTORY -
+# Alert is excluded here since its 'conditions' are a set of objects, not
+# a simple field, and are out of scope for the generic add/edit dialog),
+# which constructor fields the /config page should render, and how many
+# 'receives' wires (0, 1 or many) the type accepts.
+#
+# 'receives' is one of:
+#   'none'   - the type doesn't listen to other nodes (e.g. AnalogInput)
+#   'single' - exactly one source node id (e.g. a controller output)
+#   'multi'  - zero or more source node ids (e.g. History, AvgAux)
+#
+# Each field entry mirrors the attrs used by get_settings()/the /settings
+# API (type: 'text'|'number'|'checkbox', optional min/max), plus
+# 'required' (no default, must be supplied on creation) or 'default'.
+
+NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
+    'AnalogInput': {
+        'receives': 'none',
+        'fields': [
+            {'key': 'port', 'label': 'Input port', 'type': 'text', 'default': ''},
+            {'key': 'initval', 'label': 'Initial value', 'type': 'number', 'default': 0.0},
+            {'key': 'unit', 'label': 'Unit', 'type': 'text', 'default': ''},
+            {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
+             'min': 1, 'max': 600, 'default': 10.0},
+            {'key': 'avg', 'label': 'Averaging [1=off]', 'type': 'number',
+             'min': 1, 'max': 5, 'default': 1},
+        ],
+    },
+    'SwitchInput': {
+        'receives': 'none',
+        'fields': [
+            {'key': 'port', 'label': 'Input port', 'type': 'text', 'default': ''},
+            {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
+             'min': 0.1, 'default': 0.5},
+            {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
+        ],
+    },
+    'ScheduleInput': {
+        'receives': 'none',
+        'fields': [
+            {'key': 'cronspec', 'label': 'CRON (m h DoM M DoW)', 'type': 'text', 'required': True},
+        ],
+    },
+    'AnalogDevice': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'port', 'label': 'Output port', 'type': 'text', 'default': ''},
+            {'key': 'minimum', 'label': 'Minimum [%]', 'type': 'number',
+             'min': 0, 'max': 99, 'default': 0},
+            {'key': 'maximum', 'label': 'Maximum [%]', 'type': 'number',
+             'min': 1, 'max': 100, 'default': 100},
+            {'key': 'percept', 'label': 'Perceptive', 'type': 'checkbox', 'default': False},
+        ],
+    },
+    'SlowPwmDevice': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'port', 'label': 'Output port', 'type': 'text', 'default': ''},
+            {'key': 'cycle', 'label': 'PWM cycle time [s]', 'type': 'number',
+             'min': 10, 'max': 300, 'default': 60.0},
+            {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
+        ],
+    },
+    'SwitchDevice': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'port', 'label': 'Output port', 'type': 'text', 'default': ''},
+            {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
+        ],
+    },
+    'MaximumCtrl': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'setpoint', 'label': 'Setpoint', 'type': 'number', 'required': True},
+            {'key': 'hysteresis', 'label': 'Hysteresis', 'type': 'number', 'default': 0.0},
+        ],
+    },
+    'MinimumCtrl': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'setpoint', 'label': 'Setpoint', 'type': 'number', 'required': True},
+            {'key': 'hysteresis', 'label': 'Hysteresis', 'type': 'number', 'default': 0.0},
+        ],
+    },
+    'PidCtrl': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'setpoint', 'label': 'Setpoint', 'type': 'number', 'required': True},
+            {'key': 'p_fact', 'label': 'P factor', 'type': 'number',
+             'min': -10, 'max': 10, 'default': 1.0},
+            {'key': 'i_fact', 'label': 'I factor', 'type': 'number',
+             'min': -10, 'max': 10, 'default': 0.05},
+            {'key': 'd_fact', 'label': 'D factor', 'type': 'number',
+             'min': -10, 'max': 10, 'default': 0.0},
+        ],
+    },
+    'SunCtrl': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'xscend', 'label': 'Ascend/descend factor', 'type': 'number',
+             'default': 1.0},
+        ],
+    },
+    'FadeCtrl': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'fade_time', 'label': 'Fade-in time [s]', 'type': 'number', 'default': 0},
+            {'key': 'fade_out', 'label': 'Fade-out time [s]', 'type': 'number', 'default': 0},
+        ],
+    },
+    'AvgAux': {
+        'receives': 'multi',
+        'fields': [
+            {'key': 'unfair_avg', 'label': 'Unweighted average [0=off]', 'type': 'number',
+             'min': 0, 'default': 0},
+        ],
+    },
+    'MaxAux': {
+        'receives': 'multi',
+        'fields': [],
+    },
+    'MinAux': {
+        'receives': 'multi',
+        'fields': [],
+    },
+    'ScaleAux': {
+        'receives': 'single',
+        'fields': [
+            {'key': 'unit', 'label': 'Unit', 'type': 'text', 'default': ''},
+            {'key': 'offset', 'label': 'Offset', 'type': 'number', 'default': 0.0},
+            {'key': 'factor', 'label': 'Scale factor', 'type': 'number', 'default': 1.0},
+        ],
+    },
+    'History': {
+        'receives': 'multi',
+        'fields': [
+            {'key': 'duration', 'label': 'Duration [h]', 'type': 'number',
+             'min': 1, 'default': 24},
+        ],
+    },
+}
+
+
+def _mk_receives_arg(receives_kind: str, receives: list[str]):
+    """ shape the plain list of receiver ids the API accepts into what
+        each node type's constructor expects
+    """
+    if receives_kind == 'none':
+        return None
+    if receives_kind == 'single':
+        return receives[0] if receives else ''
+    return list(receives)  # 'multi'
+
+
+def build_node(type_name: str, name: str, receives: list[str],
+              fields: dict[str, Any]) -> BusNode:
+    """ construct a brand new node of a *creatable* type (see
+        NODE_TYPE_SCHEMA) directly via its real constructor - used by the
+        /config graph editor (aquaPi/api.py) to add nodes at runtime.
+        Raises ValueError/KeyError on unknown type or missing fields.
+    """
+    schema = NODE_TYPE_SCHEMA.get(type_name)
+    if not schema:
+        raise ValueError(f'Unknown or non-creatable node type: {type_name!r}')
+
+    rcv = _mk_receives_arg(schema['receives'], receives)
+
+    if type_name == 'AnalogInput':
+        return AnalogInput(name, fields['port'], fields['initval'], fields['unit'],
+                           interval=fields['interval'], avg=int(fields['avg']))
+    if type_name == 'SwitchInput':
+        return SwitchInput(name, fields['port'],
+                           interval=fields['interval'], inverted=fields['inverted'])
+    if type_name == 'ScheduleInput':
+        return ScheduleInput(name, fields['cronspec'])
+    if type_name == 'AnalogDevice':
+        return AnalogDevice(name, rcv, fields['port'], percept=fields['percept'],
+                            minimum=fields['minimum'], maximum=fields['maximum'])
+    if type_name == 'SlowPwmDevice':
+        return SlowPwmDevice(name, rcv, fields['port'],
+                             inverted=fields['inverted'], cycle=fields['cycle'])
+    if type_name == 'SwitchDevice':
+        return SwitchDevice(name, rcv, fields['port'], inverted=fields['inverted'])
+    if type_name == 'MaximumCtrl':
+        return MaximumCtrl(name, rcv, fields['setpoint'], hysteresis=fields['hysteresis'])
+    if type_name == 'MinimumCtrl':
+        return MinimumCtrl(name, rcv, fields['setpoint'], hysteresis=fields['hysteresis'])
+    if type_name == 'PidCtrl':
+        return PidCtrl(name, rcv, fields['setpoint'], p_fact=fields['p_fact'],
+                       i_fact=fields['i_fact'], d_fact=fields['d_fact'])
+    if type_name == 'SunCtrl':
+        return SunCtrl(name, rcv, xscend=fields['xscend'])
+    if type_name == 'FadeCtrl':
+        return FadeCtrl(name, rcv, fade_time=fields['fade_time'], fade_out=fields['fade_out'])
+    if type_name == 'AvgAux':
+        return AvgAux(name, rcv, unfair_avg=int(fields['unfair_avg']))
+    if type_name == 'MaxAux':
+        return MaxAux(name, rcv)
+    if type_name == 'MinAux':
+        return MinAux(name, rcv)
+    if type_name == 'ScaleAux':
+        return ScaleAux(name, rcv, fields['unit'], offset=fields['offset'],
+                        factor=fields['factor'])
+    if type_name == 'History':
+        return History(name, rcv, duration=int(fields['duration']))
+
+    raise ValueError(f'Unknown or non-creatable node type: {type_name!r}')  # pragma: no cover
+
+
+def compute_node_id(name: str) -> str:
+    """ replicate BusNode.__init__'s id-from-name derivation, so the API
+        can check for a collision *before* constructing (and thus
+        side-effecting, e.g. driver creation) a new node.
+    """
+    node_id = name.lower()
+    node_id = node_id.replace(' ', '').replace('.', '').replace(';', '')
+    node_id = node_id.replace('Ä', 'Ae').replace('ä', 'ae')
+    node_id = node_id.replace('Ö', 'Oe').replace('ö', 'oe')
+    node_id = node_id.replace('Ü', 'Ue').replace('ü', 'ue')
+    node_id = node_id.replace('-', '_').replace('ß', 'ss')
+    return str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
+
+
+def would_create_cycle(bus: MsgBus, node_id: str, new_receives: list[str]) -> bool:
+    """ True if wiring 'node_id' to receive from 'new_receives' would
+        create a cycle, i.e. any of the new sources (directly or
+        transitively, via its own 'receives') already depends on
+        'node_id'.
+    """
+    for start in new_receives:
+        if start == node_id:
+            return True
+        visited: set[str] = set()
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            if cur == node_id:
+                return True
+            if cur in visited:
+                continue
+            visited.add(cur)
+            node = bus.get_node(cur)
+            if node:
+                stack.extend(node.receives)
+    return False
+
+
 def get_db_path(instance_path: str, filename: str = DEFAULT_DB_FILENAME) -> str:
     """ build the full path of the SQLite database file
     """
@@ -163,9 +412,11 @@ def _deserialize_node(type_name: str, state: dict[str, Any]) -> BusNode:
     node.__setstate__(state)
     # every concrete node type overrides __setstate__() without calling
     # super() (they call their own __init__() instead), so the generic
-    # 'group' attribute added to BusNode is restored centrally here
-    # instead of touching every single node subclass
+    # 'group'/'pos_x'/'pos_y' attributes added to BusNode are restored
+    # centrally here instead of touching every single node subclass
     node.group = state.get('group', '')
+    node.pos_x = state.get('pos_x', 0.0)
+    node.pos_y = state.get('pos_y', 0.0)
     return node
 
 

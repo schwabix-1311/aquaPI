@@ -301,3 +301,230 @@ def api_set_node_settings(node_id: str) -> Response:
 
     settings = [_settings_entry_to_dict(entry) for entry in node.get_settings()]
     return jsonify(settings)
+
+
+# --- /config: node-graph editor (Step 12) -----------------------------
+
+
+def _schema_field_attrs(field: dict) -> dict:
+    """ build the {type, min?, max?} attrs dict _validate_and_cast()
+        expects, from one NODE_TYPE_SCHEMA field descriptor
+    """
+    attrs = {'type': field['type']}
+    if 'min' in field:
+        attrs['min'] = field['min']
+    if 'max' in field:
+        attrs['max'] = field['max']
+    return attrs
+
+
+def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool) -> dict:
+    """ validate/cast a {key: value} dict against a NODE_TYPE_SCHEMA
+        field list. On creation (require_all=True), fields without a
+        submitted value fall back to their 'default', or raise if
+        'required' and no default is given. On update
+        (require_all=False), only the submitted keys are validated.
+        Raises ValueError on an unknown key or an invalid value.
+    """
+    by_key = {f['key']: f for f in schema_fields}
+
+    for key in raw_fields:
+        if key not in by_key:
+            raise ValueError(f'Unknown field: {key}')
+
+    result = {}
+    for key, field in by_key.items():
+        if key in raw_fields:
+            result[key] = _validate_and_cast(key, raw_fields[key], _schema_field_attrs(field))
+        elif require_all:
+            if 'default' in field:
+                result[key] = field['default']
+            elif field.get('required'):
+                raise ValueError(f'Missing required field: {key}')
+    return result
+
+
+@bp.route('/api/node-types/', methods=['GET'])
+@login_required
+def api_node_types() -> Response:
+    """ metadata describing every creatable node type (fields, how many
+        'receives' wires it accepts). Powers the node palette and the
+        add/edit dialog on /config. Alert nodes are intentionally not
+        listed here (their 'conditions' are out of scope for this
+        generic editor).
+    """
+    return jsonify(db.NODE_TYPE_SCHEMA)
+
+
+@bp.route('/api/nodes/', methods=['POST'])
+@roles_required('admin')
+def api_create_node() -> Response:
+    """ create a new node of a creatable type, wire it up on the live
+        bus and persist the topology.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error='Body must be a JSON object'), HTTPStatus.BAD_REQUEST
+
+    type_name = body.get('type')
+    schema = db.NODE_TYPE_SCHEMA.get(type_name)
+    if not schema:
+        return jsonify(error=f'Unknown or non-creatable node type: {type_name!r}'), HTTPStatus.BAD_REQUEST
+
+    name = (body.get('name') or '').strip()
+    if not name:
+        return jsonify(error='name must not be empty'), HTTPStatus.BAD_REQUEST
+
+    node_id = db.compute_node_id(name)
+    if bus.get_node(node_id):
+        return jsonify(error=f'A node named {name!r} already exists'), HTTPStatus.BAD_REQUEST
+
+    receives = body.get('receives', [])
+    if not isinstance(receives, list) or not all(isinstance(r, str) for r in receives):
+        return jsonify(error='receives must be a list of node ids'), HTTPStatus.BAD_REQUEST
+
+    if schema['receives'] == 'none' and receives:
+        return jsonify(error=f'{type_name} does not accept any receives'), HTTPStatus.BAD_REQUEST
+    if schema['receives'] == 'single' and len(receives) > 1:
+        return jsonify(error=f'{type_name} accepts at most 1 receives entry'), HTTPStatus.BAD_REQUEST
+
+    for rcv_id in receives:
+        if not bus.get_node(rcv_id):
+            return jsonify(error=f'Unknown receives node id: {rcv_id}'), HTTPStatus.BAD_REQUEST
+
+    raw_fields = body.get('fields', {})
+    if not isinstance(raw_fields, dict):
+        return jsonify(error='fields must be a JSON object'), HTTPStatus.BAD_REQUEST
+
+    try:
+        fields = _validate_fields(schema['fields'], raw_fields, require_all=True)
+        node = db.build_node(type_name, name, receives, fields)
+    except (ValueError, KeyError) as ex:
+        return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
+
+    node.group = str(body.get('group', '') or '')
+    try:
+        node.pos_x = float(body.get('pos_x', 0.0) or 0.0)
+        node.pos_y = float(body.get('pos_y', 0.0) or 0.0)
+    except (TypeError, ValueError):
+        node.pos_x = node.pos_y = 0.0
+
+    node.plugin(bus)
+
+    mr: MachineRoom = current_app.extensions['machineroom']
+    mr.save_nodes(bus)
+
+    log.info('User %r created node %r (type %s)', current_user.username, node.id, type_name)
+
+    return jsonify(_node_to_dict(node)), HTTPStatus.CREATED
+
+
+@bp.route('/api/nodes/<node_id>', methods=['PUT'])
+@roles_required('admin')
+def api_update_node(node_id: str) -> Response:
+    """ update an existing node's wiring (receives), position, group
+        and/or type-specific fields. Renaming (which would change the
+        node's id) is not supported by this route.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    node = bus.get_node(node_id)
+    if not node:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error='Body must be a JSON object'), HTTPStatus.BAD_REQUEST
+
+    schema = db.NODE_TYPE_SCHEMA.get(type(node).__name__)
+
+    if 'receives' in body:
+        receives = body['receives']
+        if not isinstance(receives, list) or not all(isinstance(r, str) for r in receives):
+            return jsonify(error='receives must be a list of node ids'), HTTPStatus.BAD_REQUEST
+        if not schema:
+            return jsonify(error=f'{type(node).__name__} does not support changing receives'), HTTPStatus.BAD_REQUEST
+        if schema['receives'] == 'none' and receives:
+            return jsonify(error=f'{type(node).__name__} does not accept any receives'), HTTPStatus.BAD_REQUEST
+        if schema['receives'] == 'single' and len(receives) > 1:
+            return jsonify(error=f'{type(node).__name__} accepts at most 1 receives entry'), HTTPStatus.BAD_REQUEST
+        for rcv_id in receives:
+            if not bus.get_node(rcv_id):
+                return jsonify(error=f'Unknown receives node id: {rcv_id}'), HTTPStatus.BAD_REQUEST
+        if db.would_create_cycle(bus, node_id, receives):
+            return jsonify(error='This wiring would create a cycle'), HTTPStatus.BAD_REQUEST
+        node.receives = receives
+
+    if 'fields' in body:
+        raw_fields = body['fields']
+        if not isinstance(raw_fields, dict):
+            return jsonify(error='fields must be a JSON object'), HTTPStatus.BAD_REQUEST
+        if not schema:
+            return jsonify(error=f'{type(node).__name__} does not support editing fields'), HTTPStatus.BAD_REQUEST
+        try:
+            fields = _validate_fields(schema['fields'], raw_fields, require_all=False)
+        except ValueError as ex:
+            return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
+        for key, value in fields.items():
+            setattr(node, key, value)
+
+    if 'group' in body:
+        node.group = str(body['group'] or '')
+
+    if 'pos_x' in body:
+        try:
+            node.pos_x = float(body['pos_x'])
+        except (TypeError, ValueError):
+            return jsonify(error='pos_x must be a number'), HTTPStatus.BAD_REQUEST
+
+    if 'pos_y' in body:
+        try:
+            node.pos_y = float(body['pos_y'])
+        except (TypeError, ValueError):
+            return jsonify(error='pos_y must be a number'), HTTPStatus.BAD_REQUEST
+
+    mr: MachineRoom = current_app.extensions['machineroom']
+    mr.save_nodes(bus)
+
+    log.info('User %r updated node %r: %s', current_user.username, node_id, list(body.keys()))
+
+    return jsonify(_node_to_dict(node))
+
+
+@bp.route('/api/nodes/<node_id>', methods=['DELETE'])
+@roles_required('admin')
+def api_delete_node(node_id: str) -> Response:
+    """ remove a node from the live bus, cleanly disconnecting it from
+        any other (non-Alert) node that still listens to it, then
+        persist the topology. Alert nodes are skipped when cleaning up
+        references since their 'receives' is derived from 'conditions',
+        not an independently editable wire.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    node = bus.get_node(node_id)
+    if not node:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    for other in bus.get_nodes():
+        if other is node or other.ROLE == BusRole.ALERTS:
+            continue
+        if node_id in other.receives:
+            other.receives = [r for r in other.receives if r != node_id]
+
+    node.pullout()
+
+    mr: MachineRoom = current_app.extensions['machineroom']
+    mr.save_nodes(bus)
+
+    log.info('User %r deleted node %r', current_user.username, node_id)
+
+    return Response(status=HTTPStatus.NO_CONTENT)

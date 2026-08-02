@@ -2,6 +2,7 @@ import auth from './modules/auth.js'
 import ui from './modules/ui.js'
 import dashboard from './modules/dashboard.js'
 import settings from './modules/settings.js'
+import config from './modules/config.js'
 
 Vue.use(Vuex)
 
@@ -10,7 +11,8 @@ export default new Vuex.Store({
 		ui,
 		auth,
 		dashboard,
-		settings
+		settings,
+		config
 	},
 	strict: false,
 })

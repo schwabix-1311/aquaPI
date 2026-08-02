@@ -1,0 +1,356 @@
+// Simple, dependency-free node box + SVG connector overlay for the
+// /config graph editor. Free-form drag&drop positioning is implemented
+// with plain mouse events (rather than vuedraggable, which targets
+// sortable *lists*, not absolute x/y placement) - no new dependency,
+// works fully offline/without a build step like the rest of the SPA.
+
+const NODE_BOX_WIDTH = 190
+const NODE_BOX_HEIGHT = 76
+
+const ROLE_COLORS = {
+	IN_ENDP: 'blue',
+	OUT_ENDP: 'deep-orange',
+	CTRL: 'green',
+	AUX: 'purple',
+	HISTORY: 'grey',
+	ALERTS: 'red',
+}
+
+const ConfigNodeBox = {
+	props: {
+		node: {type: Object, required: true},
+		connecting: {type: Boolean, default: false},
+	},
+	template: `
+		<v-sheet
+			:elevation="dragging ? 8 : 2"
+			outlined
+			class="config-node-box"
+			:class="{'config-node-box--connecting': connecting}"
+			:style="style"
+			@mousedown.stop="onDragStart"
+			@click.stop="onClick"
+		>
+			<div class="d-flex align-center justify-space-between px-2 pt-1">
+				<v-chip x-small label :color="color" text-color="white">{{ node.role }}</v-chip>
+				<div>
+					<v-btn icon x-small @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
+						<v-icon small>mdi-vector-line</v-icon>
+					</v-btn>
+					<v-btn icon x-small @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
+						<v-icon small>mdi-pencil</v-icon>
+					</v-btn>
+					<v-btn icon x-small @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
+						<v-icon small>mdi-delete</v-icon>
+					</v-btn>
+				</div>
+			</div>
+			<div class="px-2 pb-1">
+				<div class="font-weight-medium text-truncate">{{ node.name }}</div>
+				<div class="text-caption grey--text text-truncate">{{ node.type }}</div>
+			</div>
+		</v-sheet>
+	`,
+	data: function() {
+		return {
+			dragging: false,
+			dragOffset: {x: 0, y: 0},
+			localX: this.node.pos_x || 0,
+			localY: this.node.pos_y || 0,
+		}
+	},
+	watch: {
+		'node.pos_x': function(val) { if (!this.dragging) this.localX = val || 0 },
+		'node.pos_y': function(val) { if (!this.dragging) this.localY = val || 0 },
+	},
+	computed: {
+		color: function() {
+			return ROLE_COLORS[this.node.role] || 'grey'
+		},
+		style: function() {
+			return {
+				left: this.localX + 'px',
+				top: this.localY + 'px',
+				width: NODE_BOX_WIDTH + 'px',
+			}
+		},
+	},
+	methods: {
+		onClick: function() {
+			this.$emit('select', this.node)
+		},
+		onDragStart: function(ev) {
+			this.dragging = true
+			this.dragOffset = {x: ev.clientX - this.localX, y: ev.clientY - this.localY}
+			const onMove = (mv) => {
+				this.localX = Math.max(0, mv.clientX - this.dragOffset.x)
+				this.localY = Math.max(0, mv.clientY - this.dragOffset.y)
+				this.$emit('drag', {node: this.node, x: this.localX, y: this.localY})
+			}
+			const onUp = () => {
+				this.dragging = false
+				document.removeEventListener('mousemove', onMove)
+				document.removeEventListener('mouseup', onUp)
+				this.$emit('drag-end', {node: this.node, x: this.localX, y: this.localY})
+			}
+			document.addEventListener('mousemove', onMove)
+			document.addEventListener('mouseup', onUp)
+		},
+	},
+}
+Vue.component('ConfigNodeBox', ConfigNodeBox)
+
+const ConfigConnections = {
+	props: {
+		nodes: {type: Array, required: true},
+		width: {type: Number, required: true},
+		height: {type: Number, required: true},
+	},
+	template: `
+		<svg class="config-connections" :width="width" :height="height">
+			<line
+				v-for="edge in edges"
+				:key="edge.key"
+				:x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+				stroke="#90a4ae" stroke-width="2" marker-end="url(#config-arrow)"
+				class="config-connection-line"
+				@click="$emit('remove', edge)"
+			></line>
+			<defs>
+				<marker id="config-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+					<path d="M0,0 L8,4 L0,8 z" fill="#90a4ae"></path>
+				</marker>
+			</defs>
+		</svg>
+	`,
+	computed: {
+		byId: function() {
+			const map = {}
+			this.nodes.forEach(n => { map[n.id] = n })
+			return map
+		},
+		edges: function() {
+			const edges = []
+			this.nodes.forEach(target => {
+				(target.receives || []).forEach(sourceId => {
+					const source = this.byId[sourceId]
+					if (!source) return
+					edges.push({
+						key: sourceId + '->' + target.id,
+						sourceId, targetId: target.id,
+						x1: (source.pos_x || 0) + NODE_BOX_WIDTH,
+						y1: (source.pos_y || 0) + NODE_BOX_HEIGHT / 2,
+						x2: (target.pos_x || 0),
+						y2: (target.pos_y || 0) + NODE_BOX_HEIGHT / 2,
+					})
+				})
+			})
+			return edges
+		},
+	},
+}
+Vue.component('ConfigConnections', ConfigConnections)
+
+const ConfigNodeDialog = {
+	props: {
+		value: {type: Boolean, default: false},
+		nodeTypes: {type: Object, required: true},
+		nodes: {type: Array, required: true},
+		editNode: {type: Object, default: null},
+	},
+	template: `
+		<v-dialog v-model="show" max-width="520" persistent>
+			<v-card>
+				<v-card-title>
+					{{ editNode ? $t('pages.config.editNode') : $t('pages.config.addNode') }}
+				</v-card-title>
+				<v-card-text>
+					<v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>
+
+					<v-select
+						v-if="!editNode"
+						v-model="form.type"
+						:items="typeItems"
+						:label="$t('pages.config.nodeType')"
+						outlined dense
+						@change="onTypeChange"
+					></v-select>
+
+					<v-text-field
+						v-if="!editNode"
+						v-model="form.name"
+						:label="$t('pages.config.nodeName')"
+						outlined dense
+					></v-text-field>
+
+					<v-select
+						v-if="receivesKind !== 'none'"
+						v-model="form.receives"
+						:items="receivesItems"
+						:multiple="receivesKind === 'multi'"
+						:label="$t('pages.config.receives')"
+						outlined dense
+						clearable
+					></v-select>
+
+					<v-text-field
+						v-model="form.group"
+						:label="$t('pages.config.group')"
+						outlined dense
+					></v-text-field>
+
+					<div v-for="field in schemaFields" :key="field.key">
+						<v-switch
+							v-if="field.type === 'checkbox'"
+							v-model="form.fields[field.key]"
+							:label="field.label"
+							dense
+						></v-switch>
+						<v-text-field
+							v-else-if="field.type === 'number'"
+							v-model.number="form.fields[field.key]"
+							:label="field.label"
+							type="number"
+							:min="field.min" :max="field.max"
+							outlined dense
+						></v-text-field>
+						<v-text-field
+							v-else
+							v-model="form.fields[field.key]"
+							:label="field.label"
+							outlined dense
+						></v-text-field>
+					</div>
+				</v-card-text>
+				<v-card-actions>
+					<v-spacer></v-spacer>
+					<v-btn text @click="cancel">{{ $t('pages.config.cancel') }}</v-btn>
+					<v-btn color="primary" @click="save" :loading="saving">{{ $t('pages.config.save') }}</v-btn>
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
+	`,
+	data: function() {
+		return {
+			form: {type: '', name: '', receives: null, group: '', fields: {}},
+			saving: false,
+			error: null,
+		}
+	},
+	computed: {
+		show: {
+			get: function() { return this.value },
+			set: function(val) { this.$emit('input', val) },
+		},
+		typeItems: function() {
+			return Object.keys(this.nodeTypes).sort()
+		},
+		schema: function() {
+			const typeName = this.editNode ? this.editNode.type : this.form.type
+			return this.nodeTypes[typeName] || {receives: 'none', fields: []}
+		},
+		schemaFields: function() {
+			return this.schema.fields || []
+		},
+		receivesKind: function() {
+			return this.schema.receives || 'none'
+		},
+		receivesItems: function() {
+			const selfId = this.editNode ? this.editNode.id : null
+			return this.nodes
+				.filter(n => n.id !== selfId)
+				.map(n => ({text: n.name + ' (' + n.type + ')', value: n.id}))
+		},
+	},
+	watch: {
+		value: function(val) {
+			if (val) {
+				this.resetForm()
+			}
+		},
+	},
+	methods: {
+		resetForm: function() {
+			this.error = null
+			if (this.editNode) {
+				this.form = {
+					type: this.editNode.type,
+					name: this.editNode.name,
+					receives: this.receivesKind === 'multi'
+						? (this.editNode.receives || []).slice()
+						: ((this.editNode.receives || [])[0] || null),
+					group: this.editNode.group || '',
+					fields: this.buildFieldValues(this.editNode),
+				}
+			} else {
+				this.form = {type: '', name: '', receives: null, group: '', fields: {}}
+			}
+		},
+		buildFieldValues: function(node) {
+			const values = {}
+			this.schemaFields.forEach(field => {
+				values[field.key] = (node && node[field.key] !== undefined) ? node[field.key]
+					: (field.default !== undefined ? field.default : '')
+			})
+			return values
+		},
+		onTypeChange: function() {
+			this.form.receives = this.receivesKind === 'multi' ? [] : null
+			this.form.fields = this.buildFieldValues(null)
+		},
+		asReceivesList: function() {
+			if (this.receivesKind === 'none') return []
+			if (this.receivesKind === 'multi') return this.form.receives || []
+			return this.form.receives ? [this.form.receives] : []
+		},
+		cancel: function() {
+			this.show = false
+		},
+		save: async function() {
+			this.error = null
+			this.saving = true
+			try {
+				if (this.editNode) {
+					const result = await this.$store.dispatch('config/updateNode', {
+						nodeId: this.editNode.id,
+						changes: {
+							receives: this.asReceivesList(),
+							group: this.form.group,
+							fields: this.form.fields,
+						},
+					})
+					if (!result.ok) {
+						this.error = result.error
+						return
+					}
+				} else {
+					if (!this.form.type || !this.form.name) {
+						this.error = this.$t('pages.config.errNameType')
+						return
+					}
+					const result = await this.$store.dispatch('config/createNode', {
+						type: this.form.type,
+						name: this.form.name,
+						receives: this.asReceivesList(),
+						group: this.form.group,
+						fields: this.form.fields,
+						pos_x: 20,
+						pos_y: 20,
+					})
+					if (!result.ok) {
+						this.error = result.error
+						return
+					}
+				}
+				this.show = false
+			} finally {
+				this.saving = false
+			}
+		},
+	},
+}
+Vue.component('ConfigNodeDialog', ConfigNodeDialog)
+
+export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT}
+
+// vim: set noet ts=4 sw=4:

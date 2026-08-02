@@ -111,3 +111,39 @@ html::-webkit-scrollbar {
 .fade-leave-to {
     opacity: 0;
 }
+
+/* /config graph editor (Step 12) */
+.config-canvas-wrapper {
+    width: 100%;
+    overflow: auto;
+    border: 1px dashed rgba(128, 128, 128, 0.4);
+}
+.config-canvas {
+    position: relative;
+}
+.config-connections {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+.config-connection-line {
+    pointer-events: stroke;
+    cursor: pointer;
+}
+.config-connection-line:hover {
+    stroke: #f44336 !important;
+    stroke-width: 3;
+}
+.config-node-box {
+    position: absolute;
+    cursor: move;
+    user-select: none;
+    background-color: rgba(255, 255, 255, 0.95);
+}
+.theme--dark .config-node-box {
+    background-color: rgba(48, 48, 48, 0.95);
+}
+.config-node-box--connecting {
+    outline: 2px solid #1976d2;
+}

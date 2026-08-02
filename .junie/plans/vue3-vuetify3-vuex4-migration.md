@@ -132,7 +132,7 @@ The app has a working, Vue-3-safe mechanism for global component registration an
 - Remove the dead `this.$root.$on('test-clicked', ...)` block from `AppFooComp` in `aquaPi/static/spa/comps.js`.
 - Rename `destroyed()` → `unmounted()` and `beforeDestroy()` → `beforeUnmount()` in `App.vue.js`, `components/app/AquapiConfirmDialog.vue.js`, `layouts/Default.vue.js`, and `components/dashboard/comps.js`.
 
-### * Step 3: Rewrite the app bootstrap for the Vue 3 / Vuex 4 / Router 4 / I18n 9 / Vuetify 3 APIs
+### ✓ Step 3: Rewrite the app bootstrap for the Vue 3 / Vuex 4 / Router 4 / I18n 9 / Vuetify 3 APIs
 The application boots via `Vue.createApp()` and all core plugins are wired up through the new v3/v4/v9 APIs.
 - `store/index.js`: switch to `Vuex.createStore({modules})`, dropping `Vue.use(Vuex)`.
 - `router/index.js`: switch to `VueRouter.createRouter({history: VueRouter.createWebHashHistory(), routes, scrollBehavior})`, keeping the existing `beforeEach` guard logic.
@@ -140,7 +140,7 @@ The application boots via `Vue.createApp()` and all core plugins are wired up th
 - `main.js`: switch to `Vue.createApp(App)`, `app.use(store/router/i18n/vuetify)`, move `$confirm`/`$alert` onto `app.config.globalProperties`, call `installGlobalComponents(app)` from stage 2, then `app.mount('#app')`.
 - Adapt the `createVuetify({icons, theme})` call to the Vuetify 3 theme-config shape while preserving the existing color palette and MDI iconfont.
 
-###   Step 4: Verify all existing pages against the new stack and fix surfaced component-level breakages
+### * Step 4: Verify all existing pages against the new stack and fix surfaced component-level breakages
 All existing pages/flows work unchanged on the new Vue 3 stack, verified manually in the running simulation.
 - Manually exercise: app boot/splash, login flow, dashboard live updates via SSE (EventBus), `/config` editor (component registry + confirm dialog + draft save/discard), `/settings` page, dark-mode toggle, nav drawer.
 - Fix any small per-component Vuetify 3 API differences that surface during this verification (e.g. renamed/removed props), keeping changes minimal and scoped to restoring prior behavior rather than redesigning components.

@@ -69,10 +69,9 @@ const routes = [
 	}
 ];
 
-const router =	new VueRouter({
-	// TODO: maybe switch to mode 'history', when we do not need old URL paths any longer
-	mode: 'hash', //'history',
-	// base: process.env.BASE_URL,
+const router = VueRouter.createRouter({
+	// TODO: maybe switch to createWebHistory(), when we do not need old URL paths any longer
+	history: VueRouter.createWebHashHistory(),
 	routes,
 	scrollBehavior(to, from, savedPosition) {
 		const mainWrapper = document.querySelector('div.v-main__wrap')

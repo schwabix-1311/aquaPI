@@ -3,41 +3,17 @@ import router from './router/index.js'
 import i18n from './i18n/index.js'
 import App from './App.vue.js'
 import {AQUAPI_EVENTS, EventBus} from './components/app/EventBus.js'
+import {installGlobalComponents} from './components/app/registry.js'
 
-Vue.config.productionTip = true;
-
-Vue.prototype.$confirm = function(message, options = {}) {
-	return new Promise((resolve) => {
-		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {message, options, resolve})
-	})
-}
-Vue.prototype.$alert = function(message, options = {}) {
-	return new Promise((resolve) => {
-		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {
-			message,
-			options: Object.assign({}, options, {alertOnly: true}),
-			resolve,
-		})
-	})
-}
-
-// Vue.use(VueToast, {
-// 	position: 'top',
-// 	duration: 0
-// });
-
-const app = new Vue({
-	eventbus: new Vue(),
-	store,
-	router,
-	i18n,
-	vuetify: new Vuetify({
-		icons: {
-			iconfont: 'mdi', // 'mdi' || 'mdiSvg' || 'md' || 'fa' || 'fa4' || 'faSvg'
-		},
-		theme: {
-			themes: {
-				light: {
+const vuetify = Vuetify.createVuetify({
+	icons: {
+		defaultSet: 'mdi', // 'mdi' || 'mdiSvg' || 'md' || 'fa' || 'fa4' || 'faSvg'
+	},
+	theme: {
+		defaultTheme: 'light',
+		themes: {
+			light: {
+				colors: {
 					primary: '#1976D2',
 					secondary: '#424242',
 					accent: '#82B1FF',
@@ -48,8 +24,18 @@ const app = new Vue({
 				},
 			},
 		},
-	}),
-	render: (h) => h(App),
+	},
+})
+
+// Vue.use(VueToast, {
+// 	position: 'top',
+// 	duration: 0
+// });
+
+const app = Vue.createApp({
+	render() {
+		return Vue.h(App)
+	},
 	methods: {
 		toggleNavDrawer() {
 			const dialogName = 'AquapiNavDrawer'
@@ -125,10 +111,33 @@ const app = new Vue({
 		} catch(e) {}
 	},
 
-	beforeDestroy() {
+	beforeUnmount() {
 		this.detachEventListeners()
 	}
+})
 
-}).$mount('#app');
+app.config.globalProperties.$confirm = function(message, options = {}) {
+	return new Promise((resolve) => {
+		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {message, options, resolve})
+	})
+}
+app.config.globalProperties.$alert = function(message, options = {}) {
+	return new Promise((resolve) => {
+		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {
+			message,
+			options: Object.assign({}, options, {alertOnly: true}),
+			resolve,
+		})
+	})
+}
+
+app.use(store)
+app.use(router)
+app.use(i18n)
+app.use(vuetify)
+
+installGlobalComponents(app)
+
+app.mount('#app')
 
 // vim: set noet ts=4 sw=4:

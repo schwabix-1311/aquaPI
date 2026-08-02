@@ -4,9 +4,7 @@ import dashboard from './modules/dashboard.js'
 import settings from './modules/settings.js'
 import config from './modules/config.js'
 
-Vue.use(Vuex)
-
-export default new Vuex.Store({
+export default Vuex.createStore({
 	modules: {
 		ui,
 		auth,

@@ -1,7 +1,9 @@
 import de from './locales/de.js';
 import en from './locales/en.js';
 
-export default new VueI18n({
+export default VueI18n.createI18n({
+	legacy: false,
+	globalInjection: true,
 	locale: navigator.language.substring(0, 2) || 'en',
 	fallbackLocale: 'de',
 	messages: {de, en},

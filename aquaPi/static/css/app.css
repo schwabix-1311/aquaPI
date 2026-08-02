@@ -86,6 +86,25 @@ div.aquapi-dashboard div.v-expansion-panel--active > .v-expansion-panel-header {
 div.aquapi-dashboard div.v-expansion-panel-content__wrap {
     padding: 0;
 }
+
+/* Dependency-free replacement for vue-masonry-css (Vue-2-only, removed in
+   the Vue 3 migration bugfix follow-up); mirrors the previous
+   {default: 3, 1264: 3, 960: 2, 600: 1} column breakpoints via
+   AquapiDashboard's columnCount computed property (JS-driven, since the
+   number of columns must also be known to bucket widgets round-robin). */
+.aquapi-dashboard-masonry {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+.aquapi-dashboard-masonry-col {
+    flex: 1 1 0;
+    min-width: 0;
+}
+.aquapi-dashboard-masonry-col + .aquapi-dashboard-masonry-col {
+    margin-left: 24px;
+}
+
 div::-webkit-scrollbar-track {
     background-color: rgba(100, 100, 100, 0.1);
 }

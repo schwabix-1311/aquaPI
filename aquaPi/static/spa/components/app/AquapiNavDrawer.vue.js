@@ -12,14 +12,12 @@ const AquapiNavDrawer = {
 			:width="$store.state.ui.navigation.drawerWidth"
 		>
 			<v-list-item @click="$root.navigate({route: 'home'})">
-				<v-list-item-content>
-					<v-list-item-title class="text-h6">
-						{{ $t('app.name') }}
-					</v-list-item-title>
-					<v-list-item-subtitle>
-					{{ $t('app.subtitle') }}
-					</v-list-item-subtitle>
-				</v-list-item-content>
+				<v-list-item-title class="text-h6">
+					{{ $t('app.name') }}
+				</v-list-item-title>
+				<v-list-item-subtitle>
+				{{ $t('app.subtitle') }}
+				</v-list-item-subtitle>
 				<v-btn
 					icon
 					@click.stop="navDrawerVisible = false"
@@ -35,11 +33,9 @@ const AquapiNavDrawer = {
 				nav
 			>
 				<v-list-item>
-					<v-list-item-content>
-						<v-list-item-title>
-							<a href="/settings">(alte) Settings</a>
-						</v-list-item-title>
-					</v-list-item-content>
+					<v-list-item-title>
+						<a href="/settings">(alte) Settings</a>
+					</v-list-item-title>
 				</v-list-item>
 			
 				<v-list-item
@@ -49,16 +45,14 @@ const AquapiNavDrawer = {
 					link
 					@click="$root.navigate(item)"
 				>
-					<v-list-item-icon class="mr-3">
-						<v-icon v-if="item.icon">
+					<template #prepend>
+						<v-icon v-if="item.icon" class="mr-3">
 							{{ item.icon }}
 						</v-icon>
-					</v-list-item-icon>
-					<v-list-item-content>
-						<v-list-item-title>
-							{{ $t('pages.' + item.name + '.label') }}
-						</v-list-item-title>
-					</v-list-item-content>
+					</template>
+					<v-list-item-title>
+						{{ $t('pages.' + item.name + '.label') }}
+					</v-list-item-title>
 				</v-list-item>
 
 				<v-divider class="mb-1"></v-divider>
@@ -68,16 +62,14 @@ const AquapiNavDrawer = {
 						link
 						@click="$store.dispatch('auth/logout')"
 					>
-						<v-list-item-icon class="mr-3">
-							<v-icon>
+						<template #prepend>
+							<v-icon class="mr-3">
 								mdi-logout
 							</v-icon>
-						</v-list-item-icon>
-						<v-list-item-content>
-							<v-list-item-title>
-								{{ $t('pages.logout.label') }}
-							</v-list-item-title>
-						</v-list-item-content>
+						</template>
+						<v-list-item-title>
+							{{ $t('pages.logout.label') }}
+						</v-list-item-title>
 					</v-list-item>
 				</template>
 				<template v-else>
@@ -85,16 +77,14 @@ const AquapiNavDrawer = {
 						link
 						@click="$root.navigate({route: 'login'})"
 					>
-						<v-list-item-icon class="mr-3">
-							<v-icon>
+						<template #prepend>
+							<v-icon class="mr-3">
 								mdi-login
 							</v-icon>
-						</v-list-item-icon>
-						<v-list-item-content>
-							<v-list-item-title>
-								{{ $t('pages.login.label') }}
-							</v-list-item-title>
-						</v-list-item-content>
+						</template>
+						<v-list-item-title>
+							{{ $t('pages.login.label') }}
+						</v-list-item-title>
 					</v-list-item>
 				</template>
 			</v-list>

@@ -4,12 +4,11 @@ import {registerGlobalComponent} from '../app/registry.js'
 const AquapiDashboardConfigurator = {
 	template: `
 		<v-navigation-drawer
-			v-show="$store.getters['ui/isActiveDialog']('AquapiDashboardConfigurator')"
+			:model-value="$store.getters['ui/isActiveDialog']('AquapiDashboardConfigurator')"
+			@update:model-value="(v) => (v ? null : hideConfigurator())"
 			width="500"
-			fixed
-			right
-			permanent
-			:overlay-opacity="0.8"
+			location="right"
+			temporary
 			:style="'max-width:100vw;'"
 			id="dashboard_configurator"
 		>
@@ -30,7 +29,7 @@ const AquapiDashboardConfigurator = {
 				<v-divider></v-divider>
 
 				<v-card-text class="pa-2">
-					<draggable v-model="widgets" handle=".handle" direction="vertical">
+					<div ref="widgetList">
 						<v-card 
 							v-for="(item, idx) in widgets"
 							:key="item.identifier"
@@ -69,7 +68,7 @@ const AquapiDashboardConfigurator = {
 								</v-col>
 							</v-row>
 						</v-card>
-					</draggable>
+					</div>
 
 				</v-card-text>
 
@@ -119,6 +118,15 @@ const AquapiDashboardConfigurator = {
 		toggleVisibility(item) {
 			item.visible = !item.visible
 		},
+		reorderWidgets(from, to) {
+			if (from === to) {
+				return
+			}
+			const items = this.widgets.slice()
+			const [moved] = items.splice(from, 1)
+			items.splice(to, 0, moved)
+			this.widgets = items
+		},
 		typeLabel(item) {
 			return ['AUX', 'CTRL', 'HISTORY', 'IN_ENDP', 'OUT_ENDP', 'ALERTS'].includes(item.role)
 				? this.$t('misc.nodeTypes.' + item.role.toLowerCase())
@@ -133,7 +141,20 @@ const AquapiDashboardConfigurator = {
 			const result = await this.$store.dispatch('dashboard/persistConfig', this.widgets)
 			this.hideConfigurator()
 		},
-	}
+	},
+
+	mounted() {
+		this._sortable = Sortable.create(this.$refs.widgetList, {
+			handle: '.handle',
+			onEnd: (evt) => this.reorderWidgets(evt.oldIndex, evt.newIndex),
+		})
+	},
+	unmounted() {
+		if (this._sortable) {
+			this._sortable.destroy()
+			this._sortable = null
+		}
+	},
 }
 registerGlobalComponent('AquapiDashboardConfigurator', AquapiDashboardConfigurator)
 
@@ -334,28 +355,32 @@ const AquapiDashboard = {
 					</v-col>
 				</v-row>
 
-				<masonry
-					:cols="{default: 3, 1264: 3, 960: 2, 600: 1}"
-					:gutter="24"
-				>
-					<div 
-						v-for="(item, index) in widgets" 
-						:key="item.identifier"
-						class="mb-6"
+				<div class="aquapi-dashboard-masonry">
+					<div
+						v-for="(column, colIndex) in columns"
+						:key="colIndex"
+						class="aquapi-dashboard-masonry-col"
 					>
-						<aquapi-dashboard-widget
-							:item="item"
-							:addTitle="true"
+						<div 
+							v-for="item in column" 
+							:key="item.identifier"
+							class="mb-6"
 						>
-						</aquapi-dashboard-widget>
+							<aquapi-dashboard-widget
+								:item="item"
+								:addTitle="true"
+							>
+							</aquapi-dashboard-widget>
+						</div>
 					</div>
-				</masonry>
+				</div>
 			</v-card-text>
 		</v-card>
 	`,
 
 	data() {
 		return {
+			dashboardWidth: (typeof window !== 'undefined' ? window.innerWidth : 1264),
 		};
 	},
 
@@ -375,7 +400,22 @@ const AquapiDashboard = {
 			set(items) {
 				this.$store.commit('dashboard/setNodes', items)
 			}
-		}
+		},
+		// mirrors the old vue-masonry-css {default: 3, 1264: 3, 960: 2, 600: 1} breakpoints
+		columnCount() {
+			if (this.dashboardWidth >= 960) {
+				return 3
+			}
+			if (this.dashboardWidth >= 600) {
+				return 2
+			}
+			return 1
+		},
+		columns() {
+			const cols = Array.from({length: this.columnCount}, () => [])
+			this.widgets.forEach((item, i) => cols[i % this.columnCount].push(item))
+			return cols
+		},
 	},
 
 	methods: {
@@ -394,9 +434,16 @@ const AquapiDashboard = {
 				this.widgets = result
 			}
 		},
+		updateDashboardWidth() {
+			this.dashboardWidth = window.innerWidth
+		},
 	},
 	async mounted() {
 		await this.loadConfig()
+		window.addEventListener('resize', this.updateDashboardWidth)
+	},
+	unmounted() {
+		window.removeEventListener('resize', this.updateDashboardWidth)
 	},
 }
 registerGlobalComponent('AquapiDashboard', AquapiDashboard)

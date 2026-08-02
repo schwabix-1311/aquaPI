@@ -9,6 +9,7 @@ from flask_login import (login_required, current_user)
 
 from . import db
 from .auth import roles_required
+from .driver.base import DriverError
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import BusRole
 from .pages.sse_util import send_sse_events
@@ -39,14 +40,17 @@ def api_nodes() -> Response:
     """ return array of all node's ids
     """
     bus = the_bus()
-    if bus:
-        node_ids = [node.id for node in
-                    sorted(bus.get_nodes(), key=lambda node: node.ROLE.value)]
-        if node_ids:
-            body = json.dumps(node_ids)
-            log.debug('API nodes: %s', body)
-            return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
-    return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+    if bus is None:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    # an empty topology (e.g. right after a fresh start, or if every
+    # node failed to restore) is a valid state, not a server error -
+    # this used to answer with 500 whenever node_ids was empty
+    node_ids = [node.id for node in
+                sorted(bus.get_nodes(), key=lambda node: node.ROLE.value)]
+    body = json.dumps(node_ids)
+    log.debug('API nodes: %s', body)
+    return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')
 
 
 def _node_to_dict(node) -> dict:
@@ -619,7 +623,7 @@ def api_insert_template(name: str) -> Response:
 
     try:
         new_nodes = db.instantiate_template(bus, template['data'])
-    except (ValueError, KeyError, TypeError) as ex:
+    except (ValueError, KeyError, TypeError, DriverError) as ex:
         log.exception('api_insert_template: failed to instantiate template %r', name)
         return jsonify(error=f'Could not insert template: {ex}'), HTTPStatus.BAD_REQUEST
 

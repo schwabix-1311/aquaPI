@@ -37,6 +37,7 @@ from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
 from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux)
 from .machineroom.hist_nodes import History
 from .machineroom.alert_nodes import (Alert, AlertAbove, AlertBelow)
+from .driver.base import DriverError
 
 
 log = logging.getLogger('aquaPi.db')
@@ -470,12 +471,16 @@ def load_topology(db_path: str) -> MsgBus:
         state = json.loads(row['params'])
         try:
             nodes.append(_deserialize_node(row['type'], state))
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError, DriverError):
             log.exception('load_topology: failed to restore node %r (type %r), skipping',
                           row['id'], row['type'])
 
     for node in nodes:
-        node.plugin(bus)
+        try:
+            node.plugin(bus)
+        except (ValueError, KeyError, TypeError, DriverError):
+            log.exception('load_topology: failed to plug in node %r, skipping',
+                          getattr(node, 'id', '?'))
 
     log.info('load_topology: %d nodes restored from %s', len(nodes), db_path)
     return bus
@@ -724,8 +729,11 @@ def restore_snapshot_into_bus(bus: MsgBus, snapshot_rows: list[dict[str, Any]]) 
         a snapshot: tears down every currently plugged-in node first,
         then reconstructs and plugs in every snapshot node (whitelisted
         NODE_FACTORY only, never pickle/eval). A node that fails to
-        restore (e.g. an unknown type from a foreign export) is skipped
-        with a log entry rather than aborting the whole restore.
+        restore or to plug in (e.g. an unknown type from a foreign
+        export, or a driver/port error) is skipped with a log entry
+        rather than aborting the whole restore - once teardown() has
+        run, aborting would leave the live bus permanently empty
+        instead of just missing the one problematic node.
     """
     bus.teardown()
     nodes = []
@@ -734,11 +742,15 @@ def restore_snapshot_into_bus(bus: MsgBus, snapshot_rows: list[dict[str, Any]]) 
             nodes.append(_deserialize_node(row['type'], row['params']
                                            if isinstance(row['params'], dict)
                                            else json.loads(row['params'])))
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError, DriverError):
             log.exception('restore_snapshot_into_bus: failed to restore node %r (type %r), skipping',
                           row.get('id'), row.get('type'))
     for node in nodes:
-        node.plugin(bus)
+        try:
+            node.plugin(bus)
+        except (ValueError, KeyError, TypeError, DriverError):
+            log.exception('restore_snapshot_into_bus: failed to plug in node %r, skipping',
+                          getattr(node, 'id', '?'))
 
 
 # --- users / authentication -------------------------------------------

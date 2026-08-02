@@ -411,3 +411,36 @@ def test_restore_snapshot_persists_topology(client, users, app):
 
     client.post('/api/config/snapshots/backup1/restore')
     assert app.extensions['machineroom'].saved == saved_before + 1
+
+
+def test_restore_snapshot_skips_conflicting_port_instead_of_emptying_bus():
+    """ regression test: a snapshot containing two nodes that (e.g. due
+        to a previous bug, or a manually edited export) claim the same
+        hardware/driver port used to raise an uncaught
+        DriverPortInuseError, which aborted restore_snapshot_into_bus()
+        *after* it had already torn down the live bus - leaving it
+        permanently empty (GET /api/nodes/ then 500s forever). The
+        conflicting node must now be skipped instead, so the rest of
+        the topology (and therefore the live bus) survives the restore.
+    """
+    bus = MsgBus(threaded=False)
+    sensor = AnalogInput('Temperatur', 'DS1820 #1', 25.0, '°C')
+    sensor.plugin(bus)
+    try:
+        snapshot_rows = [
+            {'id': 'temperatur', 'type': 'AnalogInput',
+             'params': dict(sensor.__getstate__(), name='Temperatur')},
+            {'id': 'temperatur-2', 'type': 'AnalogInput',
+             'params': dict(sensor.__getstate__(), name='Temperatur 2')},
+        ]
+
+        # must not raise, even though both entries claim 'DS1820 #1'
+        db.restore_snapshot_into_bus(bus, snapshot_rows)
+
+        # at least the first node must have survived the restore -
+        # the bus must not be left permanently empty
+        assert len(bus.nodes) == 1
+        assert bus.get_node('temperatur') is not None
+        assert bus.get_node('temperatur').port == 'DS1820 #1'
+    finally:
+        bus.teardown()

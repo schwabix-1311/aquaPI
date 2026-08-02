@@ -25,6 +25,15 @@ The configuration of controller blocks has no user interface yet; you need to ed
 - Reporting functions in various ways (email/Telegram alerts, logging page).
 - Documentation. Testing. Translation. Deployment.
 
+**Running the automated tests**
+
+The backend test suite (`tests/`) uses `pytest` and needs no real hardware, no running QuestDB instance and no manual setup - each test builds its own temporary, isolated SQLite database and simulation-mode node bus. From the project root, with your virtual environment activated:
+```
+pip install -r requirements-dev.txt
+pytest
+```
+A few tests are marked `questdb` and only run meaningfully against a real QuestDB instance; to skip them explicitly, run `pytest -m "not questdb"`.
+
 If you are interested in contributing in any form, you are welcome! Please leave a note in Discussion or Issues.
 If you don't want to contribute but have an idea of a "killer feature" let's talk about it in Discussions too.  BTW, German is my native language; feel free to use it here.
 

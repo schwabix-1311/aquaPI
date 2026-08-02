@@ -1087,6 +1087,15 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 PRIMARY KEY (user_id, alert_node_id)
             )
         """)
+        # 'escalation_channel'/'escalation_after_minutes' were added in
+        # Step 28 (alarm escalation) - migrate existing DBs
+        pref_cols = {row['name'] for row in conn.execute('PRAGMA table_info(user_notification_prefs)')}
+        if 'escalation_channel' not in pref_cols:
+            conn.execute("ALTER TABLE user_notification_prefs "
+                        "ADD COLUMN escalation_channel TEXT NOT NULL DEFAULT 'none'")
+        if 'escalation_after_minutes' not in pref_cols:
+            conn.execute('ALTER TABLE user_notification_prefs '
+                        'ADD COLUMN escalation_after_minutes INTEGER NOT NULL DEFAULT 0')
         conn.execute("""
             CREATE TABLE IF NOT EXISTS dashboards (
                 user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -1595,21 +1604,33 @@ def migrate_notification_config_from_json(globals_cfg: dict[str, Any],
 # --- per-user, per-alert notification preferences -----------------------
 
 def set_user_notification_pref(db_path: str, user_id: int, alert_node_id: str,
-                               channel: str) -> None:
+                               channel: str, escalation_channel: str = 'none',
+                               escalation_after_minutes: int = 0) -> None:
     """ set (create or replace) the preferred notification channel a
-        user wants for a given Alert node ('email'/'telegram'/'none')
+        user wants for a given Alert node ('email'/'telegram'/'none').
+        Optionally also sets a 2nd, escalation channel that gets
+        additionally notified once the alert has stayed active for at
+        least 'escalation_after_minutes' (Step 28), 0 disables escalation.
     """
     if channel not in ('email', 'telegram', 'none'):
         raise ValueError(f'Invalid notification channel: {channel!r}')
+    if escalation_channel not in ('email', 'telegram', 'none'):
+        raise ValueError(f'Invalid escalation channel: {escalation_channel!r}')
+    if escalation_after_minutes < 0:
+        raise ValueError('escalation_after_minutes must be >= 0')
 
     conn = get_users_connection(db_path)
     try:
         with conn:
             conn.execute("""
-                INSERT INTO user_notification_prefs (user_id, alert_node_id, channel)
-                VALUES (?, ?, ?)
-                ON CONFLICT(user_id, alert_node_id) DO UPDATE SET channel = excluded.channel
-            """, (user_id, alert_node_id, channel))
+                INSERT INTO user_notification_prefs
+                    (user_id, alert_node_id, channel, escalation_channel, escalation_after_minutes)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, alert_node_id) DO UPDATE SET
+                    channel = excluded.channel,
+                    escalation_channel = excluded.escalation_channel,
+                    escalation_after_minutes = excluded.escalation_after_minutes
+            """, (user_id, alert_node_id, channel, escalation_channel, escalation_after_minutes))
     finally:
         conn.close()
 
@@ -1631,12 +1652,14 @@ def get_user_notification_pref(db_path: str, user_id: int, alert_node_id: str) -
 
 
 def list_user_notification_prefs(db_path: str, user_id: int) -> list[dict[str, Any]]:
-    """ return all (alert_node_id, channel) prefs configured by one user
+    """ return all (alert_node_id, channel, escalation_*) prefs configured
+        by one user
     """
     conn = get_users_connection(db_path)
     try:
         rows = conn.execute(
-            'SELECT alert_node_id, channel FROM user_notification_prefs '
+            'SELECT alert_node_id, channel, escalation_channel, escalation_after_minutes '
+            'FROM user_notification_prefs '
             'WHERE user_id = ? ORDER BY alert_node_id',
             (user_id,)
         ).fetchall()
@@ -1652,7 +1675,9 @@ def get_prefs_for_alert(db_path: str, alert_node_id: str) -> list[dict[str, Any]
     conn = get_users_connection(db_path)
     try:
         rows = conn.execute("""
-            SELECT u.id AS user_id, u.username AS username, p.channel AS channel
+            SELECT u.id AS user_id, u.username AS username, p.channel AS channel,
+                   p.escalation_channel AS escalation_channel,
+                   p.escalation_after_minutes AS escalation_after_minutes
             FROM user_notification_prefs p
             JOIN users u ON u.id = p.user_id
             WHERE p.alert_node_id = ? AND p.channel != 'none'

@@ -350,15 +350,31 @@ def api_list_notification_prefs():
 @roles_required('operator', 'admin')
 def api_set_notification_pref(alert_node_id: str):
     """ set the current user's preferred notification channel
-        ('email'/'telegram'/'none') for one specific Alert node
+        ('email'/'telegram'/'none') for one specific Alert node, plus an
+        optional 2nd escalation channel that gets additionally notified
+        once the alert has stayed active for 'escalation_after_minutes'
+        (Step 28; 0 or 'none' disables escalation).
     """
     data = request.get_json(silent=True) or {}
     channel = data.get('channel', '')
+    escalation_channel = data.get('escalation_channel', 'none')
+    escalation_after_minutes = data.get('escalation_after_minutes', 0)
 
     if channel not in ('email', 'telegram', 'none'):
         return jsonify(error=f'Invalid channel: {channel!r}'), HTTPStatus.BAD_REQUEST
+    if escalation_channel not in ('email', 'telegram', 'none'):
+        return jsonify(error=f'Invalid escalation channel: {escalation_channel!r}'), HTTPStatus.BAD_REQUEST
+    try:
+        escalation_after_minutes = int(escalation_after_minutes)
+        if escalation_after_minutes < 0:
+            raise ValueError()
+    except (TypeError, ValueError):
+        return jsonify(error='escalation_after_minutes must be a non-negative integer'), HTTPStatus.BAD_REQUEST
 
-    db.set_user_notification_pref(_users_db_path(), current_user.id, alert_node_id, channel)
-    log.info('User %r set notification channel %r for alert %r',
-             current_user.username, channel, alert_node_id)
-    return jsonify({'alert_node_id': alert_node_id, 'channel': channel})
+    db.set_user_notification_pref(_users_db_path(), current_user.id, alert_node_id, channel,
+                                  escalation_channel, escalation_after_minutes)
+    log.info('User %r set notification channel %r (escalation %r after %d min) for alert %r',
+             current_user.username, channel, escalation_channel, escalation_after_minutes, alert_node_id)
+    return jsonify({'alert_node_id': alert_node_id, 'channel': channel,
+                    'escalation_channel': escalation_channel,
+                    'escalation_after_minutes': escalation_after_minutes})

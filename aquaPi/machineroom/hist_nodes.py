@@ -50,6 +50,67 @@ def check_questdb_reachable(timeout: float = 1.0) -> bool:
         return False
 
 
+def _questdb_conn_str() -> str:
+    return ('host=localhost port=8812 user=admin password=quest '
+            'dbname=aquaPi application_name=aquaPi')
+
+
+def log_calibration_event(node_id: str, field: str,
+                          old_value: float, new_value: float) -> bool:
+    """ record a calibration change (e.g. a ScaleAux node's 'offset'/
+        'factor', typically adjusted after re-calibrating a pH probe or
+        similar sensor) with timestamp and old/new value in QuestDB, so
+        it can be reviewed later (Step 28). Like the rest of this module,
+        this degrades gracefully: if QuestDB isn't installed/reachable,
+        the event is just logged and skipped, never raises.
+    """
+    if not QUEST_DB:
+        log.warning('Calibration event for %s.%s not recorded: QuestDB not available',
+                    node_id, field)
+        return False
+    try:
+        with pg.connect(_questdb_conn_str(), autocommit=True) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS calibration_log (
+                    ts        timestamp,
+                    node_id   symbol CAPACITY 64,
+                    field     symbol CAPACITY 16,
+                    old_value double,
+                    new_value double )
+                    timestamp(ts) PARTITION BY MONTH;
+            """)
+            qry = SQL("INSERT INTO {} VALUES (now(), %s, %s, %s, %s)"
+                      ).format(Identifier('calibration_log'))
+            conn.execute(qry, [node_id, field, old_value, new_value])
+        log.brief('Calibration event recorded: %s.%s %s -> %s', node_id, field, old_value, new_value)
+        return True
+    except Exception:
+        log.exception('Failed to record calibration event for %s.%s', node_id, field)
+        return False
+
+
+def get_calibration_log(node_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    """ return the most recent calibration events for one node, newest
+        first; empty list if QuestDB is unavailable or on any error
+    """
+    if not QUEST_DB:
+        return []
+    try:
+        with pg.connect(_questdb_conn_str(), autocommit=True) as conn:
+            with conn.cursor() as curs:
+                qry = SQL("SELECT ts, field, old_value, new_value FROM {} "
+                          "WHERE node_id=%s ORDER BY ts DESC LIMIT %s"
+                          ).format(Identifier('calibration_log'))
+                curs.execute(qry, [node_id, limit])
+                rows = curs.fetchall()
+                return [{'ts': ts.isoformat(), 'field': field,
+                        'old_value': old_value, 'new_value': new_value}
+                       for (ts, field, old_value, new_value) in rows]
+    except Exception:
+        log.exception('Failed to read calibration log for %s', node_id)
+        return []
+
+
 class TimeDb(ABC):
     """ Base class for time series storage
     """

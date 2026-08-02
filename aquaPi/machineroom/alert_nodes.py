@@ -181,6 +181,11 @@ class Alert(BusListener):
             conditions = {conditions}
         self.conditions: set[AlertCond] = conditions
         self.receives: list[str] = [c.node_id for c in self.conditions]
+        # Step 28: track how long an alert has been continuously active,
+        # to notify a 2nd, escalation channel once it stays unresolved
+        # longer than a user's configured 'escalation_after_minutes'
+        self._alert_since: float | None = None
+        self._escalated_users: set[int] = set()
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -226,6 +231,32 @@ class Alert(BusListener):
 
         self._notify_user_prefs(text)
 
+    def _notify_one(self, pref: dict, channel: str, text: str, escalated: bool = False) -> None:
+        """ notify a single user via a single channel ('email'/'telegram'),
+            never raising - a missing/misconfigured driver for one user
+            must never break the alert loop for others.
+        """
+        port_name = f'{channel.capitalize()} #1'
+        try:
+            driver = IoRegistry.get().driver_factory(port_name)
+        except Exception:
+            log.error('No %s port available to notify user %s for alert %s',
+                      channel, pref.get('username', pref['user_id']), self.id)
+            return
+
+        try:
+            if isinstance(driver, OutDriver) and driver.func == PortFunc.Tout:
+                msg = f'[ESKALATION] {text}' if escalated else text
+                driver.write(msg)
+                log.info('Alert %s notified user %s via %s%s',
+                         self.id, pref.get('username', pref['user_id']), channel,
+                         ' (escalated)' if escalated else '')
+        except Exception:
+            log.exception('Failed to notify user %s via %s for alert %s',
+                          pref.get('username', pref['user_id']), channel, self.id)
+        finally:
+            IoRegistry.get().driver_destruct(port_name, driver)
+
     def _notify_user_prefs(self, text: str) -> None:
         """ additionally notify every user that configured a preferred
             channel ('email'/'telegram') for this specific Alert node,
@@ -244,25 +275,40 @@ class Alert(BusListener):
             return
 
         for pref in prefs:
-            channel = pref['channel']
-            port_name = f'{channel.capitalize()} #1'
-            try:
-                driver = IoRegistry.get().driver_factory(port_name)
-            except Exception:
-                log.error('No %s port available to notify user %s for alert %s',
-                          channel, pref.get('username', pref['user_id']), self.id)
-                continue
+            self._notify_one(pref, pref['channel'], text)
 
-            try:
-                if isinstance(driver, OutDriver) and driver.func == PortFunc.Tout:
-                    driver.write(text)
-                    log.info('Alert %s notified user %s via %s',
-                             self.id, pref.get('username', pref['user_id']), channel)
-            except Exception:
-                log.exception('Failed to notify user %s via %s for alert %s',
-                              pref.get('username', pref['user_id']), channel, self.id)
-            finally:
-                IoRegistry.get().driver_destruct(port_name, driver)
+    def _check_escalation(self, now: float, text: str) -> None:
+        """ Step 28: independently of the repeat/'any_change' throttling
+            used for the primary notification, check on every message
+            whether any user's configured escalation channel needs to be
+            notified because the alert has been continuously active for
+            at least their 'escalation_after_minutes'. Fires at most once
+            per continuously-active episode per user (self._escalated_users,
+            reset once the alert clears).
+        """
+        if self._alert_since is None:
+            return
+
+        users_db_path = db.get_current_users_db_path()
+        if not users_db_path:
+            return
+
+        try:
+            prefs = db.get_prefs_for_alert(users_db_path, self.id)
+        except Exception:
+            log.exception('Failed to read user notification prefs for alert %s', self.id)
+            return
+
+        active_minutes = (now - self._alert_since) / 60
+        for pref in prefs:
+            escalation_channel = pref.get('escalation_channel') or 'none'
+            escalation_after = pref.get('escalation_after_minutes') or 0
+            user_id = pref['user_id']
+            if (escalation_channel not in ('none', pref['channel'])
+                and escalation_after > 0 and active_minutes >= escalation_after
+                and user_id not in self._escalated_users):
+                self._notify_one(pref, escalation_channel, text, escalated=True)
+                self._escalated_users.add(user_id)
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData) and self._bus:
@@ -296,6 +342,14 @@ class Alert(BusListener):
             self.post(MsgData(self.id, '\n'.join(self.data)))
 
             now = monotonic()
+            if any_alert:
+                if self._alert_since is None:
+                    self._alert_since = now
+                self._check_escalation(now, '\n'.join(self.data))
+            else:
+                self._alert_since = None
+                self._escalated_users.clear()
+
             if any_change \
             or (self._repeat_time and (now > self._repeat_time)):
                 self._send_alert(any_alert, self.data)

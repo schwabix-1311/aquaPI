@@ -18,7 +18,9 @@ from .driver.base import DriverError
 from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import BusRole
-from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable)
+from .machineroom.aux_nodes import ScaleAux
+from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable,
+                                     log_calibration_event, get_calibration_log)
 from .pages.sse_util import send_sse_events
 
 
@@ -145,6 +147,70 @@ def api_history(node_id: str) -> Response:
         return Response(status=HTTPStatus.NOT_FOUND)
 
     return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+
+@bp.route('/api/history/<node_id>/export')
+@login_required
+def api_history_export(node_id: str) -> Response:
+    """ export a history node's recorded series as CSV or JSON
+        (?format=csv|json, default json; optional ?start=/?step= like
+        /api/history/<id>), for offline analysis (Step 28).
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    node_id = str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
+    node = bus.get_node(node_id)
+    if not node or not hasattr(node, 'get_history'):
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    start = int(request.args.get('start', 0))
+    step = int(request.args.get('step', 0))
+    fmt = request.args.get('format', 'json').lower()
+    if fmt not in ('csv', 'json'):
+        return jsonify(error=f'Invalid format: {fmt!r}, expected csv or json'), HTTPStatus.BAD_REQUEST
+
+    hist = node.get_history(start, step)
+    names = list(hist.get(0, []))
+    rows = sorted((ts, vals) for ts, vals in hist.items() if ts != 0)
+
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'export_history', node_id, {'format': fmt})
+
+    if fmt == 'csv':
+        import csv
+        import io
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(['timestamp'] + names)
+        for ts, vals in rows:
+            writer.writerow([ts] + list(vals))
+        return Response(buf.getvalue(), mimetype='text/csv', headers={
+            'Content-Disposition': f'attachment; filename="{node_id}_history.csv"'
+        })
+
+    data = [{'timestamp': ts, **dict(zip(names, vals))} for ts, vals in rows]
+    return jsonify({'node_id': node_id, 'fields': names, 'data': data})
+
+
+@bp.route('/api/nodes/<node_id>/calibration-log')
+@login_required
+def api_calibration_log(node_id: str) -> Response:
+    """ return the recorded calibration history (offset/factor changes)
+        of a ScaleAux node (Step 28); empty list if QuestDB is unavailable
+        or the node never had a calibration change recorded.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    node = bus.get_node(node_id)
+    if not node:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    limit = int(request.args.get('limit', 100))
+    return jsonify(get_calibration_log(node_id, limit))
 
 
 @bp.route('/api/sse', methods=['GET'])
@@ -299,12 +365,18 @@ def api_set_node_settings(node_id: str) -> Response:
         if key not in editable:
             return jsonify(error=f'Unknown or read-only setting: {key}'), HTTPStatus.BAD_REQUEST
 
+    # Step 28: calibration history - ScaleAux is used for linear sensor
+    # calibrations (e.g. pH probes); log offset/factor changes to QuestDB
+    calibration_changes: list[tuple[str, float, float]] = []
+
     try:
         for key, raw_value in body.items():
             entry = editable[key]
             attrs = _parse_settings_attrs(entry[3] if len(entry) > 3 else '')
             attrs.setdefault('type', _infer_type(entry[2]))
             value = _validate_and_cast(key, raw_value, attrs)
+            if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
+                calibration_changes.append((key, getattr(node, key), value))
             setattr(node, key, value)
     except ValueError as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
@@ -316,6 +388,9 @@ def api_set_node_settings(node_id: str) -> Response:
              current_user.username, node_id, list(body.keys()))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_settings', node_id, {'fields': list(body.keys())})
+
+    for field, old_value, new_value in calibration_changes:
+        log_calibration_event(node_id, field, old_value, new_value)
 
     settings = [_settings_entry_to_dict(entry) for entry in node.get_settings()]
     return jsonify(settings)

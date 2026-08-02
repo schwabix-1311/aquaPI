@@ -29,6 +29,27 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 # ========== interface to time series DB ==========
 
 
+def check_questdb_reachable(timeout: float = 1.0) -> bool:
+    """ lightweight, side-effect-free reachability check for QuestDB
+        (Step 25 /api/health): tries a short-timeout connection and a
+        trivial query, without creating/touching any tables - unlike
+        TimeDbQuest.__init__(), which is only used once a History node
+        is actually instantiated. Returns False immediately if the
+        'psycopg' driver isn't even installed (QUEST_DB == False).
+    """
+    if not QUEST_DB:
+        return False
+    try:
+        conn_str = ('host=localhost port=8812 user=admin password=quest '
+                    'dbname=aquaPi application_name=aquaPi connect_timeout=%d'
+                    % max(1, int(timeout)))
+        with pg.connect(conn_str, autocommit=True) as conn:
+            conn.execute('SELECT 1')
+        return True
+    except Exception:
+        return False
+
+
 class TimeDb(ABC):
     """ Base class for time series storage
     """

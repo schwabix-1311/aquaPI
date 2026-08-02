@@ -101,7 +101,18 @@ class IoRegistry(object):
 
         for drv in drv_classes:
             if hasattr(drv, 'find_ports'):
-                drv_ports = drv.find_ports()
+                # Step 25: a single driver failing to enumerate its ports
+                # (e.g. Email/Telegram find_ports() raising DriverConfigError
+                # on a misconfigured account, or any other connection issue
+                # beyond the internet-outage case they already handle
+                # themselves) must not block the whole app from starting -
+                # log it and just skip that driver's ports instead.
+                try:
+                    drv_ports = drv.find_ports()
+                except Exception:
+                    log.exception('Driver %s failed to report its ports, '
+                                  'skipping it', drv.__name__)
+                    continue
                 log.info('Driver %s reported ports %r', drv.__name__, [k for k in drv_ports])
 
                 # TODO: reject duplicate ports, same port should in theory not be reported

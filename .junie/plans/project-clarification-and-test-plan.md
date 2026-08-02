@@ -628,11 +628,13 @@ Datensicherheit für die neue Persistenzschicht hergestellt. **(war zuvor Step 2
 - Neue Testdatei `tests/test_backup.py` (10 Tests: `backup_sqlite_file`/`create_backup_archive`/`rotate_backups`/`create_scheduled_backup` inkl. fehlender Quelldatei und Rotations-Grenzfällen; `GET /api/backup` Zugriffsschutz für Nicht-Admins/nicht eingeloggt, sowie ein Ende-zu-Ende-Test, der das heruntergeladene Archiv entpackt und beide SQLite-Dateien tatsächlich lädt).
 - Verifikation: `tests/test_backup.py` (10/10 grün); Regressionschecks `tests/test_audit_log.py` + `tests/test_config_apply.py` (21/21 grün) sowie `tests/test_step10_integration.py` (5/5 grün, deckt den geänderten `MachineRoom.__init__`/`shutdown()` ab); `python3 -m py_compile` für `db.py`/`api.py`/`machineroom/__init__.py` erfolgreich.
 
-###   Step 25: Health-Check-Endpoint und Graceful Degradation ohne Internet
-Robustheit und Monitoring-Fähigkeit verbessern. **(war zuvor Step 21)**
-- Neue Route `GET /api/health` (ohne Login) liefert QuestDB-Erreichbarkeit, Anzahl aktiver Nodes, Simulations-/Hardware-Modus.
-- `MachineRoom`-Start (`aquaPi/machineroom/__init__.py`) so anpassen, dass fehlgeschlagene Email-/Telegram-Verbindungsversuche beim Start nur geloggt werden, statt den Startvorgang zu blockieren.
-- Verifikation: `/api/health` liefert plausible Werte in der Simulation; Start ohne Internetverbindung (simuliert) bricht nicht ab.
+### ✓ Step 25: Health-Check-Endpoint und Graceful Degradation ohne Internet
+Robustheit und Monitoring-Fähigkeit verbessert. **(war zuvor Step 21)**
+- `aquaPi/machineroom/hist_nodes.py`: neue, seiteneffektfreie Funktion `check_questdb_reachable()` (kurzer Verbindungsversuch + `SELECT 1` mit `connect_timeout`, legt keine Tabellen an - im Gegensatz zu `TimeDbQuest.__init__()`, das nur bei tatsächlicher Nutzung eines History-Nodes läuft).
+- `aquaPi/api.py`: neue, **nicht** login-pflichtige Route `GET /api/health` liefert `status`, `timestamp`, `mode` (`'simulation'`/`'hardware'`, aus `DriverADC.SIMULATED`), `nodes.active` (Anzahl aktueller Bus-Nodes) und `questdb.{available, reachable}`.
+- **Echter Root-Cause-Fund bei der Analyse**: `DriverEmail.find_ports()` und `DriverTelegram.find_ports()` (`aquaPi/driver/DriverText.py`) verbinden sich beim Start tatsächlich zu SMTP-Server bzw. Telegram-API; der reine "kein Internet"-Fall wurde bereits abgefangen, eine **ungültige Konfiguration** (z.B. falsches Passwort, fehlender Bot-Token) warf jedoch eine ungefangene `DriverConfigError`, die den kompletten App-Start zum Absturz brachte. Fix: `IoRegistry.__init__()` (`aquaPi/driver/__init__.py`) fängt jetzt jeden `find_ports()`-Aufruf einzeln ab (`try`/`except Exception`, loggt und überspringt den betroffenen Treiber), sodass ein fehlkonfigurierter oder nicht erreichbarer Treiber nie mehr den gesamten Start blockiert.
+- Neue Testdatei `tests/test_health.py` (8 Tests: `/api/health` ohne Login erreichbar, erwartete Antwortstruktur, Verhalten bei fehlendem QuestDB-Treiber, 0 Nodes ohne Bus, `check_questdb_reachable()` in allen 3 Fällen (kein Treiber/Verbindungsfehler/Erfolg, gemockt), sowie ein Test, der einen absichtlich fehlschlagenden Fake-Treiber registriert und bestätigt, dass `IoRegistry()` trotzdem nicht crasht).
+- Verifikation: `tests/test_health.py` (8/8 grün); Regressionschecks `tests/test_backup.py` (10/10), `tests/test_node_crud_api.py` (24/24) und `tests/test_step10_integration.py` (5/5, deckt den geänderten `IoRegistry`-Code über echten `MachineRoom`-Start ab); `python3 -m py_compile` für `api.py`/`hist_nodes.py`/`driver/__init__.py` erfolgreich.
 
 ###   Step 26: Internationalisierung (Deutsch/Englisch)
 Mehrsprachigkeit der SPA über die bereits eingebundene Vue-I18n-Bibliothek umsetzen. **(war zuvor Step 22)**

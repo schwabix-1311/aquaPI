@@ -4,6 +4,7 @@ import logging
 import re
 import shutil
 import tempfile
+import time
 from os import path
 
 from http import HTTPStatus
@@ -14,8 +15,10 @@ from flask_login import (login_required, current_user)
 from . import db
 from .auth import roles_required
 from .driver.base import DriverError
+from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import BusRole
+from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable)
 from .pages.sse_util import send_sse_events
 
 
@@ -826,3 +829,37 @@ def api_backup() -> Response:
 
     return send_file(archive_path, as_attachment=True,
                      download_name=path.basename(archive_path))
+
+
+# --- health check (Step 25) ---------------------------------------------
+
+
+@bp.route('/api/health', methods=['GET'])
+def api_health() -> Response:
+    """ unauthenticated health/monitoring endpoint: reports QuestDB
+        availability/reachability, the number of currently active bus
+        nodes, and whether the app is running in simulation or on real
+        hardware. Never blocks/fails just because an external service
+        (QuestDB) happens to be unreachable - that degradation is
+        already handled gracefully elsewhere (History falls back to
+        in-memory storage, see hist_nodes.py), this endpoint just
+        surfaces the current state for monitoring.
+    """
+    bus = the_bus()
+    node_count = len(bus.get_nodes()) if bus else 0
+
+    questdb_reachable = check_questdb_reachable() if QUEST_DB else False
+
+    body = {
+        'status': 'ok',
+        'timestamp': time.time(),
+        'mode': 'simulation' if SIMULATED else 'hardware',
+        'nodes': {
+            'active': node_count,
+        },
+        'questdb': {
+            'available': QUEST_DB,
+            'reachable': questdb_reachable,
+        },
+    }
+    return jsonify(body)

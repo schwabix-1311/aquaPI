@@ -14,10 +14,9 @@
 		{# <link href="{{ url_for('static', filename='fonts/roboto-v30.css') }}" rel="stylesheet"> #}
 		<link href="{{ url_for('static', filename='fonts/blinker-v12.css') }}" rel="stylesheet">
 
-		{#- <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet"> -#}
-		{# <link href="{{ url_for('static', filename='css/vuetify.2.6.13.min.css') }}" rel="stylesheet"> #}
+		{#- <link href="https://cdn.jsdelivr.net/npm/vuetify@3.x/dist/vuetify.min.css" rel="stylesheet"> -#}
 		{# NOTE: vuetify ...customized uses font Blinker instead of default Roboto #}
-		<link href="{{ url_for('static', filename='css/vuetify.2.6.13.customized.min.css') }}" rel="stylesheet">
+		<link href="{{ url_for('static', filename='css/vuetify.3.13.0.customized.min.css') }}" rel="stylesheet">
 		<link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
 
 		{#- <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet"> -#}
@@ -43,14 +42,11 @@
 			</div>
 		</div>
 
-		{# TODO: for development use CDN file #}
-		<script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
-		{# <script src="{{ url_for('static', filename='libs/vue.2.7.14.js') }}"></script> #}
-
-		<script src="{{ url_for('static', filename='libs/vuex.3.6.2.js') }}"></script>
-		<script src="{{ url_for('static', filename='libs/vue-router.3.6.5.js') }}"></script>
-		<script src="{{ url_for('static', filename='libs/vue-i18n.8.28.2.js') }}"></script>
-		<script src="{{ url_for('static', filename='libs/vuetify.2.6.13.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue.3.5.40.global.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vuex.4.1.0.global.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-router.4.6.4.global.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-i18n.9.14.5.global.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vuetify.3.13.0.global.js') }}"></script>
 
 		<script src="{{ url_for('static', filename='libs/chart.js.4.0.1.js') }}"></script>
 		<script src="{{ url_for('static', filename='libs/luxon.3.1.1.js') }}"></script>

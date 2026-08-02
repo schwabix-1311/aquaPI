@@ -1,12 +1,11 @@
 import {AuthLayout} from '../layouts/Auth.vue.js'
 import {DefaultLayout} from '../layouts/Default.vue.js'
-import {AquapiLoginForm} from '../components/auth/AquapiLoginForm.vue.js'
 import {AquapiDummy} from '../components/app/index.js'
+import {loadSfc} from '../sfc/loadSfc.js'
 
 import {Settings} from '../pages/Settings.vue.js'
 import {Config} from '../pages/Config.vue.js'
 import {Home} from '../pages/Home.vue.js'
-import {About} from '../pages/About.vue.js'
 
 const routes = [
 	{
@@ -20,7 +19,7 @@ const routes = [
 				path: '',
 				name: 'login',
 				components: {
-					default: AquapiLoginForm
+					default: () => loadSfc('/static/spa/components/auth/AquapiLoginForm.vue')
 				},
 				// meta: {
 				//	 title: i18n.t("routes.login"),
@@ -62,7 +61,7 @@ const routes = [
 				path: 'about',
 				name: 'about',
 				components: {
-					default: About
+					default: () => loadSfc('/static/spa/pages/About.vue')
 				},
 			},
 		]

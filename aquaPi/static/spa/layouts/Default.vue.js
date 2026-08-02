@@ -2,14 +2,17 @@ import {AppFooComp} from '../comps.js';
 // import {AquapiNavDrawer} from '../components/app/AquapiNavDrawer.vue.js'
 // import {AquapiNavDrawer, AquapiTestComp} from '../components/app/index.js'
 import '../components/app/index.js'
-import {AquapiLoginDialog} from '../components/auth/AquapiLoginDialog.vue.js'
 import {AquapiConfirmDialog} from '../components/app/AquapiConfirmDialog.vue.js'
 import {AQUAPI_EVENTS, EventBus} from '../components/app/EventBus.js';
+import {loadSfc} from '../sfc/loadSfc.js'
 
 const DefaultLayout = {
 	components: {
 		// AquapiNavDrawer,
-		AquapiLoginDialog,
+		// Note: a bare `() => loadSfc(...)` factory only auto-resolves as an
+		// async component for Vue Router route components; plain `components:`
+		// option entries need an explicit `Vue.defineAsyncComponent()` wrapper.
+		AquapiLoginDialog: Vue.defineAsyncComponent(() => loadSfc('/static/spa/components/auth/AquapiLoginDialog.vue')),
 		AquapiConfirmDialog,
 		AppFooComp,
 		// AquapiTestComp

@@ -5,144 +5,167 @@ sessionId: session-260802-063658-1699
 # Requirements
 
 ### Overview & Goals
-This is **Plan Step 18** (`.junie/plans/project-clarification-and-test-plan.md`): swap the frontend's core libraries from Vue 2.7 / Vuetify 2.6 / Vuex 3.6 / Vue-Router 3.6 / VueI18n 8.x to their Vue-3-compatible equivalents (Vue 3, Vuetify 3, Vuex 4, Vue-Router 4, Vue-I18n 9), **without introducing a build process** - the project continues to load plain ESM/global browser builds from `aquaPi/static/libs/` and plain JS "`.vue.js`" component-definition modules (no real `.vue` SFC compilation yet - that is Step 19/20).
+This is **Plan Step 19** (`.junie/plans/project-clarification-and-test-plan.md`, previously Step 15): introduce a runtime **SFC (Single-File-Component) loader** (`vue3-sfc-loader`) and migrate the first, least-interconnected components from today's `.vue.js` template-string/Options-API objects to real `.vue` files (`<template>`/`<script>`/`<style>`), **without introducing a build process** - `.vue` files are parsed/compiled directly in the user's browser at runtime; the Raspberry Pi keeps serving them unchanged as static assets, exactly like today's `.vue.js` files.
 
-Goal: after this step, the app boots, authenticates, and all existing pages (Home/Dashboard, Config, Settings, About, Login) render and behave exactly as before, just running on the Vue 3 stack.
+Goal: after this step, `About.vue`, `AquapiLoginForm.vue`, and `AquapiLoginDialog.vue` exist as genuine SFCs, are loaded lazily on demand via a small `loadSfc(path)` wrapper, and behave exactly as their `.vue.js` predecessors did - proving out the SFC pipeline before the larger Step 20 migration (`Home`, `Config`, `Settings`, layouts).
 
 ### Scope
 **In Scope**
-- Replacing the 5 core library files under `aquaPi/static/libs/` with Vue-3-compatible ESM/global browser builds.
-- Updating `spa.html.jinja2` script tags and the Vuetify CSS reference for the new versions.
-- Rewriting the app bootstrap (`main.js`) to use `Vue.createApp()`, `Vuex.createStore()`, `VueRouter.createRouter()` (with `createWebHashHistory()`), `Vuetify.createVuetify()`, `VueI18n.createI18n()`.
-- Fixing the breaking changes that block the app from working at all under Vue 3: the global `Vue.component(...)` self-registration pattern used by ~30 components, the `EventBus = new Vue()` pattern (no more `$on`/`$off`/`$emit` on instances), and the `destroyed`/`beforeDestroy` lifecycle hook renames (`unmounted`/`beforeUnmount`).
-- Adjusting the Vuetify theme/icon bootstrap config and base layout (`v-app`/`v-main`) for the Vuetify 3 API.
+- Adding `vue3-sfc-loader` as a new browser-global library under `aquaPi/static/libs/`.
+- Implementing a `loadSfc(path)` wrapper module that configures `loadModule()` (module cache seeded with `Vue`, `fetch`-based `getFile`, automatic `<style>` injection into `<head>`, `localStorage`-backed compile cache).
+- Migrating exactly 3 components to `.vue` SFCs: `pages/About.vue`, `components/auth/AquapiLoginForm.vue`, `components/auth/AquapiLoginDialog.vue`.
+- Wiring these 3 components into the router/nav-drawer as **lazy-loaded async components** (loaded only when their route/dialog is actually used).
 
 **Out of Scope** (explicitly deferred to later plan steps)
-- Migrating any `.vue.js` file into a real `.vue` SFC (Step 19/20).
-- Introducing `vue3-sfc-loader` (Step 19).
-- Any new feature work.
+- Migrating `Home`, `Config`, `Settings`, or either layout (`Default`/`Auth`) - that is Step 20.
+- Migrating Vuex store modules to any new registration pattern (already done in Step 18; unaffected here).
+- Any new feature work or visual redesign of the migrated components.
 
 ### Functional Requirements
-- The app boots without console errors on `/`, `/login`, `/config`, `/settings`, `/about`.
-- Login flow, navigation drawer, dark-mode toggle, and the SSE-driven live node updates keep working exactly as before.
-- All existing Vuetify components used in the app render visually equivalent to before (colors, icons, Blinker font).
-- All places that relied on `EventBus.$on/$off/$emit` keep working unchanged from the call-site's point of view.
-- All globally-registered components (`AquapiPageHeading`, `ConfigNodeBox`, dashboard widgets, settings widgets, etc.) are resolvable in templates exactly as before.
+- Navigating to `/login` and `/about` still renders the login form and about page exactly as before, now loaded as SFCs on first visit.
+- The `AquapiLoginDialog` (used from the nav drawer) still opens/closes and embeds `AquapiLoginForm` exactly as before.
+- Login (success and validation-error paths) and the About page's donate `$alert` continue to work unchanged.
+- The 3 old `.vue.js` files are deleted; nothing in the codebase still imports them.
+- Loading a not-yet-migrated page (`/`, `/config`, `/settings`) is unaffected in behavior or noticeably in load time.
 
 # Technical Design
 
 ### Current Implementation
-- `aquaPi/templates/pages/spa.html.jinja2` loads Vue 2.x from a CDN plus Vuex 3.6.2, Vue-Router 3.6.5, Vue-I18n 8.28.2, Vuetify 2.6.13 as plain global `<script>` tags (non-module), then `main.js` as `<script type="module">` which freely uses the resulting `window.Vue`/`window.Vuex`/`window.VueRouter`/`window.Vuetify` globals (no explicit imports).
-- `aquaPi/static/spa/main.js`: `new Vue({store, router, i18n, vuetify: new Vuetify({...}), render: h => h(App)}).$mount('#app')`, plus `Vue.prototype.$confirm/$alert`.
-- `store/index.js`: `Vue.use(Vuex); new Vuex.Store({modules: {...}})`.
-- `router/index.js`: `new VueRouter({mode: 'hash', routes, scrollBehavior})` + `router.beforeEach`.
-- `components/app/EventBus.js`: `const EventBus = new Vue()`, used via `.$on/.$off/.$emit` in ~10 places (`App.vue.js`, `AquapiConfirmDialog.vue.js`, `layouts/Default.vue.js`, `components/dashboard/comps.js`).
-- ~30 component modules (`components/**/index.js`, `components/**/comps.js`) call `Vue.component('Name', Def)` as a **module-load-time side effect** so the component becomes globally resolvable in any template.
-- Several components use `destroyed()`/no `beforeDestroy` currently only `destroyed` (removed/renamed in Vue 3 to `unmounted`).
-- `aquaPi/static/spa/comps.js` (`AppFooComp`, imported by `layouts/Default.vue.js`) uses `this.$root.$on('test-clicked', ...)` - a leftover demo snippet.
-- CSS: `aquaPi/static/css/vuetify.2.6.13.customized.min.css` is a locally patched Vuetify 2 CSS build (default font swapped from Roboto to Blinker).
+- `pages/About.vue.js`: a plain JS object (`{template: '...', methods: {...}}`) imported statically by `router/index.js` (`import {About} from '../pages/About.vue.js'`) and used directly as the route's `default` component.
+- `components/auth/AquapiLoginForm.vue.js`: similar object, additionally self-registers globally via `registerGlobalComponent('AquapiLoginForm', ...)` (Step 18) since it's referenced both as a route component and, via its tag `<aquapi-login-form>`, inside `AquapiLoginDialog`'s template.
+- `components/auth/AquapiLoginDialog.vue.js`: imports `AquapiLoginForm` statically and registers it locally via `components: {AquapiLoginForm}`; used only from `layouts/Default.vue.js`'s nav-drawer login entry point (not routed).
+- `router/index.js`: routes hold direct object references to page components (`components: {default: Home}` etc.) - no async/lazy component pattern is used anywhere today.
+- `aquaPi/static/libs/` holds only pre-built global browser bundles (`vue.3.5.40.global.js` etc.); `vue.3.5.40.global.js` is the **full build including the runtime template compiler** (confirmed: it defines a working `Vue.compile` and supports the `template:` string option used throughout the app), which `vue3-sfc-loader` needs to compile `<template>` blocks parsed out of `.vue` files.
+- No dynamic-import/lazy-loading pattern exists yet anywhere in the SPA; all component modules are statically `import`ed at the top of their consumers.
 
 ### Key Decisions
-- **Global component registration** → **central registry list** (per user decision): new `components/app/registry.js` exports `registerGlobalComponent(name, def)` which pushes `{name, def}` into an array; `main.js` iterates the array once after `Vue.createApp()` and calls `app.component(name, def)` before mounting. This keeps the per-file diff to a one-line function-name swap (`Vue.component(...)` → `registerGlobalComponent(...)`) across all ~30 call sites and preserves today's "just import the module and it's globally available" developer experience.
-- **EventBus replacement** → **own mini emitter with the same `$on`/`$off`/`$emit` API** (per user decision): a small class (`~20 LOC`) implemented in `components/app/EventBus.js` (Map of event name → Set of listeners) replaces `new Vue()`. All ~10 existing call sites (`EventBus.$on(...)`, `.$off(...)`, `.$emit(...)`) stay byte-for-byte unchanged, only the `EventBus` construction itself changes. `this.$root.$on(...)` in `comps.js` is removed (dead demo code) since the root app instance no longer supports it and it serves no functional purpose.
-- **Lifecycle hooks**: `destroyed()` → `unmounted()`, `beforeDestroy()` → `beforeUnmount()` (Vue 3 rename) at all ~6 identified call sites; `created()`, `data()`, `methods`, `computed`, `template` (string) Options-API usage is unchanged and remains compatible.
-- **No build process, ESM/global browser builds only** (continuing existing project convention): fetch Vue 3, Vuetify 3, Vuex 4, Vue-Router 4, Vue-I18n 9 as pre-built global `.js` bundles (analogous to today's `vue.2.7.14.js` etc.) and drop them into `aquaPi/static/libs/`, referenced from `spa.html.jinja2` the same way as today.
+- **SFC compile strategy** (per master plan `project-clarification-and-test-plan.md`): use `vue3-sfc-loader` to parse/compile `.vue` files entirely client-side in the visitor's browser; the Flask/Pi backend serves `.vue` files unchanged as static assets, exactly like today's `.js` files - no server-side or build-time compilation step is introduced.
+- **Loading timing** → **lazy, per route/component** (per user decision): the 3 migrated SFCs are wrapped as async component factories (`() => loadSfc('/static/spa/pages/About.vue')`) at their existing call sites (`router/index.js` route definitions, `AquapiLoginDialog`'s `components:` option) - Vue Router 4 and Vue 3 support plain-promise-returning-function async components natively, so `About`/`AquapiLoginForm`/`AquapiLoginDialog` are only fetched and compiled the first time their route/dialog is actually visited/opened, keeping the app's initial boot cost unchanged.
+- **Compile cache** → **enabled via `localStorage`** (per user decision): `loadSfc.js` passes `getCachedModule`/`setCachedModule` options backed by `window.localStorage`, keyed by file path plus a cache-format version constant (bumped manually if the loader/compiler version changes) - avoids re-parsing/re-compiling the same `.vue` file's script/template/style on every repeat visit, which matters most on the low-power Pi Zero 2 target hardware.
+- **Style handling**: rely on `vue3-sfc-loader`'s `addStyle` option (inject `<style>` block content as a `<style>` tag into `<head>`) rather than hand-rolling CSS extraction - keeps `.vue` files self-contained and consistent with a normal Vue build pipeline.
+- **Migration order**: exactly the 3 components named in the master plan's Step 19 description (`About`, `AquapiLoginForm`, `AquapiLoginDialog`) - chosen because they have the fewest inbound dependencies (no dedicated Vuex module, no EventBus usage, no child components besides each other), making them a safe, low-risk proof of the SFC pipeline before Step 20's larger, more interconnected pages/layouts.
 
 ### Proposed Changes
-1. **Libraries**: add `vue.3.x.global.js`, `vuex.4.x.global.js`, `vue-router.4.x.global.js`, `vue-i18n.9.x.global.js`, `vuetify.3.x.global.js` (+ its companion CSS) under `aquaPi/static/libs/` (and `static/css/`), replacing the current Vue-2-era files; keep `chart.js`, `luxon`, `sortablejs`/`vuedraggable`, `vue-masonry-css` untouched for now (their Vue-2-specific integration, if any, will be revisited only if they break).
-2. **`spa.html.jinja2`**: swap `<script>` tags to the new library files; swap the Vuetify CSS `<link>` to the new customized Vuetify 3 build (same Blinker-font patch reapplied).
-3. **`main.js`**: rewrite bootstrap using `const app = Vue.createApp(App)`; `app.use(store)`, `app.use(router)`, `app.use(i18n)`, `app.use(vuetify)`; move `$confirm`/`$alert` to `app.config.globalProperties`; iterate the component registry and call `app.component(...)`; `app.mount('#app')`.
-4. **`store/index.js`**: `Vuex.createStore({modules: {...}})` (drop `Vue.use(Vuex)`, no longer needed/valid).
-5. **`router/index.js`**: `VueRouter.createRouter({history: VueRouter.createWebHashHistory(), routes, scrollBehavior})`; `router.beforeEach` signature unchanged.
-6. **`i18n/index.js`**: `VueI18n.createI18n({legacy: false, ...})` (checked against actual current options during implementation) so Composition-API-style `useI18n`/global injection works the same as before for Options-API `$t` calls (`legacy: false` still exposes `$t` via `globalInjection`).
-7. **`components/app/registry.js`** (new file) + one-line edits to all ~30 `Vue.component(...)` call sites.
-8. **`components/app/EventBus.js`**: replace `new Vue()` with the new mini-emitter class; remove the dead `this.$root.$on(...)` block in `comps.js`.
-9. Rename `destroyed`/`beforeDestroy` hooks at the ~6 identified sites (`App.vue.js`, `AquapiConfirmDialog.vue.js`, `layouts/Default.vue.js`, `components/dashboard/comps.js`).
-10. **Vuetify bootstrap**: adapt the `createVuetify({icons, theme})` call to the Vuetify 3 theme-config shape (`theme: {defaultTheme: 'light', themes: {light: {colors: {...}}}}`) while keeping the same color values and MDI iconfont.
+1. **Library**: add `vue3-sfc-loader` as a new browser-global bundle (`aquaPi/static/libs/vue3-sfc-loader.js`) and reference it via a new `<script>` tag in `spa.html.jinja2`, placed after the Vue 3 script tag so it can auto-detect/use `window.Vue`.
+2. **`loadSfc.js`** (new module, `aquaPi/static/spa/sfc/loadSfc.js`): thin wrapper around `loadModule(path, options)` with `moduleCache: {vue: Vue}`, a `fetch`-based `getFile(url)`, `addStyle` injecting into `document.head`, and `localStorage`-backed `getCachedModule`/`setCachedModule` keyed by `path + CACHE_VERSION`. Exports a single `loadSfc(path)` function returning a `Promise<Component>`.
+3. **Convert 3 components to `.vue` SFCs**: `pages/About.vue`, `components/auth/AquapiLoginForm.vue`, `components/auth/AquapiLoginDialog.vue`, each split into `<template>` (verbatim from the old `template:` string), `<script>` (`export default {...}`, same `data`/`methods`/`props`/`computed`).
+4. **Wire up lazy loading**: `router/index.js` replaces the static `About`/`AquapiLoginForm` imports and route bindings with `() => loadSfc(...)` factories for the `about`/`login` routes; `layouts/Default.vue.js`'s nav-drawer login trigger and `AquapiLoginDialog`'s own `components: {AquapiLoginForm}` similarly become async factories.
+5. **Delete** the 3 old `.vue.js` files once their replacements are verified working, and remove the now-unused `registerGlobalComponent('AquapiLoginForm', ...)` call (no longer needed since it's referenced via async factory, not global registration).
+6. Update `spa.html.jinja2` with the new `<script>` tag for `vue3-sfc-loader`.
 
 ### Data Models / Contracts
 ```js
-// components/app/registry.js
-const pendingComponents = []
-export function registerGlobalComponent(name, def) {
-  pendingComponents.push({name, def})
+// aquaPi/static/spa/sfc/loadSfc.js
+const CACHE_VERSION = 'v1'
+
+const options = {
+  moduleCache: { vue: Vue },
+  async getFile(url) {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(url + ' ' + res.statusText)
+    return await res.text()
+  },
+  addStyle(textContent) {
+    const style = document.createElement('style')
+    style.textContent = textContent
+    document.head.appendChild(style)
+  },
+  getCachedModule(key) {
+    const raw = window.localStorage.getItem('aquapi.sfc.' + CACHE_VERSION + '.' + key)
+    return raw ? JSON.parse(raw) : undefined
+  },
+  setCachedModule(key, value) {
+    window.localStorage.setItem('aquapi.sfc.' + CACHE_VERSION + '.' + key, JSON.stringify(value))
+  },
 }
-export function installGlobalComponents(app) {
-  pendingComponents.forEach(({name, def}) => app.component(name, def))
+
+export function loadSfc(path) {
+  return window['vue3-sfc-loader'].loadModule(path, options)
 }
 ```
 ```js
-// components/app/EventBus.js
-class MiniEmitter {
-  constructor() { this._listeners = new Map() }
-  $on(event, fn) { /* add to Set for event */ }
-  $off(event, fn) { /* remove fn, or clear all listeners for event if fn omitted */ }
-  $emit(event, ...args) { /* call all listeners for event */ }
-}
-export const EventBus = new MiniEmitter()
+// router/index.js (excerpt)
+import {loadSfc} from '../sfc/loadSfc.js'
+// ...
+{ path: '', name: 'login', components: { default: () => loadSfc('/static/spa/components/auth/AquapiLoginForm.vue') } }
+{ path: 'about', name: 'about', components: { default: () => loadSfc('/static/spa/pages/About.vue') } }
 ```
 
 ### Components
-- `main.js`, `store/index.js`, `router/index.js`, `i18n/index.js`: bootstrap rewritten for the v4/v3/v9 APIs.
-- `components/app/EventBus.js`: internal implementation swapped, public `$on/$off/$emit` surface unchanged.
-- `components/app/registry.js`: new, small utility module.
-- ~30 component modules across `components/app/`, `components/auth/`, `components/config/`, `components/dashboard/`, `components/settings/`: one-line `Vue.component(...)` → `registerGlobalComponent(...)` swap each.
-- `App.vue.js`, `layouts/Default.vue.js`, `components/app/AquapiConfirmDialog.vue.js`, `components/dashboard/comps.js`: lifecycle hook renames.
-- `aquaPi/static/spa/comps.js`: drop the dead `this.$root.$on(...)` demo code from `AppFooComp`.
-- `aquaPi/templates/pages/spa.html.jinja2`: script/CSS references updated.
+- `aquaPi/static/spa/sfc/loadSfc.js`: new, the sole integration point with `vue3-sfc-loader`.
+- `pages/About.vue`, `components/auth/AquapiLoginForm.vue`, `components/auth/AquapiLoginDialog.vue`: new SFC files, replacing the `.vue.js` files of the same base name (which get deleted).
+- `router/index.js`: `about`/`login` route component bindings become async factories calling `loadSfc(...)`.
+- `layouts/Default.vue.js`: reference to `AquapiLoginDialog` becomes an async factory.
+- `aquaPi/templates/pages/spa.html.jinja2`: new `<script>` tag for `vue3-sfc-loader`.
+
+### Architecture Diagram
+```mermaid
+graph LR
+    Router[router/index.js] -->|async factory| LoadSfc[loadSfc.js]
+    Layout[layouts/Default.vue.js] -->|async factory| LoadSfc
+    LoadSfc -->|fetch .vue text| Flask[Flask static route]
+    LoadSfc -->|localStorage cache hit| Cache[(localStorage)]
+    LoadSfc -->|loadModule| SfcLoader[vue3-sfc-loader]
+    SfcLoader -->|Vue.compile template| Vue3[Vue 3 runtime]
+    SfcLoader -->|inject style| Head[document.head]
+    SfcLoader -->|resolved component| App[Mounted Vue app]
+```
 
 ### Risks
-- **Third-party libs without Vue-3 build**: `vuedraggable` 2.x is Vue-2-only; it's currently only used by the (Step 11-superseded) sortable-list dashboard configurator, not by the drag&drop-via-native-mouse-events `/config` editor - if it turns out to still be loaded/used, its breakage will be flagged but fixing it is out of scope for this step (tracked as follow-up if needed).
-- **VueI18n 9 API differences** (message format, `legacy` mode) could subtly change interpolation syntax (`%{name}` placeholders are used today) - will be verified against the actual locale files during implementation.
-- **Vuetify 3 component API differences** (e.g. `v-overlay` `absolute` prop removed/renamed) may require small per-component tweaks beyond the bootstrap; these will surface during manual verification and be fixed as part of this step, staying within "keep pages working as before" scope rather than redesigning them.
+- **Runtime compile cost / first-load latency**: parsing+compiling a `.vue` file client-side is measurably slower than a plain object literal - mitigated by lazy loading (only the visited route pays the cost) and the `localStorage` compile cache (repeat visits skip re-compilation); will be observed during manual verification and called out if it's noticeably worse on the target hardware.
+- **`window['vue3-sfc-loader']` global name / UMD export shape** can vary by build; will be confirmed against the actually-downloaded bundle during implementation and the wrapper adjusted if the global is named differently.
+- **`localStorage` cache staleness**: if a cached compiled module doesn't match the current `.vue` source (e.g. after a manual file edit without bumping `CACHE_VERSION`), the stale compiled version would keep loading - mitigated by the explicit `CACHE_VERSION` key prefix that must be bumped whenever the loader/compiler version or caching semantics change; full content-hash-based invalidation is left as a possible future refinement.
+- **`AquapiLoginForm` used from two places** (route + `AquapiLoginDialog`): both call sites resolve to the same async factory pattern, and `vue3-sfc-loader`'s own in-memory cache (on top of the `localStorage` cache) de-duplicates fetch/compile within a session.
 
 # Testing
 
 ### Validation Approach
-This step touches only frontend bootstrap/library code (no Python/backend changes), so validation is manual/browser-based plus static syntax checks - consistent with the project's established verification approach for frontend-only steps.
+This step touches only frontend code (new `.vue` files, a new loader wrapper, router wiring - no Python/backend changes), so validation is manual/browser-based (ideally via the existing headless-browser check-script pattern from Step 18) plus static syntax checks, consistent with the project's established verification approach for frontend-only steps.
 
 ### Key Scenarios
-- App loads at `/` without console errors; splash screen disappears and the dashboard renders.
-- Login dialog opens/closes, login succeeds, SSE-driven live node value updates still arrive and update the dashboard (exercises the new `EventBus`).
-- `/config` editor: node boxes render (exercises the component registry for `ConfigNodeBox`/`ConfigConnections`/`ConfigNodeDialog`), draft save/discard and the confirm dialog still work (exercises `AquapiConfirmDialog` + lifecycle hook renames).
-- `/settings` page renders generic setting widgets (exercises the settings component registrations).
-- Dark-mode toggle and navigation drawer still work.
+- Navigating to `/#/login` (fresh page load, empty cache) fetches and renders `AquapiLoginForm.vue` via `loadSfc`, no console errors; a second visit in the same session loads from the in-memory `vue3-sfc-loader` cache without a network request.
+- Navigating to `/#/about` renders `About.vue` correctly, including the `$t(...)` translations and the donate button's `$alert(...)` call.
+- Opening the login dialog from the nav drawer (not via the `/login` route) renders `AquapiLoginDialog.vue` embedding the lazily-loaded `AquapiLoginForm.vue`.
+- Reloading the browser (clearing in-memory cache but keeping `localStorage`) shows the compile cache being used (verified via `localStorage` keys after the first load).
+- Logging in via the migrated form still dispatches `auth/login` and navigates to `home` exactly as before.
 
 ### Edge Cases
-- Component that is imported but never referenced in a rendered template should still not throw during `installGlobalComponents`.
-- Repeated `EventBus.$off()` calls without a matching `$on` should not throw.
-- Route navigation away from `/config` with unsaved changes still triggers the `$confirm` leave-guard (exercises `app.config.globalProperties.$confirm`).
+- A `.vue` file with a syntax error should surface a clear console error from `vue3-sfc-loader` rather than silently failing to render.
+- Repeated dialog open/close of `AquapiLoginDialog` should not re-fetch `AquapiLoginForm.vue` from the network each time (session-level in-memory cache).
+- Navigating directly to `/#/about` on first app load (deep link, bypassing home) should still correctly lazy-load the SFC.
+- Existing, not-yet-migrated pages (`/`, `/config`, `/settings`) must render identically to before - confirms the new loader/library addition doesn't interfere with the untouched `.vue.js` component pipeline.
 
 ### Test Changes
-- All modified `.js` files checked with `node --input-type=module --check` (existing project convention for this frontend, no Python touched so no `pytest` run needed for this step per the agreed testing protocol).
+- All modified/added `.js` files checked with `node --input-type=module --check` where applicable; `.vue` files verified by actually loading them in the browser since Node can't parse SFC syntax directly.
+- No Python touched, so no `pytest` run needed for this step per the agreed testing protocol.
 
 # Delivery Steps
 
-### ✓ Step 1: Add Vue 3 / Vuetify 3 / Vuex 4 / Router 4 / I18n 9 library builds and update page shell
-The static libs directory contains Vue-3-compatible global browser builds and the HTML shell references them instead of the Vue-2-era files.
-- Add `vue.3.x.global.js`, `vuex.4.x.global.js`, `vue-router.4.x.global.js`, `vue-i18n.9.x.global.js`, `vuetify.3.x.global.js` under `aquaPi/static/libs/`, plus the matching Vuetify 3 CSS bundle under `aquaPi/static/css/` (with the existing Blinker-font customization reapplied).
-- Update `aquaPi/templates/pages/spa.html.jinja2` script `<script>`/CSS `<link>` references to the new files, removing the old Vue-2 CDN/local script tags.
-- Leave `chart.js`, `luxon`, `sortablejs`/`vuedraggable`, `vue-masonry-css` untouched at this stage.
+### ✓ Step 1: Add the `vue3-sfc-loader` library and the `loadSfc` wrapper
+The app has a working, cached, fetch-based SFC-loading pipeline that is not yet wired into any component.
+- Add `vue3-sfc-loader` as a browser-global bundle under `aquaPi/static/libs/` and reference it via a new `<script>` tag in `spa.html.jinja2` (after the Vue 3 script tag).
+- Add `aquaPi/static/spa/sfc/loadSfc.js` implementing `loadSfc(path)` with `moduleCache: {vue: Vue}`, `fetch`-based `getFile`, `addStyle` head-injection, and a `localStorage`-backed `compiledCache: {get, set}` (the loader's actual cache hook name, discovered during implementation to differ from the plan's originally assumed `getCachedModule`/`setCachedModule`) keyed by a `CACHE_VERSION` prefix.
+- Verified the wrapper in isolation via a headless-browser run against a throwaway test `.vue` file: `loadSfc()` resolves a real component and `localStorage` gets populated with `aquapi.sfc.v1.*` cache entries on first load.
 
-### ✓ Step 2: Build the shared component registry and mini EventBus, and rename lifecycle hooks
-The app has a working, Vue-3-safe mechanism for global component registration and cross-component events, and no component still uses removed Vue-2 lifecycle hooks.
-- Add `components/app/registry.js` with `registerGlobalComponent(name, def)` / `installGlobalComponents(app)`.
-- Replace all ~30 `Vue.component('Name', Def)` call sites (across `components/app/`, `components/auth/`, `components/config/`, `components/dashboard/`, `components/settings/`) with `registerGlobalComponent('Name', Def)`.
-- Rewrite `components/app/EventBus.js` to export a small custom emitter class exposing `$on`/`$off`/`$emit`, replacing `new Vue()`, without touching any of the ~10 existing call sites.
-- Remove the dead `this.$root.$on('test-clicked', ...)` block from `AppFooComp` in `aquaPi/static/spa/comps.js`.
-- Rename `destroyed()` → `unmounted()` and `beforeDestroy()` → `beforeUnmount()` in `App.vue.js`, `components/app/AquapiConfirmDialog.vue.js`, `layouts/Default.vue.js`, and `components/dashboard/comps.js`.
+### ✓ Step 2: Migrate `About.vue.js` to `About.vue` and load it lazily from the router
+The `/about` route renders the same content as before, now sourced from a real `.vue` SFC loaded on demand.
+- Create `aquaPi/static/spa/pages/About.vue` with `<template>` (ported verbatim) and `<script>` (`export default {methods: {donate() {...}}}`).
+- Update `router/index.js`'s `about` route to use `components: {default: () => loadSfc('/static/spa/pages/About.vue')}`, removing the static `About` import.
+- Delete `pages/About.vue.js`.
 
-### ✓ Step 3: Rewrite the app bootstrap for the Vue 3 / Vuex 4 / Router 4 / I18n 9 / Vuetify 3 APIs
-The application boots via `Vue.createApp()` and all core plugins are wired up through the new v3/v4/v9 APIs.
-- `store/index.js`: switch to `Vuex.createStore({modules})`, dropping `Vue.use(Vuex)`.
-- `router/index.js`: switch to `VueRouter.createRouter({history: VueRouter.createWebHashHistory(), routes, scrollBehavior})`, keeping the existing `beforeEach` guard logic.
-- `i18n/index.js`: switch to `VueI18n.createI18n({legacy: false, ...})`, verified against the existing locale files' interpolation syntax.
-- `main.js`: switch to `Vue.createApp(App)`, `app.use(store/router/i18n/vuetify)`, move `$confirm`/`$alert` onto `app.config.globalProperties`, call `installGlobalComponents(app)` from stage 2, then `app.mount('#app')`.
-- Adapt the `createVuetify({icons, theme})` call to the Vuetify 3 theme-config shape while preserving the existing color palette and MDI iconfont.
+### ✓ Step 3: Migrate `AquapiLoginForm.vue.js` and `AquapiLoginDialog.vue.js` to SFCs and load both lazily
+Login via the `/login` route and via the nav-drawer dialog both work unchanged, sourced from lazily-loaded SFCs.
+- Created `components/auth/AquapiLoginForm.vue` (props, `data`, `usernameRules`/`passwordRules`, `methods.login`/`validate`/`cancelLogin` ported verbatim), removed its `registerGlobalComponent(...)` call and deleted the old `.vue.js` file.
+- Created `components/auth/AquapiLoginDialog.vue` with `components: {AquapiLoginForm: Vue.defineAsyncComponent(() => loadSfc(...))}`, and deleted the old `.vue.js` file.
+- Updated `router/index.js`'s `login` route (`() => loadSfc(...)` directly, since Vue Router 4 natively supports plain-promise-returning route component factories) and `layouts/Default.vue.js`'s nav-drawer reference to `AquapiLoginDialog` (`Vue.defineAsyncComponent(() => loadSfc(...))`, since a bare factory in a plain `components:` option is NOT auto-async-resolved by Vue 3 the way router components are - discovered and fixed during implementation, see Key Decisions below).
+- **Fixed two real implementation-time discoveries** not anticipated by the original plan:
+  1. vue3-sfc-loader parses plain `.js`/`.mjs` dependencies with Babel's non-module (`.js`) vs. module (`.mjs`) `sourceType`, so a `.vue` file's `<script>` can't `import` a `.js` file that itself uses `import`/`export` syntax (like `loadSfc.js`). Fixed by exposing `loadSfc` through `moduleCache` (`moduleCache: {vue: Vue, 'sfc/loadSfc': {loadSfc}}`, the same mechanism already used for `vue`), so `AquapiLoginDialog.vue` does `import {loadSfc} from 'sfc/loadSfc'` (a virtual specifier resolved from the cache, never fetched/parsed as a file).
+  2. A bare `() => loadSfc(...)` factory only auto-resolves as an async component for Vue Router route components; plain `components: {...}` option entries (the nav-drawer's `AquapiLoginDialog`, and `AquapiLoginDialog`'s own local `AquapiLoginForm`) needed an explicit `Vue.defineAsyncComponent(() => loadSfc(...))` wrapper, otherwise Vue rendered the returned Promise object as literal text (`[object Promise]`) instead of mounting the component.
 
-### ✓ Step 4: Verify all existing pages against the new stack and fix surfaced component-level breakages
-Verified with a real headless-browser run (login, `/`, `/config`, `/settings`, `/about`, dark-mode toggle, node-box drag) against the running Flask app with the user's actual 17-node configuration - all pages render full content and the app boots without fatal errors.
-- **Dark-mode fix (the actual surfaced breakage)**: Vuetify 3 no longer exposes `$vuetify` as a plain object with a `theme.dark` boolean; instead it's provided via a global mixin computed property that wraps the injected theme instance in `vue.reactive(...)`, which **auto-unwraps nested refs**. Fixed by using `$vuetify.theme.global.current.dark` (read) and `$vuetify.theme.global.name` (read/write, no `.value`!) in `main.js`'s `toggleDarkMode`/`beforeMount` and in the 5 templates that previously read `$vuetify.theme.dark` (`layouts/Default.vue.js`, `layouts/Auth.vue.js`, `components/app/AquapiNavDrawer.vue.js`, `components/app/index.js`, `components/dashboard/index.js`); added an explicit `dark` theme definition to `createVuetify({theme: {themes: {light, dark}}})` (previously only `light` existed). Verified via headless browser: clicking the dark-mode toggle now actually switches the `v-application` element's theme class from `v-theme--light` to `v-theme--dark`.
-- **Confirmed pre-existing, accepted risk now also covers `vue-masonry-css`**: like the already-flagged `vuedraggable` 2.x, `vue-masonry-css` 1.x is Vue-2-only and throws `TypeError: window.Vue.component/use is not a function` at script-load time under Vue 3 (both call the old global `Vue.component`/`Vue.use` API as a load-time side effect). Both `<draggable>` (dashboard widget reorder drawer) and `<masonry>` (dashboard widget grid) end up unregistered as a result. Verified via headless browser that this does **not** break page rendering (Vue 3 still renders unresolved custom elements together with their slot content as plain DOM elements; confirmed the dashboard's widget list itself still renders, just without the masonry column layout or drag-reorder capability) - consistent with the already-accepted risk tolerance for `vuedraggable`. Sourcing a Vue-3-compatible drop-in replacement for both is out of scope for this step and tracked as a follow-up.
-- Ran `node --input-type=module --check` over all modified `.js` files (all pass).
-- `.junie/plans/project-clarification-and-test-plan.md` updated to mark Step 18 as done, documenting the registry/EventBus/lifecycle-hook/dark-mode approach actually implemented and the two known legacy-plugin limitations.
+### ✓ Step 4: Verify the migrated pages/dialog end-to-end and confirm the rest of the app is unaffected
+All 3 migrated components behave exactly like their `.vue.js` predecessors, verified against the running app.
+- Verified via a headless-browser (Puppeteer) run against the live Flask app with the real login: server-side Flask-Login redirect to `/login` → SPA loads at `/`, `/#/about` renders and the gift-icon `donate()` action correctly shows the `$alert` dialog ("Lob bitte an tkuhn..."), the nav-drawer login icon opens `AquapiLoginDialog` with an embedded, working `AquapiLoginForm`.
+- Confirmed the `localStorage` compile cache (`aquapi.sfc.v1.*` keys) gets populated after first load of the SFCs.
+- Confirmed `/`, `/config`, `/settings` still render their full content unaffected by the SFC-loader addition.
+- The only console errors observed (`window.Vue.component is not a function`, `window.Vue.use is not a function`) come from the pre-existing, already-documented Vue-2-only `vuedraggable`/`vue-masonry-css` UMD plugins (Step 18 known limitation), not from this step's changes.
+- All modified/added `.js` files pass `node --input-type=module --check`; temporary check scripts and `node_modules` used for verification were removed afterwards.

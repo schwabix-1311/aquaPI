@@ -10,6 +10,8 @@ import {loadSfc} from '../sfc/loadSfc.js'
 import '../components/dashboard/index.js'
 import '../components/config/index.js'
 import '../components/settings/index.js'
+import '../components/users/index.js'
+import store from '../store/index.js'
 
 const routes = [
 	{
@@ -66,6 +68,23 @@ const routes = [
 				name: 'about',
 				components: {
 					default: () => loadSfc('/static/spa/pages/About.vue')
+				},
+			},
+			{
+				path: 'users',
+				name: 'users',
+				components: {
+					default: () => loadSfc('/static/spa/pages/Users.vue')
+				},
+				beforeEnter: async (to, from, next) => {
+					if (!store.getters['users/currentUser']) {
+						await store.dispatch('users/fetchCurrentUser')
+					}
+					if (store.getters['users/isAdmin']) {
+						next()
+					} else {
+						next({name: 'home'})
+					}
 				},
 			},
 		]

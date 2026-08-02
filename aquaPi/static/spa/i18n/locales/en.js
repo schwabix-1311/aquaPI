@@ -81,6 +81,19 @@ export default
 			label: 'About',
 			heading: 'About',
 			copyright: 'Copyright',
+		},
+		users: {
+			label: 'Users',
+			heading: 'User Management',
+			username: 'Username',
+			password: 'Password',
+			newPassword: 'New password',
+			passwordHintOptional: 'Leave empty to keep the current password',
+			role: 'Role',
+			addUser: 'Add user',
+			editUser: 'Edit user',
+			errUsernamePassword: 'Username and password are required',
+			confirmDelete: 'Delete user "%{name}"?',
 		}
 	},
 

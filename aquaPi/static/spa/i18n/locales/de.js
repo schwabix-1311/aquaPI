@@ -81,6 +81,19 @@ export default
 			label: 'Über aquaPi',
 			heading: 'Über aquaPi',
 			copyright: 'Copyright',
+		},
+		users: {
+			label: 'Benutzer',
+			heading: 'Benutzerverwaltung',
+			username: 'Benutzername',
+			password: 'Passwort',
+			newPassword: 'Neues Passwort',
+			passwordHintOptional: 'Leer lassen, um das Passwort nicht zu ändern',
+			role: 'Rolle',
+			addUser: 'Benutzer hinzufügen',
+			editUser: 'Benutzer bearbeiten',
+			errUsernamePassword: 'Benutzername und Passwort sind erforderlich',
+			confirmDelete: 'Benutzer "%{name}" löschen?',
 		}
 	},
 

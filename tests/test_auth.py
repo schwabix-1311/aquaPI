@@ -170,6 +170,110 @@ def test_create_user_invalid_role_rejected(client, default_admin_password):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
+def test_current_user_endpoint_returns_own_info(client, default_admin_password):
+    _login(client, 'operator1', 'operatorPass1')
+    resp = client.get('/api/users/me')
+    assert resp.status_code == HTTPStatus.OK
+    body = resp.get_json()
+    assert body['username'] == 'operator1'
+    assert body['role'] == 'operator'
+    assert 'password_hash' not in body
+
+
+def test_current_user_endpoint_requires_login(client):
+    resp = client.get('/api/users/me')
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_admin_can_update_user_role(client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+
+    resp = client.put(f'/api/users/{user_id}', json={'role': 'operator'})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json()['role'] == 'operator'
+
+    row = db.get_user_by_id(users_db, user_id)
+    assert row['role'] == 'operator'
+
+
+def test_admin_can_reset_user_password(client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+
+    resp = client.put(f'/api/users/{user_id}', json={'password': 'brandNewPass1'})
+    assert resp.status_code == HTTPStatus.OK
+
+    client.get('/logout')
+    resp = _login(client, 'viewer1', 'brandNewPass1')
+    assert resp.status_code == 302
+
+
+def test_update_user_invalid_role_rejected(client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+
+    resp = client.put(f'/api/users/{user_id}', json={'role': 'superuser'})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_update_unknown_user_returns_404(client, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    resp = client.put('/api/users/999999', json={'role': 'operator'})
+    assert resp.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_cannot_demote_last_remaining_admin(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    # remove the two extra admins ('admin', 'admin1') so exactly one remains
+    admin_default_id = db.get_user_by_username(users_db, 'admin')['id']
+    db.delete_user(users_db, admin_default_id)
+
+    _login(client, 'admin1', 'adminPass1')
+    admin1_id = db.get_user_by_username(users_db, 'admin1')['id']
+
+    resp = client.put(f'/api/users/{admin1_id}', json={'role': 'viewer'})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+    row = db.get_user_by_id(users_db, admin1_id)
+    assert row['role'] == 'admin'
+
+
+def test_admin_can_delete_user(client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+
+    resp = client.delete(f'/api/users/{user_id}')
+    assert resp.status_code == HTTPStatus.NO_CONTENT
+    assert db.get_user_by_id(users_db, user_id) is None
+
+
+def test_cannot_delete_last_remaining_admin(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    admin_default_id = db.get_user_by_username(users_db, 'admin')['id']
+    db.delete_user(users_db, admin_default_id)
+
+    _login(client, 'admin1', 'adminPass1')
+    admin1_id = db.get_user_by_username(users_db, 'admin1')['id']
+
+    resp = client.delete(f'/api/users/{admin1_id}')
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert db.get_user_by_id(users_db, admin1_id) is not None
+
+
+def test_viewer_cannot_update_or_delete_users(client, app, default_admin_password):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    operator_id = db.get_user_by_username(users_db, 'operator1')['id']
+
+    _login(client, 'viewer1', 'viewerPass1')
+    assert client.put(f'/api/users/{operator_id}', json={'role': 'admin'}).status_code == HTTPStatus.FORBIDDEN
+    assert client.delete(f'/api/users/{operator_id}').status_code == HTTPStatus.FORBIDDEN
+
+
 def test_secret_key_persists_across_app_instances(tmp_path):
     app1 = Flask(__name__)
     app1.config['INSTANCE_PATH'] = str(tmp_path)

@@ -1151,6 +1151,54 @@ def count_admins(db_path: str) -> int:
         conn.close()
 
 
+def update_user_role(db_path: str, user_id: int, role: str) -> None:
+    """ change a user's role. Raises ValueError if the role is invalid
+        or the user does not exist.
+    """
+    if role not in VALID_ROLES:
+        raise ValueError(f'Invalid role: {role!r}')
+
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            cur = conn.execute('UPDATE users SET role = ? WHERE id = ?', (role, user_id))
+            if cur.rowcount == 0:
+                raise ValueError(f'No such user: {user_id!r}')
+    finally:
+        conn.close()
+
+
+def set_user_password(db_path: str, user_id: int, password: str) -> None:
+    """ set (reset) a user's password. Raises ValueError if the user
+        does not exist.
+    """
+    password_hash = generate_password_hash(password)
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            cur = conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                               (password_hash, user_id))
+            if cur.rowcount == 0:
+                raise ValueError(f'No such user: {user_id!r}')
+    finally:
+        conn.close()
+
+
+def delete_user(db_path: str, user_id: int) -> None:
+    """ remove a user. Raises ValueError if the user does not exist.
+        Callers are responsible for preventing removal of the last
+        remaining admin (see count_admins()).
+    """
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            cur = conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            if cur.rowcount == 0:
+                raise ValueError(f'No such user: {user_id!r}')
+    finally:
+        conn.close()
+
+
 def ensure_default_admin(db_path: str) -> tuple[str, str] | None:
     """ on first start (no users table content yet), create a default
         admin account with a freshly generated random password.

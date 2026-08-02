@@ -595,13 +595,15 @@ Regression aus Step 18/20 (Detailplan: `.junie/plans/vue3-vuetify3-vuex4-migrati
 - Verifikations-Erkenntnis (Umgebung, nicht Code): der laufende Flask-Prozess hatte kein aktives Debug-/Auto-Reload (Flask 3.x ignoriert das veraltete `FLASK_ENV=development`), wodurch er das bereits gefixte Template weiterhin veraltet auslieferte - Neustart mit `--debug` behoben.
 - Verifikation: Headless-Browser-Lauf gegen die laufende App mit der echten 13-Node-Konfiguration bestätigt: keine Konsolenfehler mehr, Dashboard rendert im Spalten-Layout, Konfigurator-Drawer ist außerhalb des Sichtbereichs bis zum Öffnen und fährt korrekt ein/aus, Drag-Reorder funktioniert, Speichern/Laden der Widget-Sichtbarkeit über `/api/dashboard/` funktioniert, Navigation zu `/config`/`/settings`/`/about` unverändert funktionsfähig.
 
-###   Step 21: Neue Seite `/users` zur Benutzerverwaltung
-Eine Admin-only-Seite zur Verwaltung von Benutzern und Rollen ergänzen. **(war zuvor Step 17)**
-- Neue SFC `pages/Users.vue` mit Tabelle aller Benutzer (Username, Rolle), Anlegen-/Bearbeiten-/Lösch-Dialogen inkl. Rollen-Auswahl (`viewer`/`operator`/`admin`) und Passwort-Reset.
-- Neuer Router-Eintrag `/users` mit Admin-Guard (analog zu bestehenden Router-Guards für `Auth`-Layout).
-- Neues Vuex-Store-Modul `users` mit Aktionen `fetchAll`/`create`/`update`/`remove`/`setRole`, angebunden an die bestehenden Nutzer-CRUD-Backend-Routen (siehe Step 4/5).
-- Backend-Absicherung: Entfernen des letzten verbleibenden Admin-Accounts wird verhindert (Selbst-Aussperrungs-Schutz).
-- Verifikation: Als `admin` einen neuen `operator`-User anlegen, dessen Rolle ändern und wieder löschen; Zugriff auf `/users` als `viewer`/`operator` liefert `403`/wird im Menü ausgeblendet.
+### ✓ Step 21: Neue Seite `/users` zur Benutzerverwaltung
+Eine Admin-only-Seite zur Verwaltung von Benutzern und Rollen ergänzt. **(war zuvor Step 17)**
+- Backend (`aquaPi/db.py`): neue Funktionen `update_user_role()`, `set_user_password()`, `delete_user()` ergänzt (bislang existierten nur `create_user`/`list_users`/`count_admins`).
+- Backend (`aquaPi/auth.py`): neue Routen `GET /api/users/me` (`@login_required`, liefert die eigenen id/username/role - unabhängig vom rein clientseitigen Auth-Store-Platzhalter aus Step 20), `PUT /api/users/<id>` (Rolle/Passwort ändern) und `DELETE /api/users/<id>` (Rolle `admin`), beide mit Schutz gegen das Entfernen/Degradieren des letzten verbleibenden Admin-Accounts (`db.count_admins()`).
+- Frontend: neues Vuex-Store-Modul `store/modules/users.js` (`fetchCurrentUser`/`fetchAll`/`create`/`update`/`remove`, Getter `isAdmin`/`role`); `main.js` ruft `fetchCurrentUser` beim Boot und nach Login ab, um die echte Server-Rolle unabhängig vom Auth-Platzhalter zu kennen.
+- Frontend: neue Komponenten `components/users/index.js` (`AquapiUsers`, Tabelle via `v-data-table`) und `components/users/comps.js` (`UserDialog`, Anlegen/Bearbeiten inkl. Rollen-Auswahl und optionalem Passwort-Reset), neue SFC `pages/Users.vue` (dünner Wrapper, analog `Settings.vue`).
+- Neuer Router-Eintrag `/users` mit `beforeEnter`-Admin-Guard (lädt bei Bedarf `users/fetchCurrentUser` nach, redirected Nicht-Admins zu `home`); neuer, nur für Admins sichtbarer Nav-Drawer-Eintrag in `Default.vue`.
+- Neue i18n-Schlüssel `pages.users.*` in `de.js`/`en.js`.
+- Verifikation: gezielte Backend-Tests `tests/test_auth_db.py` + `tests/test_auth.py` (40/40 grün, inkl. neuer Tests für `/api/users/me`, Rollenänderung, Passwort-Reset, Lösch-Schutz des letzten Admins, 403 für Nicht-Admins). Headless-Browser-Lauf (Puppeteer) gegen die laufende App mit dem echten Admin-Account bestätigt: `/#/users` zeigt die Tabelle, Anlegen/Bearbeiten (Rollenänderung)/Löschen eines Test-Users funktionieren fehlerfrei über die UI (keine Konsolenfehler), ein testweise angelegter `viewer`-Account sieht den "Benutzer"-Menüpunkt nicht und wird bei direktem Aufruf von `/#/users` zu Home umgeleitet; alle Test-Accounts wurden danach wieder entfernt, der echte Admin-Account blieb unangetastet.
 
 ###   Step 22: Login-Sicherheit erweitern (Passwort-Reset, Rate-Limiting)
 Self-Service-Passwort-Reset und Schutz vor Brute-Force-Logins ergänzen. **(war zuvor Step 18)**

@@ -3,6 +3,7 @@ import ui from './modules/ui.js'
 import dashboard from './modules/dashboard.js'
 import settings from './modules/settings.js'
 import config from './modules/config.js'
+import users from './modules/users.js'
 
 export default Vuex.createStore({
 	modules: {
@@ -10,7 +11,8 @@ export default Vuex.createStore({
 		auth,
 		dashboard,
 		settings,
-		config
+		config,
+		users
 	},
 	strict: false,
 })

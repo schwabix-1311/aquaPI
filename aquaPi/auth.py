@@ -162,6 +162,19 @@ def _user_to_dict(row: dict) -> dict:
     return {'id': row['id'], 'username': row['username'], 'role': row['role']}
 
 
+@bp.route('/api/users/me', methods=['GET'])
+@login_required
+def api_current_user():
+    """ return the currently logged-in user's own info (id, username,
+        role) - used by the SPA to reliably know its own role, since
+        the client-side Vuex auth store is only a placeholder without
+        a real tie to this server-side session.
+    """
+    return jsonify(_user_to_dict({'id': current_user.id,
+                                  'username': current_user.username,
+                                  'role': current_user.role}))
+
+
 @bp.route('/api/users/', methods=['GET'])
 @roles_required('admin')
 def api_list_users():
@@ -191,6 +204,58 @@ def api_create_user():
 
     log.info('User %r created new user %r with role %r', current_user.username, username, role)
     return jsonify({'id': user_id, 'username': username, 'role': role}), HTTPStatus.CREATED
+
+
+@bp.route('/api/users/<int:user_id>', methods=['PUT'])
+@roles_required('admin')
+def api_update_user(user_id: int):
+    """ change a user's role and/or reset their password (admin only).
+        Refuses to demote the last remaining admin, to avoid locking
+        everyone out of admin functionality.
+    """
+    row = db.get_user_by_id(_users_db_path(), user_id)
+    if not row:
+        return jsonify(error='No such user'), HTTPStatus.NOT_FOUND
+
+    data = request.get_json(silent=True) or {}
+    role = data.get('role')
+    password = data.get('password')
+
+    if role is not None:
+        if role not in db.VALID_ROLES:
+            return jsonify(error=f'Invalid role: {role!r}'), HTTPStatus.BAD_REQUEST
+        if row['role'] == 'admin' and role != 'admin' and db.count_admins(_users_db_path()) <= 1:
+            return jsonify(error='Cannot remove the last remaining admin'), HTTPStatus.BAD_REQUEST
+        db.update_user_role(_users_db_path(), user_id, role)
+        log.info('User %r changed role of user %r to %r',
+                 current_user.username, row['username'], role)
+
+    if password is not None:
+        if not password:
+            return jsonify(error='password must not be empty'), HTTPStatus.BAD_REQUEST
+        db.set_user_password(_users_db_path(), user_id, password)
+        log.info('User %r reset password of user %r', current_user.username, row['username'])
+
+    updated = db.get_user_by_id(_users_db_path(), user_id)
+    return jsonify(_user_to_dict(updated))
+
+
+@bp.route('/api/users/<int:user_id>', methods=['DELETE'])
+@roles_required('admin')
+def api_delete_user(user_id: int):
+    """ remove a user (admin only). Refuses to remove the last
+        remaining admin, to avoid locking everyone out.
+    """
+    row = db.get_user_by_id(_users_db_path(), user_id)
+    if not row:
+        return jsonify(error='No such user'), HTTPStatus.NOT_FOUND
+
+    if row['role'] == 'admin' and db.count_admins(_users_db_path()) <= 1:
+        return jsonify(error='Cannot remove the last remaining admin'), HTTPStatus.BAD_REQUEST
+
+    db.delete_user(_users_db_path(), user_id)
+    log.info('User %r deleted user %r', current_user.username, row['username'])
+    return '', HTTPStatus.NO_CONTENT
 
 
 @bp.route('/api/notifications/prefs', methods=['GET'])

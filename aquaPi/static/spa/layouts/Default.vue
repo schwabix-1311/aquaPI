@@ -104,7 +104,7 @@ export default {
 			return this.$store.getters['auth/username']
 		},
 		navItems() {
-			return [
+			const items = [
 				{
 					name: 'home',
 					icon: 'mdi-view-dashboard',
@@ -120,12 +120,20 @@ export default {
 					icon: 'mdi-cog-outline',
 					route: 'config'
 				},
-				{
-					name: 'about',
-					icon: 'mdi-information-outline',
-					route: 'about'
-				}
 			]
+			if (this.$store.getters['users/isAdmin']) {
+				items.push({
+					name: 'users',
+					icon: 'mdi-account-multiple',
+					route: 'users'
+				})
+			}
+			items.push({
+				name: 'about',
+				icon: 'mdi-information-outline',
+				route: 'about'
+			})
+			return items
 		},
 		containerFluid() {
 			// TODO: maybe render container as 'fluid' (full viewport width) on all pages

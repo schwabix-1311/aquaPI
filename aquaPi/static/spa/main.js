@@ -81,6 +81,7 @@ const app = Vue.createApp({
 			EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_IN, () => {
 				this.$store.dispatch('ui/hideDialog', 'AquapiLoginDialog')
 				this.$store.dispatch('ui/hideDialog', 'AquapiNavDrawer')
+				this.$store.dispatch('users/fetchCurrentUser')
 
 				// TODO: adapt to final root (dashboard on home)
 				this.$router.replace({name: 'home'})
@@ -100,6 +101,12 @@ const app = Vue.createApp({
 
 	beforeMount() {
 		EventBus.$emit(AQUAPI_EVENTS.APP_LOADING, true)
+
+		// Fetch the real, server-side user (id/username/role) via the
+		// authenticated Flask-Login session - independent of the
+		// localStorage-based auth/user placeholder below, since that
+		// one has no real tie to the server session (see auth.js TODOs).
+		this.$store.dispatch('users/fetchCurrentUser')
 
 		// TODO: implement server side check ...
 		// Check localStorage for authenticated user

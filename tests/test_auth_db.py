@@ -88,3 +88,45 @@ def test_ensure_default_admin_skipped_if_users_exist(users_db_path):
     created = db.ensure_default_admin(users_db_path)
     assert created is None
     assert db.count_admins(users_db_path) == 0
+
+
+def test_update_user_role(users_db_path):
+    user_id = db.create_user(users_db_path, 'erin', 'pwd12345', role='viewer')
+    db.update_user_role(users_db_path, user_id, 'operator')
+    row = db.get_user_by_id(users_db_path, user_id)
+    assert row['role'] == 'operator'
+
+
+def test_update_user_role_invalid_raises(users_db_path):
+    user_id = db.create_user(users_db_path, 'frank', 'pwd12345', role='viewer')
+    with pytest.raises(ValueError):
+        db.update_user_role(users_db_path, user_id, 'superuser')
+
+
+def test_update_user_role_unknown_user_raises(users_db_path):
+    with pytest.raises(ValueError):
+        db.update_user_role(users_db_path, 999999, 'admin')
+
+
+def test_set_user_password(users_db_path):
+    user_id = db.create_user(users_db_path, 'grace', 'oldPass1', role='viewer')
+    db.set_user_password(users_db_path, user_id, 'newPass2')
+    row = db.get_user_by_id(users_db_path, user_id)
+    assert check_password_hash(row['password_hash'], 'newPass2')
+    assert not check_password_hash(row['password_hash'], 'oldPass1')
+
+
+def test_set_user_password_unknown_user_raises(users_db_path):
+    with pytest.raises(ValueError):
+        db.set_user_password(users_db_path, 999999, 'newPass2')
+
+
+def test_delete_user(users_db_path):
+    user_id = db.create_user(users_db_path, 'henry', 'pwd12345', role='viewer')
+    db.delete_user(users_db_path, user_id)
+    assert db.get_user_by_id(users_db_path, user_id) is None
+
+
+def test_delete_user_unknown_user_raises(users_db_path):
+    with pytest.raises(ValueError):
+        db.delete_user(users_db_path, 999999)

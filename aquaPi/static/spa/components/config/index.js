@@ -21,6 +21,10 @@ const AquapiConfig = {
 						<v-alert v-else-if="selectMode" dense text type="info" class="mb-0">
 							{{ $t('pages.config.hintSelecting', {count: selectedIds.length}) }}
 						</v-alert>
+						<v-chip v-else-if="draftDirty" small color="warning" text-color="white">
+							<v-icon left x-small>mdi-circle-medium</v-icon>
+							{{ $t('pages.config.unsavedChanges') }}
+						</v-chip>
 					</v-col>
 					<v-col cols="auto">
 						<v-btn
@@ -35,9 +39,17 @@ const AquapiConfig = {
 							<v-icon left small>mdi-content-save-outline</v-icon>
 							{{ $t('pages.config.templatesSnapshots') }}
 						</v-btn>
-						<v-btn color="primary" @click="openAddDialog">
+						<v-btn color="primary" class="mr-2" @click="openAddDialog">
 							<v-icon left small>mdi-plus</v-icon>
 							{{ $t('pages.config.addNode') }}
+						</v-btn>
+						<v-btn text class="mr-2" :disabled="!draftDirty" @click="onDiscard">
+							<v-icon left small>mdi-undo</v-icon>
+							{{ $t('pages.config.discard') }}
+						</v-btn>
+						<v-btn color="success" :disabled="!draftDirty" :loading="saving" @click="onSave">
+							<v-icon left small>mdi-content-save</v-icon>
+							{{ $t('pages.config.saveChanges') }}
 						</v-btn>
 					</v-col>
 				</v-row>
@@ -100,6 +112,7 @@ const AquapiConfig = {
 	data: function() {
 		return {
 			loading: true,
+			saving: false,
 			dialogOpen: false,
 			templatesDialogOpen: false,
 			editingNode: null,
@@ -111,11 +124,16 @@ const AquapiConfig = {
 	},
 
 	computed: {
-		allNodes: function() {
-			return this.$store.getters['dashboard/nodes']
-		},
 		nodes: function() {
-			return Object.values(this.allNodes)
+			return this.$store.getters['config/draftNodes']
+		},
+		nodesById: function() {
+			const map = {}
+			this.nodes.forEach(n => { map[n.id] = n })
+			return map
+		},
+		draftDirty: function() {
+			return this.$store.getters['config/draftDirty']
 		},
 		nodeTypes: function() {
 			return this.$store.getters['config/nodeTypes']
@@ -140,7 +158,38 @@ const AquapiConfig = {
 				this.$store.dispatch('dashboard/fetchNodes'),
 				this.$store.dispatch('config/fetchNodeTypes'),
 			])
+			this.$store.dispatch('config/initDraft')
 			this.loading = false
+		},
+
+		async onSave() {
+			this.saving = true
+			try {
+				const result = await this.$store.dispatch('config/saveDraft')
+				if (!result.ok) {
+					this.error = result.error
+					return
+				}
+				this.$store.dispatch('config/initDraft')
+			} finally {
+				this.saving = false
+			}
+		},
+
+		async onDiscard() {
+			const ok = await this.$confirm(this.$t('pages.config.confirmDiscard'))
+			if (!ok) {
+				return
+			}
+			this.$store.dispatch('config/initDraft')
+			this.selectMode = false
+			this.selectedIds = []
+		},
+
+		async reinitDraft() {
+			this.selectMode = false
+			this.selectedIds = []
+			this.$store.dispatch('config/initDraft')
 		},
 
 		openAddDialog: function() {
@@ -161,8 +210,7 @@ const AquapiConfig = {
 		},
 
 		onTemplateSaved: function() {
-			this.selectMode = false
-			this.selectedIds = []
+			this.reinitDraft()
 		},
 
 		onSelect: function(node) {
@@ -189,7 +237,7 @@ const AquapiConfig = {
 			this.connectingFrom = (this.connectingFrom && this.connectingFrom.id === node.id) ? null : node
 		},
 
-		async connectTo(target) {
+		connectTo(target) {
 			const schema = this.nodeTypes[target.type]
 			if (!schema || schema.receives === 'none') {
 				this.error = target.name + ': ' + (this.$t('pages.config.errNameType'))
@@ -207,50 +255,42 @@ const AquapiConfig = {
 				receives = [this.connectingFrom.id]
 			}
 
-			const result = await this.$store.dispatch('config/updateNode', {
+			this.$store.dispatch('config/draftUpdateNode', {
 				nodeId: target.id,
 				changes: {receives},
 			})
-			if (!result.ok) {
-				this.error = result.error
-			}
 			this.connectingFrom = null
 		},
 
-		async onRemoveEdge(edge) {
-			const target = this.allNodes[edge.targetId]
+		onRemoveEdge(edge) {
+			const target = this.nodesById[edge.targetId]
 			if (!target) return
 			const receives = (target.receives || []).filter(id => id !== edge.sourceId)
-			const result = await this.$store.dispatch('config/updateNode', {
+			this.$store.dispatch('config/draftUpdateNode', {
 				nodeId: target.id,
 				changes: {receives},
 			})
-			if (!result.ok) {
-				this.error = result.error
-			}
 		},
 
 		onDrag: function(payload) {
 			// local-only while dragging, position is committed on drag-end
 		},
 
-		async onDragEnd(payload) {
-			const result = await this.$store.dispatch('config/updateNode', {
+		onDragEnd(payload) {
+			this.$store.dispatch('config/draftUpdateNode', {
 				nodeId: payload.node.id,
 				changes: {pos_x: payload.x, pos_y: payload.y},
 			})
-			if (!result.ok) {
-				this.error = result.error
-			}
 		},
 
 		async onDelete(node) {
-			if (!window.confirm(this.$t('pages.config.confirmDelete', {name: node.name}))) {
+			const ok = await this.$confirm(this.$t('pages.config.confirmDelete', {name: node.name}))
+			if (!ok) {
 				return
 			}
-			const result = await this.$store.dispatch('config/deleteNode', {nodeId: node.id})
-			if (!result.ok) {
-				this.error = result.error
+			this.$store.dispatch('config/draftDeleteNode', {nodeId: node.id})
+			if (this.selectMode) {
+				this.selectedIds = this.selectedIds.filter(id => id !== node.id)
 			}
 		},
 	},

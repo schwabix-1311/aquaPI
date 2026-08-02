@@ -69,6 +69,13 @@ export default
 			confirmDeleteTemplate: 'Delete template "%{name}"?',
 			confirmDeleteSnapshot: 'Delete snapshot "%{name}"?',
 			confirmRestoreSnapshot: 'Restore snapshot "%{name}"? This replaces the entire current configuration.',
+			restoringSnapshot: 'Restoring snapshot, please wait…',
+			unsavedChanges: 'Unsaved changes',
+			discard: 'Discard',
+			saveChanges: 'Save',
+			confirmDiscard: 'Discard all unsaved changes?',
+			confirmLeaveUnsaved: 'There are unsaved changes. Discard them and leave the page?',
+			deleteConnection: 'Delete connection',
 		},
 		about: {
 			label: 'About',
@@ -134,6 +141,11 @@ export default
 	},
 
 	misc: {
+		dialog: {
+			confirm: 'Confirm',
+			cancel: 'Cancel',
+			ok: 'OK',
+		},
 		duration: {
 			min: 'min',
 			mins: 'min',

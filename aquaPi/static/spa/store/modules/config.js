@@ -3,6 +3,8 @@ const state = () => ({
 	nodeTypesLoaded: false,
 	templates: [],
 	snapshots: [],
+	draft: null,
+	draftTempCounter: 0,
 })
 
 const getters = {
@@ -17,6 +19,21 @@ const getters = {
 	},
 	snapshots: (state) => {
 		return state.snapshots
+	},
+	draftActive: (state) => {
+		return state.draft !== null
+	},
+	draftNodes: (state) => {
+		if (!state.draft) {
+			return []
+		}
+		return Object.values(state.draft).filter(node => !node._deleted)
+	},
+	draftDirty: (state) => {
+		if (!state.draft) {
+			return false
+		}
+		return Object.values(state.draft).some(node => node._new || node._dirty || node._deleted)
 	},
 }
 
@@ -295,6 +312,144 @@ const actions = {
 			return {ok: false, error: e.message}
 		}
 	},
+
+	// --- /config editor draft mode (Step 16): all node CRUD below is
+	// applied client-side to state.draft only, and only actually sent
+	// to the backend as a single atomic diff by saveDraft() ---
+
+	initDraft({rootGetters, commit}) {
+		const nodes = rootGetters['dashboard/nodes']
+		const draft = {}
+		Object.values(nodes).forEach(node => {
+			draft[node.id] = Object.assign({}, node, {_new: false, _dirty: false, _deleted: false})
+		})
+		commit('setDraft', draft)
+	},
+
+	discardDraft({commit}) {
+		commit('setDraft', null)
+	},
+
+	draftCreateNode({state, commit}, payload) {
+		const tempId = 'draft-' + (state.draftTempCounter + 1)
+		commit('bumpDraftTempCounter')
+		const node = Object.assign({}, payload, {
+			id: tempId,
+			identifier: tempId,
+			_tempId: tempId,
+			_new: true,
+			_dirty: true,
+			_deleted: false,
+		})
+		commit('setDraftNode', node)
+		return node
+	},
+
+	draftUpdateNode({state, commit}, payload) {
+		const {nodeId, changes} = payload
+		const existing = state.draft[nodeId]
+		if (!existing) {
+			return
+		}
+		const node = Object.assign({}, existing, changes, {
+			_dirty: existing._new ? existing._dirty : true,
+		})
+		commit('setDraftNode', node)
+	},
+
+	draftDeleteNode({state, commit}, payload) {
+		const {nodeId} = payload
+		const existing = state.draft[nodeId]
+		if (!existing) {
+			return
+		}
+		if (existing._new) {
+			commit('removeDraftNode', nodeId)
+		} else {
+			commit('setDraftNode', Object.assign({}, existing, {_deleted: true}))
+		}
+	},
+
+	async saveDraft({state, dispatch, commit}) {
+		if (!state.draft) {
+			return {ok: true}
+		}
+
+		const fieldsOf = (node) => {
+			const schema = state.nodeTypes[node.type]
+			const fields = {}
+			;(schema && schema.fields || []).forEach(field => {
+				if (node[field.key] !== undefined) {
+					fields[field.key] = node[field.key]
+				}
+			})
+			return fields
+		}
+
+		const creates = []
+		const updates = []
+		const deletes = []
+
+		Object.values(state.draft).forEach(node => {
+			if (node._new && node._deleted) {
+				return
+			}
+			if (node._new) {
+				creates.push({
+					temp_id: node._tempId,
+					type: node.type,
+					name: node.name,
+					receives: node.receives || [],
+					fields: fieldsOf(node),
+					group: node.group || '',
+					pos_x: node.pos_x || 0,
+					pos_y: node.pos_y || 0,
+				})
+			} else if (node._deleted) {
+				deletes.push(node.id)
+			} else if (node._dirty) {
+				updates.push({
+					id: node.id,
+					receives: node.receives || [],
+					fields: fieldsOf(node),
+					group: node.group || '',
+					pos_x: node.pos_x || 0,
+					pos_y: node.pos_y || 0,
+				})
+			}
+		})
+
+		if (!creates.length && !updates.length && !deletes.length) {
+			commit('setDraft', null)
+			return {ok: true}
+		}
+
+		try {
+			const response = await fetch('/api/config/apply', {
+				method: 'post',
+				mode: 'same-origin',
+				cache: 'no-cache',
+				headers: {
+					'X-Requested-With': 'XMLHttpRequest',
+					'Accept': 'application/json',
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({creates, updates, deletes}),
+			})
+
+			const body = await response.json().catch(() => null)
+
+			if (response.status == 200) {
+				await dispatch('dashboard/fetchNodes', null, {root: true})
+				commit('setDraft', null)
+				return {ok: true, idMap: body.id_map}
+			}
+
+			return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
+		} catch (e) {
+			return {ok: false, error: e.message}
+		}
+	},
 }
 
 const mutations = {
@@ -307,6 +462,20 @@ const mutations = {
 	},
 	setSnapshots(state, payload) {
 		state.snapshots = payload
+	},
+	setDraft(state, payload) {
+		state.draft = payload
+	},
+	setDraftNode(state, payload) {
+		state.draft = Object.assign({}, state.draft)
+		state.draft[payload.id] = payload
+	},
+	removeDraftNode(state, nodeId) {
+		state.draft = Object.assign({}, state.draft)
+		delete state.draft[nodeId]
+	},
+	bumpDraftTempCounter(state) {
+		state.draftTempCounter += 1
 	},
 }
 

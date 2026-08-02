@@ -69,6 +69,13 @@ export default
 			confirmDeleteTemplate: 'Template "%{name}" löschen?',
 			confirmDeleteSnapshot: 'Snapshot "%{name}" löschen?',
 			confirmRestoreSnapshot: 'Snapshot "%{name}" wiederherstellen? Dies ersetzt die komplette aktuelle Konfiguration.',
+			restoringSnapshot: 'Snapshot wird wiederhergestellt, bitte warten…',
+			unsavedChanges: 'Ungespeicherte Änderungen',
+			discard: 'Verwerfen',
+			saveChanges: 'Speichern',
+			confirmDiscard: 'Alle ungespeicherten Änderungen verwerfen?',
+			confirmLeaveUnsaved: 'Es gibt ungespeicherte Änderungen. Diese verwerfen und die Seite verlassen?',
+			deleteConnection: 'Verbindung löschen',
 		},
 		about: {
 			label: 'Über aquaPi',
@@ -134,6 +141,11 @@ export default
 	},
 
 	misc: {
+		dialog: {
+			confirm: 'Bestätigen',
+			cancel: 'Abbrechen',
+			ok: 'OK',
+		},
 		duration: {
 			min: 'min',
 			mins: 'min',

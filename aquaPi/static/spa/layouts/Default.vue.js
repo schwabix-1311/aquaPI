@@ -3,12 +3,14 @@ import {AppFooComp} from '../comps.js';
 // import {AquapiNavDrawer, AquapiTestComp} from '../components/app/index.js'
 import '../components/app/index.js'
 import {AquapiLoginDialog} from '../components/auth/AquapiLoginDialog.vue.js'
+import {AquapiConfirmDialog} from '../components/app/AquapiConfirmDialog.vue.js'
 import {AQUAPI_EVENTS, EventBus} from '../components/app/EventBus.js';
 
 const DefaultLayout = {
 	components: {
 		// AquapiNavDrawer,
 		AquapiLoginDialog,
+		AquapiConfirmDialog,
 		AppFooComp,
 		// AquapiTestComp
 	},
@@ -76,6 +78,7 @@ const DefaultLayout = {
 			</v-footer>
 
 			<aquapi-login-dialog></aquapi-login-dialog>
+			<aquapi-confirm-dialog></aquapi-confirm-dialog>
 		</v-app>
 	`,
 
@@ -121,7 +124,7 @@ const DefaultLayout = {
 		},
 		containerFluid() {
 			// TODO: maybe render container as 'fluid' (full viewport width) on all pages
-			return ['home', 'dashboard'].includes(this.$route.name)
+			return ['home', 'dashboard', 'config'].includes(this.$route.name)
 		}
 	},
 

@@ -109,14 +109,34 @@ const ConfigConnections = {
 	},
 	template: `
 		<svg class="config-connections" :width="width" :height="height">
-			<line
+			<g
 				v-for="edge in edges"
 				:key="edge.key"
-				:x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
-				stroke="#90a4ae" stroke-width="2" marker-end="url(#config-arrow)"
-				class="config-connection-line"
-				@click="$emit('remove', edge)"
-			></line>
+				class="config-connection-group"
+				@mouseenter="hoveredEdgeKey = edge.key"
+				@mouseleave="hoveredEdgeKey = null"
+			>
+				<line
+					:x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+					class="config-connection-hit"
+				></line>
+				<line
+					:x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+					stroke="#90a4ae" stroke-width="2" marker-end="url(#config-arrow)"
+					class="config-connection-line"
+					:class="{'config-connection-line--hover': hoveredEdgeKey === edge.key}"
+				></line>
+				<g
+					v-if="hoveredEdgeKey === edge.key"
+					class="config-connection-delete"
+					:transform="'translate(' + edge.midX + ',' + edge.midY + ')'"
+					@click="$emit('remove', edge)"
+				>
+					<title>{{ $t('pages.config.deleteConnection') }}</title>
+					<circle r="9" fill="#f44336"></circle>
+					<path d="M-4,-4 L4,4 M4,-4 L-4,4" stroke="white" stroke-width="1.6" stroke-linecap="round"></path>
+				</g>
+			</g>
 			<defs>
 				<marker id="config-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
 					<path d="M0,0 L8,4 L0,8 z" fill="#90a4ae"></path>
@@ -124,6 +144,11 @@ const ConfigConnections = {
 			</defs>
 		</svg>
 	`,
+	data: function() {
+		return {
+			hoveredEdgeKey: null,
+		}
+	},
 	computed: {
 		byId: function() {
 			const map = {}
@@ -136,13 +161,16 @@ const ConfigConnections = {
 				(target.receives || []).forEach(sourceId => {
 					const source = this.byId[sourceId]
 					if (!source) return
+					const x1 = (source.pos_x || 0) + NODE_BOX_WIDTH
+					const y1 = (source.pos_y || 0) + NODE_BOX_HEIGHT / 2
+					const x2 = (target.pos_x || 0)
+					const y2 = (target.pos_y || 0) + NODE_BOX_HEIGHT / 2
 					edges.push({
 						key: sourceId + '->' + target.id,
 						sourceId, targetId: target.id,
-						x1: (source.pos_x || 0) + NODE_BOX_WIDTH,
-						y1: (source.pos_y || 0) + NODE_BOX_HEIGHT / 2,
-						x2: (target.pos_x || 0),
-						y2: (target.pos_y || 0) + NODE_BOX_HEIGHT / 2,
+						x1, y1, x2, y2,
+						midX: (x1 + x2) / 2,
+						midY: (y1 + y2) / 2,
 					})
 				})
 			})
@@ -307,41 +335,31 @@ const ConfigNodeDialog = {
 		cancel: function() {
 			this.show = false
 		},
-		save: async function() {
+		save: function() {
 			this.error = null
 			this.saving = true
 			try {
 				if (this.editNode) {
-					const result = await this.$store.dispatch('config/updateNode', {
+					this.$store.dispatch('config/draftUpdateNode', {
 						nodeId: this.editNode.id,
-						changes: {
-							receives: this.asReceivesList(),
-							group: this.form.group,
-							fields: this.form.fields,
-						},
+						changes: Object.assign(
+							{receives: this.asReceivesList(), group: this.form.group},
+							this.form.fields
+						),
 					})
-					if (!result.ok) {
-						this.error = result.error
-						return
-					}
 				} else {
 					if (!this.form.type || !this.form.name) {
 						this.error = this.$t('pages.config.errNameType')
 						return
 					}
-					const result = await this.$store.dispatch('config/createNode', {
+					this.$store.dispatch('config/draftCreateNode', Object.assign({
 						type: this.form.type,
 						name: this.form.name,
 						receives: this.asReceivesList(),
 						group: this.form.group,
-						fields: this.form.fields,
 						pos_x: 20,
 						pos_y: 20,
-					})
-					if (!result.ok) {
-						this.error = result.error
-						return
-					}
+					}, this.form.fields))
 				}
 				this.show = false
 			} finally {
@@ -358,8 +376,14 @@ const ConfigTemplatesDialog = {
 		selectedIds: {type: Array, default: () => []},
 	},
 	template: `
-		<v-dialog v-model="show" max-width="640">
+		<v-dialog v-model="show" max-width="640" :persistent="restoring">
 			<v-card>
+				<v-overlay v-if="restoring" absolute :opacity="0.85" color="white">
+					<div class="text-center black--text">
+						<aquapi-loading-indicator color="primary"></aquapi-loading-indicator>
+						<div class="mt-3">{{ $t('pages.config.restoringSnapshot') }}</div>
+					</div>
+				</v-overlay>
 				<v-card-title>{{ $t('pages.config.templatesSnapshots') }}</v-card-title>
 				<v-tabs v-model="tab">
 					<v-tab>{{ $t('pages.config.templates') }}</v-tab>
@@ -432,12 +456,12 @@ const ConfigTemplatesDialog = {
 										<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
 									</v-list-item-content>
 									<v-list-item-action>
-										<v-btn icon @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
+										<v-btn icon :disabled="restoring" @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
 											<v-icon>mdi-restore</v-icon>
 										</v-btn>
 									</v-list-item-action>
 									<v-list-item-action>
-										<v-btn icon @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
+										<v-btn icon :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
 									</v-list-item-action>
@@ -460,6 +484,7 @@ const ConfigTemplatesDialog = {
 			newTemplateName: '',
 			newSnapshotName: '',
 			saving: false,
+			restoring: false,
 			error: null,
 		}
 	},
@@ -508,10 +533,12 @@ const ConfigTemplatesDialog = {
 				this.error = result.error
 			} else {
 				this.show = false
+				this.$emit('saved')
 			}
 		},
 		async deleteTemplate(tpl) {
-			if (!window.confirm(this.$t('pages.config.confirmDeleteTemplate', {name: tpl.name}))) {
+			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteTemplate', {name: tpl.name}))
+			if (!ok) {
 				return
 			}
 			const result = await this.$store.dispatch('config/deleteTemplate', {name: tpl.name})
@@ -533,18 +560,26 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async restoreSnapshot(snap) {
-			if (!window.confirm(this.$t('pages.config.confirmRestoreSnapshot', {name: snap.name}))) {
+			const ok = await this.$confirm(this.$t('pages.config.confirmRestoreSnapshot', {name: snap.name}))
+			if (!ok) {
 				return
 			}
-			const result = await this.$store.dispatch('config/restoreSnapshot', {name: snap.name})
-			if (!result.ok) {
-				this.error = result.error
-			} else {
-				this.show = false
+			this.restoring = true
+			try {
+				const result = await this.$store.dispatch('config/restoreSnapshot', {name: snap.name})
+				if (!result.ok) {
+					this.error = result.error
+				} else {
+					this.show = false
+					this.$emit('saved')
+				}
+			} finally {
+				this.restoring = false
 			}
 		},
 		async deleteSnapshot(snap) {
-			if (!window.confirm(this.$t('pages.config.confirmDeleteSnapshot', {name: snap.name}))) {
+			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteSnapshot', {name: snap.name}))
+			if (!ok) {
 				return
 			}
 			const result = await this.$store.dispatch('config/deleteSnapshot', {name: snap.name})

@@ -62,10 +62,25 @@ class MachineRoom:
         self.globals['CUSTOM_CFG'] = cfg_file
         self.globals['BUS_TOPO'] = topo_file
 
-        if 'Email' in self.globals:
-            driver_config['Email'] = self.globals['Email']
-        if 'Telegram' in self.globals:
-            driver_config['Telegram'] = self.globals['Telegram']
+        # Email/Telegram credentials now live in the users SQLite DB
+        # (table 'notification_config'), not in config.json anymore.
+        # A config.json still present is migrated once, then ignored.
+        users_db_path = db.get_users_db_path(instance_path)
+        self.globals['USERS_DB'] = users_db_path
+
+        if db.migrate_notification_config_from_json(self.globals, users_db_path):
+            log.brief("=== Migrated notification config (Email/Telegram) from "
+                      "%s to %s", cfg_file, users_db_path)
+
+        for channel in db.NOTIFICATION_CHANNELS:
+            cfg_list = db.get_notification_config(users_db_path, channel)
+            if cfg_list:
+                driver_config[channel] = cfg_list
+
+        # let alert_nodes.py look up per-user notification prefs without
+        # needing Flask's app context (mirrors driver_config's pattern)
+        db.set_current_users_db_path(users_db_path)
+
         create_io_registry()
 
         try:

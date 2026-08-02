@@ -257,6 +257,7 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
     """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
     with conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -266,6 +267,21 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 role          TEXT NOT NULL DEFAULT 'viewer'
                     CHECK (role IN ('viewer', 'operator', 'admin')),
                 created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS notification_config (
+                channel TEXT PRIMARY KEY,
+                params  TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_notification_prefs (
+                user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                alert_node_id TEXT NOT NULL,
+                channel       TEXT NOT NULL DEFAULT 'none'
+                    CHECK (channel IN ('email', 'telegram', 'none')),
+                PRIMARY KEY (user_id, alert_node_id)
             )
         """)
     return conn
@@ -360,3 +376,157 @@ def ensure_default_admin(db_path: str) -> tuple[str, str] | None:
     password = secrets.token_urlsafe(12)
     create_user(db_path, username, password, role='admin')
     return username, password
+
+
+# --- notification config (Email/Telegram credentials) ------------------
+#
+# 'channel' here matches the keys used by aquaPi/driver/DriverText.py's
+# driver_config dict: 'Email' and 'Telegram'. 'params' stores the JSON
+# encoded *list* of credential dicts (multiple accounts per channel are
+# supported, exactly like the previous config.json structure).
+
+NOTIFICATION_CHANNELS = ('Email', 'Telegram')
+
+
+def get_notification_config(db_path: str, channel: str) -> list[dict[str, Any]] | None:
+    """ return the stored credential list for a channel ('Email'/'Telegram'),
+        or None if nothing is configured for it
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute(
+            'SELECT params FROM notification_config WHERE channel = ?', (channel,)
+        ).fetchone()
+        return json.loads(row['params']) if row else None
+    finally:
+        conn.close()
+
+
+def set_notification_config(db_path: str, channel: str,
+                            configs: list[dict[str, Any]]) -> None:
+    """ store (create or replace) the credential list for a channel
+    """
+    if channel not in NOTIFICATION_CHANNELS:
+        raise ValueError(f'Invalid notification channel: {channel!r}')
+
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO notification_config (channel, params) VALUES (?, ?)
+                ON CONFLICT(channel) DO UPDATE SET params = excluded.params
+            """, (channel, json.dumps(configs)))
+    finally:
+        conn.close()
+
+
+def migrate_notification_config_from_json(globals_cfg: dict[str, Any],
+                                          db_path: str) -> bool:
+    """ one-time migration of Email/Telegram credentials, previously read
+        directly from config.json into MachineRoom.globals, into the
+        notification_config table. Idempotent: does nothing once any
+        channel is already present in the DB.
+        Returns True if anything was migrated.
+    """
+    migrated = False
+    for channel in NOTIFICATION_CHANNELS:
+        if channel not in globals_cfg:
+            continue
+        if get_notification_config(db_path, channel) is not None:
+            continue
+        configs = globals_cfg[channel]
+        if not isinstance(configs, list):
+            configs = [configs]
+        set_notification_config(db_path, channel, configs)
+        log.brief('Migrated %s notification config from config.json to %s',
+                  channel, db_path)
+        migrated = True
+    return migrated
+
+
+# --- per-user, per-alert notification preferences -----------------------
+
+def set_user_notification_pref(db_path: str, user_id: int, alert_node_id: str,
+                               channel: str) -> None:
+    """ set (create or replace) the preferred notification channel a
+        user wants for a given Alert node ('email'/'telegram'/'none')
+    """
+    if channel not in ('email', 'telegram', 'none'):
+        raise ValueError(f'Invalid notification channel: {channel!r}')
+
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO user_notification_prefs (user_id, alert_node_id, channel)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, alert_node_id) DO UPDATE SET channel = excluded.channel
+            """, (user_id, alert_node_id, channel))
+    finally:
+        conn.close()
+
+
+def get_user_notification_pref(db_path: str, user_id: int, alert_node_id: str) -> str:
+    """ return the preferred channel of a user for a given alert,
+        defaults to 'none' if nothing was ever configured
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute(
+            'SELECT channel FROM user_notification_prefs '
+            'WHERE user_id = ? AND alert_node_id = ?',
+            (user_id, alert_node_id)
+        ).fetchone()
+        return row['channel'] if row else 'none'
+    finally:
+        conn.close()
+
+
+def list_user_notification_prefs(db_path: str, user_id: int) -> list[dict[str, Any]]:
+    """ return all (alert_node_id, channel) prefs configured by one user
+    """
+    conn = get_users_connection(db_path)
+    try:
+        rows = conn.execute(
+            'SELECT alert_node_id, channel FROM user_notification_prefs '
+            'WHERE user_id = ? ORDER BY alert_node_id',
+            (user_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def get_prefs_for_alert(db_path: str, alert_node_id: str) -> list[dict[str, Any]]:
+    """ return all users (with their preferred channel) that want to be
+        notified for a given Alert node, excluding those set to 'none'
+    """
+    conn = get_users_connection(db_path)
+    try:
+        rows = conn.execute("""
+            SELECT u.id AS user_id, u.username AS username, p.channel AS channel
+            FROM user_notification_prefs p
+            JOIN users u ON u.id = p.user_id
+            WHERE p.alert_node_id = ? AND p.channel != 'none'
+        """, (alert_node_id,)).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+# --- module-level 'current' users DB path, mirrors the driver_config
+#     pattern in aquaPi/driver/__init__.py: set once at startup by
+#     MachineRoom, then read by alert_nodes.py to look up per-user
+#     notification preferences without needing Flask's app context.
+
+_current_users_db_path: str | None = None
+
+
+def set_current_users_db_path(db_path: str | None) -> None:
+    # pylint: disable-next=W0603
+    global _current_users_db_path
+    _current_users_db_path = db_path
+
+
+def get_current_users_db_path() -> str | None:
+    return _current_users_db_path

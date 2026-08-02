@@ -191,3 +191,29 @@ def api_create_user():
 
     log.info('User %r created new user %r with role %r', current_user.username, username, role)
     return jsonify({'id': user_id, 'username': username, 'role': role}), HTTPStatus.CREATED
+
+
+@bp.route('/api/notifications/prefs', methods=['GET'])
+@login_required
+def api_list_notification_prefs():
+    """ list the current user's own preferred channel per alert node """
+    prefs = db.list_user_notification_prefs(_users_db_path(), current_user.id)
+    return jsonify(prefs)
+
+
+@bp.route('/api/notifications/prefs/<alert_node_id>', methods=['PUT'])
+@roles_required('operator', 'admin')
+def api_set_notification_pref(alert_node_id: str):
+    """ set the current user's preferred notification channel
+        ('email'/'telegram'/'none') for one specific Alert node
+    """
+    data = request.get_json(silent=True) or {}
+    channel = data.get('channel', '')
+
+    if channel not in ('email', 'telegram', 'none'):
+        return jsonify(error=f'Invalid channel: {channel!r}'), HTTPStatus.BAD_REQUEST
+
+    db.set_user_notification_pref(_users_db_path(), current_user.id, alert_node_id, channel)
+    log.info('User %r set notification channel %r for alert %r',
+             current_user.username, channel, alert_node_id)
+    return jsonify({'alert_node_id': alert_node_id, 'channel': channel})

@@ -424,15 +424,16 @@ Sicherstellen, dass Login-Schutz und Rollenprüfung korrekt greifen, ohne die Si
 - Test: Viewer-Rolle kann lesen aber keine Nutzer verwalten (`403`); Operator/Admin haben erweiterten Zugriff auf die neuen `/api/users/`-Routen (`Schreibende Setpoint-Routen` folgen erst in Step 11/12). (verifiziert manuell + `tests/test_auth.py`)
 - Regressionstest: Simulation (13 Knoten) läuft nach Login weiterhin fehlerfrei (manuell gegen die reale `instance/`-Konfiguration verifiziert, danach zurückgesetzt).
 
-### * Step 7: Benachrichtigungs-Parameter und User-Präferenzen in SQLite
+### ✓ Step 7: Benachrichtigungs-Parameter und User-Präferenzen in SQLite
 Telegram-/Mail-Konfiguration aus `config.json` in die DB überführen, mit User-Zuordnung je Alert.
-- Tabellen `notification_config` und `user_notification_prefs` über `aquaPi/db.py` anlegen.
-- Einmalige Migration bestehender `config.json`-Werte (Email/Telegram) nach `notification_config`.
-- `DriverText.py` (`DriverEmail`, `DriverTelegram`) auf Lesen der Zugangsdaten aus der DB umstellen.
-- `alert_nodes.py` erweitern: beim Auslösen eines Alerts werden alle zugeordneten User samt bevorzugtem Kanal abgefragt und entsprechend benachrichtigt.
-- Einfache Verwaltungsroute, mit der ein User seinen Kanal je Alert setzen kann (mind. `operator`-Rolle).
+- Tabellen `notification_config` und `user_notification_prefs` über `aquaPi/db.py` angelegt (in `users.sqlite`, FK auf `users` mit `ON DELETE CASCADE`).
+- Einmalige, idempotente Migration bestehender `config.json`-Werte (Email/Telegram) nach `notification_config` (`db.migrate_notification_config_from_json`), verifiziert per Testlauf: bestehendes `config.json` wird migriert, 13 Nodes starten weiterhin fehlerfrei.
+- `DriverText.py` liest Zugangsdaten weiterhin über das bestehende `driver_config`-Modul-Dict; dieses wird nun in `MachineRoom.__init__` aus der DB (statt direkt aus `config.json`) befüllt - bewusste, risikoarme Design-Entscheidung, um `DriverText.py` selbst unverändert zu lassen (siehe Notes).
+- `alert_nodes.py` erweitert: `Alert._send_alert()` ruft zusätzlich `_notify_user_prefs()` auf, die für den Alert-Node alle User mit gesetztem Kanal (`db.get_prefs_for_alert`) über einen kurzlebigen Treiber (`IoRegistry.driver_factory`/`driver_destruct`) benachrichtigt; das bisherige `port`/`_driver`-Verhalten bleibt als zusätzlicher, unabhängiger Broadcast-Kanal erhalten.
+- Neue Routen `GET /api/notifications/prefs` (eigene Prefs, jeder eingeloggte User) und `PUT /api/notifications/prefs/<alert_node_id>` (mind. `operator`-Rolle) in `aquaPi/auth.py`.
+- 16 neue Tests in `tests/test_notifications.py` (Config-CRUD, Migration/Idempotenz, User-Prefs-CRUD, Cascade-Delete, Alert-Dispatch per Fake-Treiber) - alle 47 Tests im Projekt grün.
 
-###   Step 8: Benutzerspezifische Dashboards und `group`-Property
+### * Step 8: Benutzerspezifische Dashboards und `group`-Property
 Dashboard-Konfiguration und Controller-Gruppierung gemäß ToDo umsetzen.
 - Tabelle `dashboards` (user_id, layout JSON) über `aquaPi/db.py` anlegen; Routen `GET/PUT /api/dashboard/` für das Layout des eingeloggten Users.
 - `group`-Property (Default `""`) in das `params`-JSON jeder Node aufnehmen, editierbar über die Node-Konfiguration.

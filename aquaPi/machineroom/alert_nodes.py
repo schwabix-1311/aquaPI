@@ -9,6 +9,7 @@ from time import monotonic
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange)
 from ..driver import (IoRegistry, PortFunc, OutDriver)
+from .. import db
 
 
 log = logging.getLogger('machineroom.alert_nodes')
@@ -211,6 +212,7 @@ class Alert(BusListener):
         self._port = port
 
     def _send_alert(self, alert_active: bool, alert_lst: list[str]):
+        text = ' \n'.join(alert_lst)
         if self._driver:
             driver = self._driver
             if driver.func == PortFunc.Bout:
@@ -218,9 +220,49 @@ class Alert(BusListener):
                 log.info('Alert device "%s" set to %d',
                          driver.name, 100 if alert_active else 0)
             elif driver.func == PortFunc.Tout:
-                driver.write(' \n'.join(alert_lst))
+                driver.write(text)
                 log.info('Alert receiver "%s" will get msg:  "%s"',
                          driver.name, '\n'.join(alert_lst))
+
+        self._notify_user_prefs(text)
+
+    def _notify_user_prefs(self, text: str) -> None:
+        """ additionally notify every user that configured a preferred
+            channel ('email'/'telegram') for this specific Alert node,
+            regardless of this node's own 'port'. Users without a pref
+            (default 'none') are not notified, and a missing/misconfigured
+            driver for one user must never break the alert loop.
+        """
+        users_db_path = db.get_current_users_db_path()
+        if not users_db_path:
+            return
+
+        try:
+            prefs = db.get_prefs_for_alert(users_db_path, self.id)
+        except Exception:
+            log.exception('Failed to read user notification prefs for alert %s', self.id)
+            return
+
+        for pref in prefs:
+            channel = pref['channel']
+            port_name = f'{channel.capitalize()} #1'
+            try:
+                driver = IoRegistry.get().driver_factory(port_name)
+            except Exception:
+                log.error('No %s port available to notify user %s for alert %s',
+                          channel, pref.get('username', pref['user_id']), self.id)
+                continue
+
+            try:
+                if isinstance(driver, OutDriver) and driver.func == PortFunc.Tout:
+                    driver.write(text)
+                    log.info('Alert %s notified user %s via %s',
+                             self.id, pref.get('username', pref['user_id']), channel)
+            except Exception:
+                log.exception('Failed to notify user %s via %s for alert %s',
+                              pref.get('username', pref['user_id']), channel, self.id)
+            finally:
+                IoRegistry.get().driver_destruct(port_name, driver)
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData) and self._bus:

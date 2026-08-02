@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 import logging
+import re
 
 from http import HTTPStatus
 from flask import (Blueprint, current_app, json, Response, request, jsonify)
 from flask_login import (login_required, current_user)
 
 from . import db
+from .auth import roles_required
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import BusRole
 from .pages.sse_util import send_sse_events
@@ -173,3 +175,129 @@ def api_set_dashboard() -> Response:
     db.set_dashboard(_users_db_path(), current_user.id, layout)
     log.info('User %r saved dashboard layout (%d items)', current_user.username, len(layout))
     return jsonify(layout)
+
+
+_ATTR_RE = re.compile(r'([\w-]+)="([^"]*)"')
+
+
+def _parse_settings_attrs(attrs: str) -> dict:
+    """ parse a node's get_settings() html-attribute string, e.g.
+        'type="number" min="0" max="99" step="0.1"', into a plain dict.
+    """
+    return {k: v for k, v in _ATTR_RE.findall(attrs or '')}
+
+
+def _infer_type(value) -> str:
+    """ get_settings() entries without an explicit 'type' attr (e.g.
+        plain booleans) fall back to a type inferred from the value.
+    """
+    if isinstance(value, bool):
+        return 'checkbox'
+    if isinstance(value, (int, float)):
+        return 'number'
+    return 'text'
+
+
+def _settings_entry_to_dict(entry: tuple) -> dict:
+    """ convert one get_settings() tuple (key, label, value[, attrs])
+        into a JSON-serializable dict for the /settings page. Entries
+        with key=None are read-only informational fields (e.g.
+        'Receives') and are included, but marked as not editable.
+    """
+    key, label, value = entry[0], entry[1], entry[2]
+    attrs = _parse_settings_attrs(entry[3] if len(entry) > 3 else '')
+    attrs.setdefault('type', _infer_type(value))
+    return {
+        'key': key,
+        'label': label,
+        'value': value,
+        'attrs': attrs,
+        'editable': key is not None,
+    }
+
+
+@bp.route('/api/nodes/<node_id>/settings', methods=['GET'])
+@login_required
+def api_get_node_settings(node_id: str) -> Response:
+    """ return the node's operational parameters (get_settings()) as
+        JSON, used by the /settings page to render generic widgets.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    node = bus.get_node(node_id)
+    if not node:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    settings = [_settings_entry_to_dict(entry) for entry in node.get_settings()]
+    return jsonify(settings)
+
+
+def _validate_and_cast(key: str, raw_value, attrs: dict):
+    """ validate & cast a single settings value against the attrs
+        delivered by the node's get_settings(); raises ValueError on
+        an invalid type or an out-of-range value.
+    """
+    vtype = attrs.get('type', 'text')
+    if vtype == 'number':
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            raise ValueError(f'{key}: expected a number')
+        if 'min' in attrs and value < float(attrs['min']):
+            raise ValueError(f'{key}: value {value} below minimum {attrs["min"]}')
+        if 'max' in attrs and value > float(attrs['max']):
+            raise ValueError(f'{key}: value {value} above maximum {attrs["max"]}')
+        return value
+    elif vtype == 'checkbox':
+        if not isinstance(raw_value, bool):
+            raise ValueError(f'{key}: expected a boolean')
+        return raw_value
+    else:
+        return str(raw_value)
+
+
+@bp.route('/api/nodes/<node_id>/settings', methods=['PUT'])
+@roles_required('operator', 'admin')
+def api_set_node_settings(node_id: str) -> Response:
+    """ update one or more operational parameters of a node, validated
+        against the min/max/type delivered by the node itself
+        (get_settings()), then persist the whole topology.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    node = bus.get_node(node_id)
+    if not node:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error='Body must be a JSON object of {key: value}'), HTTPStatus.BAD_REQUEST
+
+    editable = {entry[0]: entry for entry in node.get_settings() if entry[0] is not None}
+
+    for key in body:
+        if key not in editable:
+            return jsonify(error=f'Unknown or read-only setting: {key}'), HTTPStatus.BAD_REQUEST
+
+    try:
+        for key, raw_value in body.items():
+            entry = editable[key]
+            attrs = _parse_settings_attrs(entry[3] if len(entry) > 3 else '')
+            attrs.setdefault('type', _infer_type(entry[2]))
+            value = _validate_and_cast(key, raw_value, attrs)
+            setattr(node, key, value)
+    except ValueError as ex:
+        return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
+
+    mr: MachineRoom = current_app.extensions['machineroom']
+    mr.save_nodes(bus)
+
+    log.info('User %r updated settings of node %r: %s',
+             current_user.username, node_id, list(body.keys()))
+
+    settings = [_settings_entry_to_dict(entry) for entry in node.get_settings()]
+    return jsonify(settings)

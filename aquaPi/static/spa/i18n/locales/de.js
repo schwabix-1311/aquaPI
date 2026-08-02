@@ -29,6 +29,9 @@ export default
 		settings: {
 			label: 'Einstellungen',
 			heading: 'Einstellungen',
+			hintEmpty: 'Keine einstellbaren Regler gefunden',
+			ungrouped: 'Ohne Gruppe',
+			scheduleHint: 'Minute Stunde Tag(Monat) Monat Wochentag',
 		},
 		config: {
 			label: 'Konfiguration',

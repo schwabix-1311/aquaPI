@@ -29,6 +29,9 @@ export default
 		settings: {
 			label: 'Settings',
 			heading: 'Settings',
+			hintEmpty: 'No configurable controllers found',
+			ungrouped: 'Ungrouped',
+			scheduleHint: 'Minute Hour DayOfMonth Month DayOfWeek',
 		},
 		config: {
 			label: 'Configuration',

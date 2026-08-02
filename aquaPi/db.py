@@ -542,6 +542,14 @@ def capture_node_template(bus: MsgBus, node_ids: list[str]) -> dict[str, Any]:
             raise ValueError('Alert nodes cannot be part of a template')
         state = serialize_node(node)
         state['receives'] = [r for r in state.get('receives', []) if r in selected]
+        if 'port' in state:
+            # hardware/driver ports are an exclusive resource (only one
+            # node may own a given port at a time) - the captured node
+            # is still live and keeps using its port, so a template must
+            # not carry it along, or instantiating the template would
+            # always fail with a 'port already in use' error. Users
+            # re-assign a port after inserting the template instead.
+            state['port'] = ''
         entries.append({'id': node.id, 'type': type(node).__name__, 'state': state})
     return {'nodes': entries}
 
@@ -637,6 +645,12 @@ def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
         state = dict(entry['state'])
         state['name'] = new_names[entry['id']]
         state['receives'] = [id_map[r] for r in state.get('receives', []) if r in id_map]
+        if 'port' in state:
+            # defense in depth: also blank ports here, not just in
+            # capture_node_template(), so templates saved before this
+            # fix (which may still carry a real port) don't crash the
+            # insert with a 'port already in use' error either
+            state['port'] = ''
         new_nodes.append(_deserialize_node(entry['type'], state))
 
     for node in new_nodes:

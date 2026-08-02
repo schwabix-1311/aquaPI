@@ -220,6 +220,58 @@ def test_insert_template_creates_new_ids_and_wiring(client, users, bus):
     assert new_out['receives'] == [new_ctrl['id']]
 
 
+def test_insert_template_with_hw_port_does_not_conflict(tmp_path):
+    """ regression test: inserting a template containing an input/output
+        node that owns a real (still in-use) hardware/driver port must
+        not raise a 500 (DriverPortInuseError) - the copied node's port
+        must be blanked out instead, since only one node may own a
+        given port at a time.
+    """
+    bus = MsgBus(threaded=False)
+    sensor = AnalogInput('Temperatur', 'DS1820 #1', 25.0, '°C')
+    sensor.plugin(bus)
+    try:
+        app = Flask(__name__, template_folder=_TEMPLATE_FOLDER)
+        app.config['INSTANCE_PATH'] = str(tmp_path)
+        app.config['TESTING'] = True
+        auth.init_app(app)
+        app.register_blueprint(auth.bp)
+        app.register_blueprint(api.bp)
+
+        topo_db_path = str(tmp_path / 'topo.sqlite')
+        db.save_topology(bus, topo_db_path)
+        app.extensions['machineroom'] = _FakeMachineRoom(bus, topo_db_path)
+
+        @app.route('/', endpoint='spa.spa')
+        def spa_stub():
+            return 'spa'
+
+        users_db = db.get_users_db_path(str(tmp_path))
+        db.create_user(users_db, 'admin1', 'adminPass123', role='admin')
+
+        client = app.test_client()
+        _login(client, 'admin1', 'adminPass123')
+
+        resp = client.post('/api/templates/', json={
+            'name': 'Sensor', 'node_ids': ['temperatur'],
+        })
+        assert resp.status_code == HTTPStatus.CREATED
+        # the captured template must not carry the live, still-used port
+        assert resp.get_json()['data']['nodes'][0]['state']['port'] == ''
+
+        resp = client.post('/api/templates/Sensor/insert')
+        assert resp.status_code == HTTPStatus.CREATED
+        new_nodes = resp.get_json()
+        assert len(new_nodes) == 1
+        assert new_nodes[0]['port'] == ''
+
+        # original node must still be untouched and still own its port
+        assert bus.get_node('temperatur') is not None
+        assert bus.get_node('temperatur').port == 'DS1820 #1'
+    finally:
+        bus.teardown()
+
+
 def test_insert_template_twice_avoids_collision(client, users):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/templates/', json={'name': 'X', 'node_ids': ['wasser']})

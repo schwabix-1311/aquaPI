@@ -617,7 +617,11 @@ def api_insert_template(name: str) -> Response:
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
 
-    new_nodes = db.instantiate_template(bus, template['data'])
+    try:
+        new_nodes = db.instantiate_template(bus, template['data'])
+    except (ValueError, KeyError, TypeError) as ex:
+        log.exception('api_insert_template: failed to instantiate template %r', name)
+        return jsonify(error=f'Could not insert template: {ex}'), HTTPStatus.BAD_REQUEST
 
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)

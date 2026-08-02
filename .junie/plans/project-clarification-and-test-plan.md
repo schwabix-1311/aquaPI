@@ -613,12 +613,12 @@ Self-Service-Passwort-Reset und Schutz vor Brute-Force-Logins ergänzt. **(war z
 - Frontend: `UserDialog` (`components/users/comps.js`) und die Benutzer-Tabelle (`components/users/index.js`) um ein E-Mail-Feld/-Spalte erweitert, damit Admins Benutzern überhaupt eine E-Mail-Adresse für den Reset-Versand zuweisen können; neue i18n-Schlüssel `pages.users.email`/`emailHint`.
 - Verifikation: 68/68 gezielte Backend-Tests grün (`tests/test_auth_db.py` 31/31 inkl. 15 neuer Tests für E-Mail/Reset-Token/Lockout, `tests/test_auth.py` 37/37 inkl. 16 neuer Integrationstests für Login-Sperre, Reset-Anfrage/-Bestätigung und E-Mail-Feld auf den User-CRUD-Routen); alle geänderten `.js`-Dateien per `node --input-type=module --check` geprüft; `python3 -m py_compile` für `db.py`/`auth.py` erfolgreich.
 
-###   Step 23: Audit-Log für Konfigurations- und Setpoint-Änderungen
-Nachvollziehbarkeit von Änderungen für Admins schaffen. **(war zuvor Step 19)**
-- Tabelle `audit_log` (timestamp, user_id, action, target, details JSON) über `aquaPi/db.py` anlegen.
-- Bestehende Schreib-Routen (Setpoints, Node-CRUD, Nutzerverwaltung aus Step 5/11/12) um Logging-Aufrufe ergänzen.
-- Neue Route `GET /api/audit-log` (Rolle `admin`) mit Filter-/Paginierungs-Unterstützung.
-- Verifikation: Änderung eines Setpoints sowie Anlegen/Löschen eines Nodes erscheinen korrekt mit User und Zeitstempel im Audit-Log.
+### ✓ Step 23: Audit-Log für Konfigurations- und Setpoint-Änderungen
+Nachvollziehbarkeit von Änderungen für Admins geschaffen. **(war zuvor Step 19)**
+- `aquaPi/db.py`: neue Tabelle `audit_log` (id, timestamp, user_id [FK auf `users(id)`, `ON DELETE SET NULL`], username [denormalisiert, bleibt auch nach Nutzer-Löschung lesbar], action, target, details als JSON-String) samt Index auf `timestamp` in `get_users_connection()` angelegt; neue Funktionen `add_audit_log_entry()` (schluckt eigene Fehler, damit ein Logging-Problem nie die eigentliche Operation blockiert) und `list_audit_log()` (Paginierung via `limit`/`offset`, optionale Filter `action`/`username`, liefert `total` für die UI).
+- `aquaPi/api.py`: alle bestehenden Schreib-Routen um `db.add_audit_log_entry(...)`-Aufrufe ergänzt: Setpoint-/Settings-Änderung, Node anlegen/ändern/löschen, `POST /api/config/apply` (mit Anzahl Creates/Updates/Deletes als `details`), Templates anlegen/löschen/einfügen, Snapshots anlegen/löschen/wiederherstellen. Neue Route `GET /api/audit-log` (Rolle `admin`) mit `limit`/`offset`/`action`/`username`-Query-Parametern.
+- `aquaPi/auth.py`: Benutzerverwaltungs-Routen (`POST /api/users/`, `PUT /api/users/<id>` für Rolle/Passwort/E-Mail, `DELETE /api/users/<id>`) protokollieren jetzt ebenfalls (`create_user`/`update_user_role`/`reset_user_password`/`set_user_email`/`delete_user`).
+- Verifikation: neue Testdatei `tests/test_audit_log.py` (12 Tests grün: DB-Funktionen inkl. Paginierung/Filterung/Fehlertoleranz bei ungültigem Pfad, Integration mit Node-CRUD/Setpoints/Config-Apply/Nutzerverwaltung, Endpoint-Zugriffsschutz für Nicht-Admins, Paginierung/Filterung über die Route); Regressionschecks `tests/test_config_apply.py` + `tests/test_auth.py` + `tests/test_auth_db.py` (77/77 grün) sowie `tests/test_node_crud_api.py` (24/24 grün); `python3 -m py_compile` für `db.py`/`api.py`/`auth.py` erfolgreich.
 
 ###   Step 24: Backup/Export der SQLite-DB und automatisiertes Scheduling
 Datensicherheit für die neue Persistenzschicht herstellen. **(war zuvor Step 20)**

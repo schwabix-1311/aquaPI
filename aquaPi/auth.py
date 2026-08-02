@@ -268,6 +268,8 @@ def api_create_user():
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
 
     log.info('User %r created new user %r with role %r', current_user.username, username, role)
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'create_user', username, {'role': role})
     return jsonify({'id': user_id, 'username': username, 'role': role, 'email': email}), HTTPStatus.CREATED
 
 
@@ -295,16 +297,22 @@ def api_update_user(user_id: int):
         db.update_user_role(_users_db_path(), user_id, role)
         log.info('User %r changed role of user %r to %r',
                  current_user.username, row['username'], role)
+        db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                               'update_user_role', row['username'], {'role': role})
 
     if password is not None:
         if not password:
             return jsonify(error='password must not be empty'), HTTPStatus.BAD_REQUEST
         db.set_user_password(_users_db_path(), user_id, password)
         log.info('User %r reset password of user %r', current_user.username, row['username'])
+        db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                               'reset_user_password', row['username'])
 
     if email is not None:
         db.set_user_email(_users_db_path(), user_id, email)
         log.info('User %r set email of user %r', current_user.username, row['username'])
+        db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                               'set_user_email', row['username'])
 
     updated = db.get_user_by_id(_users_db_path(), user_id)
     return jsonify(_user_to_dict(updated))
@@ -325,6 +333,8 @@ def api_delete_user(user_id: int):
 
     db.delete_user(_users_db_path(), user_id)
     log.info('User %r deleted user %r', current_user.username, row['username'])
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'delete_user', row['username'])
     return '', HTTPStatus.NO_CONTENT
 
 

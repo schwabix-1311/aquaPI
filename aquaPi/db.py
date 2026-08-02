@@ -1107,6 +1107,20 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 locked_until TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                user_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                username  TEXT NOT NULL,
+                action    TEXT NOT NULL,
+                target    TEXT NOT NULL DEFAULT '',
+                details   TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log (timestamp DESC)
+        """)
     return conn
 
 
@@ -1431,6 +1445,81 @@ def clear_login_attempts(db_path: str, key: str) -> None:
     try:
         with conn:
             conn.execute('DELETE FROM login_attempts WHERE key = ?', (key,))
+    finally:
+        conn.close()
+
+
+# --- audit log (Step 23) -------------------------------------------------
+#
+# Records who did what to which configuration/setpoint/user entity and
+# when, for admins to review via GET /api/audit-log. 'details' is an
+# optional, free-form JSON-serializable dict (e.g. changed field names),
+# stored as a JSON string; 'username' is denormalized (kept even if the
+# user is later deleted, unlike 'user_id' which is nulled via ON DELETE
+# SET NULL) so historic entries stay readable.
+
+def add_audit_log_entry(db_path: str, user_id: int | None, username: str,
+                        action: str, target: str = '',
+                        details: dict[str, Any] | None = None) -> None:
+    """ append one entry to the audit log. Never raises on its own
+        (logging an audit entry must not break the operation it is
+        auditing) - failures are only logged.
+    """
+    try:
+        conn = get_users_connection(db_path)
+        try:
+            with conn:
+                conn.execute("""
+                    INSERT INTO audit_log (user_id, username, action, target, details)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, username, action, target,
+                      json.dumps(details) if details is not None else None))
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        log.exception('Failed to write audit log entry: user=%r action=%r target=%r',
+                      username, action, target)
+
+
+def list_audit_log(db_path: str, *, limit: int = 50, offset: int = 0,
+                   action: str | None = None,
+                   username: str | None = None) -> dict[str, Any]:
+    """ return a page of audit log entries (newest first), optionally
+        filtered by exact 'action' and/or 'username', along with the
+        total number of matching entries (for pagination).
+    """
+    limit = max(1, min(int(limit), 500))
+    offset = max(0, int(offset))
+
+    where = []
+    params: list[Any] = []
+    if action:
+        where.append('action = ?')
+        params.append(action)
+    if username:
+        where.append('username = ?')
+        params.append(username)
+    where_clause = f'WHERE {" AND ".join(where)}' if where else ''
+
+    conn = get_users_connection(db_path)
+    try:
+        total = conn.execute(
+            f'SELECT COUNT(*) AS n FROM audit_log {where_clause}', params
+        ).fetchone()['n']
+
+        rows = conn.execute(f"""
+            SELECT id, timestamp, user_id, username, action, target, details
+            FROM audit_log {where_clause}
+            ORDER BY id DESC LIMIT ? OFFSET ?
+        """, [*params, limit, offset]).fetchall()
+
+        entries = []
+        for row in rows:
+            entry = dict(row)
+            entry['details'] = json.loads(entry['details']) if entry['details'] else None
+            entries.append(entry)
+
+        return {'entries': entries, 'total': total, 'limit': limit, 'offset': offset}
     finally:
         conn.close()
 

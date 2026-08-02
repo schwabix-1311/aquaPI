@@ -307,6 +307,8 @@ def api_set_node_settings(node_id: str) -> Response:
 
     log.info('User %r updated settings of node %r: %s',
              current_user.username, node_id, list(body.keys()))
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'update_settings', node_id, {'fields': list(body.keys())})
 
     settings = [_settings_entry_to_dict(entry) for entry in node.get_settings()]
     return jsonify(settings)
@@ -428,6 +430,8 @@ def api_create_node() -> Response:
     mr.save_nodes(bus)
 
     log.info('User %r created node %r (type %s)', current_user.username, node.id, type_name)
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'create_node', node.id, {'type': type_name})
 
     return jsonify(_node_to_dict(node)), HTTPStatus.CREATED
 
@@ -502,6 +506,8 @@ def api_update_node(node_id: str) -> Response:
     mr.save_nodes(bus)
 
     log.info('User %r updated node %r: %s', current_user.username, node_id, list(body.keys()))
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'update_node', node_id, {'fields': list(body.keys())})
 
     return jsonify(_node_to_dict(node))
 
@@ -535,6 +541,8 @@ def api_delete_node(node_id: str) -> Response:
     mr.save_nodes(bus)
 
     log.info('User %r deleted node %r', current_user.username, node_id)
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'delete_node', node_id)
 
     return Response(status=HTTPStatus.NO_CONTENT)
 
@@ -567,6 +575,12 @@ def api_config_apply() -> Response:
         log.info('User %r applied config diff: %d create(s), %d update(s), %d delete(s)',
                  current_user.username, len(diff.get('creates') or []),
                  len(diff.get('updates') or []), len(diff.get('deletes') or []))
+        db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                               'apply_config_diff', '', {
+                                   'creates': len(diff.get('creates') or []),
+                                   'updates': len(diff.get('updates') or []),
+                                   'deletes': len(diff.get('deletes') or []),
+                               })
 
     nodes = [_node_to_dict(node) for node in bus.get_nodes()]
     return jsonify(nodes=nodes, id_map=result['id_map'])
@@ -614,6 +628,8 @@ def api_create_template() -> Response:
 
     log.info('User %r saved template %r (%d nodes)',
              current_user.username, name, len(node_ids))
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'save_template', name, {'node_count': len(node_ids)})
 
     return jsonify(db.get_template(_topo_db_path(), name)), HTTPStatus.CREATED
 
@@ -636,6 +652,8 @@ def api_delete_template(name: str) -> Response:
         return Response(status=HTTPStatus.NOT_FOUND)
 
     log.info('User %r deleted template %r', current_user.username, name)
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'delete_template', name)
 
     return Response(status=HTTPStatus.NO_CONTENT)
 
@@ -665,6 +683,8 @@ def api_insert_template(name: str) -> Response:
 
     log.info('User %r inserted template %r (%d new nodes)',
              current_user.username, name, len(new_nodes))
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'insert_template', name, {'node_count': len(new_nodes)})
 
     return jsonify([_node_to_dict(n) for n in new_nodes]), HTTPStatus.CREATED
 
@@ -703,6 +723,8 @@ def api_create_snapshot() -> Response:
     db.create_snapshot(_topo_db_path(), name)
 
     log.info('User %r created snapshot %r', current_user.username, name)
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'create_snapshot', name)
 
     return jsonify(db.get_snapshot(_topo_db_path(), name)), HTTPStatus.CREATED
 
@@ -715,6 +737,8 @@ def api_delete_snapshot(name: str) -> Response:
         return Response(status=HTTPStatus.NOT_FOUND)
 
     log.info('User %r deleted snapshot %r', current_user.username, name)
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'delete_snapshot', name)
 
     return Response(status=HTTPStatus.NO_CONTENT)
 
@@ -740,5 +764,29 @@ def api_restore_snapshot(name: str) -> Response:
 
     log.info('User %r restored snapshot %r (%d nodes)',
              current_user.username, name, len(bus.nodes))
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'restore_snapshot', name, {'node_count': len(bus.nodes)})
 
     return jsonify([_node_to_dict(n) for n in bus.get_nodes()])
+
+
+# --- audit log (Step 23) ------------------------------------------------
+
+
+@bp.route('/api/audit-log', methods=['GET'])
+@roles_required('admin')
+def api_audit_log() -> Response:
+    """ list audit log entries (newest first), admin only. Supports
+        pagination via 'limit'/'offset' and optional exact-match
+        filters 'action'/'username' query parameters.
+    """
+    try:
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+    except (TypeError, ValueError):
+        return jsonify(error='limit/offset must be integers'), HTTPStatus.BAD_REQUEST
+
+    result = db.list_audit_log(_users_db_path(), limit=limit, offset=offset,
+                               action=request.args.get('action') or None,
+                               username=request.args.get('username') or None)
+    return jsonify(result)

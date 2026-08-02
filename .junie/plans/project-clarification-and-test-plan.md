@@ -433,13 +433,14 @@ Telegram-/Mail-Konfiguration aus `config.json` in die DB überführen, mit User-
 - Neue Routen `GET /api/notifications/prefs` (eigene Prefs, jeder eingeloggte User) und `PUT /api/notifications/prefs/<alert_node_id>` (mind. `operator`-Rolle) in `aquaPi/auth.py`.
 - 16 neue Tests in `tests/test_notifications.py` (Config-CRUD, Migration/Idempotenz, User-Prefs-CRUD, Cascade-Delete, Alert-Dispatch per Fake-Treiber) - alle 47 Tests im Projekt grün.
 
-### * Step 8: Benutzerspezifische Dashboards und `group`-Property
+### ✓ Step 8: Benutzerspezifische Dashboards und `group`-Property
 Dashboard-Konfiguration und Controller-Gruppierung gemäß ToDo umsetzen.
-- Tabelle `dashboards` (user_id, layout JSON) über `aquaPi/db.py` anlegen; Routen `GET/PUT /api/dashboard/` für das Layout des eingeloggten Users.
-- `group`-Property (Default `""`) in das `params`-JSON jeder Node aufnehmen, editierbar über die Node-Konfiguration.
-- `/api/nodes/` liefert `group` mit; Dashboard-Filterung und foldable Gruppen auf `/settings` nutzen dieses Feld.
+- Tabelle `dashboards` (user_id, layout JSON, `ON DELETE CASCADE`) über `aquaPi/db.py` angelegt; neue Routen `GET/PUT /api/dashboard/` in `aquaPi/api.py` liefern/speichern das Layout des eingeloggten Users (`current_user.id`), leeres Array als Default.
+- `group`-Property (Default `""`) als generisches Attribut auf `BusNode` ergänzt (`aquaPi/machineroom/msg_bus.py`): wird über `__getstate__` in jedes Node-`params`-JSON aufgenommen; die Wiederherstellung erfolgt zentral in `aquaPi/db.py::_deserialize_node`, da alle konkreten Node-Typen `__setstate__` ohne `super()`-Aufruf überschreiben.
+- `/api/nodes/<id>` (Einzelabruf) liefert `group` bereits mit, da es Teil von `__getstate__()` ist; die Liste `/api/nodes/` bleibt unverändert (Umstellung auf volles JSON/`group`-Filterung dort ist Teil von Step 9/11).
+- 14 neue Tests in `tests/test_dashboards.py` (Dashboard-CRUD, Isolation zwischen Usern, Cascade-Delete, `group`-Persistenz durch die SQLite-Topologie, API-Roundtrip inkl. Rollen/401) - alle 61 Tests im Projekt grün.
 
-###   Step 9: Umstellung der REST-API von jsonpickle auf reines JSON
+### * Step 9: Umstellung der REST-API von jsonpickle auf reines JSON
 API-Antworten explizit und ohne Objekt-Introspektion gestalten.
 - Explizite `to_dict()`-Methoden für die relevanten Node-Typen ergänzen (statt generischer `jsonpickle.encode`).
 - `api.py` auf `json.dumps` mit den neuen `to_dict()`-Ergebnissen umstellen.

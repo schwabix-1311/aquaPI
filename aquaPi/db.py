@@ -159,6 +159,11 @@ def _deserialize_node(type_name: str, state: dict[str, Any]) -> BusNode:
 
     node = cls.__new__(cls)
     node.__setstate__(state)
+    # every concrete node type overrides __setstate__() without calling
+    # super() (they call their own __init__() instead), so the generic
+    # 'group' attribute added to BusNode is restored centrally here
+    # instead of touching every single node subclass
+    node.group = state.get('group', '')
     return node
 
 
@@ -282,6 +287,12 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 channel       TEXT NOT NULL DEFAULT 'none'
                     CHECK (channel IN ('email', 'telegram', 'none')),
                 PRIMARY KEY (user_id, alert_node_id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS dashboards (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                layout  TEXT NOT NULL
             )
         """)
     return conn
@@ -510,6 +521,45 @@ def get_prefs_for_alert(db_path: str, alert_node_id: str) -> list[dict[str, Any]
             WHERE p.alert_node_id = ? AND p.channel != 'none'
         """, (alert_node_id,)).fetchall()
         return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+# --- user-specific dashboards --------------------------------------------
+#
+# Each user's dashboard (visible controllers/groups, layout, ordering) is
+# stored as a single JSON blob, keyed by user_id. This keeps the schema
+# minimal and flexible, matching the heterogeneous widget structure of
+# the Vuetify frontend - no dashboard row means the frontend falls back
+# to its own default view (all controllers, no grouping).
+
+DEFAULT_DASHBOARD_LAYOUT: list[dict[str, Any]] = []
+
+
+def get_dashboard(db_path: str, user_id: int) -> list[dict[str, Any]]:
+    """ return the stored dashboard layout for a user, or the default
+        (empty) layout if the user never saved one
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute(
+            'SELECT layout FROM dashboards WHERE user_id = ?', (user_id,)
+        ).fetchone()
+        return json.loads(row['layout']) if row else list(DEFAULT_DASHBOARD_LAYOUT)
+    finally:
+        conn.close()
+
+
+def set_dashboard(db_path: str, user_id: int, layout: list[dict[str, Any]]) -> None:
+    """ store (create or replace) the dashboard layout of a user
+    """
+    conn = get_users_connection(db_path)
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO dashboards (user_id, layout) VALUES (?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET layout = excluded.layout
+            """, (user_id, json.dumps(layout)))
     finally:
         conn.close()
 

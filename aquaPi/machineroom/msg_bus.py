@@ -67,6 +67,8 @@ class BusNode(ABC):
         self.unit: str = ''
         self.rcv_unit: str = ''
         self.alert: tuple[str, str] | None = None
+        self.group: str = ''  # optional user-defined group, used to filter/fold
+                              # nodes in the dashboard and on /settings
 
     def __getstate__(self) -> dict[str, Any]:
         state = {'name': self.name}
@@ -77,6 +79,7 @@ class BusNode(ABC):
         state["unit"] = self.unit
         state["rcv_unit"] = self.rcv_unit
         state["data_range"] = self.data_range.name
+        state["group"] = self.group
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -84,6 +87,7 @@ class BusNode(ABC):
         BusNode.__init__(self, state['name'], _cont=True)
         self.receives = state['receives']
         self.unit = state['unit']
+        self.group = state.get('group', '')
 
     def __str__(self) -> str:
         return f'{type(self).__name__}({self.name})'
@@ -177,6 +181,7 @@ class BusListener(BusNode, ABC):
         BusListener.__init__(self, state['name'],
                              receives=state['receives'],
                              _cont=True)
+        self.group = state.get('group', '')
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()

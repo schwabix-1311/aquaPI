@@ -4,9 +4,10 @@ import logging
 
 from http import HTTPStatus
 import jsonpickle  # type: ignore[import-untyped]
-from flask import (Blueprint, current_app, json, Response, request)
-from flask_login import login_required
+from flask import (Blueprint, current_app, json, Response, request, jsonify)
+from flask_login import (login_required, current_user)
 
+from . import db
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import BusRole
 from .pages.sse_util import send_sse_events
@@ -134,3 +135,31 @@ def api_sse() -> Response:
         return json.dumps([id for id in changed_ids])
 
     return send_sse_events(sse_update)
+
+
+def _users_db_path() -> str:
+    return db.get_users_db_path(current_app.config['INSTANCE_PATH'])
+
+
+@bp.route('/api/dashboard/', methods=['GET'])
+@login_required
+def api_get_dashboard() -> Response:
+    """ return the current user's own dashboard layout (visible
+        controllers/groups, ordering). An empty list means the user
+        never saved one - the frontend then shows its own default view.
+    """
+    layout = db.get_dashboard(_users_db_path(), current_user.id)
+    return jsonify(layout)
+
+
+@bp.route('/api/dashboard/', methods=['PUT'])
+@login_required
+def api_set_dashboard() -> Response:
+    """ save the current user's dashboard layout """
+    layout = request.get_json(silent=True)
+    if not isinstance(layout, list):
+        return jsonify(error='Body must be a JSON array'), HTTPStatus.BAD_REQUEST
+
+    db.set_dashboard(_users_db_path(), current_user.id, layout)
+    log.info('User %r saved dashboard layout (%d items)', current_user.username, len(layout))
+    return jsonify(layout)

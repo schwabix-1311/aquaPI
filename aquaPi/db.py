@@ -29,7 +29,7 @@ from typing import Any
 
 from werkzeug.security import generate_password_hash
 
-from .machineroom.msg_bus import MsgBus, BusNode
+from .machineroom.msg_bus import MsgBus, BusNode, BusRole
 from .machineroom.ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl,
                                      SunCtrl, FadeCtrl)
 from .machineroom.in_nodes import (AnalogInput, SwitchInput, ScheduleInput)
@@ -291,6 +291,7 @@ def compute_node_id(name: str) -> str:
     node_id = node_id.replace('Ö', 'Oe').replace('ö', 'oe')
     node_id = node_id.replace('Ü', 'Ue').replace('ü', 'ue')
     node_id = node_id.replace('-', '_').replace('ß', 'ss')
+    node_id = node_id.replace('/', '_').replace('\\', '_')
     return str(node_id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
 
 
@@ -316,6 +317,255 @@ def would_create_cycle(bus: MsgBus, node_id: str, new_receives: list[str]) -> bo
             if node:
                 stack.extend(node.receives)
     return False
+
+
+class ConfigDiffError(ValueError):
+    """ raised by apply_config_diff() when any single part of a diff is
+        invalid. Carries the offending 'entry' (the create/update dict,
+        or a small identifying dict for deletes/cycle errors) so the
+        API can report which part of the diff failed.
+    """
+    def __init__(self, message: str, entry: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.entry = entry
+
+
+def _check_receives_cardinality(schema: dict[str, Any], resolved: list[str],
+                                entry: dict[str, Any]) -> None:
+    if schema['receives'] == 'none' and resolved:
+        raise ConfigDiffError('This node type does not accept any receives', entry)
+    if schema['receives'] == 'single' and len(resolved) > 1:
+        raise ConfigDiffError('This node type accepts at most 1 receives entry', entry)
+
+
+def _would_create_cycle_virtual(graph: dict[str, list[str]], node_id: str,
+                                new_receives: list[str]) -> bool:
+    """ would_create_cycle(), but operating on a caller-supplied,
+        already-post-diff {id: receives} graph instead of the live bus
+        - used by apply_config_diff() to validate the *result* of a
+        diff before anything is actually applied.
+    """
+    for start in new_receives:
+        if start == node_id:
+            return True
+        visited: set[str] = set()
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            if cur == node_id:
+                return True
+            if cur in visited:
+                continue
+            visited.add(cur)
+            stack.extend(graph.get(cur, []))
+    return False
+
+
+def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dict[str, Any]:
+    """ atomically validate and apply a bulk create/update/delete diff
+        against the live bus - the backend counterpart of the /config
+        editor's client-side draft ("Speichern" button, POST
+        /api/config/apply in aquaPi/api.py). Either the *entire* diff
+        is applied, or (on any validation error) *none* of it is - the
+        live bus is left completely untouched in that case.
+
+        'diff' is a dict with optional list entries:
+          'creates': [{'temp_id'?, 'type', 'name', 'receives'?, 'fields'?,
+                       'group'?, 'pos_x'?, 'pos_y'?}, ...]
+          'updates': [{'id', 'receives'?, 'fields'?, 'group'?, 'pos_x'?,
+                       'pos_y'?}, ...]
+          'deletes': ['id', ...]
+
+        A 'receives' entry (in both creates and updates) may reference
+        either an existing (and not concurrently deleted) node id, or
+        the 'temp_id' of another entry of the same 'creates' list -
+        those client-side temp ids are remapped to the real, freshly
+        assigned node id of that entry.
+
+        'validate_fields' is the caller-supplied, api._validate_fields
+        compatible callable (schema_fields, raw_fields, require_all) ->
+        dict; injected here to reuse the existing per-type field
+        validation without introducing a circular import between
+        aquaPi.api and aquaPi.db.
+
+        Returns {'id_map': {temp_id: real_id, ...}} on success.
+        Raises ConfigDiffError (without having changed anything) on
+        any validation failure.
+    """
+    creates = diff.get('creates') or []
+    updates = diff.get('updates') or []
+    deletes = diff.get('deletes') or []
+    if not isinstance(creates, list) or not isinstance(updates, list) \
+            or not isinstance(deletes, list):
+        raise ConfigDiffError("'creates', 'updates' and 'deletes' must each be a list")
+
+    live_nodes = {n.id: n for n in bus.get_nodes()}
+
+    deleted_ids: set[str] = set()
+    for del_id in deletes:
+        if not isinstance(del_id, str) or del_id not in live_nodes:
+            raise ConfigDiffError(f'Unknown node id to delete: {del_id!r}', {'id': del_id})
+        deleted_ids.add(del_id)
+
+    remaining_ids = set(live_nodes) - deleted_ids
+
+    updates_by_id: dict[str, dict[str, Any]] = {}
+    for upd in updates:
+        if not isinstance(upd, dict):
+            raise ConfigDiffError('Each update entry must be an object', upd)
+        upd_id = upd.get('id')
+        if not isinstance(upd_id, str) or upd_id not in remaining_ids:
+            raise ConfigDiffError(f'Unknown or deleted node id to update: {upd_id!r}', upd)
+        if upd_id in updates_by_id:
+            raise ConfigDiffError(f'Duplicate update for node id: {upd_id!r}', upd)
+        updates_by_id[upd_id] = upd
+
+    # --- creates: type/name/collision/field validation. build_node()
+    #     only constructs the node object, it never plugin()s it onto
+    #     the bus, so this has no side effect on the live bus yet.
+    temp_id_map: dict[str, str] = {}
+    new_ids: set[str] = set()
+    prepared_creates: list[dict[str, Any]] = []
+
+    for entry in creates:
+        if not isinstance(entry, dict):
+            raise ConfigDiffError('Each create entry must be an object', entry)
+
+        type_name = entry.get('type')
+        schema = NODE_TYPE_SCHEMA.get(type_name)
+        if not schema:
+            raise ConfigDiffError(f'Unknown or non-creatable node type: {type_name!r}', entry)
+
+        name = (entry.get('name') or '').strip()
+        if not name:
+            raise ConfigDiffError('name must not be empty', entry)
+
+        node_id = compute_node_id(name)
+        if node_id in remaining_ids or node_id in new_ids:
+            raise ConfigDiffError(f'A node named {name!r} already exists', entry)
+        new_ids.add(node_id)
+
+        temp_id = entry.get('temp_id')
+        if temp_id is not None:
+            if str(temp_id) in temp_id_map:
+                raise ConfigDiffError(f'Duplicate temp_id: {temp_id!r}', entry)
+            temp_id_map[str(temp_id)] = node_id
+
+        raw_receives = entry.get('receives', [])
+        if not isinstance(raw_receives, list) or not all(isinstance(r, str) for r in raw_receives):
+            raise ConfigDiffError('receives must be a list of node ids', entry)
+
+        raw_fields = entry.get('fields', {})
+        if not isinstance(raw_fields, dict):
+            raise ConfigDiffError('fields must be a JSON object', entry)
+        try:
+            fields = validate_fields(schema['fields'], raw_fields, require_all=True)
+        except (ValueError, KeyError) as ex:
+            raise ConfigDiffError(str(ex), entry) from ex
+
+        prepared_creates.append({
+            'entry': entry, 'node_id': node_id, 'schema': schema,
+            'raw_receives': raw_receives, 'fields': fields,
+        })
+
+    all_ids = remaining_ids | new_ids
+
+    def resolve_ref(ref: str, err_entry: dict[str, Any]) -> str:
+        if ref in temp_id_map:
+            return temp_id_map[ref]
+        if ref in all_ids:
+            return ref
+        raise ConfigDiffError(f'Unknown receives node id: {ref!r}', err_entry)
+
+    # --- resolve receives (temp-id remap) + cardinality checks, and
+    #     build the virtual, post-diff {id: receives} wiring graph
+    #     used for cycle detection below ---
+    virtual_receives: dict[str, list[str]] = {
+        node_id: list(node.receives)
+        for node_id, node in live_nodes.items() if node_id in remaining_ids
+    }
+
+    for prep in prepared_creates:
+        resolved = [resolve_ref(r, prep['entry']) for r in prep['raw_receives']]
+        _check_receives_cardinality(prep['schema'], resolved, prep['entry'])
+        prep['resolved_receives'] = resolved
+        virtual_receives[prep['node_id']] = resolved
+
+    for upd_id, upd in updates_by_id.items():
+        node = live_nodes[upd_id]
+        schema = NODE_TYPE_SCHEMA.get(type(node).__name__)
+
+        if 'receives' in upd:
+            raw_receives = upd['receives']
+            if not isinstance(raw_receives, list) or not all(isinstance(r, str) for r in raw_receives):
+                raise ConfigDiffError('receives must be a list of node ids', upd)
+            if not schema:
+                raise ConfigDiffError(f'{type(node).__name__} does not support changing receives', upd)
+            resolved = [resolve_ref(r, upd) for r in raw_receives]
+            _check_receives_cardinality(schema, resolved, upd)
+            upd['_resolved_receives'] = resolved
+            virtual_receives[upd_id] = resolved
+
+        if 'fields' in upd:
+            raw_fields = upd['fields']
+            if not isinstance(raw_fields, dict):
+                raise ConfigDiffError('fields must be a JSON object', upd)
+            if not schema:
+                raise ConfigDiffError(f'{type(node).__name__} does not support editing fields', upd)
+            try:
+                upd['_fields'] = validate_fields(schema['fields'], raw_fields, require_all=False)
+            except ValueError as ex:
+                raise ConfigDiffError(str(ex), upd) from ex
+
+        for key in ('pos_x', 'pos_y'):
+            if key in upd:
+                try:
+                    upd['_' + key] = float(upd[key])
+                except (TypeError, ValueError):
+                    raise ConfigDiffError(f'{key} must be a number', upd)
+
+    for node_id, receives in virtual_receives.items():
+        if _would_create_cycle_virtual(virtual_receives, node_id, receives):
+            raise ConfigDiffError('This wiring would create a cycle', {'id': node_id})
+
+    # --- everything about this diff has been validated: apply it for
+    #     real, deletes first, then updates, then creates ---
+    for del_id in deleted_ids:
+        node = live_nodes[del_id]
+        for other in bus.get_nodes():
+            if other is node or other.ROLE == BusRole.ALERTS:
+                continue
+            if del_id in other.receives:
+                other.receives = [r for r in other.receives if r != del_id]
+        node.pullout()
+
+    for upd_id, upd in updates_by_id.items():
+        node = live_nodes[upd_id]
+        if '_resolved_receives' in upd:
+            node.receives = upd['_resolved_receives']
+        if '_fields' in upd:
+            for key, value in upd['_fields'].items():
+                setattr(node, key, value)
+        if 'group' in upd:
+            node.group = str(upd['group'] or '')
+        if '_pos_x' in upd:
+            node.pos_x = upd['_pos_x']
+        if '_pos_y' in upd:
+            node.pos_y = upd['_pos_y']
+
+    for prep in prepared_creates:
+        entry = prep['entry']
+        node = build_node(entry['type'], entry.get('name', '').strip(),
+                          prep['resolved_receives'], prep['fields'])
+        node.group = str(entry.get('group', '') or '')
+        try:
+            node.pos_x = float(entry.get('pos_x', 0.0) or 0.0)
+            node.pos_y = float(entry.get('pos_y', 0.0) or 0.0)
+        except (TypeError, ValueError):
+            node.pos_x = node.pos_y = 0.0
+        node.plugin(bus)
+
+    return {'id_map': temp_id_map}
 
 
 def get_db_path(instance_path: str, filename: str = DEFAULT_DB_FILENAME) -> str:
@@ -645,11 +895,38 @@ def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
         new_names[entry['id']] = candidate
         id_map[entry['id']] = candidate_id
 
+    # avoid template nodes landing exactly on top of nodes already
+    # present on the /config canvas: a template's positions are those
+    # it was captured with, so a plain re-insert would overlap the
+    # very nodes it was captured from. Shift the whole template
+    # diagonally by a growing offset until none of its (approximate)
+    # node-box footprints overlaps an already placed node.
+    NODE_BOX_WIDTH = 190
+    NODE_BOX_HEIGHT = 76
+    OFFSET_STEP = 40.0
+    existing_positions = [
+        (float(node.pos_x or 0.0), float(node.pos_y or 0.0)) for node in bus.nodes
+    ]
+    offset_x = offset_y = 0.0
+    for _ in range(50):
+        collision = any(
+            abs(float(entry['state'].get('pos_x', 0.0) or 0.0) + offset_x - ux) < NODE_BOX_WIDTH
+            and abs(float(entry['state'].get('pos_y', 0.0) or 0.0) + offset_y - uy) < NODE_BOX_HEIGHT
+            for entry in entries
+            for (ux, uy) in existing_positions
+        )
+        if not collision:
+            break
+        offset_x += OFFSET_STEP
+        offset_y += OFFSET_STEP
+
     new_nodes = []
     for entry in entries:
         state = dict(entry['state'])
         state['name'] = new_names[entry['id']]
         state['receives'] = [id_map[r] for r in state.get('receives', []) if r in id_map]
+        state['pos_x'] = float(state.get('pos_x', 0.0) or 0.0) + offset_x
+        state['pos_y'] = float(state.get('pos_y', 0.0) or 0.0) + offset_y
         if 'port' in state:
             # defense in depth: also blank ports here, not just in
             # capture_node_template(), so templates saved before this

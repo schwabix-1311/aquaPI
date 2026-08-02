@@ -55,6 +55,7 @@ class BusNode(ABC):
         self.id = self.id.replace('Ö', 'Oe').replace('ö', 'oe')
         self.id = self.id.replace('Ü', 'Ue').replace('ü', 'ue')
         self.id = self.id.replace('-', '_').replace('ß', 'ss')
+        self.id = self.id.replace('/', '_').replace('\\', '_')
         # hack: replace non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         self.identifier = self.__class__.__qualname__ + '.' + self.id

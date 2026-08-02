@@ -539,6 +539,39 @@ def api_delete_node(node_id: str) -> Response:
     return Response(status=HTTPStatus.NO_CONTENT)
 
 
+@bp.route('/api/config/apply', methods=['POST'])
+@roles_required('admin')
+def api_config_apply() -> Response:
+    """ atomically apply a bulk create/update/delete diff, as produced
+        by the /config editor's client-side draft ("Speichern"
+        button). Either every part of the diff is applied and persisted
+        exactly once, or (on any validation error) nothing is changed
+        at all.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    diff = request.get_json(silent=True)
+    if not isinstance(diff, dict):
+        return jsonify(error='Body must be a JSON object'), HTTPStatus.BAD_REQUEST
+
+    try:
+        result = db.apply_config_diff(bus, diff, _validate_fields)
+    except db.ConfigDiffError as ex:
+        return jsonify(error=str(ex), entry=ex.entry), HTTPStatus.BAD_REQUEST
+
+    if result['id_map'] or diff.get('creates') or diff.get('updates') or diff.get('deletes'):
+        mr: MachineRoom = current_app.extensions['machineroom']
+        mr.save_nodes(bus)
+        log.info('User %r applied config diff: %d create(s), %d update(s), %d delete(s)',
+                 current_user.username, len(diff.get('creates') or []),
+                 len(diff.get('updates') or []), len(diff.get('deletes') or []))
+
+    nodes = [_node_to_dict(node) for node in bus.get_nodes()]
+    return jsonify(nodes=nodes, id_map=result['id_map'])
+
+
 # --- /config: node-combination templates (Step 13) ---------------------
 
 

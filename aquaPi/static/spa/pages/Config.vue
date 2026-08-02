@@ -1,11 +1,12 @@
-import '../components/config/index.js'
+<template>
+	<div>
+		<aquapi-config></aquapi-config>
+	</div>
+</template>
 
-const Config = {
-	template: `
-		<div>
-			<aquapi-config></aquapi-config>
-		</div>
-	`,
+<script>
+export default {
+	name: 'Config',
 
 	beforeRouteLeave(to, from, next) {
 		if (!this.$store.getters['config/draftDirty']) {
@@ -21,8 +22,5 @@ const Config = {
 			}
 		})
 	},
-};
-
-export { Config };
-
-// vim: set noet ts=4 sw=4:
+}
+</script>

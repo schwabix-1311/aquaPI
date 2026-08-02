@@ -1,17 +1,21 @@
-import {AuthLayout} from '../layouts/Auth.vue.js'
-import {DefaultLayout} from '../layouts/Default.vue.js'
 import {AquapiDummy} from '../components/app/index.js'
 import {loadSfc} from '../sfc/loadSfc.js'
 
-import {Settings} from '../pages/Settings.vue.js'
-import {Config} from '../pages/Config.vue.js'
-import {Home} from '../pages/Home.vue.js'
+// Home/Config/Settings only wrap their respective `aquapi-dashboard` /
+// `aquapi-config` / `aquapi-settings` tags, whose actual component
+// definitions still live in these plain, eagerly-loaded `.js` modules
+// (self-registering into the global component registry, see
+// components/app/registry.js) - a `.vue` SFC's `<script>` can't `import`
+// them directly (see the comment in sfc/loadSfc.js).
+import '../components/dashboard/index.js'
+import '../components/config/index.js'
+import '../components/settings/index.js'
 
 const routes = [
 	{
 		path: '/login',
 		// redirect: 'login',
-		component: AuthLayout,
+		component: () => loadSfc('/static/spa/layouts/Auth.vue'),
 		// name: 'login',
 		// component: DefaultLayout,
 		children: [
@@ -32,21 +36,21 @@ const routes = [
 		// partly DONE: old app is now /home, and / redirects to /#/
 		path: '/',
 		// name: 'app',
-		component: DefaultLayout,
+		component: () => loadSfc('/static/spa/layouts/Default.vue'),
 		children: [
 			{
 				path: '',
 				name: 'home',
 				alias: 'app',
 				components: {
-					default: Home
+					default: () => loadSfc('/static/spa/pages/Home.vue')
 				}
 			},
 			{
 				path: 'settings',
 				name: 'settings',
 				components: {
-					default: Settings,
+					default: () => loadSfc('/static/spa/pages/Settings.vue'),
 					view_bottom: AquapiDummy
 				},
 			},
@@ -54,7 +58,7 @@ const routes = [
 				path: 'config',
 				name: 'config',
 				components: {
-					default: Config
+					default: () => loadSfc('/static/spa/pages/Config.vue')
 				},
 			},
 			{

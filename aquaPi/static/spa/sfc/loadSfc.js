@@ -1,5 +1,9 @@
 'use strict'
 
+import {EventBus, AQUAPI_EVENTS} from '../components/app/EventBus.js'
+import {AquapiConfirmDialog} from '../components/app/AquapiConfirmDialog.vue.js'
+import {AppFooComp} from '../comps.js'
+
 // Thin wrapper around vue3-sfc-loader's loadModule(), so callers can just
 // do `() => loadSfc('/static/spa/pages/About.vue')` as an async component
 // factory. Compiles .vue files entirely client-side; the Flask backend
@@ -12,13 +16,17 @@ const CACHE_VERSION = 'v1'
 // Note: vue3-sfc-loader parses plain `.js` dependencies with Babel's
 // non-module ("script") sourceType, so a `.js` file using `import`/`export`
 // (like this one) can't be `import`ed directly from inside a loaded SFC's
-// `<script>` block. Instead, `loadSfc` itself is exposed through
+// `<script>` block. Instead, such shared modules are exposed through
 // `moduleCache` (the same mechanism used for `vue` below), so SFCs that
-// need to lazy-load a sub-component can do `import {loadSfc} from 'sfc/loadSfc'`.
+// need them do e.g. `import {loadSfc} from 'sfc/loadSfc'` or
+// `import {EventBus, AQUAPI_EVENTS} from 'app/EventBus'`.
 const options = {
 	moduleCache: {
 		vue: Vue,
 		'sfc/loadSfc': {loadSfc},
+		'app/EventBus': {EventBus, AQUAPI_EVENTS},
+		'app/AquapiConfirmDialog': {AquapiConfirmDialog},
+		'app/comps': {AppFooComp},
 	},
 
 	async getFile(url) {

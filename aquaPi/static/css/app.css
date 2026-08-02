@@ -87,6 +87,16 @@ div.aquapi-dashboard div.v-expansion-panel-content__wrap {
     padding: 0;
 }
 
+/* AquapiPageHeading (page titles like "Einstellungen"/"Konfiguration"):
+   Vuetify 3's v-toolbar-title__placeholder is single-line by default
+   (overflow: hidden + text-overflow: ellipsis), which cuts off longer
+   German headings on narrow/mobile viewports. Let it wrap instead. */
+h1.v-toolbar-title .v-toolbar-title__placeholder {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+}
+
 /* Dependency-free replacement for vue-masonry-css (Vue-2-only, removed in
    the Vue 3 migration bugfix follow-up); mirrors the previous
    {default: 3, 1264: 3, 960: 2, 600: 1} column breakpoints via

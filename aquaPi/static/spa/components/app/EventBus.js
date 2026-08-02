@@ -6,7 +6,8 @@ const AQUAPI_EVENTS = {
 	SSE_NODE_UPDATE: 'sse:node_update',
 	APP_LOADING: 'app:loading',
 	DIALOG_CLOSED: 'ui:dialog_closed',
-	DIALOG_OPENED: 'ui:dialog_opened'
+	DIALOG_OPENED: 'ui:dialog_opened',
+	CONFIRM_REQUESTED: 'ui:confirm_requested'
 }
 export {EventBus, AQUAPI_EVENTS}
 

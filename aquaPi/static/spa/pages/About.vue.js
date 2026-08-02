@@ -35,7 +35,7 @@ const About = {
 
 	methods: {
 		donate() {
-			window.alert('Lob bitte an tkuhn, Bugs darfst du behalten.')
+			this.$alert('Lob bitte an tkuhn, Bugs darfst du behalten.')
 		}
 	}
 

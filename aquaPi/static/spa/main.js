@@ -6,6 +6,21 @@ import {AQUAPI_EVENTS, EventBus} from './components/app/EventBus.js'
 
 Vue.config.productionTip = true;
 
+Vue.prototype.$confirm = function(message, options = {}) {
+	return new Promise((resolve) => {
+		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {message, options, resolve})
+	})
+}
+Vue.prototype.$alert = function(message, options = {}) {
+	return new Promise((resolve) => {
+		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {
+			message,
+			options: Object.assign({}, options, {alertOnly: true}),
+			resolve,
+		})
+	})
+}
+
 // Vue.use(VueToast, {
 // 	position: 'top',
 // 	duration: 0

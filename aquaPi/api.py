@@ -28,6 +28,11 @@ def the_bus() -> MsgBus | None:
     return mr.bus
 
 
+def _topo_db_path() -> str:
+    mr: MachineRoom = current_app.extensions['machineroom']
+    return mr.globals['BUS_TOPO']
+
+
 @bp.route('/api/nodes/')
 @login_required
 def api_nodes() -> Response:
@@ -528,3 +533,171 @@ def api_delete_node(node_id: str) -> Response:
     log.info('User %r deleted node %r', current_user.username, node_id)
 
     return Response(status=HTTPStatus.NO_CONTENT)
+
+
+# --- /config: node-combination templates (Step 13) ---------------------
+
+
+@bp.route('/api/templates/', methods=['GET'])
+@roles_required('admin')
+def api_list_templates() -> Response:
+    """ list all node-combination templates (name, description, node count) """
+    return jsonify(db.list_templates(_topo_db_path()))
+
+
+@bp.route('/api/templates/', methods=['POST'])
+@roles_required('admin')
+def api_create_template() -> Response:
+    """ capture a named template from a set of currently live node ids.
+        Creating a template with an already-used name overwrites it.
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error='Body must be a JSON object'), HTTPStatus.BAD_REQUEST
+
+    name = (body.get('name') or '').strip()
+    if not name:
+        return jsonify(error='name must not be empty'), HTTPStatus.BAD_REQUEST
+
+    node_ids = body.get('node_ids', [])
+    if not isinstance(node_ids, list) or not node_ids \
+       or not all(isinstance(i, str) for i in node_ids):
+        return jsonify(error='node_ids must be a non-empty list of node ids'), HTTPStatus.BAD_REQUEST
+
+    try:
+        data = db.capture_node_template(bus, node_ids)
+    except ValueError as ex:
+        return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
+
+    db.save_template(_topo_db_path(), name, body.get('descr', '') or '', data)
+
+    log.info('User %r saved template %r (%d nodes)',
+             current_user.username, name, len(node_ids))
+
+    return jsonify(db.get_template(_topo_db_path(), name)), HTTPStatus.CREATED
+
+
+@bp.route('/api/templates/<name>', methods=['GET'])
+@roles_required('admin')
+def api_get_template(name: str) -> Response:
+    """ fetch one template including its full node data """
+    template = db.get_template(_topo_db_path(), name)
+    if not template:
+        return Response(status=HTTPStatus.NOT_FOUND)
+    return jsonify(template)
+
+
+@bp.route('/api/templates/<name>', methods=['DELETE'])
+@roles_required('admin')
+def api_delete_template(name: str) -> Response:
+    """ remove a template """
+    if not db.delete_template(_topo_db_path(), name):
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    log.info('User %r deleted template %r', current_user.username, name)
+
+    return Response(status=HTTPStatus.NO_CONTENT)
+
+
+@bp.route('/api/templates/<name>/insert', methods=['POST'])
+@roles_required('admin')
+def api_insert_template(name: str) -> Response:
+    """ insert a template's nodes into the live bus with fresh,
+        collision-free ids, wire them up and persist the topology
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    template = db.get_template(_topo_db_path(), name)
+    if not template:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    new_nodes = db.instantiate_template(bus, template['data'])
+
+    mr: MachineRoom = current_app.extensions['machineroom']
+    mr.save_nodes(bus)
+
+    log.info('User %r inserted template %r (%d new nodes)',
+             current_user.username, name, len(new_nodes))
+
+    return jsonify([_node_to_dict(n) for n in new_nodes]), HTTPStatus.CREATED
+
+
+# --- /config: topology snapshots (Step 13) ------------------------------
+
+
+@bp.route('/api/config/snapshots', methods=['GET'])
+@roles_required('admin')
+def api_list_snapshots() -> Response:
+    """ list all saved configuration snapshots (name, created_at) """
+    return jsonify(db.list_snapshots(_topo_db_path()))
+
+
+@bp.route('/api/config/snapshots', methods=['POST'])
+@roles_required('admin')
+def api_create_snapshot() -> Response:
+    """ save the entire current topology as a named snapshot.
+        Creating a snapshot with an already-used name overwrites it.
+    """
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error='Body must be a JSON object'), HTTPStatus.BAD_REQUEST
+
+    name = (body.get('name') or '').strip()
+    if not name:
+        return jsonify(error='name must not be empty'), HTTPStatus.BAD_REQUEST
+
+    bus = the_bus()
+    if bus:
+        # make sure the on-disk 'nodes' table reflects the live bus
+        # before it gets exported into the snapshot
+        mr: MachineRoom = current_app.extensions['machineroom']
+        mr.save_nodes(bus)
+
+    db.create_snapshot(_topo_db_path(), name)
+
+    log.info('User %r created snapshot %r', current_user.username, name)
+
+    return jsonify(db.get_snapshot(_topo_db_path(), name)), HTTPStatus.CREATED
+
+
+@bp.route('/api/config/snapshots/<name>', methods=['DELETE'])
+@roles_required('admin')
+def api_delete_snapshot(name: str) -> Response:
+    """ remove a saved snapshot """
+    if not db.delete_snapshot(_topo_db_path(), name):
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    log.info('User %r deleted snapshot %r', current_user.username, name)
+
+    return Response(status=HTTPStatus.NO_CONTENT)
+
+
+@bp.route('/api/config/snapshots/<name>/restore', methods=['POST'])
+@roles_required('admin')
+def api_restore_snapshot(name: str) -> Response:
+    """ replace the entire live topology with the one stored in a
+        snapshot, then persist it as the new current topology
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    snapshot = db.get_snapshot(_topo_db_path(), name)
+    if not snapshot:
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    db.restore_snapshot_into_bus(bus, snapshot['data'])
+
+    mr: MachineRoom = current_app.extensions['machineroom']
+    mr.save_nodes(bus)
+
+    log.info('User %r restored snapshot %r (%d nodes)',
+             current_user.username, name, len(bus.nodes))
+
+    return jsonify([_node_to_dict(n) for n in bus.get_nodes()])

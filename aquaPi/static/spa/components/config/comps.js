@@ -20,13 +20,14 @@ const ConfigNodeBox = {
 	props: {
 		node: {type: Object, required: true},
 		connecting: {type: Boolean, default: false},
+		selected: {type: Boolean, default: false},
 	},
 	template: `
 		<v-sheet
 			:elevation="dragging ? 8 : 2"
 			outlined
 			class="config-node-box"
-			:class="{'config-node-box--connecting': connecting}"
+			:class="{'config-node-box--connecting': connecting, 'config-node-box--selected': selected}"
 			:style="style"
 			@mousedown.stop="onDragStart"
 			@click.stop="onClick"
@@ -350,6 +351,210 @@ const ConfigNodeDialog = {
 	},
 }
 Vue.component('ConfigNodeDialog', ConfigNodeDialog)
+
+const ConfigTemplatesDialog = {
+	props: {
+		value: {type: Boolean, default: false},
+		selectedIds: {type: Array, default: () => []},
+	},
+	template: `
+		<v-dialog v-model="show" max-width="640">
+			<v-card>
+				<v-card-title>{{ $t('pages.config.templatesSnapshots') }}</v-card-title>
+				<v-tabs v-model="tab">
+					<v-tab>{{ $t('pages.config.templates') }}</v-tab>
+					<v-tab>{{ $t('pages.config.snapshots') }}</v-tab>
+				</v-tabs>
+				<v-card-text>
+					<v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>
+
+					<v-tabs-items v-model="tab">
+						<v-tab-item>
+							<div class="d-flex align-center mt-3 mb-2">
+								<v-text-field
+									v-model="newTemplateName"
+									:label="$t('pages.config.templateName')"
+									dense outlined hide-details
+									class="mr-2"
+								></v-text-field>
+								<v-btn
+									color="primary"
+									:disabled="!newTemplateName || !selectedIds.length"
+									:loading="saving"
+									@click="saveTemplate"
+								>{{ $t('pages.config.saveSelection') }}</v-btn>
+							</div>
+							<div class="text-caption grey--text mb-3">
+								{{ $t('pages.config.selectedCount', {count: selectedIds.length}) }}
+							</div>
+
+							<v-list dense v-if="templates.length">
+								<v-list-item v-for="tpl in templates" :key="tpl.name">
+									<v-list-item-content>
+										<v-list-item-title>{{ tpl.name }}</v-list-item-title>
+										<v-list-item-subtitle>{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
+									</v-list-item-content>
+									<v-list-item-action>
+										<v-btn icon @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
+											<v-icon>mdi-tray-arrow-down</v-icon>
+										</v-btn>
+									</v-list-item-action>
+									<v-list-item-action>
+										<v-btn icon @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
+											<v-icon>mdi-delete</v-icon>
+										</v-btn>
+									</v-list-item-action>
+								</v-list-item>
+							</v-list>
+							<v-alert v-else type="info" text dense>{{ $t('pages.config.hintNoTemplates') }}</v-alert>
+						</v-tab-item>
+
+						<v-tab-item>
+							<div class="d-flex align-center mt-3 mb-2">
+								<v-text-field
+									v-model="newSnapshotName"
+									:label="$t('pages.config.snapshotName')"
+									dense outlined hide-details
+									class="mr-2"
+								></v-text-field>
+								<v-btn
+									color="primary"
+									:disabled="!newSnapshotName"
+									:loading="saving"
+									@click="saveSnapshot"
+								>{{ $t('pages.config.saveSnapshot') }}</v-btn>
+							</div>
+
+							<v-list dense v-if="snapshots.length">
+								<v-list-item v-for="snap in snapshots" :key="snap.name">
+									<v-list-item-content>
+										<v-list-item-title>{{ snap.name }}</v-list-item-title>
+										<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
+									</v-list-item-content>
+									<v-list-item-action>
+										<v-btn icon @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
+											<v-icon>mdi-restore</v-icon>
+										</v-btn>
+									</v-list-item-action>
+									<v-list-item-action>
+										<v-btn icon @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
+											<v-icon>mdi-delete</v-icon>
+										</v-btn>
+									</v-list-item-action>
+								</v-list-item>
+							</v-list>
+							<v-alert v-else type="info" text dense>{{ $t('pages.config.hintNoSnapshots') }}</v-alert>
+						</v-tab-item>
+					</v-tabs-items>
+				</v-card-text>
+				<v-card-actions>
+					<v-spacer></v-spacer>
+					<v-btn text @click="show = false">{{ $t('pages.config.close') }}</v-btn>
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
+	`,
+	data: function() {
+		return {
+			tab: 0,
+			newTemplateName: '',
+			newSnapshotName: '',
+			saving: false,
+			error: null,
+		}
+	},
+	computed: {
+		show: {
+			get: function() { return this.value },
+			set: function(val) { this.$emit('input', val) },
+		},
+		templates: function() {
+			return this.$store.getters['config/templates']
+		},
+		snapshots: function() {
+			return this.$store.getters['config/snapshots']
+		},
+	},
+	watch: {
+		value: function(val) {
+			if (val) {
+				this.error = null
+				this.$store.dispatch('config/fetchTemplates')
+				this.$store.dispatch('config/fetchSnapshots')
+			}
+		},
+	},
+	methods: {
+		async saveTemplate() {
+			this.saving = true
+			try {
+				const result = await this.$store.dispatch('config/createTemplate', {
+					name: this.newTemplateName,
+					node_ids: this.selectedIds,
+				})
+				if (result.ok) {
+					this.newTemplateName = ''
+					this.$emit('saved')
+				} else {
+					this.error = result.error
+				}
+			} finally {
+				this.saving = false
+			}
+		},
+		async insertTemplate(tpl) {
+			const result = await this.$store.dispatch('config/insertTemplate', {name: tpl.name})
+			if (!result.ok) {
+				this.error = result.error
+			} else {
+				this.show = false
+			}
+		},
+		async deleteTemplate(tpl) {
+			if (!window.confirm(this.$t('pages.config.confirmDeleteTemplate', {name: tpl.name}))) {
+				return
+			}
+			const result = await this.$store.dispatch('config/deleteTemplate', {name: tpl.name})
+			if (!result.ok) {
+				this.error = result.error
+			}
+		},
+		async saveSnapshot() {
+			this.saving = true
+			try {
+				const result = await this.$store.dispatch('config/createSnapshot', {name: this.newSnapshotName})
+				if (result.ok) {
+					this.newSnapshotName = ''
+				} else {
+					this.error = result.error
+				}
+			} finally {
+				this.saving = false
+			}
+		},
+		async restoreSnapshot(snap) {
+			if (!window.confirm(this.$t('pages.config.confirmRestoreSnapshot', {name: snap.name}))) {
+				return
+			}
+			const result = await this.$store.dispatch('config/restoreSnapshot', {name: snap.name})
+			if (!result.ok) {
+				this.error = result.error
+			} else {
+				this.show = false
+			}
+		},
+		async deleteSnapshot(snap) {
+			if (!window.confirm(this.$t('pages.config.confirmDeleteSnapshot', {name: snap.name}))) {
+				return
+			}
+			const result = await this.$store.dispatch('config/deleteSnapshot', {name: snap.name})
+			if (!result.ok) {
+				this.error = result.error
+			}
+		},
+	},
+}
+Vue.component('ConfigTemplatesDialog', ConfigTemplatesDialog)
 
 export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT}
 

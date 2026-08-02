@@ -335,7 +335,8 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
-    """ create the nodes table if it does not exist yet
+    """ create the nodes table (and the related templates/snapshots
+        tables) if they do not exist yet
     """
     with conn:
         conn.execute("""
@@ -344,6 +345,20 @@ def init_db(conn: sqlite3.Connection) -> None:
                 type   TEXT NOT NULL,
                 name   TEXT,
                 params TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS node_templates (
+                name  TEXT PRIMARY KEY,
+                descr TEXT,
+                data  TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS topology_snapshots (
+                name       TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                data       TEXT NOT NULL
             )
         """)
 
@@ -499,6 +514,217 @@ def migrate_pickle_to_sqlite(pickle_path: str, db_path: str) -> bool:
     replace(pickle_path, backup_path)
     log.brief('Migration done, legacy file kept as %s', backup_path)
     return True
+
+
+# --- node-combination templates (/config, Step 13) ----------------------
+#
+# A template is a small, portable sub-graph of nodes (e.g. "pH control
+# with CO2 valve") that can be inserted into the live topology multiple
+# times. Alert nodes are intentionally excluded (same reasoning as
+# NODE_TYPE_SCHEMA: their 'receives' is derived from 'conditions', a set
+# of objects, not a plain field - out of scope for this generic editor).
+# 'receives' references that point *outside* the captured node set are
+# dropped, since the template must remain insertable without depending
+# on specific, possibly absent, external node ids.
+
+def capture_node_template(bus: MsgBus, node_ids: list[str]) -> dict[str, Any]:
+    """ build a portable template dict from a set of currently live
+        node ids. Raises ValueError if a node id is unknown or refers
+        to an Alert node.
+    """
+    selected = set(node_ids)
+    entries = []
+    for node_id in node_ids:
+        node = bus.get_node(node_id)
+        if not node:
+            raise ValueError(f'Unknown node id: {node_id}')
+        if isinstance(node, Alert):
+            raise ValueError('Alert nodes cannot be part of a template')
+        state = serialize_node(node)
+        state['receives'] = [r for r in state.get('receives', []) if r in selected]
+        entries.append({'id': node.id, 'type': type(node).__name__, 'state': state})
+    return {'nodes': entries}
+
+
+def list_templates(db_path: str) -> list[dict[str, Any]]:
+    """ list all templates (name, description, node count) """
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            'SELECT name, descr, data FROM node_templates ORDER BY name'
+        ).fetchall()
+        result = []
+        for row in rows:
+            data = json.loads(row['data'])
+            result.append({
+                'name': row['name'],
+                'descr': row['descr'],
+                'node_count': len(data.get('nodes', [])),
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def get_template(db_path: str, name: str) -> dict[str, Any] | None:
+    """ fetch one template including its full node data """
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            'SELECT name, descr, data FROM node_templates WHERE name = ?', (name,)
+        ).fetchone()
+        if not row:
+            return None
+        return {'name': row['name'], 'descr': row['descr'], 'data': json.loads(row['data'])}
+    finally:
+        conn.close()
+
+
+def save_template(db_path: str, name: str, descr: str, data: dict[str, Any]) -> None:
+    """ store (create or replace) a named template """
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO node_templates (name, descr, data) VALUES (?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET descr = excluded.descr, data = excluded.data
+            """, (name, descr, json.dumps(data)))
+    finally:
+        conn.close()
+
+
+def delete_template(db_path: str, name: str) -> bool:
+    """ remove a template, returns True if it existed """
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            cur = conn.execute('DELETE FROM node_templates WHERE name = ?', (name,))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
+    """ insert a template's nodes into the live bus, assigning fresh,
+        collision-free names/ids (the stored name, with a ' (2)',
+        ' (3)', ... suffix appended if it - or its derived id - is
+        already taken) and remapping the internal 'receives' wiring to
+        the new ids. Nodes are reconstructed via the same whitelisted
+        NODE_FACTORY used everywhere else in this module (never
+        pickle/eval). Returns the list of newly created, plugged-in
+        nodes.
+    """
+    entries = data.get('nodes', [])
+    used_ids = {node.id for node in bus.nodes}
+    id_map: dict[str, str] = {}
+    new_names: dict[str, str] = {}
+
+    for entry in entries:
+        base_name = entry['state']['name']
+        candidate = base_name
+        candidate_id = compute_node_id(candidate)
+        suffix = 2
+        while candidate_id in used_ids:
+            candidate = f'{base_name} ({suffix})'
+            candidate_id = compute_node_id(candidate)
+            suffix += 1
+        used_ids.add(candidate_id)
+        new_names[entry['id']] = candidate
+        id_map[entry['id']] = candidate_id
+
+    new_nodes = []
+    for entry in entries:
+        state = dict(entry['state'])
+        state['name'] = new_names[entry['id']]
+        state['receives'] = [id_map[r] for r in state.get('receives', []) if r in id_map]
+        new_nodes.append(_deserialize_node(entry['type'], state))
+
+    for node in new_nodes:
+        node.plugin(bus)
+
+    return new_nodes
+
+
+# --- topology snapshots (/config, Step 13) -------------------------------
+#
+# A snapshot is a full, named export of the 'nodes' table, used for
+# "save the whole configuration now, try something, restore it later".
+
+def list_snapshots(db_path: str) -> list[dict[str, Any]]:
+    """ list all snapshots (name, created_at), newest first """
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute(
+            'SELECT name, created_at FROM topology_snapshots ORDER BY created_at DESC'
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def create_snapshot(db_path: str, name: str) -> None:
+    """ capture the entire current 'nodes' table as a named snapshot
+        (create, or overwrite if the name already exists)
+    """
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute('SELECT id, type, name, params FROM nodes').fetchall()
+        data = [dict(row) for row in rows]
+        with conn:
+            conn.execute("""
+                INSERT INTO topology_snapshots (name, data) VALUES (?, ?)
+                ON CONFLICT(name) DO UPDATE SET data = excluded.data,
+                                               created_at = datetime('now')
+            """, (name, json.dumps(data)))
+    finally:
+        conn.close()
+
+
+def get_snapshot(db_path: str, name: str) -> dict[str, Any] | None:
+    """ fetch one snapshot including its full node-table export """
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            'SELECT name, created_at, data FROM topology_snapshots WHERE name = ?', (name,)
+        ).fetchone()
+        if not row:
+            return None
+        return {'name': row['name'], 'created_at': row['created_at'], 'data': json.loads(row['data'])}
+    finally:
+        conn.close()
+
+
+def delete_snapshot(db_path: str, name: str) -> bool:
+    """ remove a snapshot, returns True if it existed """
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            cur = conn.execute('DELETE FROM topology_snapshots WHERE name = ?', (name,))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def restore_snapshot_into_bus(bus: MsgBus, snapshot_rows: list[dict[str, Any]]) -> None:
+    """ replace the live bus' entire node set with the nodes stored in
+        a snapshot: tears down every currently plugged-in node first,
+        then reconstructs and plugs in every snapshot node (whitelisted
+        NODE_FACTORY only, never pickle/eval). A node that fails to
+        restore (e.g. an unknown type from a foreign export) is skipped
+        with a log entry rather than aborting the whole restore.
+    """
+    bus.teardown()
+    nodes = []
+    for row in snapshot_rows:
+        try:
+            nodes.append(_deserialize_node(row['type'], row['params']
+                                           if isinstance(row['params'], dict)
+                                           else json.loads(row['params'])))
+        except (ValueError, KeyError, TypeError):
+            log.exception('restore_snapshot_into_bus: failed to restore node %r (type %r), skipping',
+                          row.get('id'), row.get('type'))
+    for node in nodes:
+        node.plugin(bus)
 
 
 # --- users / authentication -------------------------------------------

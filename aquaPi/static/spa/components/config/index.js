@@ -18,8 +18,23 @@ const AquapiConfig = {
 						<v-alert v-if="connectingFrom" dense text type="info" class="mb-0">
 							{{ $t('pages.config.hintConnecting') }}
 						</v-alert>
+						<v-alert v-else-if="selectMode" dense text type="info" class="mb-0">
+							{{ $t('pages.config.hintSelecting', {count: selectedIds.length}) }}
+						</v-alert>
 					</v-col>
 					<v-col cols="auto">
+						<v-btn
+							:color="selectMode ? 'secondary' : undefined"
+							outlined class="mr-2"
+							@click="toggleSelectMode"
+						>
+							<v-icon left small>mdi-checkbox-multiple-marked-outline</v-icon>
+							{{ $t('pages.config.selectNodes') }}
+						</v-btn>
+						<v-btn outlined class="mr-2" @click="templatesDialogOpen = true">
+							<v-icon left small>mdi-content-save-outline</v-icon>
+							{{ $t('pages.config.templatesSnapshots') }}
+						</v-btn>
 						<v-btn color="primary" @click="openAddDialog">
 							<v-icon left small>mdi-plus</v-icon>
 							{{ $t('pages.config.addNode') }}
@@ -55,6 +70,7 @@ const AquapiConfig = {
 							:key="node.identifier"
 							:node="node"
 							:connecting="connectingFrom && connectingFrom.id === node.id"
+							:selected="selectedIds.includes(node.id)"
 							@select="onSelect"
 							@connect="onConnectStart"
 							@edit="openEditDialog"
@@ -72,6 +88,12 @@ const AquapiConfig = {
 				:nodes="nodes"
 				:edit-node="editingNode"
 			></config-node-dialog>
+
+			<config-templates-dialog
+				v-model="templatesDialogOpen"
+				:selected-ids="selectedIds"
+				@saved="onTemplateSaved"
+			></config-templates-dialog>
 		</v-card>
 	`,
 
@@ -79,8 +101,11 @@ const AquapiConfig = {
 		return {
 			loading: true,
 			dialogOpen: false,
+			templatesDialogOpen: false,
 			editingNode: null,
 			connectingFrom: null,
+			selectMode: false,
+			selectedIds: [],
 			error: null,
 		}
 	},
@@ -130,7 +155,26 @@ const AquapiConfig = {
 			this.dialogOpen = true
 		},
 
+		toggleSelectMode: function() {
+			this.selectMode = !this.selectMode
+			this.selectedIds = []
+		},
+
+		onTemplateSaved: function() {
+			this.selectMode = false
+			this.selectedIds = []
+		},
+
 		onSelect: function(node) {
+			if (this.selectMode) {
+				const idx = this.selectedIds.indexOf(node.id)
+				if (idx === -1) {
+					this.selectedIds.push(node.id)
+				} else {
+					this.selectedIds.splice(idx, 1)
+				}
+				return
+			}
 			if (!this.connectingFrom) {
 				return
 			}

@@ -3,6 +3,7 @@
 import {EventBus, AQUAPI_EVENTS} from '../components/app/EventBus.js'
 import {AquapiConfirmDialog} from '../components/app/AquapiConfirmDialog.vue.js'
 import {AppFooComp} from '../comps.js'
+import i18n from '../i18n/index.js'
 
 // Thin wrapper around vue3-sfc-loader's loadModule(), so callers can just
 // do `() => loadSfc('/static/spa/pages/About.vue')` as an async component
@@ -27,6 +28,7 @@ const options = {
 		'app/EventBus': {EventBus, AQUAPI_EVENTS},
 		'app/AquapiConfirmDialog': {AquapiConfirmDialog},
 		'app/comps': {AppFooComp},
+		'app/i18n': {i18n},
 	},
 
 	async getFile(url) {

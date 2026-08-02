@@ -32,11 +32,11 @@ const AquapiNavDrawer = {
 				dense
 				nav
 			>
-				<v-list-item>
-					<v-list-item-title>
-						<a href="/settings">(alte) Settings</a>
-					</v-list-item-title>
-				</v-list-item>
+			<v-list-item>
+				<v-list-item-title>
+					<a href="/settings">{{ $t('misc.legacySettingsLink') }}</a>
+				</v-list-item-title>
+			</v-list-item>
 			
 				<v-list-item
 					v-for="item in items"

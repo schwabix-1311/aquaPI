@@ -68,6 +68,10 @@ const app = Vue.createApp({
 				this.$store.dispatch('ui/setDarkMode', true)
 			}
 		},
+		setLocale(locale) {
+			i18n.global.locale.value = locale
+			this.$store.dispatch('ui/setLocale', locale)
+		},
 		navigate(item) {
 			if (item.route == this.$route.name) return
 			this.$router.push({name: item.route})
@@ -129,6 +133,16 @@ const app = Vue.createApp({
 				this.$store.dispatch('ui/setDarkMode', (itemTheme == 'dark'))
 			}
 		} catch(e) {}
+
+		// Check localStorage for a persisted language choice, otherwise
+		// keep the navigator.language-derived default set in i18n/index.js
+		try {
+			const itemLocale = window.localStorage.getItem('aquapi.locale')
+			if (itemLocale && Object.prototype.hasOwnProperty.call(i18n.global.messages.value, itemLocale)) {
+				i18n.global.locale.value = itemLocale
+			}
+		} catch(e) {}
+		this.$store.dispatch('ui/setLocale', i18n.global.locale.value)
 	},
 
 	beforeUnmount() {

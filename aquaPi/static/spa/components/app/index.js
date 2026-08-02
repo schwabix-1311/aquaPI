@@ -86,7 +86,7 @@ const AquapiDummy = {
 				max-width="350"
 			>
 				<v-card-text class="my-4 text-center text-h6">
-					Einfach nur 'ne Dummy-Komponente für Testzwecke
+					{{ $t('misc.dummyComponentText') }}
 				</v-card-text>
 			</v-card>
 		</v-hover>

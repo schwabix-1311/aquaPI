@@ -81,6 +81,8 @@ export default
 			label: 'About',
 			heading: 'About',
 			copyright: 'Copyright',
+			donateMessage: 'Please send praise to tkuhn, you may keep the bugs.',
+			hintPlaceholder: 'Someday this page will show version, copyright, system state, etc.<br>... and a link to REST API documentation.',
 		},
 		users: {
 			label: 'Users',
@@ -156,6 +158,13 @@ export default
 	},
 
 	misc: {
+		legacySettingsLink: '(old) Settings',
+		dummyComponentText: 'Just a dummy component for testing purposes',
+		language: {
+			label: 'Language',
+			de: 'German',
+			en: 'English',
+		},
 		dialog: {
 			confirm: 'Confirm',
 			cancel: 'Cancel',

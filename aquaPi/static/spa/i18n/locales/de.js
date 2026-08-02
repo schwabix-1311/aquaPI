@@ -81,6 +81,8 @@ export default
 			label: 'Über aquaPi',
 			heading: 'Über aquaPi',
 			copyright: 'Copyright',
+			donateMessage: 'Lob bitte an tkuhn, Bugs darfst du behalten.',
+			hintPlaceholder: 'Diese Seite wird irgendwann Version, Copyright, Systemstatus etc. anzeigen.<br>... und einen Link zur REST-API-Dokumentation.',
 		},
 		users: {
 			label: 'Benutzer',
@@ -156,6 +158,13 @@ export default
 	},
 
 	misc: {
+		legacySettingsLink: '(alte) Settings',
+		dummyComponentText: 'Einfach nur \'ne Dummy-Komponente für Testzwecke',
+		language: {
+			label: 'Sprache',
+			de: 'Deutsch',
+			en: 'Englisch',
+		},
 		dialog: {
 			confirm: 'Bestätigen',
 			cancel: 'Abbrechen',

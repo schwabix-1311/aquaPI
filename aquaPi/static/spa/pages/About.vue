@@ -17,9 +17,8 @@
 						YYtext
 						:icon="'mdi-clock'"
 						YYcolor="'orange'"
+						v-html="$t('pages.about.hintPlaceholder')"
 					>
-						Someday this page will show version, copyright, system state, etc.<br>
-						... and a link to REST API documentation.
 					</v-alert>
 				</v-col>
 			</v-row>
@@ -36,7 +35,7 @@
 export default {
 	methods: {
 		donate() {
-			this.$alert('Lob bitte an tkuhn, Bugs darfst du behalten.')
+			this.$alert(this.$t('pages.about.donateMessage'))
 		}
 	}
 }

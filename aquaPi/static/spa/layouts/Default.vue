@@ -30,15 +30,33 @@
 				<v-sheet dark color="transparent" class="mr-3">
 					<v-icon class="mr-1">mdi-account-circle-outline</v-icon>{{ username }}
 				</v-sheet>
-				<v-btn title="Logout" icon class="white--text" @click.stop="$store.dispatch('auth/logout')">
+				<v-btn :title="$t('pages.logout.label')" icon class="white--text" @click.stop="$store.dispatch('auth/logout')">
 					<v-icon>mdi-logout</v-icon>
 				</v-btn>
 			</template>
 			<template v-else>
-				<v-btn title="Login" icon class="white--text" @click.stop="$store.dispatch('ui/showDialog', 'AquapiLoginDialog', true);">
+				<v-btn :title="$t('pages.login.label')" icon class="white--text" @click.stop="$store.dispatch('ui/showDialog', 'AquapiLoginDialog', true);">
 					<v-icon>mdi-login</v-icon>
 				</v-btn>
 			</template>
+
+			<v-menu>
+				<template #activator="{ props }">
+					<v-btn icon class="white--text" v-bind="props" :title="$t('misc.language.label')">
+						<v-icon>mdi-translate</v-icon>
+					</v-btn>
+				</template>
+				<v-list>
+					<v-list-item
+						v-for="loc in availableLocales"
+						:key="loc"
+						:active="loc === currentLocale"
+						@click="$root.setLocale(loc)"
+					>
+						<v-list-item-title>{{ $t('misc.language.' + loc) }}</v-list-item-title>
+					</v-list-item>
+				</v-list>
+			</v-menu>
 
 			<v-btn icon class="white--text" @click="$root.toggleDarkMode">
 				<v-icon>mdi-circle-half-full</v-icon>
@@ -75,6 +93,7 @@ import {loadSfc} from 'sfc/loadSfc'
 import {EventBus, AQUAPI_EVENTS} from 'app/EventBus'
 import {AquapiConfirmDialog} from 'app/AquapiConfirmDialog'
 import {AppFooComp} from 'app/comps'
+import {i18n} from 'app/i18n'
 
 export default {
 	name: 'DefaultLayout',
@@ -138,6 +157,12 @@ export default {
 		containerFluid() {
 			// TODO: maybe render container as 'fluid' (full viewport width) on all pages
 			return ['home', 'dashboard', 'config'].includes(this.$route.name)
+		},
+		availableLocales() {
+			return Object.keys(i18n.global.messages.value)
+		},
+		currentLocale() {
+			return i18n.global.locale.value
 		}
 	},
 

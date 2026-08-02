@@ -3,6 +3,7 @@ import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 const state = () => ({
 	appLoading: false,
 	darkMode: false,
+	locale: 'en',
 	colors: {
 		lightMode: {
 			bg: {
@@ -41,6 +42,9 @@ const getters = {
 	darkMode: (state) => {
 		return state.darkMode
 	},
+	locale: (state) => {
+		return state.locale
+	},
 	appLoaderVisible: (state, getters) => {
 		return state.appLoading;
 	},
@@ -63,6 +67,12 @@ const actions = {
 		context.state.darkMode = value
 		try {
 			window.localStorage.setItem('aquapi.theme', (context.state.darkMode ? 'dark' : 'light'))
+		} catch(e) {}
+	},
+	setLocale(context, value) {
+		context.state.locale = value
+		try {
+			window.localStorage.setItem('aquapi.locale', value)
 		} catch(e) {}
 	},
 	showDialog(context, dialog, hideOthers=true) {

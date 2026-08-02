@@ -98,6 +98,14 @@ Beide Seiten bauen auf der in diesem Plan bereits vorgesehenen SQLite-Infrastruk
 *   Auf `/config` können Admins neue Nodes per Drag&Drop aus einer Typ-Palette platzieren, per Klick/Ziehen verbinden (`receives` setzen) sowie bestehende Nodes bearbeiten oder löschen.
 *   `/config` bietet Speichern/Laden benannter Konfigurationen (Snapshots der gesamten Topologie) sowie ein Template-Menü mit vordefinierten Node-Kombinationen (z.B. "pH-Regelung mit CO2-Ventil"), die beim Einfügen automatisch neue Node-IDs erhalten.
 
+### Functional Requirements (Config-Editor UX-Verbesserungen)
+*   **Entwurfsmodus statt Sofort-Speicherung**: Auf `/config` werden alle Änderungen (Node anlegen/bearbeiten/löschen, Verbindung ziehen/entfernen, Drag&Drop-Position) zunächst nur in einem lokalen Entwurf im Browser gesammelt, ohne den laufenden `MsgBus`/die Hardware-Treiber oder `topo.sqlite` zu verändern.
+*   Der Editor zeigt sichtbar an, ob ungespeicherte Änderungen vorliegen ("dirty"-Zustand), und bietet zwei Aktionen: **"Speichern"** (überträgt alle gesammelten Änderungen atomar auf das laufende System) und **"Verwerfen"** (setzt den Entwurf auf den zuletzt gespeicherten Stand zurück).
+*   Beim Verlassen von `/config` mit ungespeicherten Änderungen wird über den neuen Modal-Dialog (siehe unten) nachgefragt, ob verworfen oder gespeichert werden soll.
+*   Schlägt "Speichern" fehl (z.B. Zyklus, Namens-Kollision, ungültiges Feld), bleibt der Entwurf unverändert im Editor erhalten und die Fehlermeldung wird angezeigt, statt bereits einen Teil der Änderungen anzuwenden.
+*   **Verbindungslinien**: Eine Verbindung wird nicht mehr direkt beim Anklicken der Linie entfernt. Stattdessen erscheint beim Hovern über eine Verbindungslinie ein Lösch-Icon an der Linie; erst ein Klick auf dieses Icon entfernt die Verbindung (im Entwurf, wirksam erst nach "Speichern").
+*   **Kein Standard-Confirm/Alert**: Sämtliche Bestätigungs- und Hinweisdialoge im Projekt (aktuell u.a. `window.confirm` beim Löschen von Node/Template/Snapshot bzw. Wiederherstellen eines Snapshots in `components/config/*.js`, sowie `window.alert` in `About.vue.js`) werden durch eine einheitliche, projektweite **Modal-Komponente** ersetzt; neue Bestätigungsdialoge (z.B. "Änderungen verwerfen?") nutzen ausschließlich dieses Modal, keine Browser-nativen Dialoge.
+
 ### Functional Requirements (Automatisierte Tests)
 *   Es wird eine `pytest`-basierte Test-Suite unter `tests/` eingeführt, die ohne echte Hardware (nur Simulationstreiber) lauffähig ist.
 *   Kernkomponenten (`msg_bus.py`, `alert_nodes.py`, `aquaPi/db.py`, Auth-/Rollen-Decorator, ausgewählte API-Routen) erhalten Unit- bzw. Integrationstests.
@@ -149,6 +157,13 @@ Beide Seiten bauen auf der in diesem Plan bereits vorgesehenen SQLite-Infrastruk
 *   **API-Serialisierung**: Ablösung von `jsonpickle` durch explizite `to_dict()`-Methoden je Node-Typ plus `json.dumps` — eliminiert die (geringere) Objekt-Introspektions-Unsicherheit von `jsonpickle` und macht die API-Contracts explizit und stabil.
 *   **`/settings`-Widget-Mapping**: Statt neuer Frontend-Logik pro Node-Typ wird das bestehende `get_settings()`-Tupel `(key, label, value, html_attrs)` per neuer Route `GET /api/nodes/<id>/settings` exponiert; das Frontend parst die simplen HTML-Attribut-Strings (`type="number" min=.. max=..`, `type="range"`, etc.) und mappt sie auf Vuetify-Komponenten (`v-text-field type=number`, `v-slider`, `v-switch`, Cron-Editor) — vermeidet ein komplett neues Metadaten-Schema und nutzt vorhandene Backend-Logik weiter.
 *   **`/config`-Editor-Technik**: Kein neues Graph-Library-Dependency (kein React-Flow/vue-flow, da diese einen npm-Build erfordern würden); stattdessen **`vuedraggable`** (bereits eingebunden) für die Positionierung der Node-Boxen in einem freien Grid/Canvas, plus ein **leichtgewichtiges eigenes SVG-Overlay** zum Zeichnen der Verbindungslinien zwischen `receives`-Ports — beides reine Vue-2-Komponenten ohne zusätzliche Abhängigkeiten, passend zum Build-Tool-losen Deployment auf dem Pi.
+
+### Key Decisions (Config-Editor: Entwurfsmodus, Verbindungs-UX, Modal)
+*   **Staging-Architektur (User-Entscheidung)**: Ein **client-seitiger Entwurf** statt eines serverseitigen Staging-Bus. Alle Editier-Aktionen mutieren ausschließlich eine lokale Kopie des Node-Graphen im Vuex-Modul `store/modules/config.js` (`draft`-State, initial ein Deep-Clone von `dashboard/nodes`); der laufende `MsgBus` und `topo.sqlite` bleiben bis zum Klick auf "Speichern" komplett unberührt. "Speichern" berechnet ein Diff (Creates/Updates/Deletes) und sendet es an einen neuen, atomaren Bulk-Endpoint; "Verwerfen" ersetzt den Entwurf einfach wieder durch eine frische Kopie des Server-Standes. Vorteil: keine neue Backend-Zustandsverwaltung (Sessions/Staging-Tabellen) nötig; Trade-off (bewusst akzeptiert): Validierung von Zyklen/Namenskollisionen/Feldgrenzen erfolgt serverseitig komplett erst beim Speichern statt inkrementell während der Bearbeitung.
+*   **Neuer Bulk-Endpoint statt einzelner CRUD-Aufrufe während der Bearbeitung**: `POST /api/config/apply` (Rolle `admin`) nimmt das komplette Diff (`creates`/`updates`/`deletes`) entgegen, validiert es in einer In-Memory-Vorschau gegen den aktuellen Live-Bus (Wiederverwendung von `db.build_node()`, `db.compute_node_id()`, `db.would_create_cycle()`, `_validate_fields()` aus Step 12) und wendet es nur bei vollständigem Erfolg atomar an (`mr.save_nodes(bus)` genau einmal am Ende); bei jedem Validierungsfehler wird der gesamte Batch abgelehnt (`400` mit Angabe des fehlgeschlagenen Eintrags), der Live-Bus bleibt unverändert. Die bestehenden Einzel-Routen (`POST/PUT/DELETE /api/nodes/`) bleiben zusätzlich bestehen (z.B. für zukünftige API-Nutzung), werden vom Editor selbst aber nicht mehr während der Bearbeitung aufgerufen.
+*   **Temporäre Client-IDs für neue Nodes**: Im Entwurf angelegte, noch nicht gespeicherte Nodes erhalten eine clientseitige, negative/`draft-`-präfigierte Temp-ID, damit sie im selben Entwurf bereits verbunden werden können; beim Aufbau des Diffs für `POST /api/config/apply` mappt das Backend jede `creates`-Eintrag-Temp-ID auf die tatsächlich vergebene, kollisionsfreie Node-ID (analog zum bestehenden Remapping in `instantiate_template()`) und löst referenzierende `receives`/`updates`-Einträge entsprechend auf.
+*   **Verbindungslinien-Löschung per Hover-Icon**: Die bestehende `ConfigConnections`-SVG-Komponente entfernt eine Verbindung nicht mehr bei jedem Klick auf die Linie; stattdessen wird bei `mouseenter` auf eine Linie ein kleines Lösch-Icon (SVG `<g>`-Overlay mit Icon) am Linienmittelpunkt eingeblendet, das erst bei Klick das `remove`-Event auslöst. Dies vermeidet versehentliches Löschen beim bloßen Vorbeifahren mit der Maus/beim Klicken zum Selektieren.
+*   **Generisches Modal statt `window.confirm`/`window.alert`**: Neue globale Singleton-Komponente `AquapiConfirmDialog` (registriert einmalig in `layouts/Default.vue.js`, analog zu `AquapiLoginDialog`), gesteuert über den bestehenden `EventBus`-Mechanismus (`components/app/EventBus.js`) statt über den `ui`-Store (der pro Named-Dialog nur einen Boolean, aber keine dynamischen Inhalte/Promise-Callbacks verwaltet). Ein neuer globaler Helper `Vue.prototype.$confirm(message, options)` gibt ein `Promise<boolean>` zurück und ersetzt jedes `window.confirm`; ein `Vue.prototype.$alert(message, options)` ersetzt `window.alert`. Diese Helper werden projektweit für **alle** zukünftigen und bestehenden Bestätigungs-/Hinweisdialoge verwendet (nicht nur im Config-Editor).
 *   **Templates-Speicherort**: Node-Kombinations-Templates werden als JSON-Dateien/-Einträge in einer neuen SQLite-Tabelle `node_templates` abgelegt (analog zum `nodes`-Schema, aber ohne feste `id`, stattdessen ein Template-Name) — nutzt dieselbe `aquaPi/db.py`-Infrastruktur statt eines separaten Dateiformats.
 *   **Konfigurations-Snapshots**: "Speichern/Laden" auf `/config` exportiert/importiert den kompletten Inhalt der `nodes`-Tabelle als benannten Snapshot in einer weiteren Tabelle `topology_snapshots` (name, created_at, data JSON) — ermöglicht Rollback auf eine frühere Konfiguration, ohne die Live-Topologie zu gefährden.
 
@@ -172,6 +187,10 @@ Beide Seiten bauen auf der in diesem Plan bereits vorgesehenen SQLite-Infrastruk
 17. **Node-Graph-Grundgerüst (`Config.vue.js`)**: Ersetzen der flachen Liste durch eine Canvas-Ansicht: Node-Boxen (per `vuedraggable`/absolute Positionierung) plus SVG-Layer für Verbindungslinien zu `receives`-Quellen; Klick auf eine Box öffnet ein Bearbeitungs-Dialog mit den Konstruktor-Parametern des Node-Typs.
 18. **Node-CRUD-API**: Neue Routen `POST /api/nodes/` (anlegen), `PUT /api/nodes/<id>` (bearbeiten/verbinden/Position setzen), `DELETE /api/nodes/<id>` (löschen) — alle geschützt mit `@roles_required('admin')`; nutzen `aquaPi/db.py` und lösen eine Re-Instanziierung der betroffenen Nodes im laufenden `MsgBus` aus.
 19. **Templates & Snapshots**: Neue Tabellen `node_templates` und `topology_snapshots` über `aquaPi/db.py`; neue Routen `GET/POST /api/templates/`, `GET /api/config/snapshots`, `POST /api/config/snapshots`, `POST /api/config/snapshots/<name>/restore` (alle `admin`); Frontend-Menü auf `/config` zum Einfügen von Templates bzw. Speichern/Laden von Snapshots.
+20. **Generisches Modal (`AquapiConfirmDialog`)**: Neue Komponente `components/app/AquapiConfirmDialog.vue.js` (Vuetify `v-dialog` mit Titel/Text/Bestätigen-/Abbrechen-Buttons), gesteuert über neue `EventBus`-Events (`AQUAPI_EVENTS.CONFIRM_REQUEST`/`CONFIRM_RESPONSE`, `AQUAPI_EVENTS.ALERT_REQUEST`); `Vue.prototype.$confirm`/`$alert` in `main.js` registriert. Ersetzt alle 4 `window.confirm`-Aufrufe in `components/config/index.js`/`comps.js` sowie das `window.alert` in `pages/About.vue.js`.
+21. **Entwurfs-State im Config-Store**: `store/modules/config.js` erhält neuen State `draft` (Kopie der Nodes inkl. `_dirty`/`_deleted`-Markierungen und Temp-IDs für neue Nodes) sowie Actions `initDraft`, `draftCreateNode`, `draftUpdateNode`, `draftDeleteNode`, `draftSetConnection`/`draftRemoveConnection`, `saveDraft` (baut Diff, ruft `POST /api/config/apply`, übernimmt bei Erfolg den Server-Stand) und `discardDraft` (verwirft den Entwurf, lädt `dashboard/nodes` neu). `AquapiConfig` (`components/config/index.js`) rendert ausschließlich noch `draft`-Daten und ruft nur noch `draft*`-Actions statt der bisherigen direkten `createNode`/`updateNode`/`deleteNode`-Aufrufe während der Bearbeitung auf; ein Speichern-/Verwerfen-Button-Paar mit "ungespeicherte Änderungen"-Anzeige wird ergänzt.
+22. **Bulk-Apply-Endpoint**: Neue Route `POST /api/config/apply` (Rolle `admin`) in `aquaPi/api.py`; neue Funktion `db.apply_config_diff(bus, diff)` validiert `creates`/`updates`/`deletes` vollständig gegen eine In-Memory-Prüfung (inkl. Temp-ID-Remapping, Zyklus-/Kollisions-/Feld-Validierung) und wendet sie nur bei vollständigem Erfolg auf den Live-Bus an, gefolgt von genau einem `mr.save_nodes(bus)`.
+23. **Hover-Lösch-Icon für Verbindungen**: `ConfigConnections` (`components/config/comps.js`) erhält `hoveredEdgeKey`-State (gesetzt via `@mouseenter`/`@mouseleave` auf der `<line>`), rendert bei Hover ein zusätzliches, klickbares Icon-Overlay am Linienmittelpunkt; das bestehende `@click`-Handler auf der Linie selbst entfällt. Das `remove`-Event ruft künftig `config/draftRemoveConnection` statt sofort `config/updateNode` auf.
 
 ### Data Models / Contracts
 ```sql
@@ -312,6 +331,8 @@ graph LR
 *   **Live-Rekonfiguration**: Hinzufügen/Löschen/Verbinden von Nodes über `/config` während der Laufzeit kann den `MsgBus` in einen inkonsistenten Zwischenzustand bringen (z.B. hängende Referenzen auf gelöschte Nodes) — Änderungen werden daher validiert, bevor sie angewendet werden, und im Zweifel wird ein Neustart der Simulation empfohlen statt eines unsicheren Hot-Swaps.
 *   **Ungültige Settings-Werte**: Werte außerhalb von `min`/`max` aus `get_settings()` dürfen nicht unvalidiert übernommen werden — die neue `PUT`-Route muss serverseitig gegen die vom Node gelieferten Grenzen prüfen.
 *   **SVG-Verbinder-Performance**: Bei vielen Nodes (Raspi-Constraint: keine starke CPU) kann ein naives Neuzeichnen aller Verbindungslinien bei jeder Positionsänderung ruckeln — Neuzeichnen wird auf `drag-end` statt kontinuierlich während des Ziehens beschränkt.
+*   **Diff-Race-Condition**: Ändert ein zweiter Admin die Topologie über einen anderen Client, während im ersten Client noch ein Entwurf offen ist, könnte "Speichern" auf einer veralteten Basis aufsetzen — Mitigation: `POST /api/config/apply` validiert stets gegen den *aktuellen* Live-Bus zum Zeitpunkt des Speicherns (nicht gegen den Stand beim Öffnen des Editors) und lehnt bei Konflikten (z.B. inzwischen gelöschte Referenz-Node) mit `400` ab, statt den Bus in einen inkonsistenten Zustand zu bringen.
+*   **Verlorene Entwurfsänderungen**: Ein versehentlicher Reload/Tab-Schließen verwirft den client-seitigen Entwurf komplett (kein Server-Backup des Entwurfs) — dies ist eine bewusst in Kauf genommene Einschränkung des gewählten client-seitigen Ansatzes; das neue Modal fragt beim Verlassen der Seite mit ungespeicherten Änderungen nach, um versehentlichen Verlust zu reduzieren.
 
 ### Key Decisions (Weitere Verbesserungsvorschläge)
 *   **Passwort-Reset-Versand**: Nutzt denselben `DriverEmail`/SMTP-Mechanismus wie die Alarm-Benachrichtigungen, statt eines separaten Mail-Wegs.
@@ -363,6 +384,11 @@ graph LR
 18. **Template einfügen**: Ein gespeichertes Template (z.B. "pH-Regelung") wird eingefügt und erhält automatisch neue, eindeutige Node-IDs, ohne bestehende Nodes zu überschreiben.
 19. **Snapshot speichern/laden**: Ein Snapshot der aktuellen Topologie wird gespeichert, eine Testkonfiguration danach geändert, anschließend wird der Snapshot wiederhergestellt und die ursprüngliche Topologie ist exakt wiederhergestellt.
 20. **Main-Branch-Unversehrtheit**: Nach Abschluss der Implementierung startet `main` unverändert wie vor Beginn dieser Arbeiten (keine Merges/Commits auf `main`).
+21. **Entwurfsmodus (`/config`)**: Node anlegen, zwei bestehende Nodes verbinden und einen dritten Node löschen im Editor, danach `GET /api/nodes/` erneut abfragen — die Live-Topologie ist noch exakt der alte Stand (nichts wurde bereits übernommen); erst nach "Speichern" spiegeln sich alle drei Änderungen gleichzeitig in `/api/nodes/` wider.
+22. **Verwerfen von Entwurfsänderungen**: Nach mehreren Entwurfsänderungen wird "Verwerfen" geklickt (über das neue Modal bestätigt) — der Editor zeigt wieder exakt den zuletzt gespeicherten Server-Stand, keine der Änderungen ist auf dem Server angekommen.
+23. **Fehlerhafter Bulk-Save**: Ein Entwurf enthält eine zyklische Verbindung oder eine Namens-Kollision — `POST /api/config/apply` liefert `400`, die Live-Topologie bleibt unverändert (keine Teilanwendung), der Entwurf bleibt im Frontend erhalten, damit der Fehler behoben werden kann.
+24. **Verbindungslinie per Hover löschen**: Beim Hovern über eine Verbindungslinie erscheint das Lösch-Icon; ein Klick daneben (auf die Linie selbst) löst kein Löschen mehr aus, erst der Klick auf das Icon selbst entfernt die Verbindung im Entwurf.
+25. **Generisches Modal**: Löschen eines Nodes/Templates/Snapshots öffnet das neue `AquapiConfirmDialog` statt eines Browser-`confirm()`; Abbrechen im Modal führt zu keiner Änderung, Bestätigen führt die ursprüngliche Aktion aus. Die `About`-Seite zeigt ihren Hinweistext über `$alert(...)` statt `window.alert`.
 
 ### Edge Cases
 *   Beschädigte oder unvollständige `topo.pickle` beim Migrationsversuch (Fehlerbehandlung, kein Absturz).
@@ -374,6 +400,10 @@ graph LR
 *   Ungültiger Settings-Wert (außerhalb `min`/`max`, falscher Typ) wird von `PUT /api/nodes/<id>/settings` mit `400` abgelehnt, statt den Node in einen inkonsistenten Zustand zu bringen.
 *   Zyklische `receives`-Verbindung (Node verweist direkt oder indirekt auf sich selbst) wird beim Verbinden auf `/config` erkannt und verhindert.
 *   Löschen eines Templates/Snapshots, das/der nicht existiert, liefert `404` statt eines Serverfehlers.
+*   Ein Entwurf mit **nur** einer Positionsänderung (Drag&Drop ohne sonstige Änderung) markiert den Editor korrekt als "dirty" und überträgt beim Speichern ausschließlich die geänderten Koordinaten.
+*   Zwei im selben Entwurf neu angelegte Nodes werden im Entwurf direkt untereinander verbunden (Temp-ID → Temp-ID) — nach dem Speichern ist die Verbindung korrekt zwischen den beiden neu vergebenen, echten Node-IDs vorhanden.
+*   Ein im Entwurf gelöschter Node, der noch von einer im selben Entwurf neu gezogenen Verbindung referenziert wird, entfernt diese Verbindung ebenfalls automatisch aus dem Entwurf (kein toter Verweis auf eine Temp-ID/gelöschte ID beim Speichern).
+*   `POST /api/config/apply` mit leerem Diff (`{}`/keine Änderungen) ist ein No-Op und liefert `200`, ohne `mr.save_nodes()` unnötig aufzurufen.
 
 ---
 
@@ -383,6 +413,7 @@ graph LR
 - **Commit-Sprache**: Commit-Messages werden auf **Englisch** verfasst.
 - **Push**: Pushes zum Remote-Repository erfolgen weiterhin nur nach ausdrücklicher Rückfrage und Bestätigung durch den User.
 - **Branch-Isolation**: Alle Arbeiten (SQLite-Migration, Auth, `/config`- und `/settings`-Ausbau) finden ausschließlich im aktuellen Arbeits-Branch (`dev_thk`) statt. Der Branch `main` bleibt dabei **unverändert im alten Stand lauffähig** — es wird nichts nach `main` gemerged oder dort committet, solange dies nicht ausdrücklich angefordert wird. Vor jeder Implementierungsphase wird geprüft, dass der aktive Branch tatsächlich `dev_thk` ist, nicht `main`; nach jeder Verifikation wird zusätzlich ein kurzer Regressionscheck auf `main` (unveränderter Start/API-Test) empfohlen, um sicherzustellen, dass dort nichts versehentlich beeinflusst wurde.
+- **Testlauf-Umfang nach Änderungen**: Nach Code-Änderungen wird **nicht** mehr automatisch die komplette Test-Suite (`pytest`) ausgeführt. Es werden gezielt nur die Tests der betroffenen Datei(en)/des betroffenen Moduls ausgeführt (z.B. `pytest tests/test_notifications.py`). Ein vollständiger Suite-Lauf erfolgt nur noch, wenn der User dies ausdrücklich anfordert.
 
 # Delivery Steps
 
@@ -481,90 +512,140 @@ Wiederverwendbare Node-Kombinationen sowie Speichern/Laden ganzer Konfiguratione
 - 24 neue Tests in `tests/test_config_templates.py` (Rollenschutz, Capture inkl. Ablehnung unbekannter/Alert-Nodes, Insert mit kollisionsfreier ID-/Namens-Vergabe und korrekt remappter interner Verdrahtung, doppeltes Einfügen erzeugt unterschiedliche IDs, Snapshot-Save/List/Delete, vollständiger Restore-Roundtrip inkl. Identitätsprüfung der ursprünglichen Konfiguration nach zwischenzeitlicher Änderung, Persistenz-Aufrufe, 404 für unbekannte Templates/Snapshots) - volle Suite jetzt 135/135 grün.
 - Manuelle Verifikation: alle neuen `.js`-Dateien wurden per `node --input-type=module --check` auf gültige ES-Modul-Syntax geprüft, `aquaPi/db.py`/`aquaPi/api.py` per `py_compile` kompiliert.
 
-### * Step 14: Austausch der Frontend-Bibliotheken auf Vue 3 / Vuetify 3 / Vuex 4
-Die Basis-Bibliotheken aktualisieren, ohne Build-Prozess.
+### ✓ Step 14: Generisches Modal (`AquapiConfirmDialog`) statt `window.confirm`/`window.alert`
+Einheitlichen, projektweiten Ersatz für Browser-native Dialoge schaffen, als Grundlage für den nachfolgenden Entwurfsmodus. **(vorgezogen, war zuvor Step 27)**
+- Neue Komponente `components/app/AquapiConfirmDialog.vue.js` (Vuetify `v-dialog`, Titel/Text/Bestätigen-/Abbrechen-Button, Singleton-Registrierung in `layouts/Default.vue.js` analog zu `AquapiLoginDialog`); Anzeige/Auflösung über ein `resolve`-Callback aus dem auslösenden Event-Payload.
+- Neues `EventBus`-Event `CONFIRM_REQUESTED` (`components/app/EventBus.js`) sowie `Vue.prototype.$confirm(message, options)` (liefert `Promise<boolean>`) und `Vue.prototype.$alert(message, options)` (setzt intern `options.alertOnly=true`, nur ein OK-Button) in `main.js` registriert.
+- Alle 4 bestehenden `window.confirm`-Aufrufe in `components/config/index.js`/`comps.js` (Node löschen, Template löschen, Snapshot löschen, Snapshot wiederherstellen) sowie das `window.alert` in `pages/About.vue.js` auf `await this.$confirm(...)`/`this.$alert(...)` umgestellt.
+- Neue i18n-Schlüssel `misc.dialog.confirm/cancel/ok` in `de.js`/`en.js` ergänzt.
+- Verifikation: alle geänderten/neuen `.js`-Dateien per `node --input-type=module --check` auf gültige ES-Modul-Syntax geprüft (kein Backend betroffen, keine `pytest`-Läufe nötig).
+
+### ✓ Step 15: Backend — atomarer Bulk-Apply-Endpoint für den Config-Entwurf
+Die serverseitige Grundlage für "Speichern erst auf Klick" schaffen, bevor das Frontend umgestellt wird. **(vorgezogen, war zuvor Step 28)**
+- Neue Funktion `db.apply_config_diff(bus, diff)` in `aquaPi/db.py`: validiert `creates`/`updates`/`deletes` vollständig gegen eine In-Memory-Prüfung des aktuellen Live-Bus (Wiederverwendung von `build_node()`, `compute_node_id()`, `would_create_cycle()`, `_validate_fields()`), inkl. Remapping von client-seitigen Temp-IDs auf die tatsächlich vergebenen neuen Node-IDs (analog zum bestehenden Remapping in `instantiate_template()`).
+- Bei jeder Validierungsverletzung (Zyklus, Namens-Kollision, unbekannte Referenz, ungültiges Feld) wird der komplette Diff abgelehnt, ohne dass bereits ein Teil auf den Live-Bus angewendet wurde.
+- Neue Route `POST /api/config/apply` (Rolle `admin`) in `aquaPi/api.py`: ruft `db.apply_config_diff()` auf und persistiert bei Erfolg genau einmal via `mr.save_nodes(bus)`; liefert bei Erfolg die aktualisierte Knotenliste, bei Fehlern `400` mit Angabe des betroffenen Eintrags.
+- Neue Tests in `tests/test_config_apply.py`: erfolgreicher Diff (Create+Update+Delete gemischt) wird atomar übernommen; Diff mit Zyklus/Kollision/ungültigem Feld wird komplett abgelehnt und der Bus bleibt unverändert; Temp-ID-Remapping zwischen zwei im selben Diff neu angelegten, miteinander verbundenen Nodes funktioniert; leerer Diff ist ein No-Op; Rollenschutz (`403` für Nicht-Admin).
+- Verifikation: `tests/test_config_apply.py` (9/9 grün) und Regressionscheck `tests/test_node_crud_api.py` (24/24 grün).
+
+### ✓ Step 16: Frontend — Entwurfsmodus im Config-Editor (Speichern/Verwerfen)
+Den `/config`-Editor von sofortiger Persistierung auf den neuen client-seitigen Entwurf mit explizitem Speichern umstellen. **(vorgezogen, war zuvor Step 29)**
+- `store/modules/config.js`: neuer `draft`-State (Deep-Clone von `dashboard/nodes` beim Betreten des Editors, inkl. `_new`/`_dirty`/`_deleted`-Markierungen und `draft-N`-präfigierten Temp-IDs für neue Nodes); neue Getter `draftActive`/`draftNodes`/`draftDirty` und Actions `initDraft`, `draftCreateNode`, `draftUpdateNode`, `draftDeleteNode`, `saveDraft` (baut aus dem Entwurf das `{creates, updates, deletes}`-Diff inkl. Rückführung der flachen Typ-Felder in ein verschachteltes `fields`-Objekt, ruft `POST /api/config/apply`, übernimmt bei Erfolg den Server-Stand über `dashboard/fetchNodes` + `initDraft`), `discardDraft`.
+- `components/config/index.js` (`AquapiConfig`) und `components/config/comps.js` (`ConfigNodeDialog`) rendern/ändern nur noch `draft`-Daten statt der bisherigen direkten `createNode`/`updateNode`/`deleteNode`-Aufrufe; neues Button-Paar "Speichern"/"Verwerfen" mit sichtbarem "ungespeicherte Änderungen"-Chip in der Toolbar. `ConfigTemplatesDialog`s Insert/Restore-Aktionen (die weiterhin direkt gegen das Backend laufen) lösen jetzt zusätzlich ein `saved`-Event aus, das den Entwurf neu initialisiert, damit er nicht veraltet.
+- Verlassen der `/config`-Route mit ungespeichertem Entwurf löst über einen `beforeRouteLeave`-Guard auf der tatsächlichen Routen-Komponente `pages/Config.vue.js` (in-component Guards greifen nur dort, nicht auf der eingebetteten `aquapi-config`) den `$confirm(...)`-Dialog (aus Step 14) aus; Bestätigen verwirft den Entwurf und verlässt die Seite, Abbrechen bleibt auf der Seite.
+- Neue i18n-Schlüssel `pages.config.unsavedChanges/discard/saveChanges/confirmDiscard/confirmLeaveUnsaved` in `de.js`/`en.js`.
+- Verifikation: alle geänderten `.js`-Dateien per `node --input-type=module --check` auf gültige ES-Modul-Syntax geprüft; Regressionscheck `tests/test_config_apply.py` (9/9 grün, Backend unverändert).
+
+### ✓ Step 17: Frontend — Hover-Lösch-Icon für Verbindungslinien
+Versehentliches Löschen von Verbindungen beim bloßen Anklicken der Linie verhindern. **(vorgezogen, war zuvor Step 30)**
+- `ConfigConnections` (`components/config/comps.js`) rendert pro Kante eine `<g>`-Gruppe mit `@mouseenter`/`@mouseleave` (State `hoveredEdgeKey`), einer unsichtbaren breiten "Hit"-Linie (`.config-connection-hit`, 14px) zur bequemen Hover-Erkennung, der sichtbaren dünnen Linie (färbt sich bei Hover rot) sowie einem nur bei Hover gerenderten, klickbaren Kreis-Icon mit X-Symbol am Linienmittelpunkt inkl. `<title>`-Tooltip.
+- Das bisherige direkte `@click`-Handling auf der sichtbaren `<line>` entfällt (Linie ist jetzt `pointer-events: none`); das `remove`-Event wird nur noch vom Icon-Overlay ausgelöst und läuft weiterhin über den bestehenden `onRemoveEdge`-Handler in `components/config/index.js`, der `config/draftUpdateNode` (aufbauend auf Step 16) aufruft, sodass die Löschung erst mit "Speichern" persistiert wird.
+- CSS-Ergänzung in `static/css/app.css` (`.config-connection-hit`, `.config-connection-line--hover`, `.config-connection-delete` inkl. Hover-Vergrößerung des Kreises); neuer i18n-Schlüssel `pages.config.deleteConnection` (Tooltip) in `de.js`/`en.js`.
+- Verifikation: alle geänderten `.js`-Dateien per `node --input-type=module --check` auf gültige ES-Modul-Syntax geprüft (kein Backend betroffen, keine `pytest`-Läufe nötig).
+
+### ✓ Bugfix: HTTP 404 beim Speichern im Config-Editor
+Node-Namen mit Schrägstrich (z.B. "Filter/Pumpe") führten zu einer ID mit `/` (z.B. `filter/pumpe`), wodurch der anschließende `GET /api/nodes/<id>`-Refresh (Teil von `saveDraft`/`dashboard/fetchNodes` aus Step 16) an Flasks Standard-Routenkonverter scheiterte und ein `404` zurücklieferte.
+- `machineroom/msg_bus.py` (`BusNode.__init__`) und `db.compute_node_id()` ersetzen jetzt zusätzlich `/` und `\` durch `_`, analog zu den bereits bestehenden Ersetzungen von Leerzeichen, Punkt, Semikolon, Bindestrich und Umlauten.
+- Verifikation: manuelle Reproduktion des 404 vor dem Fix bestätigt (`POST /api/config/apply` mit Node-Namen "Filter/Pumpe" erfolgreich, anschließendes `GET /api/nodes/filter/pumpe` liefert 404); nach dem Fix liefert `compute_node_id`/`BusNode.id` konsistent `filter_pumpe`; gezielte Regressionstests `tests/test_config_apply.py` + `tests/test_node_crud_api.py` (33/33 grün).
+
+### ✓ Bugfix: Konfiguration verlor beim Speichern/Snapshot-Restore Ausgangs-Nodes (Heizstab, Dimmer, CO2-Ventil)
+`InputNode.pullout()` (`in_nodes.py`) gibt seinen Hardware-Port beim Entfernen eines Nodes korrekt frei, die analoge `DeviceNode`-Basisklasse für Ausgänge (`out_nodes.py`, genutzt von `SwitchDevice`/`AnalogDevice`) hatte diese Freigabe nie implementiert.
+- Dadurch blieb der Port eines entfernten Ausgangs-Node (z.B. GPIO/PWM/TC420) in `IoRegistry` dauerhaft als "belegt" markiert; jeder nachfolgende `restore_snapshot_into_bus`-Aufruf (Snapshot-Restore, `db.py`) scheiterte für genau diese Nodes mit `DriverPortInuseError`, sie wurden übersprungen, und der reduzierte Bus wurde anschließend automatisch persistiert — die Konfiguration schrumpfte so bei jedem Restore-Versuch weiter.
+- Fix: `DeviceNode.pullout()` in `machineroom/out_nodes.py` neu ergänzt (setzt `self.port = ''`, wodurch der bestehende Port-Setter den Treiber via `IoRegistry.driver_destruct()` freigibt), analog zum bereits vorhandenen Muster in `InputNode.pullout()`.
+- Betroffene, durch wiederholte fehlgeschlagene Restores auf 10 von ursprünglich 13 Nodes reduzierte Live-Konfiguration wurde über den vorhandenen Snapshot "sn 1" erfolgreich wiederhergestellt (13/13 Nodes inkl. Heizstab, Dimmer, CO2-Ventil, verifiziert per `GET /api/nodes` nach dem Restore ohne Fehler im Log).
+- Verifikation: gezielte Regressionstests `tests/test_db.py` (8/8 grün) und `tests/test_config_templates.py` (26/26 grün).
+
+### ✓ Verbesserungen am Config-Editor (Breite, Ladeanzeige, Template-Versatz)
+Drei Usability-Verbesserungen für `/config` auf Nutzer-Feedback hin umgesetzt.
+- Volle Content-Breite: `layouts/Default.vue.js` (`containerFluid`-Computed) rendert den `v-container` jetzt auch für die Route `config` als `fluid`, analog zu `home`/`dashboard`, statt in einem schmalen zentrierten Container.
+- Ladeanzeige beim Snapshot-Restore: `ConfigTemplatesDialog` (`components/config/comps.js`) zeigt während `restoreSnapshot()` einen `v-overlay` mit `aquapi-loading-indicator` und Hinweistext; Dialog ist währenddessen `persistent`, Restore-/Löschen-Buttons sind deaktiviert. Neuer i18n-Schlüssel `pages.config.restoringSnapshot` in `de.js`/`en.js`.
+- Versatz-Positionierung beim Template-Einfügen: `instantiate_template()` (`aquaPi/db.py`) verschiebt das gesamte einzufügende Template diagonal um ein wachsendes 40px-Offset, bis keine der neuen Node-Positionen mehr mit einer bereits vorhandenen Node-Box (190x76) überlappt — verhindert, dass Template-Nodes exakt über den Nodes landen, aus denen sie ursprünglich erstellt wurden.
+- Verifikation: alle geänderten `.js`-Dateien per `node --input-type=module --check` geprüft; `python3 -m py_compile aquaPi/db.py` erfolgreich; gezielter Regressionstest `tests/test_config_templates.py` (26/26 grün).
+
+###   Step 18: Austausch der Frontend-Bibliotheken auf Vue 3 / Vuetify 3 / Vuex 4
+Die Basis-Bibliotheken aktualisieren, ohne Build-Prozess. **(war zuvor Step 14)**
 - ESM-Browser-Builds von Vue 3, Vuetify 3, Vuex 4, Vue-Router und Vue-I18n (Vue-3-kompatible Versionen) unter `aquaPi/static/libs/` ablegen.
 - `spa.html.jinja2` und den App-Bootstrap (`App.vue.js`) auf `Vue.createApp(...)`/`createStore`/`createVuetify` umstellen.
 - Vuetify-Grundlayout (`v-app`/`v-main`) und Theme-Konfiguration an Vuetify 3 anpassen.
 - Verifikation: Simulation startet fehlerfrei, Grundlayout (Navigation, Login-Dialog) wird korrekt gerendert.
 
-###   Step 15: Einführung des Runtime-SFC-Loaders und erste Komponentenmigration
-Den `vue3-sfc-loader` integrieren und einfache Komponenten als echte SFCs umsetzen.
+###   Step 19: Einführung des Runtime-SFC-Loaders und erste Komponentenmigration
+Den `vue3-sfc-loader` integrieren und einfache Komponenten als echte SFCs umsetzen. **(war zuvor Step 15)**
 - `vue3-sfc-loader` als zusätzliches Skript einbinden, Ladewrapper (`loadSfc(path)`) implementieren.
 - Einfache, wenig verflochtene Komponenten (`About.vue.js`, `AquapiLoginForm.vue.js`, `AquapiLoginDialog.vue.js`) nach `.vue`-SFC-Format überführen.
 - Verifikation: Migrierte Seiten/Komponenten funktionieren unverändert (Login-Dialog, About-Seite), Ladezeiten werden beobachtet.
 
-###   Step 16: Migration der Kernseiten (`Home`, `Config`, `Settings`) und Layouts auf SFCs
-Die umfangreicheren Seiten und Layouts auf das neue SFC-Format überführen.
+###   Step 20: Migration der Kernseiten (`Home`, `Config`, `Settings`) und Layouts auf SFCs
+Die umfangreicheren Seiten und Layouts auf das neue SFC-Format überführen. **(war zuvor Step 16)**
 - `layouts/Default.vue.js` und `layouts/Auth.vue.js` nach `.vue` migrieren.
 - `pages/Home.vue.js`, `pages/Config.vue.js`, `pages/Settings.vue.js` nach `.vue` migrieren (rein strukturell, ohne die inhaltlichen Erweiterungen aus Step 11-13 zu wiederholen, sofern diese bereits umgesetzt wurden).
 - Vuex-Store-Module (`store/`) auf Vuex-4-Registrierung (`createStore`) umstellen.
 - Verifikation: Dashboard, `/config` und `/settings` funktionieren nach der Migration unverändert; Regressionstest der Simulationsumgebung.
 
-###   Step 17: Neue Seite `/users` zur Benutzerverwaltung
-Eine Admin-only-Seite zur Verwaltung von Benutzern und Rollen ergänzen.
+###   Step 21: Neue Seite `/users` zur Benutzerverwaltung
+Eine Admin-only-Seite zur Verwaltung von Benutzern und Rollen ergänzen. **(war zuvor Step 17)**
 - Neue SFC `pages/Users.vue` mit Tabelle aller Benutzer (Username, Rolle), Anlegen-/Bearbeiten-/Lösch-Dialogen inkl. Rollen-Auswahl (`viewer`/`operator`/`admin`) und Passwort-Reset.
 - Neuer Router-Eintrag `/users` mit Admin-Guard (analog zu bestehenden Router-Guards für `Auth`-Layout).
 - Neues Vuex-Store-Modul `users` mit Aktionen `fetchAll`/`create`/`update`/`remove`/`setRole`, angebunden an die bestehenden Nutzer-CRUD-Backend-Routen (siehe Step 4/5).
 - Backend-Absicherung: Entfernen des letzten verbleibenden Admin-Accounts wird verhindert (Selbst-Aussperrungs-Schutz).
 - Verifikation: Als `admin` einen neuen `operator`-User anlegen, dessen Rolle ändern und wieder löschen; Zugriff auf `/users` als `viewer`/`operator` liefert `403`/wird im Menü ausgeblendet.
 
-###   Step 18: Login-Sicherheit erweitern (Passwort-Reset, Rate-Limiting)
-Self-Service-Passwort-Reset und Schutz vor Brute-Force-Logins ergänzen.
+###   Step 22: Login-Sicherheit erweitern (Passwort-Reset, Rate-Limiting)
+Self-Service-Passwort-Reset und Schutz vor Brute-Force-Logins ergänzen. **(war zuvor Step 18)**
 - Tabelle `password_reset_tokens` (user_id, token, expires_at) sowie Tabelle `login_attempts` (username/IP, count, window) über `aquaPi/db.py` anlegen.
 - Route `/reset-password` (Anfrage per E-Mail über `DriverEmail`, Bestätigung über Token-Link) im `aquaPi/auth.py`-Blueprint ergänzen.
 - Login-Route um Zähler/Sperrlogik erweitern: nach konfigurierbarer Anzahl Fehlversuchen temporäre Sperre je Nutzer/IP.
 - Verifikation: Reset-Link setzt Passwort korrekt zurück; wiederholte Falscheingaben lösen nach Schwellwert eine Sperre aus, die nach Ablauf automatisch endet.
 
-###   Step 19: Audit-Log für Konfigurations- und Setpoint-Änderungen
-Nachvollziehbarkeit von Änderungen für Admins schaffen.
+###   Step 23: Audit-Log für Konfigurations- und Setpoint-Änderungen
+Nachvollziehbarkeit von Änderungen für Admins schaffen. **(war zuvor Step 19)**
 - Tabelle `audit_log` (timestamp, user_id, action, target, details JSON) über `aquaPi/db.py` anlegen.
 - Bestehende Schreib-Routen (Setpoints, Node-CRUD, Nutzerverwaltung aus Step 5/11/12) um Logging-Aufrufe ergänzen.
 - Neue Route `GET /api/audit-log` (Rolle `admin`) mit Filter-/Paginierungs-Unterstützung.
 - Verifikation: Änderung eines Setpoints sowie Anlegen/Löschen eines Nodes erscheinen korrekt mit User und Zeitstempel im Audit-Log.
 
-###   Step 20: Backup/Export der SQLite-DB und automatisiertes Scheduling
-Datensicherheit für die neue Persistenzschicht herstellen.
+###   Step 24: Backup/Export der SQLite-DB und automatisiertes Scheduling
+Datensicherheit für die neue Persistenzschicht herstellen. **(war zuvor Step 20)**
 - Funktion in `aquaPi/db.py` für konsistentes Backup via `sqlite3.Connection.backup()`.
 - Route `GET /api/backup` (Rolle `admin`) zum manuellen Download der aktuellen DB als Datei.
 - Einfacher Scheduler (z.B. via bestehendem Hintergrund-Thread-Muster der Simulation) für tägliches, rotierendes Backup in `instance/backups/`.
 - Verifikation: Manueller Export liefert eine ladbare SQLite-Datei; automatisiertes Backup legt nach Ablauf des Intervalls eine neue Generation an und rotiert alte Stände.
 
-###   Step 21: Health-Check-Endpoint und Graceful Degradation ohne Internet
-Robustheit und Monitoring-Fähigkeit verbessern.
+###   Step 25: Health-Check-Endpoint und Graceful Degradation ohne Internet
+Robustheit und Monitoring-Fähigkeit verbessern. **(war zuvor Step 21)**
 - Neue Route `GET /api/health` (ohne Login) liefert QuestDB-Erreichbarkeit, Anzahl aktiver Nodes, Simulations-/Hardware-Modus.
 - `MachineRoom`-Start (`aquaPi/machineroom/__init__.py`) so anpassen, dass fehlgeschlagene Email-/Telegram-Verbindungsversuche beim Start nur geloggt werden, statt den Startvorgang zu blockieren.
 - Verifikation: `/api/health` liefert plausible Werte in der Simulation; Start ohne Internetverbindung (simuliert) bricht nicht ab.
 
-###   Step 22: Internationalisierung (Deutsch/Englisch)
-Mehrsprachigkeit der SPA über die bereits eingebundene Vue-I18n-Bibliothek umsetzen.
+###   Step 26: Internationalisierung (Deutsch/Englisch)
+Mehrsprachigkeit der SPA über die bereits eingebundene Vue-I18n-Bibliothek umsetzen. **(war zuvor Step 22)**
 - Bestehende Texte in Komponenten (Dashboard, `/settings`, `/config`, `/users`) in Übersetzungs-JSON-Dateien unter `static/spa/i18n/` extrahieren (`de.json`, `en.json`).
 - Sprachumschalter in der Navigationsleiste ergänzen, Auswahl wird pro User/Browser persistiert.
 - Verifikation: Umschalten zwischen Deutsch und Englisch ändert alle sichtbaren Texte korrekt, ohne fehlende Übersetzungsschlüssel.
 
-###   Step 23: Dark Mode und Mobile-/Responsive-Check
-UI-Komfort für unterschiedliche Geräte und Vorlieben verbessern.
+###   Step 27: Dark Mode und Mobile-/Responsive-Check
+UI-Komfort für unterschiedliche Geräte und Vorlieben verbessern. **(war zuvor Step 23)**
 - Light/Dark-Theme-Umschalter über `createVuetify`-Theme-Konfiguration ergänzen, Auswahl pro User persistiert.
 - Responsive-Überprüfung von Dashboard, `/settings`, `/config` und `/users` auf kleinen Viewport-Breiten (Vuetify-Breakpoints), Anpassung von Layout-Komponenten wo nötig.
 - Verifikation: Theme-Umschalter funktioniert und bleibt nach Neuladen erhalten; alle Kernseiten bleiben auf Smartphone-Breite bedienbar (keine abgeschnittenen Elemente).
 
-###   Step 24: Alarm-Eskalation und erweiterte Sensor-Historie
-Bestehende Alarm- und Zeitreihen-Funktionalität um Eskalation, Kalibrier-Historie und Export erweitern.
+###   Step 28: Alarm-Eskalation und erweiterte Sensor-Historie
+Bestehende Alarm- und Zeitreihen-Funktionalität um Eskalation, Kalibrier-Historie und Export erweitern. **(war zuvor Step 24)**
 - `user_notification_prefs` um `escalation_channel`/`escalation_after_minutes` ergänzen; `alert_nodes.py` prüft bei unbestätigten Alarmen nach Ablauf der Frist den Eskalationskanal.
 - Kalibriervorgänge (z.B. pH-Sonde) werden mit Zeitstempel und altem/neuem Wert zusätzlich in QuestDB protokolliert (`hist_nodes.py`).
 - Neue Route `GET /api/history/<id>/export` liefert eine QuestDB-Zeitreihe als CSV oder JSON.
 - Verifikation: Ein simulierter, unbestätigter Alarm eskaliert nach Ablauf der konfigurierten Zeit an den zweiten Kanal; Export-Route liefert eine korrekt formatierte CSV/JSON-Datei für eine bestehende Historie.
 
-###   Step 25: Einführung der pytest-Test-Infrastruktur
-Grundlage für alle automatisierten Tests schaffen, bevor weitere Backend-Steps darauf aufbauen.
+###   Step 29: Einführung der pytest-Test-Infrastruktur
+Grundlage für alle automatisierten Tests schaffen, bevor weitere Backend-Steps darauf aufbauen. **(war zuvor Step 25)**
 - Neues Verzeichnis `tests/` mit `conftest.py` (Flask-App-Fixture im Testing-/Simulationsmodus, temporäre SQLite-DB je Testlauf).
 - `requirements-dev.txt` mit `pytest` (und `pytest-mock`) ergänzen; kurze Anleitung (`pytest` ausführen) in der README ergänzen.
 - Marker `questdb` in `pytest.ini`/`pyproject.toml` registrieren, damit QuestDB-abhängige Tests gezielt ausgeschlossen/inkludiert werden können.
 - Erste Beispieltests für `msg_bus.py` (Node-Registrierung, Nachrichtenweiterleitung) zur Verifikation der Infrastruktur.
 
-###   Step 26: Unit- und Integrationstests für Kernkomponenten
-Die wichtigsten bereits geplanten Backend-Funktionen automatisiert absichern.
-- Tests für `alert_nodes.py` (Namens-Fix, Schwellwert-/Dauer-Logik, Eskalation aus Step 24).
+###   Step 30: Unit- und Integrationstests für Kernkomponenten
+Die wichtigsten bereits geplanten Backend-Funktionen automatisiert absichern. **(war zuvor Step 26)**
+- Tests für `alert_nodes.py` (Namens-Fix, Schwellwert-/Dauer-Logik, Eskalation aus Step 28).
 - Tests für `aquaPi/db.py` (Schema-Erstellung, Migration von `topo.pickle`, Node-Rekonstruktion aus Step 1-3).
 - Tests für Auth/Rollen (Login-Erfolg/-Fehlschlag, `@roles_required`-Verhalten für `viewer`/`operator`/`admin` aus Step 4-6) via `app.test_client()`.
 - Tests für Notification-Prefs (Kanal-Zuordnung je User/Alert aus Step 7) mit gemocktem `DriverEmail`/`DriverTelegram`.

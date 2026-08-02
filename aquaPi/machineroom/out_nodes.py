@@ -54,6 +54,7 @@ class DeviceNode(BusListener, ABC):
     def port(self, port: str) -> None:
         if self._driver:
             IoRegistry.get().driver_destruct(self._port, self._driver)
+            self._driver = None
         if port:
             driver = IoRegistry.get().driver_factory(port)
             if isinstance(driver, OutDriver):
@@ -62,6 +63,10 @@ class DeviceNode(BusListener, ABC):
                 log.error('Port %s does not support writing data. %s will be ignored.',
                           port, self.name)
         self._port = port
+
+    def pullout(self) -> bool:
+        self.port = ''
+        return super().pullout()
 
     def get_settings(self) -> list[tuple]:
         settings = super().get_settings()

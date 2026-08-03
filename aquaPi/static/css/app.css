@@ -58,18 +58,29 @@ div.app-splash-content {
 div.theme--light.v-application {
     background-color: #e4e4e4;
 }
-div.v-main__wrap {
+
+/* Vuetify 3's v-main no longer renders a `.v-main__wrap` child div (that
+   was a Vuetify 2 implementation detail), so the app-bar/footer (both
+   `app`-registered, absolutely positioned relative to `.v-application__wrap`)
+   only stay glued to the actual viewport bottom/top if that wrapper's
+   height is capped at the viewport height, with `v-main` scrolling its own
+   content internally - otherwise the wrapper grows with the page content
+   and the footer drifts down past the visible viewport. */
+.v-application__wrap {
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+}
+.v-main {
+    height: 100%;
     overflow-y: auto;
 }
 
-div.v-main__wrap > div.container {
-    /*background-color: #00bfa5;*/
-    /*border: 1px dashed blue;*/
-    /*min-height: calc(100% - 40px);*/
+.v-main .v-container {
     min-height: 100%;
     background-color: rgba(255, 255, 255, 0.4)
 }
-.theme--dark div.v-main__wrap > div.container {
+.theme--dark .v-main .v-container {
     background-color: rgba(255, 255, 255, 0.05)
 }
 

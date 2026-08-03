@@ -63,13 +63,11 @@
 			</v-btn>
 		</v-app-bar>
 
-		<v-main style="max-height: 100vh;">
+		<v-main>
 			<v-container :fluid="containerFluid" class="pa-5">
 				 <transition name="fade" mode="out-in" :duration="$store.state.ui.navigation.transitionDuration">
 					<router-view name="default" class="view"></router-view>
 				</transition>
-
-				<router-view name="view_bottom" class="view-bottom"></router-view>
 			</v-container>
 		</v-main>
 

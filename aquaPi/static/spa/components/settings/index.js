@@ -29,16 +29,16 @@ const AquapiSettings = {
 						v-for="(items, group) in grouped"
 						:key="group"
 					>
-						<v-expansion-panel-header class="py-0 px-4">
+						<v-expansion-panel-title class="py-0 px-4">
 							{{ group || $t('pages.settings.ungrouped') }}
-						</v-expansion-panel-header>
-						<v-expansion-panel-content>
+						</v-expansion-panel-title>
+						<v-expansion-panel-text>
 							<node-settings-card
 								v-for="node in items"
 								:key="node.identifier"
 								:node="node"
 							></node-settings-card>
-						</v-expansion-panel-content>
+						</v-expansion-panel-text>
 					</v-expansion-panel>
 				</v-expansion-panels>
 			</v-card-text>

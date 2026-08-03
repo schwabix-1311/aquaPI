@@ -123,7 +123,10 @@ export default
 				btnCancel: {
 					label: 'Cancel'
 				},
-				hintMandatory: '* mandatory fields'
+				hintMandatory: '* mandatory fields',
+				errors: {
+					invalid: 'Invalid username or password'
+				}
 			}
 		}
 	},

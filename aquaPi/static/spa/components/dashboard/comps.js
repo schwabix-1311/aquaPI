@@ -154,55 +154,33 @@ const BusNode = {
 			<template
 				v-if="receivesNodes.length > 0"
 			>
-				<template
-					v-if="level == 1"
+				<v-expansion-panels
+					tile
 				>
-					<v-expansion-panels
-						tile
-					>
-						<v-expansion-panel>
-							<v-expansion-panel-header
-								class="py-0 px-4"
+					<v-expansion-panel>
+						<v-expansion-panel-title
+							class="py-0 px-4"
+						>
+							{{ level == 1 ? $t('dashboard.widget.inputs.label') : node.name }}
+						</v-expansion-panel-title>
+						<v-expansion-panel-text>
+							<v-card
+								v-for="(item, index) in receivesNodes"
+								:key="item.identifier"
+								outlined
+								tile
+								class="ma-3 mt-0"
 							>
-								{{ $t('dashboard.widget.inputs.label') }}
-							</v-expansion-panel-header>
-							<v-expansion-panel-content>
-								<v-card
-									v-for="(item, index) in receivesNodes"
-									:key="item.identifier"
-									outlined
-									tile
-									class="ma-3 mt-0"
-								>
-									<component
-										:is="item.type"
-										:id="item.identifier"
-										:node="item"
-										:level="(level + 1)"
-									></component>
-								</v-card>
-							</v-expansion-panel-content>
-						</v-expansion-panel>
-					</v-expansion-panels>
-				</template>
-				<template
-					v-else
-				>
-					<v-card
-						v-for="(item, index) in receivesNodes"
-						:key="item.identifier"
-						outlined
-						tile
-						class="ma-3 mt-0"
-					>
-						<component
-							:is="item.type"
-							:id="item.identifier"
-							:node="item"
-							:level="(level + 1)"
-						></component>
-					</v-card>
-				</template>
+								<component
+									:is="item.type"
+									:id="item.identifier"
+									:node="item"
+									:level="(level + 1)"
+								></component>
+							</v-card>
+						</v-expansion-panel-text>
+					</v-expansion-panel>
+				</v-expansion-panels>
 			</template>
 		</div>
 	`,

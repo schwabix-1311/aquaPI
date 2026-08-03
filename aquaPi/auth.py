@@ -127,9 +127,21 @@ def _get_or_create_secret_key(instance_path: str) -> str:
     return key
 
 
+def _wants_json() -> bool:
+    """ the SPA marks its own fetch()-based login/logout requests with
+        this header, matching the convention already used by every
+        other API call in store/modules/*.js - a normal browser form
+        submit/navigation never sets it, so it keeps getting the
+        existing render_template()/redirect() behavior unchanged.
+    """
+    return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        if _wants_json():
+            return jsonify(result='SUCCESS')
         return redirect(url_for('spa.spa'))
 
     if request.method == 'POST':
@@ -143,8 +155,11 @@ def login():
         if locked:
             log.info('Login blocked for %r: locked out for %d more second(s)',
                      username, retry_seconds)
-            flash(f'Too many failed login attempts. Please try again in '
-                  f'{retry_seconds // 60 + 1} minute(s).')
+            message = (f'Too many failed login attempts. Please try again in '
+                       f'{retry_seconds // 60 + 1} minute(s).')
+            if _wants_json():
+                return jsonify(result='ERROR', message=message), HTTPStatus.TOO_MANY_REQUESTS
+            flash(message)
             return render_template('pages/login.html.jinja2')
 
         row = db.get_user_by_username(_users_db_path(), username)
@@ -152,6 +167,8 @@ def login():
             db.clear_login_attempts(_users_db_path(), lockout_key)
             login_user(User.from_row(row))
             log.info('User %r logged in', username)
+            if _wants_json():
+                return jsonify(result='SUCCESS')
             next_url = request.args.get('next') or url_for('spa.spa')
             return redirect(next_url)
 
@@ -160,6 +177,8 @@ def login():
                                  window_minutes=db.LOGIN_ATTEMPT_WINDOW_MINUTES,
                                  lockout_minutes=db.LOGIN_LOCKOUT_MINUTES)
         log.info('Failed login attempt for %r', username)
+        if _wants_json():
+            return jsonify(result='ERROR', message='Invalid username or password'), HTTPStatus.UNAUTHORIZED
         flash('Invalid username or password')
 
     return render_template('pages/login.html.jinja2')
@@ -218,6 +237,8 @@ def confirm_password_reset(token: str):
 def logout():
     log.info('User %r logged out', current_user.username)
     logout_user()
+    if _wants_json():
+        return jsonify(result='SUCCESS')
     return redirect(url_for('auth.login'))
 
 

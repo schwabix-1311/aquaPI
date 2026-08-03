@@ -19,21 +19,53 @@ const getters = {
 }
 
 const actions = {
-	login(context, payload) {
-		// TODO: implement server side ...
-		if (window.localStorage) {
-			window.localStorage.setItem('aquapi.user', JSON.stringify({username: payload.username}))
+	async login(context, payload) {
+		let data
+		try {
+			const response = await fetch('/login', {
+				method: 'post',
+				mode: 'same-origin',
+				cache: 'no-cache',
+				headers: {
+					'X-Requested-With': 'XMLHttpRequest',
+					'Content-Type': 'application/x-www-form-urlencoded',
+					'Accept': 'application/json',
+				},
+				body: new URLSearchParams({username: payload.username, password: payload.password}),
+			})
+			data = await response.json().catch(() => null)
+		} catch (e) {
+			return {ok: false, error: e.message}
 		}
 
-		context.commit('setUser', {username: payload.username})
+		if (!data || data.result !== 'SUCCESS') {
+			return {ok: false, error: (data && data.message) || 'Login failed'}
+		}
+
+		// the login itself only confirms the credentials - fetch the
+		// real user (id/username/role) from the now-established
+		// server session, instead of just guessing from the payload
+		const user = await context.dispatch('users/fetchCurrentUser', null, {root: true})
+		context.commit('setUser', {username: (user && user.username) || payload.username})
 		EventBus.$emit(AQUAPI_EVENTS.AUTH_LOGGED_IN)
+		return {ok: true}
 	},
-	logout(context) {
-		// TODO: implement server side ...
-		if (window.localStorage) {
-			window.localStorage.setItem('aquapi.user', null)
+	async logout(context) {
+		try {
+			await fetch('/logout', {
+				method: 'get',
+				mode: 'same-origin',
+				cache: 'no-cache',
+				headers: {
+					'X-Requested-With': 'XMLHttpRequest',
+					'Accept': 'application/json',
+				},
+			})
+		} catch (e) {
+			// best-effort: still clear the local state below
 		}
 		context.commit('setUser', null)
+		context.commit('users/setCurrentUser', null, {root: true})
 		EventBus.$emit(AQUAPI_EVENTS.AUTH_LOGGED_OUT)
 	}
 }

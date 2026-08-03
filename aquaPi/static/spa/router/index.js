@@ -1,4 +1,3 @@
-import {AquapiDummy} from '../components/app/index.js'
 import {loadSfc} from '../sfc/loadSfc.js'
 
 // Home/Config/Settings only wrap their respective `aquapi-dashboard` /
@@ -7,6 +6,7 @@ import {loadSfc} from '../sfc/loadSfc.js'
 // (self-registering into the global component registry, see
 // components/app/registry.js) - a `.vue` SFC's `<script>` can't `import`
 // them directly (see the comment in sfc/loadSfc.js).
+import '../components/app/index.js'
 import '../components/dashboard/index.js'
 import '../components/config/index.js'
 import '../components/settings/index.js'
@@ -14,25 +14,6 @@ import '../components/users/index.js'
 import store from '../store/index.js'
 
 const routes = [
-	{
-		path: '/login',
-		// redirect: 'login',
-		component: () => loadSfc('/static/spa/layouts/Auth.vue'),
-		// name: 'login',
-		// component: DefaultLayout,
-		children: [
-			{
-				path: '',
-				name: 'login',
-				components: {
-					default: () => loadSfc('/static/spa/components/auth/AquapiLoginForm.vue')
-				},
-				// meta: {
-				//	 title: i18n.t("routes.login"),
-				// },
-			},
-		],
-	},
 	{
 		// TODO: maybe change /app to / when 'old app' is not used any longer
 		// partly DONE: old app is now /home, and / redirects to /#/
@@ -52,8 +33,7 @@ const routes = [
 				path: 'settings',
 				name: 'settings',
 				components: {
-					default: () => loadSfc('/static/spa/pages/Settings.vue'),
-					view_bottom: AquapiDummy
+					default: () => loadSfc('/static/spa/pages/Settings.vue')
 				},
 			},
 			{
@@ -101,18 +81,6 @@ const router = VueRouter.createRouter({
 			mainWrapper.scrollTop = 0
 		}
 		return {x: 0, y: 0}
-	}
-});
-
-router.beforeEach((to, from, next) => {
-	// TODO: implement authentication
-	console.log('[router/index.js] ROUTER BEFORE EACH')
-
-	// if (to.name !== 'login' && !isAuthenticated) {
-	if (to.name !== 'login' && !(999 == 999)) {
-		next({name: 'login'});
-	} else {
-		next();
 	}
 });
 

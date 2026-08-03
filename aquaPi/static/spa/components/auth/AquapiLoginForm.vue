@@ -5,13 +5,16 @@
 				<h1 class="text-h5">{{ $t('auth.login.form.heading') }}</h1>
 			</v-card-title>
 			<v-card-text>
+				<v-alert v-if="loginError" type="error" text dense class="mb-4">
+					{{ loginError }}
+				</v-alert>
+
 				<v-text-field
 					:label="$t('auth.login.form.username.label')"
 					prepend-icon="mdi-account"
 					v-model="form.username"
 					:rules="usernameRules"
 					required
-					:error-messages="errorMessages.email"
 				></v-text-field>
 
 				<v-text-field
@@ -68,7 +71,7 @@ export default {
 			passwordRules: [
 				v => !!v || this.$t('auth.login.form.password.errors.empty')
 			],
-			errorMessages: {},
+			loginError: null,
 		};
 	},
 
@@ -77,18 +80,20 @@ export default {
 			this.$store.dispatch('ui/hideDialog', 'AquapiLoginDialog')
 		},
 		async login(payload) {
-			await this.$store.dispatch('auth/login', payload)
+			return await this.$store.dispatch('auth/login', payload)
 		},
 		async validate() {
 			const vm = this
 			if (vm.$refs.form.validate()) {
-				vm.loading = true;
-				// TODO: implement login action
-				await this.login(this.form);
-				let tmo = window.setTimeout(function(){
-					vm.loading = false
-					vm.active = false
-				}, 3500)
+				vm.loading = true
+				vm.loginError = null
+				const result = await this.login(this.form)
+				vm.loading = false
+				if (!result.ok) {
+					vm.loginError = this.$t('auth.login.form.errors.invalid')
+				}
+				// on success, the login dialog is closed by the app-wide
+				// AUTH_LOGGED_IN listener in main.js
 			}
 		},
 	},

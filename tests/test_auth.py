@@ -118,6 +118,56 @@ def test_logout_revokes_access(client, default_admin_password):
     assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
 
 
+def _xhr_login(client, username, password):
+    return client.post('/login', data={'username': username, 'password': password},
+                       headers={'X-Requested-With': 'XMLHttpRequest'})
+
+
+def test_xhr_login_success_returns_json(client, default_admin_password):
+    resp = _xhr_login(client, 'viewer1', 'viewerPass1')
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json() == {'result': 'SUCCESS'}
+    assert client.get('/api/protected').status_code == HTTPStatus.OK
+
+
+def test_xhr_login_wrong_password_returns_json_error(client, default_admin_password):
+    resp = _xhr_login(client, 'viewer1', 'wrong-password')
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    body = resp.get_json()
+    assert body['result'] == 'ERROR'
+    assert 'message' in body
+    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_xhr_login_while_locked_out_returns_json_error(client, default_admin_password, monkeypatch):
+    monkeypatch.setattr(db, 'LOGIN_MAX_ATTEMPTS', 1)
+    _xhr_login(client, 'viewer1', 'wrong-password')  # trips the lockout
+
+    resp = _xhr_login(client, 'viewer1', 'viewerPass1')
+    assert resp.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    body = resp.get_json()
+    assert body['result'] == 'ERROR'
+
+
+def test_plain_form_login_unaffected_by_json_support(client, default_admin_password):
+    # a normal (non-XHR) browser login must keep getting the existing
+    # redirect/re-render behavior, unchanged
+    resp = _login(client, 'viewer1', 'wrong-password')
+    assert resp.status_code == HTTPStatus.OK  # re-renders login form
+    assert resp.content_type.startswith('text/html')
+
+    resp = _login(client, 'viewer1', 'viewerPass1')
+    assert resp.status_code == 302
+
+
+def test_xhr_logout_returns_json(client, default_admin_password):
+    _login(client, 'viewer1', 'viewerPass1')
+    resp = client.get('/logout', headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json() == {'result': 'SUCCESS'}
+    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+
+
 def test_viewer_cannot_access_operator_route(client, default_admin_password):
     _login(client, 'viewer1', 'viewerPass1')
     assert client.get('/api/operator-only').status_code == HTTPStatus.FORBIDDEN

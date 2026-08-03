@@ -60,6 +60,8 @@ const SettingSlider = {
 				:max="Number(attrs.max || 100)"
 				:step="Number(attrs.step || 1)"
 				:disabled="disabled"
+				color="primary"
+				track-color="primary"
 				thumb-label
 				hide-details
 				@end="onEnd"
@@ -247,6 +249,7 @@ const NodeSettingsCard = {
 							v-for="(item, idx) in settings"
 							:key="node.id + '.' + (item.key || idx)"
 							cols="12" sm="6" md="4"
+							class="mb-4"
 						>
 							<component
 								:is="widgetType(item)"

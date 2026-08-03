@@ -9,6 +9,8 @@ const AquapiDashboardConfigurator = {
 			width="500"
 			location="right"
 			temporary
+			app
+			dark
 			:style="'max-width:100vw;'"
 			id="dashboard_configurator"
 		>
@@ -298,14 +300,14 @@ const AquapiDashboardWidget = {
 		},
 
 		alert() {
-			if ((this.node == null) || !('alert' in this.node)) {
+			if ((this.node == null) || (this.node.alert == null)) {
 				return ''
 			}
 			return this.node.alert[0]
 		},
 		alertColor() {
 			let ret = 'info lighten-1'
-			if ((this.node == null) || !('alert' in this.node)) {
+			if ((this.node == null) || (this.node.alert == null)) {
 				return ret
 			}
 			const severity = this.node.alert[1]
@@ -355,7 +357,7 @@ const AquapiDashboard = {
 					</v-col>
 				</v-row>
 
-				<div class="aquapi-dashboard-masonry">
+				<div class="aquapi-dashboard-masonry" ref="masonryContainer">
 					<div
 						v-for="(column, colIndex) in columns"
 						:key="colIndex"
@@ -380,7 +382,7 @@ const AquapiDashboard = {
 
 	data() {
 		return {
-			dashboardWidth: (typeof window !== 'undefined' ? window.innerWidth : 1264),
+			containerWidth: (typeof window !== 'undefined' ? window.innerWidth : 1264),
 		};
 	},
 
@@ -401,15 +403,24 @@ const AquapiDashboard = {
 				this.$store.commit('dashboard/setNodes', items)
 			}
 		},
-		// mirrors the old vue-masonry-css {default: 3, 1264: 3, 960: 2, 600: 1} breakpoints
-		columnCount() {
-			if (this.dashboardWidth >= 960) {
+		// measured from the dashboard's own masonry container (via
+		// ResizeObserver, see mounted()) rather than the raw window width,
+		// so the nav drawer's width/the container's padding are accounted
+		// for; mirrors the old vue-masonry-css {default: 3, 1264: 3, 960: 2, 600: 1} breakpoints
+		desiredColumns() {
+			if (this.containerWidth >= 960) {
 				return 3
 			}
-			if (this.dashboardWidth >= 600) {
+			if (this.containerWidth >= 600) {
 				return 2
 			}
 			return 1
+		},
+		// never create more columns than there are visible widgets, so
+		// toggling a widget's visibility never leaves a trailing column
+		// completely empty
+		columnCount() {
+			return Math.min(this.desiredColumns, this.widgets.length || 1)
 		},
 		columns() {
 			const cols = Array.from({length: this.columnCount}, () => [])
@@ -434,16 +445,22 @@ const AquapiDashboard = {
 				this.widgets = result
 			}
 		},
-		updateDashboardWidth() {
-			this.dashboardWidth = window.innerWidth
-		},
 	},
 	async mounted() {
 		await this.loadConfig()
-		window.addEventListener('resize', this.updateDashboardWidth)
+		if (this.$refs.masonryContainer) {
+			this.containerWidth = this.$refs.masonryContainer.getBoundingClientRect().width
+			this._resizeObserver = new ResizeObserver((entries) => {
+				this.containerWidth = entries[0].contentRect.width
+			})
+			this._resizeObserver.observe(this.$refs.masonryContainer)
+		}
 	},
 	unmounted() {
-		window.removeEventListener('resize', this.updateDashboardWidth)
+		if (this._resizeObserver) {
+			this._resizeObserver.disconnect()
+			this._resizeObserver = null
+		}
 	},
 }
 registerGlobalComponent('AquapiDashboard', AquapiDashboard)

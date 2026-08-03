@@ -103,25 +103,17 @@ const app = Vue.createApp({
 		this.initEventListeners()
 	},
 
-	beforeMount() {
+	async beforeMount() {
 		EventBus.$emit(AQUAPI_EVENTS.APP_LOADING, true)
 
-		// Fetch the real, server-side user (id/username/role) via the
-		// authenticated Flask-Login session - independent of the
-		// localStorage-based auth/user placeholder below, since that
-		// one has no real tie to the server session (see auth.js TODOs).
-		this.$store.dispatch('users/fetchCurrentUser')
-
-		// TODO: implement server side check ...
-		// Check localStorage for authenticated user
-		try {
-			const itemUser = JSON.parse(window.localStorage.getItem('aquapi.user'))
-			if (itemUser && itemUser.username) {
-				this.$store.commit('auth/setUser', {username: itemUser.username})
-			} else {
-				this.$store.commit('auth/setUser', null)
-			}
-		} catch(e) {
+		// Resolve the real, server-side user (id/username/role) via the
+		// authenticated Flask-Login session, so a browser refresh keeps
+		// reflecting an already-existing session instead of defaulting
+		// to logged-out until the next explicit login.
+		const user = await this.$store.dispatch('users/fetchCurrentUser')
+		if (user && user.username) {
+			this.$store.commit('auth/setUser', {username: user.username})
+		} else {
 			this.$store.commit('auth/setUser', null)
 		}
 

@@ -165,7 +165,7 @@ export default
 		dummyComponentText: 'Just a dummy component for testing purposes',
 		language: {
 			label: 'Language',
-			de: 'German',
+			de: 'Deutsch',
 			en: 'English',
 		},
 		dialog: {

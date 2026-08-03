@@ -166,7 +166,7 @@ export default
 		language: {
 			label: 'Sprache',
 			de: 'Deutsch',
-			en: 'Englisch',
+			en: 'English',
 		},
 		dialog: {
 			confirm: 'Bestätigen',

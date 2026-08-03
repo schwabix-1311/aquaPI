@@ -155,13 +155,16 @@ const BusNode = {
 				v-if="receivesNodes.length > 0"
 			>
 				<v-expansion-panels
+					v-if="level == 1"
+					multiple
+					v-model="openPanels"
 					tile
 				>
 					<v-expansion-panel>
 						<v-expansion-panel-title
 							class="py-0 px-4"
 						>
-							{{ level == 1 ? $t('dashboard.widget.inputs.label') : node.name }}
+							{{ $t('dashboard.widget.inputs.label') }}
 						</v-expansion-panel-title>
 						<v-expansion-panel-text>
 							<v-card
@@ -172,19 +175,52 @@ const BusNode = {
 								class="ma-3 mt-0"
 							>
 								<component
+									v-if="item"
 									:is="item.type"
 									:id="item.identifier"
 									:node="item"
 									:level="(level + 1)"
 								></component>
+								<v-card-text v-else class="red--text">
+									Error: Node not found
+								</v-card-text>
 							</v-card>
 						</v-expansion-panel-text>
 					</v-expansion-panel>
 				</v-expansion-panels>
+				
+				<div v-else class="mt-2">
+					<div class="px-4 py-2 font-weight-bold text-caption text-uppercase text--secondary">
+						{{ node.name }}
+					</div>
+					<v-card
+						v-for="(item, index) in receivesNodes"
+						:key="item.identifier"
+						outlined
+						tile
+						class="ma-3 mt-0"
+					>
+						<component
+							v-if="item"
+							:is="item.type"
+							:id="item.identifier"
+							:node="item"
+							:level="(level + 1)"
+						></component>
+						<v-card-text v-else class="red--text">
+							Error: Node not found
+						</v-card-text>
+					</v-card>
+				</div>
 			</template>
 		</div>
 	`,
 
+	data() {
+		return {
+			openPanels: [],
+		}
+	},
 	computed: {},
 }
 //Vue.component('BusNode', BusNode)  //??

@@ -82,12 +82,11 @@ const AquapiSettings = {
 			if (!this.$store.getters['dashboard/allNodesLoaded']) {
 				await this.$store.dispatch('dashboard/fetchNodes')
 			}
-			this.openPanels = Object.keys(this.grouped).map((_, idx) => idx)
 			this.loading = false
 		},
 	},
 
-	mounted: function() {
+	created() {
 		this.loadNodes()
 	},
 }

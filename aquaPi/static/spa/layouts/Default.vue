@@ -71,7 +71,7 @@
 			</v-container>
 		</v-main>
 
-		<v-footer dark :class="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.footer : $store.state.ui.colors.lightMode.bg.footer)" app elevation="4">
+		<v-footer dark :class="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.footer : $store.state.ui.colors.lightMode.bg.footer)" app elevation="4" style="position: fixed; bottom: 0; width: 100%; z-index: 1005;">
 			<app-foo-comp></app-foo-comp>
 			<v-spacer></v-spacer>
 			<v-icon ref="sse_signal" :color="sseSignalColor">{{ sseSignalIcon }}</v-icon>

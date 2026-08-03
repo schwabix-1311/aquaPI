@@ -67,12 +67,10 @@ div.theme--light.v-application {
    content internally - otherwise the wrapper grows with the page content
    and the footer drifts down past the visible viewport. */
 .v-application__wrap {
-    min-height: 100vh;
-    max-height: 100vh;
-    overflow: hidden;
+    height: 100vh;
 }
 .v-main {
-    height: 100%;
+    flex: 1 0 auto;
     overflow-y: auto;
 }
 

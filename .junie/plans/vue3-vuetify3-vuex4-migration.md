@@ -2,9 +2,14 @@
 sessionId: session-260802-063658-1699
 ---
 
-# Implementation Status: ✓ Done (Round 3: further post-migration corrections, Areas A-F, plus follow-up icon/gap corrections)
+# Implementation Status: ✓ Done (Round 4: History modal close-icon position + period-switch crash, on top of Round 3's A-F corrections and follow-up icon/gap corrections)
 
 This document now covers a **third round** of corrections, reported after the Round 2 fixes below (Login consolidation, Dashboard B1-B6, Settings C1-C4) were already implemented, verified and committed. Round 2's content (originally titled "Requirements"/"Technical Design"/"Testing") is kept, unmodified, further down this document as historical record - see "# Round 2 (Login, Dashboard & Settings corrections) - Implementation Status: ✓ Done".
+
+## Round 4 completion summary (✓ Done)
+Two further, user-reported issues in the History widget's fullscreen modal (both regressions surfacing only once Round 3's A1 fix made the modal actually openable) were found and fixed, verified end-to-end via a headless-browser session against the running app with a real admin login and a real, seeded History widget (test toggle reverted afterward):
+- **Close icon not top-right**: `History`'s modal `v-card-title` (`components/dashboard/comps.js`) had no flex layout, so its `v-spacer` (which only works inside a flex container) had no effect and the close button rendered inline right after the node name instead of being pushed to the right edge. Fixed by adding `d-flex align-center justify-space-between` to the `v-card-title` and dropping the now-unneeded `v-spacer`. Confirmed visually: the `X` button now sits flush at the top-right corner of the modal header.
+- **Selecting a different period did not update the chart**: root cause was that `HistoryChart`'s Chart.js config object (`this.cd`) and Chart.js instance (`this.chart`) were plain Vue 3 `data()` properties, so Vue wrapped them in a reactive Proxy; Chart.js performs its own internal, Proxy-based option resolution during `chart.update()`, and nesting that inside a Vue reactive Proxy caused an infinite recursion (`RangeError: Maximum call stack size exceeded`, thrown from deep inside `chart.js`'s internal option merge/resolve chain) every time `setPeriod()` called `chart.update()` after fetching new data - the crash was silent from the user's perspective (only visible via an uncaught `pageerror`, not a UI error), so the chart just appeared frozen. Fixed by wrapping both `cd` (in `data()`) and the `Chart` instance (in `mounted()`) with `window.Vue.markRaw(...)`, which permanently excludes them from Vue's reactivity system - confirmed via headless browser: switching from "1 h" to "7 Tage" now triggers a fresh `/api/history/<node>` fetch with a correspondingly larger `step`, the button label updates to "Zeitraum 7 Tage", and no `pageerror` occurs.
 
 ## Round 3 completion summary (✓ Done)
 All of Areas A-F were implemented and verified end-to-end via headless-browser sessions against the running app with a real admin login (test data cleaned up afterward):

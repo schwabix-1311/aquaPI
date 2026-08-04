@@ -411,9 +411,8 @@ const History = {
 				width="80vw"
 			>
 				<v-card>
-					<v-card-title class="text-h6">
-						{{ node.name }}
-						<v-spacer></v-spacer>
+					<v-card-title class="text-h6 d-flex align-center justify-space-between">
+						<span>{{ node.name }}</span>
 						<v-btn
 							icon
 							variant="text"
@@ -556,7 +555,10 @@ const HistoryChart = {
 			dataPrepared: false,
 			isLoading: false,
 			currentPeriod: (60 * 60 * 1000),
-			cd: {
+			// NOTE: markRaw() prevents Vue from wrapping this in a reactive Proxy - Chart.js
+			// performs its own internal option resolution (also Proxy-based) on this object,
+			// and nesting it inside a Vue reactive Proxy causes infinite recursion on update().
+			cd: window.Vue.markRaw({
 				type: "scatter",
 				data: {
 					// labels: [],
@@ -611,13 +613,13 @@ const HistoryChart = {
 							display: 'auto',
 							axis: 'y',
 							position: 'right',
-							grid: {
+ 						grid: {
 								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
 							}
 						},
 					}
 				}
-			},
+			}),
 		}
 	},
 
@@ -827,7 +829,8 @@ const HistoryChart = {
 		if (this.chart == null) {
 			let el = document.getElementById(this.canvasId)
 			if (el != null) {
-				this.chart = new Chart(el, this.cd)
+				// NOTE: markRaw() - see the comment on `cd` in data() above.
+				this.chart = window.Vue.markRaw(new Chart(el, this.cd))
 			}
 		}
 	},

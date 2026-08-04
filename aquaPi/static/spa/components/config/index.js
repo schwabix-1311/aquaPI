@@ -169,9 +169,11 @@ const AquapiConfig = {
 				const result = await this.$store.dispatch('config/saveDraft')
 				if (!result.ok) {
 					this.error = result.error
+					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
 					return
 				}
 				this.$store.dispatch('config/initDraft')
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 			} finally {
 				this.saving = false
 			}
@@ -185,6 +187,7 @@ const AquapiConfig = {
 			this.$store.dispatch('config/initDraft')
 			this.selectMode = false
 			this.selectedIds = []
+			this.$toast.success(this.$t('pages.config.changesDiscarded'))
 		},
 
 		async reinitDraft() {

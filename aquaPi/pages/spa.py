@@ -2,7 +2,6 @@
 
 import logging
 from flask import (Blueprint, render_template)
-from flask_login import login_required
 
 
 log = logging.getLogger('pages.spa')
@@ -13,7 +12,9 @@ bp = Blueprint('spa', __name__)
 
 
 @bp.route('/')
-@login_required
 def spa():
-
+    # the SPA shell itself is always served, even for unauthenticated
+    # users - it forces its own login dialog open (see
+    # AquapiLoginDialog.vue) instead of relying on a server-side
+    # redirect to the separate login.html.jinja2 page
     return render_template('pages/spa.html.jinja2')

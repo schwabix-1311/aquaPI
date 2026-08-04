@@ -76,6 +76,7 @@ export default
 			confirmDiscard: 'Alle ungespeicherten Änderungen verwerfen?',
 			confirmLeaveUnsaved: 'Es gibt ungespeicherte Änderungen. Diese verwerfen und die Seite verlassen?',
 			deleteConnection: 'Verbindung löschen',
+			changesDiscarded: 'Änderungen verworfen',
 		},
 		about: {
 			label: 'Über aquaPi',
@@ -172,6 +173,12 @@ export default
 			confirm: 'Bestätigen',
 			cancel: 'Abbrechen',
 			ok: 'OK',
+		},
+		toast: {
+			saveSuccess: 'Erfolgreich gespeichert',
+			saveError: 'Speichern fehlgeschlagen',
+			deleteSuccess: 'Erfolgreich gelöscht',
+			deleteError: 'Löschen fehlgeschlagen',
 		},
 		duration: {
 			min: 'min',

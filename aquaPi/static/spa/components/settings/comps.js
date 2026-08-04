@@ -278,12 +278,17 @@ const NodeSettingsCard = {
 	},
 	methods: {
 		widgetType: settingWidgetType,
-		onUpdate: function(item, value) {
-			this.$store.dispatch('settings/updateNodeSetting', {
+		async onUpdate(item, value) {
+			const ok = await this.$store.dispatch('settings/updateNodeSetting', {
 				nodeId: this.node.id,
 				key: item.key,
 				value: value
 			})
+			if (ok) {
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
+			} else {
+				this.$toast.error(this.error || this.$t('misc.toast.saveError'))
+			}
 		},
 	},
 	mounted: function() {

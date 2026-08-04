@@ -5,7 +5,7 @@
 		max-width="400px"
 		:overlay-opacity="$store.state.ui.overlay.opacity"
 	>
-		<aquapi-login-form :addCancel="true"></aquapi-login-form>
+	<aquapi-login-form :addCancel="authenticated"></aquapi-login-form>
 	</v-dialog>
 </template>
 
@@ -32,11 +32,20 @@ export default {
 	},
 
 	computed: {
+		authenticated() {
+			return this.$store.getters['auth/authenticated']
+		},
 		active: {
 			get() {
-				return this.$store.getters['ui/isActiveDialog'](this.dialogName)
+				// while unauthenticated, the login dialog is always forced open,
+				// so the SPA remains the sole place a user ever sees a login
+				// prompt (never a separate, full-page redirect to /login)
+				return !this.authenticated || this.$store.getters['ui/isActiveDialog'](this.dialogName)
 			},
 			set(value) {
+				// ignore attempts to close it while unauthenticated - there is
+				// no cancel affordance in that state (see :addCancel above)
+				if (!value && !this.authenticated) return
 				if (value) this.$store.dispatch('ui/showDialog', this.dialogName, true)
 				else this.$store.dispatch('ui/hideDialog', this.dialogName)
 			}

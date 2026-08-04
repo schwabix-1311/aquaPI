@@ -42,7 +42,8 @@ const AQUAPI_EVENTS = {
 	APP_LOADING: 'app:loading',
 	DIALOG_CLOSED: 'ui:dialog_closed',
 	DIALOG_OPENED: 'ui:dialog_opened',
-	CONFIRM_REQUESTED: 'ui:confirm_requested'
+	CONFIRM_REQUESTED: 'ui:confirm_requested',
+	TOAST_REQUESTED: 'ui:toast_requested'
 }
 export {EventBus, AQUAPI_EVENTS}
 

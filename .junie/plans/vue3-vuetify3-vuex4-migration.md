@@ -2,16 +2,194 @@
 sessionId: session-260802-063658-1699
 ---
 
-# Implementation Status: ✓ Done (current round: Login, Dashboard & Settings corrections)
+# Implementation Status: ✓ Done (Round 3: further post-migration corrections, Areas A-F, plus follow-up icon/gap corrections)
 
-All of Area A (login consolidation), Area B (dashboard B1-B6) and Area C (settings C1-C4) below are implemented and verified end-to-end via a real headless-browser session with a real logged-in session and a seeded, realistic 13-widget dashboard configuration. Two additional, previously undiagnosed bugs were found and fixed during verification (not part of the original technical design, since they only surfaced once the described fixes were actually exercised together):
+This document now covers a **third round** of corrections, reported after the Round 2 fixes below (Login consolidation, Dashboard B1-B6, Settings C1-C4) were already implemented, verified and committed. Round 2's content (originally titled "Requirements"/"Technical Design"/"Testing") is kept, unmodified, further down this document as historical record - see "# Round 2 (Login, Dashboard & Settings corrections) - Implementation Status: ✓ Done".
+
+## Round 3 completion summary (✓ Done)
+All of Areas A-F were implemented and verified end-to-end via headless-browser sessions against the running app with a real admin login (test data cleaned up afterward):
+- **A1**: `History`'s modal now uses `:model-value`/`@update:model-value`; verified opening/closing reliably (confirmed via `#dashboard_configurator`-style pattern). **Newly discovered during this verification**: closing the modal now surfaces a non-fatal console error from `chart.js` (`Cannot read properties of null (reading 'getContext')`), a Chart.js-internal resize-observer callback racing the dialog's closing transition/canvas removal - the dialog still closes correctly and the app remains fully functional, so this is tracked as a known, non-blocking follow-up rather than fixed in this round (it could only ever surface once A1 made the modal openable at all).
+- **A2**: `HistoryChart`'s expand button now uses the real `icon` prop instead of the dead `v-btn--icon` CSS class; confirmed round (`border-radius: 50%`) via computed style.
+- **B1**: `@login_required` removed from `spa.py`'s `/` route; confirmed an unauthenticated request now gets the SPA shell with a forced, un-dismissable login dialog instead of a redirect to `login.html.jinja2`.
+- **C1**: `AquapiPageHeading` and `History`/`HistoryChart` buttons already used the subdued `variant="text" color="grey-darken-1"` treatment. During this round's verification, the same treatment was extended (superseding an earlier icon-button correction plan, "dashboard-history-icon-corrections", whose remaining scope is folded into this completion) to: `components/config/comps.js` (node connect/edit/delete, template insert/delete, snapshot restore/delete), `components/dashboard/index.js` (configurator close/drag-handle/visibility-toggle), `components/users/index.js` (table edit/delete), `layouts/Default.vue` (login/logout buttons), and `HistoryChart`'s period-selector button (which also had the same Vuetify-2 `{on, attrs}` activator-slot bug as A2's root cause, fixed to `{props}`, which also fixed the period dropdown showing only one option instead of all 8).
+- **D1**: `AquapiToast.vue.js` + `$toast` global helper confirmed wired and firing (verified: changing a setting shows "Erfolgreich gespeichert" toast).
+- **E1**: `AquapiSettings`'s `openPanels` populated after `fetchNodes` resolves; confirmed panels render expanded by default.
+- **F1**: `UserDialog`/`ConfigNodeDialog`/`ConfigTemplatesDialog` all use the `modelValue`/`update:modelValue` contract; confirmed editing a user pre-fills email/role correctly and Cancel closes the dialog.
+- **Additional fix found during verification**: the dashboard configurator drawer's gap under the app-bar (both drawers being simultaneously Vuetify-3-layout-registered `app` drawers caused a positioning conflict) was fixed by wrapping `AquapiDashboardConfigurator`'s `v-navigation-drawer` in a `<teleport to="body">`, breaking it out of its nested DOM ancestor chain (unlike `AquapiNavDrawer`, it was rendered deep inside routed page content, not as a direct `Default.vue` sibling) - `fixed` alone was insufficient, confirmed via `getBoundingClientRect()` gap measurement (0px after the fix).
+
+## Round 2 recap (✓ Done)
+All of Area A (login consolidation), Area B (dashboard B1-B6) and Area C (settings C1-C4) were implemented and verified end-to-end via a real headless-browser session with a real logged-in session and a seeded, realistic 13-widget dashboard configuration. Two additional, previously undiagnosed bugs were found and fixed during verification (not part of the original technical design, since they only surfaced once the described fixes were actually exercised together):
 - **`AquapiPageHeading`/`AquapiLoadingIndicator`/`AquapiDummy` stopped being globally registered**: removing the `view_bottom: AquapiDummy` import from `router/index.js` (fix for C4) accidentally removed the *only* import of `components/app/index.js` in the whole app, which was the sole reason that module (and thus `AquapiPageHeading`) ever got loaded/registered as a side effect. This silently broke every page's heading toolbar (including the dashboard's "configure" button, needed to verify B4/B5) until a dedicated `import '../components/app/index.js'` side-effect import was added to `router/index.js` alongside the other eager component-module imports.
 - **Dashboard widget crash on `node.alert === null`**: `AquapiDashboardWidget`'s `alert`/`alertColor` computed properties only guarded `!('alert' in this.node)`, but real nodes (e.g. `heizen`) have the key present with a `null` value, causing `this.node.alert[0]` to throw and silently freeze the dashboard's reactivity (making the empty-state hint look "stuck" and columns look mis-measured) - fixed by guarding on `this.node.alert == null` instead, in `components/dashboard/index.js`.
 - **B1 footer root cause refined during verification**: removing the inline `max-height: 100vh` on `v-main` (as originally planned) was necessary but not sufficient - Vuetify 3's `v-main` no longer renders a `.v-main__wrap` child div (a Vuetify-2-only implementation detail the old `app.css` rule relied on), so without a height-capped `.v-application__wrap` the footer (absolutely positioned relative to that wrapper) drifted below the viewport once page content overflowed. Fixed in `app.css`: `.v-application__wrap` is capped to `100vh` with `overflow: hidden`, and `.v-main` scrolls its own content internally (`overflow-y: auto`), replacing the dead `div.v-main__wrap` rules.
 
-This document was previously repurposed for this round (superseding its original Steps 18-20 masonry/draggable/nav-drawer scope, which is fully implemented/verified separately - see the historical "Implementation Status" section further below).
+This document was previously repurposed for Round 2 (superseding its original Steps 18-20 masonry/draggable/nav-drawer scope, which is fully implemented/verified separately - see the historical section further below).
 
-# Requirements (current round: Login, Dashboard & Settings corrections)
+---
+
+# Round 3: Further post-migration corrections (Areas A-F)
+
+### Overview & Goals
+A new round of **corrections and adjustments**, reported by the user after Round 2 was implemented, grouped by area:
+- **Area A - Dashboard/History widgets**: the "enlarge in modal" button for History-node charts no longer opens the modal, and the History widgets' small icon buttons (period selector's companion "expand" button) render as square instead of round.
+- **Area B - Login**: the native Flask `/login` page is still reachable as an actual entry gate (the `/` route redirects unauthenticated users to it), even though Round 2 already consolidated the login *form* itself into the SPA's nav-drawer dialog - the goal now is that the SPA is the **only** thing a user ever sees, with the login dialog appearing *inside* it for unauthenticated users, instead of a full-page redirect to the separate Flask-rendered page.
+- **Area C - General icon-button styling**: icon buttons in cards/modals/tables are too visually prominent (bold, colored) and should look more subtle/muted, consistent with a typical "secondary action" affordance.
+- **Area D - Save feedback**: the app gives no consistent visual confirmation (success or error) after most save/delete actions (Config editor, Settings, Users, Dashboard) - a toast/snackbar notification should appear after these.
+- **Area E - Settings page**: the settings accordion groups added in Round 2 default to collapsed, forcing an extra click before any controller is visible.
+- **Area F - User management**: the "edit user" dialog in `/users` can't be closed and doesn't show the correct, already-saved data for the user being edited.
+
+Goal: the reported dashboard/history and user-management dialogs work correctly again, the SPA is the sole entry point for authentication, icon buttons look visually consistent and subdued app-wide, every save/delete action gives clear toast feedback, and the settings accordion is immediately useful without an extra click.
+
+### Scope
+**In Scope**
+- **A1**: Fix `History`'s chart-enlarge modal (`v-dialog v-model="$store.getters[...](...)"` anti-pattern) so it reliably opens/closes.
+- **A2**: Fix the History widget's small "expand" icon button so it renders round like other icon buttons.
+- **B1**: Remove `@login_required` from the SPA's `/` Flask route so unauthenticated users still receive the SPA shell (not a redirect to `login.html.jinja2`); the SPA itself forces its existing `AquapiLoginDialog` open (and un-closable) until a real session exists.
+- **C1**: Restyle the most visually prominent icon buttons (`AquapiPageHeading`'s action buttons, the History modal's close/expand buttons) to a subdued/muted look instead of bold primary-colored icons.
+- **D1**: Introduce a small, reusable toast/snackbar notification system (`$toast.success(...)`/`$toast.error(...)`, mirroring the existing `$confirm`/`$alert` pattern) and wire it into the Config editor's save/discard, Settings changes, Users create/update/delete, and Dashboard configuration save.
+- **E1**: Default-open all settings accordion groups (`AquapiSettings`'s `openPanels`).
+- **F1**: Fix `UserDialog`'s (and, since it's the exact same defect class, `ConfigNodeDialog`'s/`ConfigTemplatesDialog`'s) Vue-2-style `value`/`input` `v-model` contract, replacing it with Vue 3's `modelValue`/`update:modelValue` convention.
+
+**Out of Scope**
+- Any visual redesign beyond the specific "more subtle icon buttons" request (no color-palette overhaul).
+- Toast notifications for every conceivable action in the app - only the explicitly named save/delete flows.
+- Fully removing/deleting `login.html.jinja2` or the underlying Flask-Login mechanism (still needed as `login_manager.login_view`'s technical target and for the JSON-capable `/login`/`/logout` routes added in Round 2).
+
+### User Stories
+- As a user, clicking the "enlarge" button on a History widget reliably opens a larger chart in a modal, and I can close that modal again.
+- As a user, the small icon buttons on History widgets look like the rest of the app's round icon buttons.
+- As a user, visiting the app while logged out always shows me the normal-looking SPA with a login prompt inside it - never a separate, differently-styled login page.
+- As a user, the icon buttons in cards, modals and tables look subdued/secondary, not like bold primary actions.
+- As a user, after saving or deleting something (a config node, a setting, a user, my dashboard layout), I get a brief, clear confirmation (or error) toast.
+- As a user, opening `/settings` immediately shows me all my controllers, without needing to expand every group first.
+- As a admin, clicking "Bearbeiten" on a user opens the edit dialog pre-filled with that user's current data, and I can close the dialog (with or without saving).
+
+### Functional Requirements
+**Area A**
+- A1: clicking the History widget's expand icon opens the enlarged chart modal; clicking its close (X) button closes it again; reopening a different History widget's modal shows that widget's own chart.
+- A2: the History widget's "expand" button is visually a round icon button, matching the app's other icon buttons (e.g. the modal's own close button).
+
+**Area B**
+- B1: an unauthenticated request to `/` returns the SPA shell (HTTP 200, same `spa.html.jinja2`), not a redirect; the SPA opens its login dialog automatically and it cannot be dismissed without either logging in or the session already being valid.
+- B1: once logged in (via the dialog), the app behaves exactly as it does today; logging out re-triggers the forced dialog.
+
+**Area C**
+- C1: `AquapiPageHeading`'s action buttons (e.g. "add user") and the History modal's close/expand buttons render with a muted/subdued color and `text` variant instead of a bold `primary`-colored icon.
+
+**Area D**
+- D1: saving a node create/update/delete (via the Config editor's draft save), changing a setting, creating/updating/deleting a user, and saving the dashboard layout each show a green success toast on success and a red error toast (with the server's error message, where available) on failure.
+
+**Area E**
+- E1: on first load of `/settings` (once controllers are fetched), every group's accordion panel starts expanded.
+
+**Area F**
+- F1: opening the "edit user" dialog always shows that user's current username/email/role (no stale data from a previous dialog use); clicking "Abbrechen"/the dialog's dismiss affordances actually closes it.
+
+# Technical Design (Round 3)
+
+### Current Implementation
+**Area A**
+- `components/dashboard/comps.js`'s `History` component still uses `<v-dialog v-model="$store.getters['ui/isActiveDialog'](modalDialogName)">` (line ~408) - binding `v-model` directly to a getter *call expression* rather than a writable computed/ref, the exact anti-pattern already identified and fixed elsewhere in the app (`AquapiDashboardConfigurator`'s drawer, in Round 2) via `:model-value`/`@update:model-value` - this one instance was missed.
+- `components/dashboard/comps.js`'s `HistoryChart` renders its "expand" button (line ~523-534) with `class="text-none ms-2 px-0 v-btn--icon"` and explicit `width/max-width/min-width="28"` - `v-btn--icon` is a **Vuetify 2** CSS class with no effect in Vuetify 3 (which derives its rounded-icon-button look from the `icon` *prop*, not a CSS class), so the button renders as a small square button instead of a round icon button, unlike the properly-declared `<v-btn icon @click="closeModal">` a few lines above in `History`'s own modal header.
+
+**Area B**
+- `aquaPi/pages/spa.py`'s `/` route still has `@login_required`; combined with `login_manager.login_view = 'auth.login'` (`aquaPi/auth.py`), any unauthenticated request to `/` is met with a **full HTTP redirect** to `/login`, which renders the entirely separate `login.html.jinja2` page - the SPA (and its already-fixed, real, JSON-capable `AquapiLoginDialog` from Round 2) is never even loaded in this case.
+- `components/auth/AquapiLoginDialog.vue`'s `active` computed only reflects `ui/isActiveDialog('AquapiLoginDialog')` - nothing currently forces it open when the user isn't authenticated; it only opens when explicitly triggered (nav-drawer button).
+
+**Area C**
+- `components/app/index.js`'s `AquapiPageHeading` renders its action buttons as `<v-btn icon color="primary">` (bold, filled-look primary icon).
+- `components/dashboard/comps.js`'s `History` modal close button (`<v-btn icon @click="closeModal"><v-icon color="grey">mdi-close</v-icon></v-btn>`) and `HistoryChart`'s expand button (once fixed per A2) are the other clearly "too prominent" icon buttons called out.
+
+**Area D**
+- No toast/snackbar mechanism exists anywhere in the app (confirmed via search - only a commented-out, never-activated `VueToast` reference in `main.js`). Save/delete feedback today is inconsistent: some flows silently succeed with no feedback at all (Config editor's `saveDraft`, `settings/updateNodeSetting`, dashboard save), while `components/users/index.js`'s `onDelete` already calls `this.$alert(result.error)` on failure only (no success feedback anywhere).
+- The existing `$confirm`/`$alert` pattern (`main.js`, `AquapiConfirmDialog.vue.js`, `EventBus`) is a proven, minimal template for adding a similar `$toast` global helper.
+
+**Area E**
+- `components/settings/index.js`'s `AquapiSettings` initializes `openPanels: []` (line ~51) and never populates it, so `v-expansion-panels multiple v-model="openPanels"` starts with every panel collapsed.
+
+**Area F**
+- `components/users/comps.js`'s `UserDialog` declares `props: {value: {...}}` and `emits: ['input', 'saved']`, with `show` computed as `get() { return this.value }` / `set(value) { this.$emit('input', value) }` - **Vue 2's** `v-model` contract. `components/users/index.js` uses plain `<user-dialog v-model="dialogOpen" ...>`, which in Vue 3 compiles to binding the prop `modelValue` and listening for the event `update:modelValue` - names `UserDialog` never declares. The practical effect: the dialog's own `value` prop never receives `dialogOpen`'s real value (Vue 3 has no automatic legacy-prop fallback), and the `watch: { value(visible) {...} }` handler that (re)initializes `form` from `editUser` never fires reliably on the *intended* signal - explaining both reported symptoms (stale/incorrect form contents on edit, and clicking dismiss/cancel never actually closing the dialog from the parent's perspective, since `dialogOpen` in `components/users/index.js` never gets updated by the emitted, unlistened-for `input` event).
+- The identical defect (same `value`/`input` props/emits, same `v-model` usage from the parent) also exists in `components/config/comps.js`'s `ConfigNodeDialog` and `ConfigTemplatesDialog` (`components/config/index.js` uses `v-model="dialogOpen"` on both) - not yet reported by the user, but the same root cause and same fix applies; left unfixed, it is a latent bug of the same kind.
+
+### Key Decisions
+- **History modal fix**: switch `History`'s `v-dialog` to the same `:model-value`/`@update:model-value` pattern already used successfully for the dashboard configurator drawer, instead of trying to make `v-model` work directly against a store-getter call expression.
+- **v-model contract fix, applied uniformly**: rename `value` → `modelValue` and `emits: ['input', ...]` → `emits: ['update:modelValue', ...]` (and the corresponding computed getter/setter) in all three affected components (`UserDialog`, `ConfigNodeDialog`, `ConfigTemplatesDialog`), rather than only the explicitly reported `UserDialog`, since it's the exact same class of defect and leaving the other two unfixed would just defer the same bug report for the Config editor.
+- **Forced SPA-only login**: remove `@login_required` from `spa.py`'s `/` route (the SPA shell itself becomes freely loadable) and make `AquapiLoginDialog`'s `active` getter return `true` whenever `!store.getters['auth/authenticated']`, ignoring attempts to close it while unauthenticated - this keeps `login.html.jinja2`/`login_manager.login_view` intact as the technical fallback (per Round 2's decision) while guaranteeing no normal user flow ever reaches it.
+- **Toast system, mirroring `$confirm`/`$alert`**: a new `AquapiToast.vue` component (rendered once, e.g. from `App.vue.js`), listening for a new `EventBus` event (`TOAST_REQUESTED`) via a small queue of `v-snackbar`-backed messages; exposed as `app.config.globalProperties.$toast = {success(msg), error(msg)}`, called from the relevant UI components (not the store modules themselves) right after their existing `dispatch(...)` calls resolve, keeping store modules free of UI concerns.
+- **Subtle icon buttons, targeted not global**: rather than a blanket CSS override (risking unintended regressions on already-fine icon buttons elsewhere, e.g. Users table actions which are already unstyled/muted by default), explicitly restyle only the identified prominent spots (`AquapiPageHeading` buttons, History modal buttons) to `variant="text"` with a muted grey color.
+- **Settings default-open**: populate `openPanels` with every group's index once `grouped` is known (after `fetchNodes` resolves), rather than making `v-expansion-panels` uncontrolled - keeps the user's ability to still manually collapse a group afterward.
+
+### Proposed Changes
+**Area A**
+1. `components/dashboard/comps.js` (`History`): change the modal `v-dialog` to `:model-value="..."` / `@update:model-value="..."`.
+2. `components/dashboard/comps.js` (`HistoryChart`): replace the `v-btn--icon` CSS-class hack with the real `icon` prop (`<v-btn icon small ...>`), dropping the now-unneeded explicit width overrides.
+
+**Area B**
+3. `aquaPi/pages/spa.py`: remove `@login_required` from the `/` route.
+4. `components/auth/AquapiLoginDialog.vue`: `active` getter returns `!authenticated || isActiveDialog(...)`; setter ignores `false` while `!authenticated`; pass `:add-cancel="authenticated"` to `AquapiLoginForm` so no cancel option is offered while forced open.
+
+**Area C**
+5. `components/app/index.js` (`AquapiPageHeading`): action buttons get `variant="text" color="grey-darken-1"` instead of `color="primary"`.
+6. `components/dashboard/comps.js` (`History`/`HistoryChart`): close/expand buttons get the same muted `variant="text" color="grey-darken-1"` treatment.
+
+**Area D**
+7. New `components/app/AquapiToast.vue` (a `v-snackbar`-based queue, closable, auto-timeout) + `EventBus`'s `AQUAPI_EVENTS.TOAST_REQUESTED`; mounted once from `App.vue.js`.
+8. `main.js`: `app.config.globalProperties.$toast = {success(message), error(message)}`.
+9. Call `$toast.success(...)`/`$toast.error(...)` at the call sites: `components/config/index.js` (`saveDraft`/`discardDraft`), `components/settings/comps.js` (`updateNodeSetting` caller), `components/users/index.js` (`onAdd`/`onEdit` save results already surfaced via `UserDialog`; add a toast on `onSaved`/`onDelete`), `components/dashboard/index.js` (`AquapiDashboardConfigurator`'s save).
+
+**Area E**
+10. `components/settings/index.js`: after `fetchNodes` resolves, set `this.openPanels = Object.keys(this.grouped).map((_, i) => i)`.
+
+**Area F**
+11. `components/users/comps.js` (`UserDialog`), `components/config/comps.js` (`ConfigNodeDialog`, `ConfigTemplatesDialog`): rename `value`→`modelValue`, `emits: ['input', ...]`→`emits: ['update:modelValue', ...]`, adjust the `show` computed and the `watch: { value(...) }` handlers accordingly.
+
+### Components
+- `components/dashboard/comps.js`: `History`/`HistoryChart` modal + icon-button fixes.
+- `aquaPi/pages/spa.py`: `/` route no longer login-gated.
+- `components/auth/AquapiLoginDialog.vue`: forced-open behavior while unauthenticated.
+- `components/app/index.js`: `AquapiPageHeading` button styling.
+- `components/app/AquapiToast.vue` (new), `components/app/EventBus.js` (new event), `main.js` (`$toast`), `App.vue.js` (mounts the toast container).
+- `components/config/index.js`, `components/settings/comps.js`, `components/users/index.js`, `components/dashboard/index.js`: new `$toast` call sites.
+- `components/settings/index.js`: default-open accordion.
+- `components/users/comps.js`, `components/config/comps.js`: `v-model` contract fix (`UserDialog`, `ConfigNodeDialog`, `ConfigTemplatesDialog`).
+
+### Risks
+- **Forced login dialog + background content**: while the dialog is forced open, background components (dashboard, SSE) still attempt their normal (now-401) fetches - already tolerated gracefully today (existing error handling), so no additional guard is introduced, keeping the change minimal.
+- **Toast call-site coverage**: D1's scope is explicitly limited to the four named flows; other, not-yet-mentioned save actions are intentionally left without a toast for now, to keep this round's diff reviewable.
+- **Fixing the not-yet-reported `ConfigNodeDialog`/`ConfigTemplatesDialog` v-model bug** changes Config-editor dialog behavior slightly beyond what was explicitly asked - mitigated by it being a pure bugfix of the same already-approved defect class (F1), not a behavior change.
+
+# Testing (Round 3)
+
+### Validation Approach
+Area B touches backend routing (`aquaPi/pages/spa.py`); all other areas are frontend-only. Validation combines a targeted look at the modified Python route plus a headless-browser (Puppeteer) session covering all six areas end-to-end, consistent with the project's established approach for frontend-only/mixed changes.
+
+### Key Scenarios
+- Logged out, navigating to `/` in a fresh browser context returns the SPA (not `login.html.jinja2`), with the login dialog forced open and no way to dismiss it without logging in.
+- Logging in via the forced dialog proceeds exactly as before (real session, dialog closes, dashboard shows).
+- A History widget's "expand" button opens its modal with the correct node's chart; the modal's close button closes it; the expand button is visibly round.
+- `AquapiPageHeading` action buttons and the History modal's buttons render with a muted/grey look instead of bold primary color.
+- Saving/discarding a Config editor draft, changing a setting, creating/updating/deleting a user, and saving the dashboard layout each show the expected success/error toast.
+- `/settings` shows all groups already expanded on first load.
+- Clicking "Bearbeiten" on a user shows that user's current data in the dialog; the dialog closes via its Cancel button and via clicking outside (or the built-in dismiss), both without saving.
+
+### Edge Cases
+- Logging out while already on a protected view re-opens the forced login dialog rather than leaving stale content interactive.
+- A toast triggered while another toast is still visible queues rather than overwriting it.
+- Opening "add user" right after closing "edit user" shows a clean, empty form (not the previous edit's data) - regression check for the F1 fix.
+- Manually collapsing a settings group and reloading the page keeps the default (all open) behavior (no persisted collapse state introduced by E1's fix).
+
+### Test Changes
+- `aquaPi/pages/spa.py`'s changed `/` route behavior verified via a quick unauthenticated request check (expects `200`, not a `302` to `/login`).
+- All modified `.js`/`.vue`/`.py` files checked with `node --input-type=module --check` / `py_compile` respectively.
+- No `pytest` run needed beyond the `/` route spot-check, per the agreed testing protocol (targeted, not full-suite).
+
+---
+
+# Round 2 (Login, Dashboard & Settings corrections) - Implementation Status: ✓ Done
+
+
+
+# Requirements (Round 2: Login, Dashboard & Settings corrections)
 
 ### Overview & Goals
 A new round of **corrections and adjustments**, reported by the user and grouped by area:
@@ -74,7 +252,7 @@ Goal: exactly **one** login surface remains, fully embedded in and driven by the
 - C3: setting widgets (`NodeSettingsCard`'s `v-col` items, and the `v-card`s themselves) have consistent, visible vertical spacing.
 - C4: the `AquapiDummy` demo component is no longer wired into the `/settings` route (or any other real page).
 
-# Technical Design
+# Technical Design (Round 2)
 
 ### Current Implementation
 **Area A - Login**
@@ -230,7 +408,7 @@ graph TD
 - **C1's root cause (mixed async/sync named views)** is a strong hypothesis grounded in `router/index.js`, but not yet reproduced live - the delivery stage explicitly includes a headless-browser confirmation step before/after the fix, consistent with how the Step 18/20 regression was diagnosed.
 - **ResizeObserver browser support**: universally supported in the browsers this project already targets (same class of API as the already-used `fetch`/`EventSource`), so no polyfill is needed.
 
-# Testing
+# Testing (Round 2)
 
 ### Validation Approach
 Area A touches both frontend and backend (`aquaPi/auth.py`), so validation combines a targeted `pytest` run (`tests/test_auth.py`, `tests/test_auth_db.py`) with a headless-browser (Puppeteer) session for the actual login/logout UX; Areas B and C are frontend-only, validated via headless-browser + static syntax checks, consistent with the project's established verification approach.
@@ -263,7 +441,7 @@ Area A touches both frontend and backend (`aquaPi/auth.py`), so validation combi
 - All modified `.js`/`.py`/`.vue` files checked with `node --input-type=module --check` / `py_compile` respectively.
 - Targeted `pytest` run: `tests/test_auth.py` + `tests/test_auth_db.py` (no full-suite run, per the agreed testing protocol).
 
-# Previous Round (Steps 18-20 dashboard/nav-drawer bugfix) - Implementation Status: ✓ Done
+# Round 1 (Steps 18-20 dashboard/nav-drawer bugfix) - Implementation Status: ✓ Done
 
 This section documents the **previous**, already fully implemented and verified round that this plan document originally covered (masonry/draggable/nav-drawer regressions from Steps 18-20), kept here for history only - it is unrelated to and unaffected by the new Login/Dashboard/Settings corrections above.
 

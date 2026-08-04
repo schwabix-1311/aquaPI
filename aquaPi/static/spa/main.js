@@ -156,6 +156,14 @@ app.config.globalProperties.$alert = function(message, options = {}) {
 		})
 	})
 }
+app.config.globalProperties.$toast = {
+	success(message) {
+		EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {message, color: 'success', timeout: 4000})
+	},
+	error(message) {
+		EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {message, color: 'error', timeout: 6000})
+	},
+}
 
 app.use(store)
 app.use(router)

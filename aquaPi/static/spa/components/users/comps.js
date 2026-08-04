@@ -2,10 +2,10 @@ import {registerGlobalComponent} from '../app/registry.js'
 
 const UserDialog = {
 	props: {
-		value: {type: Boolean, default: false},
+		modelValue: {type: Boolean, default: false},
 		editUser: {type: Object, default: null},
 	},
-	emits: ['input', 'saved'],
+	emits: ['update:modelValue', 'saved'],
 	template: `
 		<v-dialog v-model="show" max-width="480" persistent>
 			<v-card>
@@ -66,15 +66,15 @@ const UserDialog = {
 	computed: {
 		show: {
 			get() {
-				return this.value
+				return this.modelValue
 			},
 			set(value) {
-				this.$emit('input', value)
+				this.$emit('update:modelValue', value)
 			}
 		},
 	},
 	watch: {
-		value(visible) {
+		modelValue(visible) {
 			if (visible) {
 				this.error = null
 				this.form = this.editUser
@@ -121,6 +121,7 @@ const UserDialog = {
 				}
 			}
 
+			this.$toast.success(this.$t('misc.toast.saveSuccess'))
 			this.$emit('saved')
 			this.show = false
 		},

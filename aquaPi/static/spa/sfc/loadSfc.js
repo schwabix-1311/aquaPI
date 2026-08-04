@@ -2,6 +2,7 @@
 
 import {EventBus, AQUAPI_EVENTS} from '../components/app/EventBus.js'
 import {AquapiConfirmDialog} from '../components/app/AquapiConfirmDialog.vue.js'
+import {AquapiToast} from '../components/app/AquapiToast.vue.js'
 import {AppFooComp} from '../comps.js'
 import i18n from '../i18n/index.js'
 
@@ -27,6 +28,7 @@ const options = {
 		'sfc/loadSfc': {loadSfc},
 		'app/EventBus': {EventBus, AQUAPI_EVENTS},
 		'app/AquapiConfirmDialog': {AquapiConfirmDialog},
+		'app/AquapiToast': {AquapiToast},
 		'app/comps': {AppFooComp},
 		'app/i18n': {i18n},
 	},

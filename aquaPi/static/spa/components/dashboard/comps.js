@@ -405,7 +405,8 @@ const History = {
 			></history-chart>
 			
 			<v-dialog
-				v-model="$store.getters['ui/isActiveDialog'](modalDialogName)"
+				:model-value="$store.getters['ui/isActiveDialog'](modalDialogName)"
+				@update:model-value="(val) => { if (!val) closeModal() }"
 				persistent
 				width="80vw"
 			>
@@ -415,9 +416,11 @@ const History = {
 						<v-spacer></v-spacer>
 						<v-btn
 							icon
+							variant="text"
+							color="grey-darken-1"
 							@click="closeModal"
 						>
-							<v-icon color="grey">mdi-close</v-icon>
+							<v-icon>mdi-close</v-icon>
 						</v-btn>
 					</v-card-title>
 					<v-divider></v-divider>
@@ -492,11 +495,11 @@ const HistoryChart = {
 							offset-y
 							open-on-hover
 						>
-							<template v-slot:activator="{ on, attrs }">
+							<template v-slot:activator="{ props }">
 								<v-btn
-									v-bind="attrs"
-									v-on="on"
-									depressed
+									v-bind="props"
+									variant="text"
+									color="grey-darken-1"
 									small
 									class="text-none"
 									:loading="isLoading"
@@ -522,15 +525,14 @@ const HistoryChart = {
 
 						<v-btn
 							v-if="renderType != 'modal'"
-							depressed
+							icon
 							small
-							class="text-none ms-2 px-0 v-btn--icon"
-							width="28"
-							max-width="28"
-							min-width="28"
+							variant="text"
+							color="grey-darken-1"
+							class="ms-2"
 							@click="openModal"
 						>
-							<v-icon class="text-button">mdi-arrow-expand-all</v-icon>
+							<v-icon>mdi-arrow-expand-all</v-icon>
 						</v-btn>
 					</div>
 

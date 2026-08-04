@@ -37,13 +37,13 @@ const ConfigNodeBox = {
 			<div class="d-flex align-center justify-space-between px-2 pt-1">
 				<v-chip x-small label :color="color" text-color="white">{{ node.role }}</v-chip>
 				<div>
-					<v-btn icon x-small @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
+     <v-btn icon x-small variant="text" color="grey-darken-1" @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
 						<v-icon small>mdi-vector-line</v-icon>
 					</v-btn>
-					<v-btn icon x-small @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
+     <v-btn icon x-small variant="text" color="grey-darken-1" @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
 						<v-icon small>mdi-pencil</v-icon>
 					</v-btn>
-					<v-btn icon x-small @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
+     <v-btn icon x-small variant="text" color="grey-darken-1" @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
 						<v-icon small>mdi-delete</v-icon>
 					</v-btn>
 				</div>
@@ -184,7 +184,7 @@ registerGlobalComponent('ConfigConnections', ConfigConnections)
 
 const ConfigNodeDialog = {
 	props: {
-		value: {type: Boolean, default: false},
+		modelValue: {type: Boolean, default: false},
 		nodeTypes: {type: Object, required: true},
 		nodes: {type: Array, required: true},
 		editNode: {type: Object, default: null},
@@ -270,8 +270,8 @@ const ConfigNodeDialog = {
 	},
 	computed: {
 		show: {
-			get: function() { return this.value },
-			set: function(val) { this.$emit('input', val) },
+			get: function() { return this.modelValue },
+			set: function(val) { this.$emit('update:modelValue', val) },
 		},
 		typeItems: function() {
 			return Object.keys(this.nodeTypes).sort()
@@ -294,7 +294,7 @@ const ConfigNodeDialog = {
 		},
 	},
 	watch: {
-		value: function(val) {
+		modelValue: function(val) {
 			if (val) {
 				this.resetForm()
 			}
@@ -363,6 +363,7 @@ const ConfigNodeDialog = {
 						pos_y: 20,
 					}, this.form.fields))
 				}
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 				this.show = false
 			} finally {
 				this.saving = false
@@ -374,7 +375,7 @@ registerGlobalComponent('ConfigNodeDialog', ConfigNodeDialog)
 
 const ConfigTemplatesDialog = {
 	props: {
-		value: {type: Boolean, default: false},
+		modelValue: {type: Boolean, default: false},
 		selectedIds: {type: Array, default: () => []},
 	},
 	template: `
@@ -421,12 +422,12 @@ const ConfigTemplatesDialog = {
 										<v-list-item-subtitle>{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
 									</v-list-item-content>
 									<v-list-item-action>
-										<v-btn icon @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
+          <v-btn icon variant="text" color="grey-darken-1" @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
 											<v-icon>mdi-tray-arrow-down</v-icon>
 										</v-btn>
 									</v-list-item-action>
 									<v-list-item-action>
-										<v-btn icon @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
+          <v-btn icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
 									</v-list-item-action>
@@ -458,12 +459,12 @@ const ConfigTemplatesDialog = {
 										<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
 									</v-list-item-content>
 									<v-list-item-action>
-										<v-btn icon :disabled="restoring" @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
+          <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
 											<v-icon>mdi-restore</v-icon>
 										</v-btn>
 									</v-list-item-action>
 									<v-list-item-action>
-										<v-btn icon :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
+          <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
 									</v-list-item-action>
@@ -492,8 +493,8 @@ const ConfigTemplatesDialog = {
 	},
 	computed: {
 		show: {
-			get: function() { return this.value },
-			set: function(val) { this.$emit('input', val) },
+			get: function() { return this.modelValue },
+			set: function(val) { this.$emit('update:modelValue', val) },
 		},
 		templates: function() {
 			return this.$store.getters['config/templates']
@@ -503,7 +504,7 @@ const ConfigTemplatesDialog = {
 		},
 	},
 	watch: {
-		value: function(val) {
+		modelValue: function(val) {
 			if (val) {
 				this.error = null
 				this.$store.dispatch('config/fetchTemplates')
@@ -521,9 +522,11 @@ const ConfigTemplatesDialog = {
 				})
 				if (result.ok) {
 					this.newTemplateName = ''
+					this.$toast.success(this.$t('misc.toast.saveSuccess'))
 					this.$emit('saved')
 				} else {
 					this.error = result.error
+					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
 				}
 			} finally {
 				this.saving = false
@@ -533,7 +536,9 @@ const ConfigTemplatesDialog = {
 			const result = await this.$store.dispatch('config/insertTemplate', {name: tpl.name})
 			if (!result.ok) {
 				this.error = result.error
+				this.$toast.error(result.error || this.$t('misc.toast.saveError'))
 			} else {
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 				this.show = false
 				this.$emit('saved')
 			}
@@ -546,6 +551,9 @@ const ConfigTemplatesDialog = {
 			const result = await this.$store.dispatch('config/deleteTemplate', {name: tpl.name})
 			if (!result.ok) {
 				this.error = result.error
+				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))
+			} else {
+				this.$toast.success(this.$t('misc.toast.deleteSuccess'))
 			}
 		},
 		async saveSnapshot() {
@@ -554,8 +562,10 @@ const ConfigTemplatesDialog = {
 				const result = await this.$store.dispatch('config/createSnapshot', {name: this.newSnapshotName})
 				if (result.ok) {
 					this.newSnapshotName = ''
+					this.$toast.success(this.$t('misc.toast.saveSuccess'))
 				} else {
 					this.error = result.error
+					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
 				}
 			} finally {
 				this.saving = false
@@ -571,7 +581,9 @@ const ConfigTemplatesDialog = {
 				const result = await this.$store.dispatch('config/restoreSnapshot', {name: snap.name})
 				if (!result.ok) {
 					this.error = result.error
+					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
 				} else {
+					this.$toast.success(this.$t('misc.toast.saveSuccess'))
 					this.show = false
 					this.$emit('saved')
 				}
@@ -587,6 +599,9 @@ const ConfigTemplatesDialog = {
 			const result = await this.$store.dispatch('config/deleteSnapshot', {name: snap.name})
 			if (!result.ok) {
 				this.error = result.error
+				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))
+			} else {
+				this.$toast.success(this.$t('misc.toast.deleteSuccess'))
 			}
 		},
 	},

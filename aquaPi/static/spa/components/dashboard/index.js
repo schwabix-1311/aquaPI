@@ -3,6 +3,7 @@ import {registerGlobalComponent} from '../app/registry.js'
 
 const AquapiDashboardConfigurator = {
 	template: `
+		<teleport to="body">
 		<v-navigation-drawer
 			:model-value="$store.getters['ui/isActiveDialog']('AquapiDashboardConfigurator')"
 			@update:model-value="(v) => (v ? null : hideConfigurator())"
@@ -11,6 +12,7 @@ const AquapiDashboardConfigurator = {
 			temporary
 			app
 			dark
+			fixed
 			:style="'max-width:100vw;'"
 			id="dashboard_configurator"
 		>
@@ -18,7 +20,7 @@ const AquapiDashboardConfigurator = {
 				<v-card-title class="d-flex flex-row pa-2">
 					{{ $t('dashboard.configurator.headline') }}
 					<v-spacer></v-spacer>
-					<v-btn icon @click.stop="hideConfigurator()">
+					<v-btn icon variant="text" color="grey-darken-1" @click.stop="hideConfigurator()">
 						<v-icon>
 							mdi-close
 						</v-icon>
@@ -40,16 +42,16 @@ const AquapiDashboardConfigurator = {
 							outlined
 							tile
 						>
-							<v-btn icon tile :ripple="false" class="handle text--grey">
-								<v-icon>
-									mdi-drag
-								</v-icon>
-							</v-btn>
-							<v-btn icon tile :ripple="false" @click.stop="toggleVisibility(item)">
-								<v-icon :class="(item.visible ? 'green--text text--lighten-2' : 'red--text text--lighten-2')">
-									{{ (item.visible ? 'mdi-eye-outline' : 'mdi-eye-off-outline') }}
-								</v-icon>
-							</v-btn>
+ 						<v-btn icon tile variant="text" color="grey-darken-1" :ripple="false" class="handle text--grey">
+ 							<v-icon>
+ 								mdi-drag
+ 							</v-icon>
+ 						</v-btn>
+ 						<v-btn icon tile variant="text" color="grey-darken-1" :ripple="false" @click.stop="toggleVisibility(item)">
+ 							<v-icon :class="(item.visible ? 'green--text text--lighten-2' : 'red--text text--lighten-2')">
+ 								{{ (item.visible ? 'mdi-eye-outline' : 'mdi-eye-off-outline') }}
+ 							</v-icon>
+ 						</v-btn>
 							<v-row class="ml-1 justify-space-between align-center">
 								<v-col cols="7">
 									<v-text-field
@@ -82,6 +84,7 @@ const AquapiDashboardConfigurator = {
 				</v-card-actions>
 			</v-card>
 		</v-navigation-drawer>
+		</teleport>
 	`,
 
 	data: function() {
@@ -141,6 +144,11 @@ const AquapiDashboardConfigurator = {
 		},
 		persistConfig: async function() {
 			const result = await this.$store.dispatch('dashboard/persistConfig', this.widgets)
+			if (result) {
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
+			} else {
+				this.$toast.error(this.$t('misc.toast.saveError'))
+			}
 			this.hideConfigurator()
 		},
 	},

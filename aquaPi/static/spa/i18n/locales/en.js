@@ -76,6 +76,7 @@ export default
 			confirmDiscard: 'Discard all unsaved changes?',
 			confirmLeaveUnsaved: 'There are unsaved changes. Discard them and leave the page?',
 			deleteConnection: 'Delete connection',
+			changesDiscarded: 'Changes discarded',
 		},
 		about: {
 			label: 'About',
@@ -172,6 +173,12 @@ export default
 			confirm: 'Confirm',
 			cancel: 'Cancel',
 			ok: 'OK',
+		},
+		toast: {
+			saveSuccess: 'Saved successfully',
+			saveError: 'Save failed',
+			deleteSuccess: 'Deleted successfully',
+			deleteError: 'Delete failed',
 		},
 		duration: {
 			min: 'min',

@@ -30,12 +30,12 @@
 				<v-sheet dark color="transparent" class="mr-3">
 					<v-icon class="mr-1">mdi-account-circle-outline</v-icon>{{ username }}
 				</v-sheet>
-				<v-btn :title="$t('pages.logout.label')" icon class="white--text" @click.stop="$store.dispatch('auth/logout')">
+				<v-btn :title="$t('pages.logout.label')" icon variant="text" class="white--text" @click.stop="$store.dispatch('auth/logout')">
 					<v-icon>mdi-logout</v-icon>
 				</v-btn>
 			</template>
 			<template v-else>
-				<v-btn :title="$t('pages.login.label')" icon class="white--text" @click.stop="$store.dispatch('ui/showDialog', 'AquapiLoginDialog', true);">
+				<v-btn :title="$t('pages.login.label')" icon variant="text" class="white--text" @click.stop="$store.dispatch('ui/showDialog', 'AquapiLoginDialog', true);">
 					<v-icon>mdi-login</v-icon>
 				</v-btn>
 			</template>
@@ -79,6 +79,7 @@
 
 		<aquapi-login-dialog></aquapi-login-dialog>
 		<aquapi-confirm-dialog></aquapi-confirm-dialog>
+		<aquapi-toast></aquapi-toast>
 	</v-app>
 </template>
 
@@ -90,6 +91,7 @@ import Vue from 'vue'
 import {loadSfc} from 'sfc/loadSfc'
 import {EventBus, AQUAPI_EVENTS} from 'app/EventBus'
 import {AquapiConfirmDialog} from 'app/AquapiConfirmDialog'
+import {AquapiToast} from 'app/AquapiToast'
 import {AppFooComp} from 'app/comps'
 import {i18n} from 'app/i18n'
 
@@ -102,6 +104,7 @@ export default {
 		// option entries need an explicit `Vue.defineAsyncComponent()` wrapper.
 		AquapiLoginDialog: Vue.defineAsyncComponent(() => loadSfc('/static/spa/components/auth/AquapiLoginDialog.vue')),
 		AquapiConfirmDialog,
+		AquapiToast,
 		AppFooComp,
 	},
 

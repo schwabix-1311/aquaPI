@@ -29,10 +29,10 @@ const AquapiUsers = {
 						<v-chip small :color="roleColor(item.role)" dark>{{ item.role }}</v-chip>
 					</template>
 					<template #item.actions="{ item }">
-						<v-btn icon small @click="onEdit(item)" :title="$t('pages.config.edit')">
+      <v-btn icon small variant="text" color="grey-darken-1" @click="onEdit(item)" :title="$t('pages.config.edit')">
 							<v-icon small>mdi-pencil</v-icon>
 						</v-btn>
-						<v-btn icon small @click="onDelete(item)" :title="$t('pages.config.delete')">
+      <v-btn icon small variant="text" color="grey-darken-1" @click="onDelete(item)" :title="$t('pages.config.delete')">
 							<v-icon small>mdi-delete</v-icon>
 						</v-btn>
 					</template>
@@ -95,8 +95,10 @@ const AquapiUsers = {
 			}
 			const result = await this.$store.dispatch('users/remove', user.id)
 			if (!result.ok) {
-				await this.$alert(result.error)
+				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))
+				return
 			}
+			this.$toast.success(this.$t('misc.toast.deleteSuccess'))
 		},
 		async loadUsers() {
 			this.loading = true

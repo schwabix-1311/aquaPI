@@ -83,6 +83,9 @@ const AquapiSettings = {
 				await this.$store.dispatch('dashboard/fetchNodes')
 			}
 			this.loading = false
+			// default all groups to expanded, once known, so the user sees
+			// every controller immediately without an extra click
+			this.openPanels = Object.keys(this.grouped).map((_, i) => i)
 		},
 	},
 

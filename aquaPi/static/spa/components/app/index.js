@@ -19,7 +19,8 @@ const AquapiPageHeading = {
 				<v-spacer></v-spacer>
 				<v-btn v-for="item, idx in buttons" :key="idx"
 					icon
-					color="primary"
+					variant="text"
+					color="grey-darken-1"
 					@click="item.action"
 				>
 					<v-icon>{{ item.icon }}</v-icon>

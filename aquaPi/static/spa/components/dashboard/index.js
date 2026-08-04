@@ -78,7 +78,7 @@ const AquapiDashboardConfigurator = {
 
 				<v-divider></v-divider>
 				<v-card-actions>
-					<v-btn block color="primary" @click.stop="persistConfig">
+					<v-btn block variant="flat" color="primary" @click.stop="persistConfig">
 						{{ $t('dashboard.configurator.btnSave.label') }}
 					</v-btn>
 				</v-card-actions>

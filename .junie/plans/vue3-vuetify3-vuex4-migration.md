@@ -2,9 +2,12 @@
 sessionId: session-260802-063658-1699
 ---
 
-# Implementation Status: ✓ Done (Round 4: History modal close-icon position + period-switch crash, on top of Round 3's A-F corrections and follow-up icon/gap corrections)
+# Implementation Status: ✓ Done (Round 5: dashboard configurator Save button restyled as primary, on top of Round 4's History modal fixes and Round 3's A-F corrections)
 
 This document now covers a **third round** of corrections, reported after the Round 2 fixes below (Login consolidation, Dashboard B1-B6, Settings C1-C4) were already implemented, verified and committed. Round 2's content (originally titled "Requirements"/"Technical Design"/"Testing") is kept, unmodified, further down this document as historical record - see "# Round 2 (Login, Dashboard & Settings corrections) - Implementation Status: ✓ Done".
+
+## Round 5 completion summary (✓ Done)
+User-reported: the "Speichern" (Save) button in the dashboard configurator side panel (`components/dashboard/index.js`) looked like plain blue text instead of a proper filled primary button, even though it already had `color="primary"` - it was missing an explicit `variant`, and combined with the drawer's `dark` context it rendered as flat/unfilled. Fixed by adding `variant="flat"` to the button. Verified via a headless-browser session with a real admin login: the button's computed style now shows `background-color: rgb(25, 118, 210)` (Vuetify's primary blue) and the classes `bg-primary v-btn--variant-flat`, confirming it renders as a solid, filled primary button.
 
 ## Round 4 completion summary (✓ Done)
 Two further, user-reported issues in the History widget's fullscreen modal (both regressions surfacing only once Round 3's A1 fix made the modal actually openable) were found and fixed, verified end-to-end via a headless-browser session against the running app with a real admin login and a real, seeded History widget (test toggle reverted afterward):

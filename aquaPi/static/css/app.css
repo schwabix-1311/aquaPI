@@ -82,6 +82,22 @@ div.theme--light.v-application {
     background-color: rgba(255, 255, 255, 0.05)
 }
 
+/* AquapiDashboardConfigurator's <v-navigation-drawer> is teleported directly
+   to <body> (see the Round 3 app-bar-gap fix), so its auto-generated scrim
+   (`.v-navigation-drawer__scrim`) ends up as a direct child of <body> too,
+   outside `.v-application__wrap`'s `position: relative` context. Vuetify's
+   own scrim CSS only sets `position: absolute; height: 100%`, which then
+   resolves against the whole (possibly taller-than-viewport) document
+   instead of the viewport, so it scrolls away with the page content instead
+   of staying over it. Force it back to a real viewport-fixed overlay here,
+   without touching AquapiNavDrawer's scrim (which stays nested as before). */
+body > .v-navigation-drawer__scrim {
+    position: fixed;
+    inset: 0;
+    height: auto;
+    width: auto;
+}
+
 div.aquapi-dashboard div.v-expansion-panels {
     border-radius: 0;
 }

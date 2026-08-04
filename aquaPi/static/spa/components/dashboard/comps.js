@@ -509,14 +509,17 @@ const HistoryChart = {
 							</template>
 							<v-list
 								dense
+								density="compact"
 								class="py-0"
 							>
 								<v-list-item
 									v-for="(item, index) in periods"
 									:key="index"
+									density="compact"
+									min-height="28"
 									@click="setPeriod(item.value, chart)"
 								>
-									<v-list-item-title>
+									<v-list-item-title class="text-caption">
 										{{ item.label }}
 									</v-list-item-title>
 								</v-list-item>

@@ -55,7 +55,7 @@ div.app-splash-content {
 }
 */
 
-div.theme--light.v-application {
+div.v-theme--light.v-application {
     background-color: #e4e4e4;
 }
 
@@ -78,7 +78,7 @@ div.theme--light.v-application {
     min-height: 100%;
     background-color: rgba(255, 255, 255, 0.4)
 }
-.theme--dark .v-main .v-container {
+.v-theme--dark .v-main .v-container {
     background-color: rgba(255, 255, 255, 0.05)
 }
 
@@ -211,7 +211,7 @@ html::-webkit-scrollbar {
     user-select: none;
     background-color: rgba(255, 255, 255, 0.95);
 }
-.theme--dark .config-node-box {
+.v-theme--dark .config-node-box {
     background-color: rgba(48, 48, 48, 0.95);
 }
 .config-node-box--connecting {

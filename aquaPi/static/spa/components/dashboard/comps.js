@@ -175,7 +175,7 @@ const BusNode = {
 							<v-card
 								v-for="(item, index) in receivesNodes"
 								:key="item.identifier"
-								outlined
+								variant="outlined"
 								tile
 								class="ma-3 mt-0"
 							>
@@ -201,7 +201,7 @@ const BusNode = {
 					<v-card
 						v-for="(item, index) in receivesNodes"
 						:key="item.identifier"
-						outlined
+						variant="outlined"
 						tile
 						class="ma-3 mt-0"
 					>

@@ -18,7 +18,7 @@ const AquapiDashboardConfigurator = {
 			:style="'max-width:100vw;'"
 			id="dashboard_configurator"
 		>
-			<v-card elevation="0">
+			<v-card elevation="0" color="transparent">
 				<v-card-title class="d-flex flex-row pa-2">
 					{{ $t('dashboard.configurator.headline') }}
 					<v-spacer></v-spacer>
@@ -39,18 +39,18 @@ const AquapiDashboardConfigurator = {
 						<v-card 
 							v-for="(item, idx) in widgets"
 							:key="item.identifier"
-							class="d-flex flex-row align-center col col-12 mb-1 pa-0" 
+							class="d-flex flex-row align-center col col-12 mb-1 pa-0"
 							elevation="0"
-							outlined
+							variant="outlined"
 							tile
 						>
- 						<v-btn icon tile variant="text" color="grey-darken-1" :ripple="false" class="handle text--grey">
+ 						<v-btn icon tile variant="text" color="grey-darken-1" :ripple="false" class="handle">
  							<v-icon>
  								mdi-drag
  							</v-icon>
  						</v-btn>
  						<v-btn icon tile variant="text" color="grey-darken-1" :ripple="false" @click.stop="toggleVisibility(item)">
- 							<v-icon :class="(item.visible ? 'green--text text--lighten-2' : 'red--text text--lighten-2')">
+ 							<v-icon :color="(item.visible ? 'green-lighten-2' : 'red-lighten-2')">
  								{{ (item.visible ? 'mdi-eye-outline' : 'mdi-eye-off-outline') }}
  							</v-icon>
  						</v-btn>
@@ -58,17 +58,15 @@ const AquapiDashboardConfigurator = {
 								<v-col cols="7">
 									<v-text-field
 										v-model="item.name"
-										solo
-										flat
-										dense
+										variant="underlined"
+										density="compact"
 										hide-details="auto"
-										:background-color="($vuetify.theme.global.current.dark ? 'grey darken-4' : 'grey lighten-5')"
 										class="pa-0 ma-0"
 									></v-text-field>
 								</v-col>
 								<v-col>
-									<div class="grey--text text--darken-1">
-										<v-icon small class="grey--text mr-1">{{ typeIcon(item) }}</v-icon>
+									<div class="text-grey-darken-1">
+										<v-icon size="small" color="grey" class="mr-1">{{ typeIcon(item) }}</v-icon>
 										<span>{{ typeLabel(item) }}</span>
 									</div>
 								</v-col>
@@ -178,12 +176,13 @@ registerGlobalComponent('AquapiDashboardConfigurator', AquapiDashboardConfigurat
 
 const AquapiDashboardWidget = {
 	template: `
-		<v-card 
-			tile 
-			outlined
-			elevation="3" 
+		<v-card
+			tile
+			variant="outlined"
+			elevation="3"
 			:loading="false"
 			class="pb-0"
+			style="border-color: rgba(0,0,0,0.3);"
 		>
 			<v-card-title
 				class="pb-1"

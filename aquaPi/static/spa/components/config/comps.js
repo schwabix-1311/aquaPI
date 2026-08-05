@@ -5,6 +5,7 @@
 // works fully offline/without a build step like the rest of the SPA.
 
 import {registerGlobalComponent} from '../app/registry.js'
+import {useConfigStore} from '../../store/modules/config.js'
 
 const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
@@ -290,6 +291,9 @@ const ConfigNodeDialog = {
 		}
 	},
 	computed: {
+		configStore() {
+			return useConfigStore()
+		},
 		show: {
 			get: function() { return this.modelValue },
 			set: function(val) { this.$emit('update:modelValue', val) },
@@ -362,8 +366,8 @@ const ConfigNodeDialog = {
 			this.error = null
 			this.saving = true
 			try {
-				if (this.editNode) {
-					this.$store.dispatch('config/draftUpdateNode', {
+ 			if (this.editNode) {
+					this.configStore.draftUpdateNode({
 						nodeId: this.editNode.id,
 						changes: Object.assign(
 							{receives: this.asReceivesList(), group: this.form.group},
@@ -375,7 +379,7 @@ const ConfigNodeDialog = {
 						this.error = this.$t('pages.config.errNameType')
 						return
 					}
-					this.$store.dispatch('config/draftCreateNode', Object.assign({
+					this.configStore.draftCreateNode(Object.assign({
 						type: this.form.type,
 						name: this.form.name,
 						receives: this.asReceivesList(),
@@ -505,23 +509,26 @@ const ConfigTemplatesDialog = {
 		}
 	},
 	computed: {
+		configStore() {
+			return useConfigStore()
+		},
 		show: {
 			get: function() { return this.modelValue },
 			set: function(val) { this.$emit('update:modelValue', val) },
 		},
 		templates: function() {
-			return this.$store.getters['config/templates']
+			return this.configStore.templates
 		},
 		snapshots: function() {
-			return this.$store.getters['config/snapshots']
+			return this.configStore.snapshots
 		},
 	},
 	watch: {
 		modelValue: function(val) {
 			if (val) {
 				this.error = null
-				this.$store.dispatch('config/fetchTemplates')
-				this.$store.dispatch('config/fetchSnapshots')
+				this.configStore.fetchTemplates()
+				this.configStore.fetchSnapshots()
 			}
 		},
 	},
@@ -529,7 +536,7 @@ const ConfigTemplatesDialog = {
 		async saveTemplate() {
 			this.saving = true
 			try {
-				const result = await this.$store.dispatch('config/createTemplate', {
+				const result = await this.configStore.createTemplate({
 					name: this.newTemplateName,
 					node_ids: this.selectedIds,
 				})
@@ -546,7 +553,7 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async insertTemplate(tpl) {
-			const result = await this.$store.dispatch('config/insertTemplate', {name: tpl.name})
+			const result = await this.configStore.insertTemplate({name: tpl.name})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.saveError'))
@@ -561,7 +568,7 @@ const ConfigTemplatesDialog = {
 			if (!ok) {
 				return
 			}
-			const result = await this.$store.dispatch('config/deleteTemplate', {name: tpl.name})
+			const result = await this.configStore.deleteTemplate({name: tpl.name})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))
@@ -572,7 +579,7 @@ const ConfigTemplatesDialog = {
 		async saveSnapshot() {
 			this.saving = true
 			try {
-				const result = await this.$store.dispatch('config/createSnapshot', {name: this.newSnapshotName})
+				const result = await this.configStore.createSnapshot({name: this.newSnapshotName})
 				if (result.ok) {
 					this.newSnapshotName = ''
 					this.$toast.success(this.$t('misc.toast.saveSuccess'))
@@ -591,7 +598,7 @@ const ConfigTemplatesDialog = {
 			}
 			this.restoring = true
 			try {
-				const result = await this.$store.dispatch('config/restoreSnapshot', {name: snap.name})
+				const result = await this.configStore.restoreSnapshot({name: snap.name})
 				if (!result.ok) {
 					this.error = result.error
 					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
@@ -609,7 +616,7 @@ const ConfigTemplatesDialog = {
 			if (!ok) {
 				return
 			}
-			const result = await this.$store.dispatch('config/deleteSnapshot', {name: snap.name})
+			const result = await this.configStore.deleteSnapshot({name: snap.name})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))

@@ -3,7 +3,7 @@
 		v-model="active"
 		persistent
 		max-width="400px"
-		:overlay-opacity="$store.state.ui.overlay.opacity"
+		:overlay-opacity="uiStore.overlay.opacity"
 	>
 	<aquapi-login-form :addCancel="authenticated"></aquapi-login-form>
 	</v-dialog>
@@ -15,6 +15,8 @@
 // the comment in aquaPi/static/spa/sfc/loadSfc.js for details.
 import Vue from 'vue'
 import {loadSfc} from 'sfc/loadSfc'
+import {useUiStore} from 'store/ui'
+import {useAuthStore} from 'store/auth'
 
 export default {
 	name: 'AquapiLoginDialog',
@@ -32,22 +34,33 @@ export default {
 	},
 
 	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		authStore() {
+			return useAuthStore()
+		},
 		authenticated() {
-			return this.$store.getters['auth/authenticated']
+			return this.authStore.authenticated
 		},
 		active: {
 			get() {
 				// while unauthenticated, the login dialog is always forced open,
 				// so the SPA remains the sole place a user ever sees a login
 				// prompt (never a separate, full-page redirect to /login)
-				return !this.authenticated || this.$store.getters['ui/isActiveDialog'](this.dialogName)
+				return !this.authenticated || this.uiStore.isActiveDialog(this.dialogName)
 			},
 			set(value) {
 				// ignore attempts to close it while unauthenticated - there is
 				// no cancel affordance in that state (see :addCancel above)
 				if (!value && !this.authenticated) return
-				if (value) this.$store.dispatch('ui/showDialog', this.dialogName, true)
-				else this.$store.dispatch('ui/hideDialog', this.dialogName)
+				// NOTE: the 2nd ("hideOthers") arg is intentionally dropped here -
+				// Vuex's dispatch(type, payload, options) never forwarded a 3rd
+				// positional argument to the action anyway, so `true` was always
+				// silently ignored and showDialog() always used its hideOthers=true
+				// default; this preserves that exact prior behavior.
+				if (value) this.uiStore.showDialog(this.dialogName)
+				else this.uiStore.hideDialog(this.dialogName)
 			}
 		}
 	},

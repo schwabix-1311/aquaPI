@@ -4,6 +4,8 @@
 
 import {AQUAPI_EVENTS, EventBus} from '../app/EventBus.js';
 import {registerGlobalComponent} from '../app/registry.js';
+import {useUiStore} from '../../store/modules/ui.js';
+import {useDashboardStore} from '../../store/modules/dashboard.js';
 
 const AnyNode = {
 	props: {
@@ -34,6 +36,9 @@ const AnyNode = {
 	},
 
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		descript() {
 			return ''  // just a sample
 		},
@@ -75,7 +80,7 @@ const AnyNode = {
 
 			node.receives.forEach(id => {
 				if (id !== '*') {
-					nodes.push(this.$store.getters['dashboard/node'](id))
+					nodes.push(this.dashboardStore.node(id))
 				}
 			})
 
@@ -405,7 +410,7 @@ const History = {
 			></history-chart>
 			
 			<v-dialog
-				:model-value="$store.getters['ui/isActiveDialog'](modalDialogName)"
+				:model-value="uiStore.isActiveDialog(modalDialogName)"
 				@update:model-value="(val) => { if (!val) closeModal() }"
 				persistent
 				width="80vw"
@@ -446,13 +451,16 @@ const History = {
 	},
 
 	computed: {
+		uiStore() {
+			return useUiStore()
+		},
 		modalDialogName() {
 			return `chart_modal_${this.id}`
 		}
 	},
 	methods: {
 		closeModal() {
-			this.$store.dispatch('ui/hideDialog', this.modalDialogName)
+			this.uiStore.hideDialog(this.modalDialogName)
 		}
 	}
 }
@@ -593,7 +601,7 @@ const HistoryChart = {
 								tooltipFormat: "tt",
 							},
 							grid: {
-								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+								color: useUiStore().darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
 							}
 						},
 						y: {
@@ -606,7 +614,7 @@ const HistoryChart = {
 								beginAtZero: true
 							},
 							grid: {
-								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.12)' : 'rgba(0, 0, 0, 0.12)'
+								color: useUiStore().darkMode ? 'rgba(220, 220, 220, 0.12)' : 'rgba(0, 0, 0, 0.12)'
 							}
 						},
 						yAnalog: {
@@ -614,7 +622,7 @@ const HistoryChart = {
 							axis: 'y',
 							position: 'right',
  						grid: {
-								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+								color: useUiStore().darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
 							}
 						},
 					}
@@ -624,6 +632,12 @@ const HistoryChart = {
 	},
 
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
+		uiStore() {
+			return useUiStore()
+		},
 		wrapperId() {
 			return `chart_wrapper_${this.id}_${this.renderType}`
 		},
@@ -717,7 +731,7 @@ const HistoryChart = {
 				for (let dsIdx in historySeries) {
 					values[dsIdx] = {}
 
-					const node = this.$store.getters['dashboard/node'](historySeries[dsIdx])
+					const node = this.dashboardStore.node(historySeries[dsIdx])
 
 					if (this.cd.data.datasets[dsIdx] === undefined) {
 						this.cd.data.datasets[dsIdx] = {
@@ -763,7 +777,7 @@ const HistoryChart = {
 		},
 
 		async loadHistory() {
-			if (this.renderType === 'modal' && !this.$store.getters['ui/isActiveDialog'](this.modalDialogName)) {
+			if (this.renderType === 'modal' && !this.uiStore.isActiveDialog(this.modalDialogName)) {
 				return
 			}
 
@@ -772,7 +786,7 @@ const HistoryChart = {
 			let tsNow = Math.floor(Date.now() / 1000)
 			let start = tsNow - this.currentPeriod / 1000
 
-			const result = await this.$store.dispatch('dashboard/fetchNodeHistory', {
+			const result = await this.dashboardStore.fetchNodeHistory({
 				nodeId: this.node.id,
 				start: start,
 				step: this.chartStep
@@ -793,11 +807,16 @@ const HistoryChart = {
 			}
 		},
 		async openModal() {
-			await this.$store.dispatch('ui/showDialog', this.modalDialogName, true)
+			// NOTE: the 2nd ("hideOthers") arg is intentionally dropped here -
+			// Vuex's dispatch(type, payload, options) never forwarded a 3rd
+			// positional argument to the action anyway, so `true` was always
+			// silently ignored and showDialog() always used its hideOthers=true
+			// default; this preserves that exact prior behavior.
+			await this.uiStore.showDialog(this.modalDialogName)
 			await this.loadHistory()
 		},
 		closeModal() {
-			this.$store.dispatch('ui/hideDialog', this.modalDialogName)
+			this.uiStore.hideDialog(this.modalDialogName)
 			if (this.chart != null) {
 				this.chart.destroy()
 				this.chart = null

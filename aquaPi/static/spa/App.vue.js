@@ -1,4 +1,5 @@
 import {EventBus, AQUAPI_EVENTS} from './components/app/EventBus.js'
+import {useDashboardStore} from './store/modules/dashboard.js'
 
 const App = {
 	template: `
@@ -9,6 +10,12 @@ const App = {
 	name: 'App',
 	data: () => ({
 	}),
+
+	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
+	},
 
 	methods: {
 		initEventListeners() {
@@ -37,7 +44,7 @@ const App = {
 			EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 		},
 		async fetchNodes() {
-			await this.$store.dispatch('dashboard/fetchNodes')
+			await this.dashboardStore.fetchNodes()
 		},
 		async handleSSE(payload) {
 			let nodeId = null
@@ -51,7 +58,7 @@ const App = {
 
 			try {
 				const {result, data} = await response.json()
-				this.$store.commit('dashboard/setNode', data)
+				this.dashboardStore.setNode(data)
 			} catch (e) {
 				console.error(`Could not fetch node ${nodeId}`)
 				console.log(e)

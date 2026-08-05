@@ -1,11 +1,13 @@
 import './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
+import {useUiStore} from '../../store/modules/ui.js'
+import {useDashboardStore} from '../../store/modules/dashboard.js'
 
 const AquapiDashboardConfigurator = {
 	template: `
 		<teleport to="body">
 		<v-navigation-drawer
-			:model-value="$store.getters['ui/isActiveDialog']('AquapiDashboardConfigurator')"
+			:model-value="uiStore.isActiveDialog('AquapiDashboardConfigurator')"
 			@update:model-value="(v) => (v ? null : hideConfigurator())"
 			width="500"
 			location="right"
@@ -103,22 +105,28 @@ const AquapiDashboardConfigurator = {
 	},
 
 	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		widgets: {
 			get() {
-				return this.$store.getters['dashboard/widgets']
+				return this.dashboardStore.widgets
 			},
 			set(items) {
-				this.$store.commit('dashboard/setWidgets', items)
+				this.dashboardStore.setWidgets(items)
 			}
 		},
 	},
 
 	methods: {
 		showConfigurator() {
-			this.$store.dispatch('ui/showDialog', this.dialogName)
+			this.uiStore.showDialog(this.dialogName)
 		},
 		hideConfigurator() {
-			this.$store.dispatch('ui/hideDialog', this.dialogName)
+			this.uiStore.hideDialog(this.dialogName)
 		},
 		toggleVisibility(item) {
 			item.visible = !item.visible
@@ -143,7 +151,7 @@ const AquapiDashboardConfigurator = {
 				: 'mdi-user'
 		},
 		persistConfig: async function() {
-			const result = await this.$store.dispatch('dashboard/persistConfig', this.widgets)
+			const result = await this.dashboardStore.persistConfig(this.widgets)
 			if (result) {
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 			} else {
@@ -279,15 +287,18 @@ const AquapiDashboardWidget = {
 		}
 	},
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		node() {
-			return this.$store.getters['dashboard/node'](this.item.id)
+			return this.dashboardStore.node(this.item.id)
 		},
 		nodes: {
 			get() {
-				return this.$store.getters['dashboard/nodes']
+				return this.dashboardStore.nodes
 			},
 			set(items) {
-				this.$store.commit('dashboard/setNodes', items)
+				this.dashboardStore.setNodes(items)
 			}
 		},
 		widgetTitleIcon() {
@@ -395,20 +406,23 @@ const AquapiDashboard = {
 	},
 
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		widgets: {
 			get() {
-				return this.$store.getters['dashboard/widgets'].filter(item => item.visible)
+				return this.dashboardStore.widgets.filter(item => item.visible)
 			},
 			set(items) {
-				this.$store.commit('dashboard/setWidgets', items)
+				this.dashboardStore.setWidgets(items)
 			}
 		},
 		nodes: {
 			get() {
-				return this.$store.getters['dashboard/nodes']
+				return this.dashboardStore.nodes
 			},
 			set(items) {
-				this.$store.commit('dashboard/setNodes', items)
+				this.dashboardStore.setNodes(items)
 			}
 		},
 		// measured from the dashboard's own masonry container (via
@@ -439,16 +453,16 @@ const AquapiDashboard = {
 
 	methods: {
 		showConfigurator() {
-			this.$store.dispatch('ui/showDialog', 'AquapiDashboardConfigurator')
+			useUiStore().showDialog('AquapiDashboardConfigurator')
 			this.$nextTick(() => {
 				document.querySelectorAll('#dashboard_configurator div.v-navigation-drawer__content')[0].scrollTo(0, 0)
 			})
 		},
 		hideConfigurator() {
-			this.$store.dispatch('ui/hideDialog', 'AquapiDashboardConfigurator')
+			useUiStore().hideDialog('AquapiDashboardConfigurator')
 		},
 		async loadConfig() {
-			const result = await this.$store.dispatch('dashboard/loadConfig')
+			const result = await this.dashboardStore.loadConfig()
 			if (result)	{
 				this.widgets = result
 			}

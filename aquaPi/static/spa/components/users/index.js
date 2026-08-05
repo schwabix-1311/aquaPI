@@ -1,5 +1,6 @@
 import './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
+import {useUsersStore} from '../../store/modules/users.js'
 
 const AquapiUsers = {
 	template: `
@@ -56,11 +57,14 @@ const AquapiUsers = {
 	},
 
 	computed: {
+		usersStore() {
+			return useUsersStore()
+		},
 		users() {
-			return this.$store.getters['users/all']
+			return this.usersStore.all
 		},
 		currentUserId() {
-			const user = this.$store.getters['users/currentUser']
+			const user = this.usersStore.currentUser
 			return user ? user.id : null
 		},
 		headers() {
@@ -93,7 +97,7 @@ const AquapiUsers = {
 			if (!ok) {
 				return
 			}
-			const result = await this.$store.dispatch('users/remove', user.id)
+			const result = await this.usersStore.remove(user.id)
 			if (!result.ok) {
 				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))
 				return
@@ -102,7 +106,7 @@ const AquapiUsers = {
 		},
 		async loadUsers() {
 			this.loading = true
-			await this.$store.dispatch('users/fetchAll')
+			await this.usersStore.fetchAll()
 			this.loading = false
 		},
 	},

@@ -1,9 +1,12 @@
-import store from './store/index.js'
+import pinia from './store/index.js'
 import router from './router/index.js'
 import i18n from './i18n/index.js'
 import App from './App.vue.js'
 import {AQUAPI_EVENTS, EventBus} from './components/app/EventBus.js'
 import {installGlobalComponents} from './components/app/registry.js'
+import {useUiStore} from './store/modules/ui.js'
+import {useAuthStore} from './store/modules/auth.js'
+import {useUsersStore} from './store/modules/users.js'
 
 const vuetify = Vuetify.createVuetify({
 	icons: {
@@ -49,28 +52,39 @@ const app = Vue.createApp({
 	render() {
 		return Vue.h(App)
 	},
+	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		authStore() {
+			return useAuthStore()
+		},
+		usersStore() {
+			return useUsersStore()
+		},
+	},
 	methods: {
 		toggleNavDrawer() {
 			const dialogName = 'AquapiNavDrawer'
-			let active = this.$store.getters['ui/isActiveDialog'](dialogName)
+			let active = this.uiStore.isActiveDialog(dialogName)
 			if (active) {
-				this.$store.dispatch('ui/hideDialog', dialogName)
+				this.uiStore.hideDialog(dialogName)
 			} else {
-				this.$store.dispatch('ui/showDialog', dialogName)
+				this.uiStore.showDialog(dialogName)
 			}
 		},
 		toggleDarkMode() {
 			if (this.$vuetify.theme.global.name === 'dark') {
 				this.$vuetify.theme.global.name = 'light'
-				this.$store.dispatch('ui/setDarkMode', false)
+				this.uiStore.setDarkMode(false)
 			} else {
 				this.$vuetify.theme.global.name = 'dark'
-				this.$store.dispatch('ui/setDarkMode', true)
+				this.uiStore.setDarkMode(true)
 			}
 		},
 		setLocale(locale) {
 			i18n.global.locale.value = locale
-			this.$store.dispatch('ui/setLocale', locale)
+			this.uiStore.setLocale(locale)
 		},
 		navigate(item) {
 			if (item.route == this.$route.name) return
@@ -79,13 +93,13 @@ const app = Vue.createApp({
 
 		initEventListeners() {
 			EventBus.$on(AQUAPI_EVENTS.APP_LOADING, (value) => {
-				this.$store.dispatch('ui/showAppLoader', value)
+				this.uiStore.showAppLoader(value)
 			})
 
 			EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_IN, () => {
-				this.$store.dispatch('ui/hideDialog', 'AquapiLoginDialog')
-				this.$store.dispatch('ui/hideDialog', 'AquapiNavDrawer')
-				this.$store.dispatch('users/fetchCurrentUser')
+				this.uiStore.hideDialog('AquapiLoginDialog')
+				this.uiStore.hideDialog('AquapiNavDrawer')
+				this.usersStore.fetchCurrentUser()
 
 				// TODO: adapt to final root (dashboard on home)
 				this.$router.replace({name: 'home'})
@@ -110,11 +124,11 @@ const app = Vue.createApp({
 		// authenticated Flask-Login session, so a browser refresh keeps
 		// reflecting an already-existing session instead of defaulting
 		// to logged-out until the next explicit login.
-		const user = await this.$store.dispatch('users/fetchCurrentUser')
+		const user = await this.usersStore.fetchCurrentUser()
 		if (user && user.username) {
-			this.$store.commit('auth/setUser', {username: user.username})
+			this.authStore.setUser({username: user.username})
 		} else {
-			this.$store.commit('auth/setUser', null)
+			this.authStore.setUser(null)
 		}
 
 		// Check localStorage for theme mode
@@ -122,7 +136,7 @@ const app = Vue.createApp({
 			const itemTheme = window.localStorage.getItem('aquapi.theme')
 			if (itemTheme) {
 				this.$vuetify.theme.global.name = (itemTheme == 'dark') ? 'dark' : 'light'
-				this.$store.dispatch('ui/setDarkMode', (itemTheme == 'dark'))
+				this.uiStore.setDarkMode((itemTheme == 'dark'))
 			}
 		} catch(e) {}
 
@@ -134,7 +148,7 @@ const app = Vue.createApp({
 				i18n.global.locale.value = itemLocale
 			}
 		} catch(e) {}
-		this.$store.dispatch('ui/setLocale', i18n.global.locale.value)
+		this.uiStore.setLocale(i18n.global.locale.value)
 	},
 
 	beforeUnmount() {
@@ -165,7 +179,7 @@ app.config.globalProperties.$toast = {
 	},
 }
 
-app.use(store)
+app.use(pinia)
 app.use(router)
 app.use(i18n)
 app.use(vuetify)

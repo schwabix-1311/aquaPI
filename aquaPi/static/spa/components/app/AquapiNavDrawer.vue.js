@@ -1,15 +1,17 @@
 import {registerGlobalComponent} from './registry.js'
+import {useUiStore} from '../../store/modules/ui.js'
+import {useAuthStore} from '../../store/modules/auth.js'
 
 const AquapiNavDrawer = {
 	template: `
 		<v-navigation-drawer 
 			v-model="navDrawerVisible" 
-			:color="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.navDrawer : $store.state.ui.colors.lightMode.bg.navDrawer)"
+			:color="($vuetify.theme.global.current.dark ? uiStore.colors.darkMode.bg.navDrawer : uiStore.colors.lightMode.bg.navDrawer)"
 			app
 			dark
 			fixed
 			temporary
-			:width="$store.state.ui.navigation.drawerWidth"
+			:width="uiStore.navigation.drawerWidth"
 		>
 			<v-list-item @click="$root.navigate({route: 'home'})">
 				<v-list-item-title class="text-h6">
@@ -60,7 +62,7 @@ const AquapiNavDrawer = {
 				<template v-if="authenticated">
 					<v-list-item
 						link
-						@click="$store.dispatch('auth/logout')"
+						@click="authStore.logout()"
 					>
 						<template #prepend>
 							<v-icon class="mr-3">
@@ -99,23 +101,29 @@ const AquapiNavDrawer = {
 	},
 
 	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		authStore() {
+			return useAuthStore()
+		},
 		navDrawerVisible: {
 			get() {
-				return this.$store.getters['ui/isActiveDialog'](this.dialogName)
+				return this.uiStore.isActiveDialog(this.dialogName)
 			},
 			set(value) {
-				let active = this.$store.getters['ui/isActiveDialog'](this.dialogName)
+				let active = this.uiStore.isActiveDialog(this.dialogName)
 				if (value !== active) {
 					if (value == true) {
-						this.$store.dispatch('ui/showDialog', this.dialogName)
+						this.uiStore.showDialog(this.dialogName)
 					} else {
-						this.$store.dispatch('ui/hideDialog', this.dialogName)
+						this.uiStore.hideDialog(this.dialogName)
 					}
 				}
 			}
 		},
 		authenticated() {
-			return this.$store.getters['auth/authenticated']
+			return this.authStore.authenticated
 		},
 	},
 }

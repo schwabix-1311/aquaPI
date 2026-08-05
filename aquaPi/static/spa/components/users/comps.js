@@ -1,4 +1,5 @@
 import {registerGlobalComponent} from '../app/registry.js'
+import {useUsersStore} from '../../store/modules/users.js'
 
 const UserDialog = {
 	props: {
@@ -64,6 +65,9 @@ const UserDialog = {
 		}
 	},
 	computed: {
+		usersStore() {
+			return useUsersStore()
+		},
 		show: {
 			get() {
 				return this.modelValue
@@ -96,7 +100,7 @@ const UserDialog = {
 					changes.password = this.form.password
 				}
 				this.saving = true
-				const result = await this.$store.dispatch('users/update', {userId: this.editUser.id, changes})
+				const result = await this.usersStore.update({userId: this.editUser.id, changes})
 				this.saving = false
 				if (!result.ok) {
 					this.error = result.error
@@ -108,7 +112,7 @@ const UserDialog = {
 					return
 				}
 				this.saving = true
-				const result = await this.$store.dispatch('users/create', {
+				const result = await this.usersStore.create({
 					username: this.form.username,
 					email: this.form.email || null,
 					password: this.form.password,

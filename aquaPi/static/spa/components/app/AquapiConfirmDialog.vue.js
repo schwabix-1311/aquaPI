@@ -1,4 +1,5 @@
 import {AQUAPI_EVENTS, EventBus} from './EventBus.js'
+import {useUiStore} from '../../store/modules/ui.js'
 
 const AquapiConfirmDialog = {
 	name: 'AquapiConfirmDialog',
@@ -7,7 +8,7 @@ const AquapiConfirmDialog = {
 			v-model="visible"
 			persistent
 			max-width="450px"
-			:overlay-opacity="$store.state.ui.overlay.opacity"
+			:overlay-opacity="uiStore.overlay.opacity"
 		>
 			<v-card>
 				<v-card-title v-if="title">{{ title }}</v-card-title>
@@ -29,6 +30,12 @@ const AquapiConfirmDialog = {
 			alertOnly: false,
 			resolve: null,
 		}
+	},
+
+	computed: {
+		uiStore() {
+			return useUiStore()
+		},
 	},
 
 	methods: {

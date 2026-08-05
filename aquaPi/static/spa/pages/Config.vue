@@ -5,17 +5,20 @@
 </template>
 
 <script>
+import {useConfigStore} from 'store/config'
+
 export default {
 	name: 'Config',
 
 	beforeRouteLeave(to, from, next) {
-		if (!this.$store.getters['config/draftDirty']) {
+		const configStore = useConfigStore()
+		if (!configStore.draftDirty) {
 			next()
 			return
 		}
 		this.$confirm(this.$t('pages.config.confirmLeaveUnsaved')).then(ok => {
 			if (ok) {
-				this.$store.dispatch('config/discardDraft')
+				configStore.discardDraft()
 				next()
 			} else {
 				next(false)

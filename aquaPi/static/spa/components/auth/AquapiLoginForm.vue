@@ -50,6 +50,9 @@
 </template>
 
 <script>
+import {useUiStore} from 'store/ui'
+import {useAuthStore} from 'store/auth'
+
 export default {
 	name: 'AquapiLoginForm',
 
@@ -75,12 +78,21 @@ export default {
 		};
 	},
 
+	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		authStore() {
+			return useAuthStore()
+		},
+	},
+
 	methods: {
 		cancelLogin() {
-			this.$store.dispatch('ui/hideDialog', 'AquapiLoginDialog')
+			this.uiStore.hideDialog('AquapiLoginDialog')
 		},
 		async login(payload) {
-			return await this.$store.dispatch('auth/login', payload)
+			return await this.authStore.login(payload)
 		},
 		async validate() {
 			const vm = this

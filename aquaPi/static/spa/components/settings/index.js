@@ -1,5 +1,6 @@
 import './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
+import {useDashboardStore} from '../../store/modules/dashboard.js'
 
 const AquapiSettings = {
 	template: `
@@ -53,8 +54,11 @@ const AquapiSettings = {
 	},
 
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		nodes: function() {
-			return this.$store.getters['dashboard/nodes']
+			return this.dashboardStore.nodes
 		},
 		controllers: function() {
 			return Object.values(this.nodes)
@@ -79,8 +83,8 @@ const AquapiSettings = {
 	methods: {
 		async loadNodes() {
 			this.loading = true
-			if (!this.$store.getters['dashboard/allNodesLoaded']) {
-				await this.$store.dispatch('dashboard/fetchNodes')
+			if (!this.dashboardStore.allNodesLoaded) {
+				await this.dashboardStore.fetchNodes()
 			}
 			this.loading = false
 			// default all groups to expanded, once known, so the user sees

@@ -1,4 +1,5 @@
 import {registerGlobalComponent} from '../app/registry.js'
+import {useSettingsStore} from '../../store/modules/settings.js'
 
 const SettingNumber = {
 	props: {
@@ -269,17 +270,20 @@ const NodeSettingsCard = {
 		}
 	},
 	computed: {
+		settingsStore() {
+			return useSettingsStore()
+		},
 		settings: function() {
-			return this.$store.getters['settings/settingsForNode'](this.node.id)
+			return this.settingsStore.settingsForNode(this.node.id)
 		},
 		error: function() {
-			return this.$store.getters['settings/errorForNode'](this.node.id)
+			return this.settingsStore.errorForNode(this.node.id)
 		},
 	},
 	methods: {
 		widgetType: settingWidgetType,
 		async onUpdate(item, value) {
-			const ok = await this.$store.dispatch('settings/updateNodeSetting', {
+			const ok = await this.settingsStore.updateNodeSetting({
 				nodeId: this.node.id,
 				key: item.key,
 				value: value
@@ -293,7 +297,7 @@ const NodeSettingsCard = {
 	},
 	mounted: function() {
 		this.loading = true
-		this.$store.dispatch('settings/fetchNodeSettings', this.node.id)
+		this.settingsStore.fetchNodeSettings(this.node.id)
 			.finally(() => { this.loading = false })
 	},
 }

@@ -1,6 +1,6 @@
 <template>
 	<v-app id="aquaPi">
-		<v-overlay :value="$store.getters['ui/appLoaderVisible']" :z-index="20" :opacity="$store.state.ui.overlay.opacity">
+		<v-overlay :value="uiStore.appLoaderVisible" :z-index="20" :opacity="uiStore.overlay.opacity">
 			<v-sheet :class="'rounded-circle pa-1 white'" elevation="6">
 				<v-progress-circular
 					indeterminate
@@ -17,7 +17,7 @@
 
 		<v-app-bar
 			app
-			:color="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.appBar : $store.state.ui.colors.lightMode.bg.appBar)"
+			:color="($vuetify.theme.global.current.dark ? uiStore.colors.darkMode.bg.appBar : uiStore.colors.lightMode.bg.appBar)"
 			elevation="4"
 		>
 			<v-app-bar-nav-icon class="white--text" @click="$root.toggleNavDrawer"></v-app-bar-nav-icon>
@@ -30,12 +30,12 @@
 				<v-sheet dark color="transparent" class="mr-3">
 					<v-icon class="mr-1">mdi-account-circle-outline</v-icon>{{ username }}
 				</v-sheet>
-				<v-btn :title="$t('pages.logout.label')" icon variant="text" class="white--text" @click.stop="$store.dispatch('auth/logout')">
+				<v-btn :title="$t('pages.logout.label')" icon variant="text" class="white--text" @click.stop="authStore.logout()">
 					<v-icon>mdi-logout</v-icon>
 				</v-btn>
 			</template>
 			<template v-else>
-				<v-btn :title="$t('pages.login.label')" icon variant="text" class="white--text" @click.stop="$store.dispatch('ui/showDialog', 'AquapiLoginDialog', true);">
+				<v-btn :title="$t('pages.login.label')" icon variant="text" class="white--text" @click.stop="uiStore.showDialog('AquapiLoginDialog')">
 					<v-icon>mdi-login</v-icon>
 				</v-btn>
 			</template>
@@ -65,13 +65,13 @@
 
 		<v-main>
 			<v-container :fluid="containerFluid" class="pa-5">
-				 <transition name="fade" mode="out-in" :duration="$store.state.ui.navigation.transitionDuration">
+				 <transition name="fade" mode="out-in" :duration="uiStore.navigation.transitionDuration">
 					<router-view name="default" class="view"></router-view>
 				</transition>
 			</v-container>
 		</v-main>
 
-		<v-footer dark :class="($vuetify.theme.global.current.dark ? $store.state.ui.colors.darkMode.bg.footer : $store.state.ui.colors.lightMode.bg.footer)" app elevation="4" style="position: fixed; bottom: 0; width: 100%; z-index: 1005;">
+		<v-footer dark :class="($vuetify.theme.global.current.dark ? uiStore.colors.darkMode.bg.footer : uiStore.colors.lightMode.bg.footer)" app elevation="4" style="position: fixed; bottom: 0; width: 100%; z-index: 1005;">
 			<app-foo-comp></app-foo-comp>
 			<v-spacer></v-spacer>
 			<v-icon ref="sse_signal" :color="sseSignalColor">{{ sseSignalIcon }}</v-icon>
@@ -94,6 +94,10 @@ import {AquapiConfirmDialog} from 'app/AquapiConfirmDialog'
 import {AquapiToast} from 'app/AquapiToast'
 import {AppFooComp} from 'app/comps'
 import {i18n} from 'app/i18n'
+import {useUiStore} from 'store/ui'
+import {useAuthStore} from 'store/auth'
+import {useDashboardStore} from 'store/dashboard'
+import {useUsersStore} from 'store/users'
 
 export default {
 	name: 'DefaultLayout',
@@ -114,14 +118,26 @@ export default {
 		sseSignalColor: 'grey darken-3',
 	}),
 	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		authStore() {
+			return useAuthStore()
+		},
+		dashboardStore() {
+			return useDashboardStore()
+		},
+		usersStore() {
+			return useUsersStore()
+		},
 		nodes() {
-			return this.$store.getters['dashboard/nodes']
+			return this.dashboardStore.nodes
 		},
 		authenticated() {
-			return this.$store.getters['auth/authenticated']
+			return this.authStore.authenticated
 		},
 		username() {
-			return this.$store.getters['auth/username']
+			return this.authStore.username
 		},
 		navItems() {
 			const items = [
@@ -141,7 +157,7 @@ export default {
 					route: 'config'
 				},
 			]
-			if (this.$store.getters['users/isAdmin']) {
+			if (this.usersStore.isAdmin) {
 				items.push({
 					name: 'users',
 					icon: 'mdi-account-multiple',
@@ -169,7 +185,7 @@ export default {
 
 	methods: {
 		hideAppLoader() {
-			this.$store.dispatch('ui/showAppLoader', false)
+			this.uiStore.showAppLoader(false)
 		},
 		showSSESignal() {
 			const vm = this

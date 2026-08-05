@@ -11,7 +11,7 @@ import '../components/dashboard/index.js'
 import '../components/config/index.js'
 import '../components/settings/index.js'
 import '../components/users/index.js'
-import store from '../store/index.js'
+import {useUsersStore} from '../store/modules/users.js'
 
 const routes = [
 	{
@@ -57,10 +57,11 @@ const routes = [
 					default: () => loadSfc('/static/spa/pages/Users.vue')
 				},
 				beforeEnter: async (to, from, next) => {
-					if (!store.getters['users/currentUser']) {
-						await store.dispatch('users/fetchCurrentUser')
+					const usersStore = useUsersStore()
+					if (!usersStore.currentUser) {
+						await usersStore.fetchCurrentUser()
 					}
-					if (store.getters['users/isAdmin']) {
+					if (usersStore.isAdmin) {
 						next()
 					} else {
 						next({name: 'home'})

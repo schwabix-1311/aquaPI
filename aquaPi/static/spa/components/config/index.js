@@ -1,6 +1,8 @@
 import './comps.js'
 import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
+import {useDashboardStore} from '../../store/modules/dashboard.js'
+import {useConfigStore} from '../../store/modules/config.js'
 
 const CANVAS_MIN_WIDTH = 1200
 const CANVAS_MIN_HEIGHT = 700
@@ -127,8 +129,14 @@ const AquapiConfig = {
 	},
 
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
+		configStore() {
+			return useConfigStore()
+		},
 		nodes: function() {
-			return this.$store.getters['config/draftNodes']
+			return this.configStore.draftNodes
 		},
 		nodesById: function() {
 			const map = {}
@@ -136,10 +144,10 @@ const AquapiConfig = {
 			return map
 		},
 		draftDirty: function() {
-			return this.$store.getters['config/draftDirty']
+			return this.configStore.draftDirty
 		},
 		nodeTypes: function() {
-			return this.$store.getters['config/nodeTypes']
+			return this.configStore.nodeTypes
 		},
 		nodesForConnections: function() {
 			// Overlay any in-progress drag position so connections visibly
@@ -167,23 +175,23 @@ const AquapiConfig = {
 		async loadAll() {
 			this.loading = true
 			await Promise.all([
-				this.$store.dispatch('dashboard/fetchNodes'),
-				this.$store.dispatch('config/fetchNodeTypes'),
+				this.dashboardStore.fetchNodes(),
+				this.configStore.fetchNodeTypes(),
 			])
-			this.$store.dispatch('config/initDraft')
+			this.configStore.initDraft()
 			this.loading = false
 		},
 
 		async onSave() {
 			this.saving = true
 			try {
-				const result = await this.$store.dispatch('config/saveDraft')
+				const result = await this.configStore.saveDraft()
 				if (!result.ok) {
 					this.error = result.error
 					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
 					return
 				}
-				this.$store.dispatch('config/initDraft')
+				this.configStore.initDraft()
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 			} finally {
 				this.saving = false
@@ -195,7 +203,7 @@ const AquapiConfig = {
 			if (!ok) {
 				return
 			}
-			this.$store.dispatch('config/initDraft')
+			this.configStore.initDraft()
 			this.selectMode = false
 			this.selectedIds = []
 			this.$toast.success(this.$t('pages.config.changesDiscarded'))
@@ -204,7 +212,7 @@ const AquapiConfig = {
 		async reinitDraft() {
 			this.selectMode = false
 			this.selectedIds = []
-			this.$store.dispatch('config/initDraft')
+			this.configStore.initDraft()
 		},
 
 		openAddDialog: function() {
@@ -270,7 +278,7 @@ const AquapiConfig = {
 				receives = [this.connectingFrom.id]
 			}
 
-			this.$store.dispatch('config/draftUpdateNode', {
+			this.configStore.draftUpdateNode({
 				nodeId: target.id,
 				changes: {receives},
 			})
@@ -281,7 +289,7 @@ const AquapiConfig = {
 			const target = this.nodesById[edge.targetId]
 			if (!target) return
 			const receives = (target.receives || []).filter(id => id !== edge.sourceId)
-			this.$store.dispatch('config/draftUpdateNode', {
+			this.configStore.draftUpdateNode({
 				nodeId: target.id,
 				changes: {receives},
 			})
@@ -294,7 +302,7 @@ const AquapiConfig = {
 		},
 
 		onDragEnd(payload) {
-			this.$store.dispatch('config/draftUpdateNode', {
+			this.configStore.draftUpdateNode({
 				nodeId: payload.node.id,
 				changes: {pos_x: payload.x, pos_y: payload.y},
 			})
@@ -306,7 +314,7 @@ const AquapiConfig = {
 			if (!ok) {
 				return
 			}
-			this.$store.dispatch('config/draftDeleteNode', {nodeId: node.id})
+			this.configStore.draftDeleteNode({nodeId: node.id})
 			if (this.selectMode) {
 				this.selectedIds = this.selectedIds.filter(id => id !== node.id)
 			}

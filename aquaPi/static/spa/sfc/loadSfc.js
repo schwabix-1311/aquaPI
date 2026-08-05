@@ -5,6 +5,11 @@ import {AquapiConfirmDialog} from '../components/app/AquapiConfirmDialog.vue.js'
 import {AquapiToast} from '../components/app/AquapiToast.vue.js'
 import {AppFooComp} from '../comps.js'
 import i18n from '../i18n/index.js'
+import {useUiStore} from '../store/modules/ui.js'
+import {useAuthStore} from '../store/modules/auth.js'
+import {useDashboardStore} from '../store/modules/dashboard.js'
+import {useConfigStore} from '../store/modules/config.js'
+import {useUsersStore} from '../store/modules/users.js'
 
 // Thin wrapper around vue3-sfc-loader's loadModule(), so callers can just
 // do `() => loadSfc('/static/spa/pages/About.vue')` as an async component
@@ -31,6 +36,11 @@ const options = {
 		'app/AquapiToast': {AquapiToast},
 		'app/comps': {AppFooComp},
 		'app/i18n': {i18n},
+		'store/ui': {useUiStore},
+		'store/auth': {useAuthStore},
+		'store/dashboard': {useDashboardStore},
+		'store/config': {useConfigStore},
+		'store/users': {useUsersStore},
 	},
 
 	async getFile(url) {

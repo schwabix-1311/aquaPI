@@ -6,7 +6,7 @@
 
 import {registerGlobalComponent} from '../app/registry.js'
 
-const NODE_BOX_WIDTH = 190
+const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
 
 const ROLE_COLORS = {
@@ -37,14 +37,14 @@ const ConfigNodeBox = {
 			<div class="d-flex align-center justify-space-between px-2 pt-1">
 				<v-chip x-small label :color="color" text-color="white">{{ node.role }}</v-chip>
 				<div>
-     <v-btn icon x-small variant="text" color="grey-darken-1" @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
-						<v-icon small>mdi-vector-line</v-icon>
+     <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
+						<v-icon size="small">mdi-vector-line</v-icon>
 					</v-btn>
-     <v-btn icon x-small variant="text" color="grey-darken-1" @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
-						<v-icon small>mdi-pencil</v-icon>
+     <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
+						<v-icon size="small">mdi-pencil</v-icon>
 					</v-btn>
-     <v-btn icon x-small variant="text" color="grey-darken-1" @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
-						<v-icon small>mdi-delete</v-icon>
+     <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
+						<v-icon size="small">mdi-delete</v-icon>
 					</v-btn>
 				</div>
 			</div>
@@ -118,16 +118,18 @@ const ConfigConnections = {
 				@mouseenter="hoveredEdgeKey = edge.key"
 				@mouseleave="hoveredEdgeKey = null"
 			>
-				<line
-					:x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+				<path
+					:d="edge.path"
+					fill="none"
 					class="config-connection-hit"
-				></line>
-				<line
-					:x1="edge.x1" :y1="edge.y1" :x2="edge.x2" :y2="edge.y2"
+				></path>
+				<path
+					:d="edge.path"
+					fill="none"
 					stroke="#90a4ae" stroke-width="2" marker-end="url(#config-arrow)"
 					class="config-connection-line"
 					:class="{'config-connection-line--hover': hoveredEdgeKey === edge.key}"
-				></line>
+				></path>
 				<g
 					v-if="hoveredEdgeKey === edge.key"
 					class="config-connection-delete"
@@ -167,12 +169,19 @@ const ConfigConnections = {
 					const y1 = (source.pos_y || 0) + NODE_BOX_HEIGHT / 2
 					const x2 = (target.pos_x || 0)
 					const y2 = (target.pos_y || 0) + NODE_BOX_HEIGHT / 2
+					const midX = (x1 + x2) / 2
+					const midY = (y1 + y2) / 2
+					// Angled (elbow) route: horizontal-vertical-horizontal, so the
+					// side of a card a connection touches (right = output, left =
+					// input) stays visually clear, instead of a plain diagonal line.
+					const path = 'M' + x1 + ',' + y1 + ' H' + midX + ' V' + y2 + ' H' + x2
 					edges.push({
 						key: sourceId + '->' + target.id,
 						sourceId, targetId: target.id,
 						x1, y1, x2, y2,
-						midX: (x1 + x2) / 2,
-						midY: (y1 + y2) / 2,
+						path,
+						midX,
+						midY,
 					})
 				})
 			})
@@ -380,8 +389,8 @@ const ConfigTemplatesDialog = {
 	},
 	template: `
 		<v-dialog v-model="show" max-width="640" :persistent="restoring">
-			<v-card>
-				<v-overlay v-if="restoring" absolute :opacity="0.85" color="white">
+			<v-card class="position-relative">
+				<v-overlay v-if="restoring" contained :model-value="true" :opacity="0.85" color="white">
 					<div class="text-center black--text">
 						<aquapi-loading-indicator color="primary"></aquapi-loading-indicator>
 						<div class="mt-3">{{ $t('pages.config.restoringSnapshot') }}</div>
@@ -395,8 +404,8 @@ const ConfigTemplatesDialog = {
 				<v-card-text>
 					<v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>
 
-					<v-tabs-items v-model="tab">
-						<v-tab-item>
+					<v-window v-model="tab">
+						<v-window-item>
 							<div class="d-flex align-center mt-3 mb-2">
 								<v-text-field
 									v-model="newTemplateName"
@@ -417,26 +426,22 @@ const ConfigTemplatesDialog = {
 
 							<v-list dense v-if="templates.length">
 								<v-list-item v-for="tpl in templates" :key="tpl.name">
-									<v-list-item-content>
-										<v-list-item-title>{{ tpl.name }}</v-list-item-title>
-										<v-list-item-subtitle>{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
-									</v-list-item-content>
-									<v-list-item-action>
+									<v-list-item-title>{{ tpl.name }}</v-list-item-title>
+									<v-list-item-subtitle>{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
+									<template #append>
           <v-btn icon variant="text" color="grey-darken-1" @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
 											<v-icon>mdi-tray-arrow-down</v-icon>
 										</v-btn>
-									</v-list-item-action>
-									<v-list-item-action>
           <v-btn icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
-									</v-list-item-action>
+									</template>
 								</v-list-item>
 							</v-list>
 							<v-alert v-else type="info" text dense>{{ $t('pages.config.hintNoTemplates') }}</v-alert>
-						</v-tab-item>
+						</v-window-item>
 
-						<v-tab-item>
+						<v-window-item>
 							<div class="d-flex align-center mt-3 mb-2">
 								<v-text-field
 									v-model="newSnapshotName"
@@ -454,25 +459,21 @@ const ConfigTemplatesDialog = {
 
 							<v-list dense v-if="snapshots.length">
 								<v-list-item v-for="snap in snapshots" :key="snap.name">
-									<v-list-item-content>
-										<v-list-item-title>{{ snap.name }}</v-list-item-title>
-										<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
-									</v-list-item-content>
-									<v-list-item-action>
+									<v-list-item-title>{{ snap.name }}</v-list-item-title>
+									<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
+									<template #append>
           <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
 											<v-icon>mdi-restore</v-icon>
 										</v-btn>
-									</v-list-item-action>
-									<v-list-item-action>
           <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
-									</v-list-item-action>
+									</template>
 								</v-list-item>
 							</v-list>
 							<v-alert v-else type="info" text dense>{{ $t('pages.config.hintNoSnapshots') }}</v-alert>
-						</v-tab-item>
-					</v-tabs-items>
+						</v-window-item>
+					</v-window>
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>

@@ -527,11 +527,11 @@ const HistoryChart = {
 
 						<v-btn
 							v-if="renderType != 'modal'"
-							icon
 							small
 							variant="text"
 							color="grey-darken-1"
-							class="ms-2"
+							class="ms-2 px-1"
+							min-width="0"
 							@click="openModal"
 						>
 							<v-icon>mdi-arrow-expand-all</v-icon>

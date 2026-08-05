@@ -166,6 +166,8 @@ export default
 	misc: {
 		legacySettingsLink: '(alte) Settings',
 		dummyComponentText: 'Einfach nur \'ne Dummy-Komponente für Testzwecke',
+		genericLabel: 'Bezeichnung',
+		genericValue: 'Wert',
 		language: {
 			label: 'Sprache',
 			de: 'Deutsch',

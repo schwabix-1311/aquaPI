@@ -923,12 +923,12 @@ const AquapiNodeData = {
 		<v-row no-gutters>
 			<v-col cols="6">
 				<slot name="label">
-					Label
+					{{ $t('misc.genericLabel') }}
 				</slot>
 			</v-col>
 			<v-col cols="6">
 				<slot name="value">
-					Value
+					{{ $t('misc.genericValue') }}
 				</slot>
 			</v-col>
 		</v-row>
@@ -949,7 +949,7 @@ const AquapiNodeAlert = {
 	},
 	template: `
 		<slot name="value">
-			Value
+			{{ $t('misc.genericValue') }}
 			<v-list-item
 				v-for="(item, index) in value"
 				:key="index"

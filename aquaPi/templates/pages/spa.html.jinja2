@@ -42,11 +42,19 @@
 			</div>
 		</div>
 
+		{% if config.DEBUG %}
 		<script src="{{ url_for('static', filename='libs/vue.3.5.40.global.js') }}"></script>
 		<script src="{{ url_for('static', filename='libs/pinia.4.0.2.iife.js') }}"></script>
 		<script src="{{ url_for('static', filename='libs/vue-router.4.6.4.global.js') }}"></script>
 		<script src="{{ url_for('static', filename='libs/vue-i18n.9.14.5.global.js') }}"></script>
 		<script src="{{ url_for('static', filename='libs/vuetify.3.13.0.global.js') }}"></script>
+		{% else %}
+		<script src="{{ url_for('static', filename='libs/vue.3.5.40.global.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/pinia.4.0.2.iife.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-router.4.6.4.global.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-i18n.9.14.5.global.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vuetify.3.13.0.min.js') }}"></script>
+		{% endif %}
 		<script src="{{ url_for('static', filename='libs/vue3-sfc-loader.0.9.5.js') }}"></script>
 
 		<script src="{{ url_for('static', filename='libs/chart.js.4.0.1.js') }}"></script>

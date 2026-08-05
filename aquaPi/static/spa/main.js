@@ -75,10 +75,10 @@ const app = Vue.createApp({
 		},
 		toggleDarkMode() {
 			if (this.$vuetify.theme.global.name === 'dark') {
-				this.$vuetify.theme.global.name = 'light'
+				this.$vuetify.theme.change('light')
 				this.uiStore.setDarkMode(false)
 			} else {
-				this.$vuetify.theme.global.name = 'dark'
+				this.$vuetify.theme.change('dark')
 				this.uiStore.setDarkMode(true)
 			}
 		},
@@ -135,7 +135,7 @@ const app = Vue.createApp({
 		try {
 			const itemTheme = window.localStorage.getItem('aquapi.theme')
 			if (itemTheme) {
-				this.$vuetify.theme.global.name = (itemTheme == 'dark') ? 'dark' : 'light'
+				this.$vuetify.theme.change((itemTheme == 'dark') ? 'dark' : 'light')
 				this.uiStore.setDarkMode((itemTheme == 'dark'))
 			}
 		} catch(e) {}

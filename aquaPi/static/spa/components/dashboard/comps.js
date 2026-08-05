@@ -236,6 +236,18 @@ const BusNode = {
 
 const ControllerNode = {
 	extends: BusNode,
+	computed: {
+		// only append rcv_unit when the setpoint is a numeric value - for
+		// BINARY/PERCENT controllers the setpoint is rendered as on/off
+		// text instead (see misc.dataRange.binary/percent), where a unit
+		// suffix wouldn't make sense.
+		setpointUnitSuffix() {
+			const node = this.node
+			if (!node || !node.rcv_unit) return ''
+			if (typeof node.setpoint !== 'number') return ''
+			return ' ' + node.rcv_unit.trim()
+		}
+	},
 }
 //Vue.component('ControllerNode', ControllerNode)  //??
 
@@ -244,7 +256,7 @@ const MinimumCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return this.$t('dashboard.widget.setpoint.minimum') + this.node.setpoint.toString()
+			return this.$t('dashboard.widget.setpoint.minimum') + this.node.setpoint.toString() + this.setpointUnitSuffix
 		},
 	},
 }
@@ -255,7 +267,7 @@ const MaximumCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return this.$t('dashboard.widget.setpoint.maximum') + this.node.setpoint.toString()
+			return this.$t('dashboard.widget.setpoint.maximum') + this.node.setpoint.toString() + this.setpointUnitSuffix
 		},
 	},
 }
@@ -266,7 +278,7 @@ const PidCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return this.$t('dashboard.widget.setpoint.equals') + this.node.setpoint.toString()
+			return this.$t('dashboard.widget.setpoint.equals') + this.node.setpoint.toString() + this.setpointUnitSuffix
 		},
 	},
 }

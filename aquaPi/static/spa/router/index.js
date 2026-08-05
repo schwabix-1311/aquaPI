@@ -77,11 +77,16 @@ const router = VueRouter.createRouter({
 	history: VueRouter.createWebHashHistory(),
 	routes,
 	scrollBehavior(to, from, savedPosition) {
-		const mainWrapper = document.querySelector('div.v-main__wrap')
+		// Vuetify 3 no longer renders a `.v-main__wrap` child div (that was
+		// a Vuetify 2 implementation detail) - see app.css's own comment on
+		// `.v-main { overflow-y: auto }` - `.v-main` itself is now the
+		// actual scroll container in this app.
+		const mainWrapper = document.querySelector('.v-main')
 		if (mainWrapper) {
 			mainWrapper.scrollTop = 0
 		}
-		return {x: 0, y: 0}
+		// vue-router 4 expects {left, top}, not {x, y}
+		return {left: 0, top: 0}
 	}
 });
 

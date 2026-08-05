@@ -824,14 +824,15 @@ const HistoryChart = {
 		}
 	},
 	async created() {
-		EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, async (payload) => {
+		this._sseHandler = async (payload) => {
 			if (payload.id === this.node.id) {
 				await this.loadHistory()
 				if (this.chart !== null) {
 					this.chart.update()
 				}
 			}
-		})
+		}
+		EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this._sseHandler)
 	},
 
 	async mounted() {
@@ -855,7 +856,7 @@ const HistoryChart = {
 	},
 
 	unmounted() {
-		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
+		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this._sseHandler)
 
 		if (this.chart != null) {
 			this.chart.destroy()

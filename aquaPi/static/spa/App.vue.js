@@ -3,9 +3,7 @@ import {useDashboardStore} from './store/modules/dashboard.js'
 
 const App = {
 	template: `
-		<v-app>
-			<router-view></router-view>
-		</v-app>
+		<router-view></router-view>
 	`,
 	name: 'App',
 	data: () => ({

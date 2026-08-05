@@ -65,9 +65,11 @@
 
 		<v-main>
 			<v-container :fluid="containerFluid" class="pa-5">
-				 <transition name="fade" mode="out-in" :duration="uiStore.navigation.transitionDuration">
-					<router-view name="default" class="view"></router-view>
-				</transition>
+				<router-view name="default" v-slot="{ Component }">
+					<transition name="fade" mode="out-in" :duration="uiStore.navigation.transitionDuration">
+						<component :is="Component" class="view"></component>
+					</transition>
+				</router-view>
 			</v-container>
 		</v-main>
 

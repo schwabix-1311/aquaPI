@@ -3,7 +3,6 @@
 		<aquapi-page-heading
 			:heading="$t('pages.about.heading')"
 			icon="mdi-information-outline"
-			:buttons="[{icon: 'mdi-gift', action: donate}]"
 		></aquapi-page-heading>
 
 		<v-card-text>
@@ -32,11 +31,5 @@
 </template>
 
 <script>
-export default {
-	methods: {
-		donate() {
-			this.$alert(this.$t('pages.about.donateMessage'))
-		}
-	}
-}
+export default {}
 </script>

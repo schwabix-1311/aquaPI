@@ -167,7 +167,7 @@ const BusNode = {
 				>
 					<v-expansion-panel>
 						<v-expansion-panel-title
-							class="py-0 px-4"
+							class="py-0 px-4 text-caption"
 						>
 							{{ $t('dashboard.widget.inputs.label') }}
 						</v-expansion-panel-title>

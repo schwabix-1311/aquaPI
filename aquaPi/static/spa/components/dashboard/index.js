@@ -12,10 +12,7 @@ const AquapiDashboardConfigurator = {
 			width="500"
 			location="right"
 			temporary
-			app
-			dark
-			fixed
-			:style="'max-width:100vw;'"
+			:style="($vuetify.theme.global.current.dark ? 'max-width:100vw; background-color: rgba(33,33,33,0.7);' : 'max-width:100vw; background-color: rgba(255,255,255,0.7);')"
 			id="dashboard_configurator"
 		>
 			<v-card elevation="0" color="transparent">

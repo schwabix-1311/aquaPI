@@ -77,6 +77,8 @@ export default
 			confirmLeaveUnsaved: 'Es gibt ungespeicherte Änderungen. Diese verwerfen und die Seite verlassen?',
 			deleteConnection: 'Verbindung löschen',
 			changesDiscarded: 'Änderungen verworfen',
+			portIn: 'Eingang',
+			portOut: 'Ausgang',
 		},
 		about: {
 			label: 'Über aquaPi',

@@ -77,6 +77,8 @@ export default
 			confirmLeaveUnsaved: 'There are unsaved changes. Discard them and leave the page?',
 			deleteConnection: 'Delete connection',
 			changesDiscarded: 'Changes discarded',
+			portIn: 'Input',
+			portOut: 'Output',
 		},
 		about: {
 			label: 'About',

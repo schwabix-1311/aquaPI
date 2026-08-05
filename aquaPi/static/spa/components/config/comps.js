@@ -21,6 +21,7 @@ const ROLE_COLORS = {
 const ConfigNodeBox = {
 	props: {
 		node: {type: Object, required: true},
+		nodeTypes: {type: Object, default: () => ({})},
 		connecting: {type: Boolean, default: false},
 		selected: {type: Boolean, default: false},
 	},
@@ -34,6 +35,8 @@ const ConfigNodeBox = {
 			@mousedown.stop="onDragStart"
 			@click.stop="onClick"
 		>
+			<div v-if="hasInput" class="config-node-port config-node-port--in" :title="$t('pages.config.portIn')"></div>
+			<div v-if="hasOutput" class="config-node-port config-node-port--out" :title="$t('pages.config.portOut')"></div>
 			<div class="d-flex align-center justify-space-between px-2 pt-1">
 				<v-chip x-small label :color="color" text-color="white">{{ node.role }}</v-chip>
 				<div>
@@ -76,6 +79,15 @@ const ConfigNodeBox = {
 				top: this.localY + 'px',
 				width: NODE_BOX_WIDTH + 'px',
 			}
+		},
+		hasInput: function() {
+			const schema = this.nodeTypes[this.node.type]
+			return !schema || schema.receives !== 'none'
+		},
+		hasOutput: function() {
+			// Every node type can be a pub/sub source; the schema has no
+			// explicit "can be a source" flag, so this is always shown.
+			return true
 		},
 	},
 	methods: {

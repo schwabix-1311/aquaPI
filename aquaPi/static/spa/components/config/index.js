@@ -72,7 +72,7 @@ const AquapiConfig = {
 				<div v-else class="config-canvas-wrapper">
 					<div class="config-canvas" :style="canvasStyle">
 						<config-connections
-							:nodes="nodes"
+							:nodes="nodesForConnections"
 							:width="canvasWidth"
 							:height="canvasHeight"
 							@remove="onRemoveEdge"
@@ -82,6 +82,7 @@ const AquapiConfig = {
 							v-for="node in nodes"
 							:key="node.identifier"
 							:node="node"
+							:node-types="nodeTypes"
 							:connecting="connectingFrom && connectingFrom.id === node.id"
 							:selected="selectedIds.includes(node.id)"
 							@select="onSelect"
@@ -121,6 +122,7 @@ const AquapiConfig = {
 			selectMode: false,
 			selectedIds: [],
 			error: null,
+			dragPositions: {},
 		}
 	},
 
@@ -138,6 +140,15 @@ const AquapiConfig = {
 		},
 		nodeTypes: function() {
 			return this.$store.getters['config/nodeTypes']
+		},
+		nodesForConnections: function() {
+			// Overlay any in-progress drag position so connections visibly
+			// follow a card while it's being dragged, not just after drop.
+			return this.nodes.map(node => {
+				const drag = this.dragPositions[node.id]
+				if (!drag) return node
+				return Object.assign({}, node, {pos_x: drag.x, pos_y: drag.y})
+			})
 		},
 		canvasWidth: function() {
 			const maxX = this.nodes.reduce((m, n) => Math.max(m, (n.pos_x || 0) + NODE_BOX_WIDTH + 60), 0)
@@ -277,7 +288,9 @@ const AquapiConfig = {
 		},
 
 		onDrag: function(payload) {
-			// local-only while dragging, position is committed on drag-end
+			// local-only override for live-tracking connection lines while
+			// dragging; the draft store position is only committed on drag-end.
+			this.dragPositions[payload.node.id] = {x: payload.x, y: payload.y}
 		},
 
 		onDragEnd(payload) {
@@ -285,6 +298,7 @@ const AquapiConfig = {
 				nodeId: payload.node.id,
 				changes: {pos_x: payload.x, pos_y: payload.y},
 			})
+			delete this.dragPositions[payload.node.id]
 		},
 
 		async onDelete(node) {

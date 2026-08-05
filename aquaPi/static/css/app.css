@@ -220,3 +220,28 @@ html::-webkit-scrollbar {
 .config-node-box--selected {
     outline: 2px solid #43a047;
 }
+/* Small input/output port markers on node cards, so the connector
+   attachment side (left = input, right = output) is visually obvious
+   directly on the card, not just implied by the connector's geometry. */
+.config-node-port {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    /* auto (not none), so the title tooltip actually fires on hover;
+       mousedown still bubbles up to the card's own drag handler. */
+    pointer-events: auto;
+    cursor: move;
+    z-index: 1;
+}
+.config-node-port--in {
+    left: -5px;
+    background-color: #1976d2;
+}
+.config-node-port--out {
+    right: -5px;
+    background-color: #90a4ae;
+}

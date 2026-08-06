@@ -3,6 +3,91 @@ import {registerGlobalComponent} from '../app/registry.js'
 import {useUiStore} from '../../store/modules/ui.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 
+// Dependency-free replacement for vue-masonry-css (Vue-2-only, removed in
+// the Vue 3 migration): real masonry via native CSS column-count, so the
+// browser packs items into whichever column is shortest so far, instead of
+// round-robin bucketing by index (which can leave one column much taller
+// than the others when card heights vary).
+const Masonry = {
+	name: 'Masonry',
+	props: {
+		cols: {
+			type: [Number, Object],
+			default: 2
+		},
+		gutter: {
+			type: [Number, String],
+			default: 0
+		}
+	},
+	template: `
+		<div ref="wrapper" :style="wrapperStyle">
+			<slot></slot>
+		</div>
+	`,
+	data() {
+		return {
+			currentCols: 2,
+			resizeObserver: null
+		}
+	},
+	computed: {
+		gutterPx() {
+			return (typeof this.gutter === 'number') ? this.gutter + 'px' : this.gutter
+		},
+		wrapperStyle() {
+			return {
+				columnCount: this.currentCols,
+				columnGap: this.gutterPx
+			}
+		}
+	},
+	methods: {
+		resolveCols(width) {
+			if (typeof this.cols === 'number') {
+				return this.cols
+			}
+			if (typeof this.cols !== 'object' || this.cols === null) {
+				return 2
+			}
+			// Breakpoints ascending, first one >= current width wins - same
+			// semantics as vue-masonry-css's cols object.
+			const breakpoints = Object.keys(this.cols)
+				.filter(k => k !== 'default')
+				.map(Number)
+				.sort((a, b) => a - b)
+
+			for (const bp of breakpoints) {
+				if (width <= bp) {
+					return this.cols[bp]
+				}
+			}
+			return this.cols.default ?? 2
+		},
+		updateCols(width) {
+			this.currentCols = this.resolveCols(width)
+		}
+	},
+	mounted() {
+		// Measure the wrapper's own width via ResizeObserver (not raw
+		// window width), so nav-drawer toggling, container padding, etc.
+		// are accounted for - not just plain browser resize.
+		this.resizeObserver = new ResizeObserver((entries) => {
+			const width = entries[0]?.contentRect?.width
+			if (width !== undefined) {
+				this.updateCols(width)
+			}
+		})
+		this.resizeObserver.observe(this.$refs.wrapper)
+		this.updateCols(this.$refs.wrapper.offsetWidth)
+	},
+	unmounted() {
+		this.resizeObserver?.disconnect()
+		this.resizeObserver = null
+	}
+}
+registerGlobalComponent('Masonry', Masonry)
+
 const AquapiDashboardConfigurator = {
 	template: `
 		<teleport to="body">
@@ -372,34 +457,26 @@ const AquapiDashboard = {
 					</v-col>
 				</v-row>
 
-				<div class="aquapi-dashboard-masonry" ref="masonryContainer">
+				<masonry
+					:cols="{default: 3, 1264: 3, 960: 2, 600: 1}"
+					:gutter="24"
+				>
 					<div
-						v-for="(column, colIndex) in columns"
-						:key="colIndex"
-						class="aquapi-dashboard-masonry-col"
+						v-for="(item, index) in widgets"
+						:key="item.identifier"
+						class="mb-6"
+						style="break-inside: avoid;"
 					>
-						<div 
-							v-for="item in column" 
-							:key="item.identifier"
-							class="mb-6"
+						<aquapi-dashboard-widget
+							:item="item"
+							:addTitle="true"
 						>
-							<aquapi-dashboard-widget
-								:item="item"
-								:addTitle="true"
-							>
-							</aquapi-dashboard-widget>
-						</div>
+						</aquapi-dashboard-widget>
 					</div>
-				</div>
+				</masonry>
 			</v-card-text>
 		</v-card>
 	`,
-
-	data() {
-		return {
-			containerWidth: (typeof window !== 'undefined' ? window.innerWidth : 1264),
-		};
-	},
 
 	computed: {
 		dashboardStore() {
@@ -420,30 +497,6 @@ const AquapiDashboard = {
 			set(items) {
 				this.dashboardStore.setNodes(items)
 			}
-		},
-		// measured from the dashboard's own masonry container (via
-		// ResizeObserver, see mounted()) rather than the raw window width,
-		// so the nav drawer's width/the container's padding are accounted
-		// for; mirrors the old vue-masonry-css {default: 3, 1264: 3, 960: 2, 600: 1} breakpoints
-		desiredColumns() {
-			if (this.containerWidth >= 960) {
-				return 3
-			}
-			if (this.containerWidth >= 600) {
-				return 2
-			}
-			return 1
-		},
-		// never create more columns than there are visible widgets, so
-		// toggling a widget's visibility never leaves a trailing column
-		// completely empty
-		columnCount() {
-			return Math.min(this.desiredColumns, this.widgets.length || 1)
-		},
-		columns() {
-			const cols = Array.from({length: this.columnCount}, () => [])
-			this.widgets.forEach((item, i) => cols[i % this.columnCount].push(item))
-			return cols
 		},
 	},
 
@@ -466,19 +519,6 @@ const AquapiDashboard = {
 	},
 	async mounted() {
 		await this.loadConfig()
-		if (this.$refs.masonryContainer) {
-			this.containerWidth = this.$refs.masonryContainer.getBoundingClientRect().width
-			this._resizeObserver = new ResizeObserver((entries) => {
-				this.containerWidth = entries[0].contentRect.width
-			})
-			this._resizeObserver.observe(this.$refs.masonryContainer)
-		}
-	},
-	unmounted() {
-		if (this._resizeObserver) {
-			this._resizeObserver.disconnect()
-			this._resizeObserver = null
-		}
 	},
 }
 registerGlobalComponent('AquapiDashboard', AquapiDashboard)

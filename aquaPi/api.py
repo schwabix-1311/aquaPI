@@ -324,7 +324,7 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
     elif vtype == 'select':
         if not isinstance(raw_value, str):
             raise ValueError(f'{key}: expected a string')
-        if voptions is not None and raw_value not in voptions:
+        if raw_value and voptions is not None and raw_value not in voptions:
             raise ValueError(f'{key}: {raw_value!r} is not a valid choice')
         return raw_value
     elif vtype == 'multiselect':
@@ -436,7 +436,7 @@ def api_node_types() -> Response:
         listed here (their 'conditions' are out of scope for this
         generic editor).
     """
-    return jsonify(db.NODE_TYPE_SCHEMA)
+    return jsonify(db.get_node_type_schema())
 
 
 @bp.route('/api/nodes/', methods=['POST'])

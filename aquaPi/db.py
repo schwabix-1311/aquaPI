@@ -20,6 +20,7 @@
     'receives' wiring don't need a rigid, per-type schema.
 """
 
+import copy
 import json
 import logging
 import secrets
@@ -42,6 +43,7 @@ from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
 from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux)
 from .machineroom.hist_nodes import History
 from .machineroom.alert_nodes import (Alert, AlertAbove, AlertBelow)
+from .driver import IoRegistry
 from .driver.base import DriverError
 
 
@@ -101,7 +103,7 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
     'AnalogInput': {
         'receives': 'none',
         'fields': [
-            {'key': 'port', 'label': 'Input port', 'type': 'text', 'default': ''},
+            {'key': 'port', 'label': 'Input port', 'type': 'select', 'default': ''},
             {'key': 'initval', 'label': 'Initial value', 'type': 'number', 'default': 0.0},
             {'key': 'unit', 'label': 'Unit', 'type': 'text', 'default': ''},
             {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
@@ -113,7 +115,7 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
     'SwitchInput': {
         'receives': 'none',
         'fields': [
-            {'key': 'port', 'label': 'Input port', 'type': 'text', 'default': ''},
+            {'key': 'port', 'label': 'Input port', 'type': 'select', 'default': ''},
             {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
              'min': 0.1, 'default': 0.5},
             {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
@@ -128,7 +130,7 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
     'AnalogDevice': {
         'receives': 'single',
         'fields': [
-            {'key': 'port', 'label': 'Output port', 'type': 'text', 'default': ''},
+            {'key': 'port', 'label': 'Output port', 'type': 'select', 'default': ''},
             {'key': 'minimum', 'label': 'Minimum [%]', 'type': 'number',
              'min': 0, 'max': 99, 'default': 0},
             {'key': 'maximum', 'label': 'Maximum [%]', 'type': 'number',
@@ -139,7 +141,7 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
     'SlowPwmDevice': {
         'receives': 'single',
         'fields': [
-            {'key': 'port', 'label': 'Output port', 'type': 'text', 'default': ''},
+            {'key': 'port', 'label': 'Output port', 'type': 'select', 'default': ''},
             {'key': 'cycle', 'label': 'PWM cycle time [s]', 'type': 'number',
              'min': 10, 'max': 300, 'default': 60.0},
             {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
@@ -148,7 +150,7 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
     'SwitchDevice': {
         'receives': 'single',
         'fields': [
-            {'key': 'port', 'label': 'Output port', 'type': 'text', 'default': ''},
+            {'key': 'port', 'label': 'Output port', 'type': 'select', 'default': ''},
             {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
         ],
     },
@@ -223,6 +225,29 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
         ],
     },
 }
+
+
+def get_node_type_schema() -> dict[str, dict[str, Any]]:
+    """ Deep-copy NODE_TYPE_SCHEMA and populate live 'options' lists for
+        node types that have a 'port' field, sourced from IoRegistry.
+    """
+    schema = copy.deepcopy(NODE_TYPE_SCHEMA)
+    for type_name, cls in NODE_FACTORY.items():
+        if type_name not in schema:
+            continue
+        port_funcs = getattr(cls, '_port_funcs', None)
+        if not port_funcs:
+            continue
+        try:
+            free = IoRegistry.get().get_ports_by_function(port_funcs, in_use=False)
+            options = sorted(free)
+        except Exception:
+            options = []
+        for field in schema[type_name].get('fields', []):
+            if field.get('key') == 'port':
+                field['type'] = 'select'
+                field['options'] = options
+    return schema
 
 
 def _mk_receives_arg(receives_kind: str, receives: list[str]):

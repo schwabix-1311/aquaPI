@@ -3,7 +3,7 @@ generatedBy: Claude Code (dev_thk)
 date: 2026-08-06
 ---
 
-# Implementation Status: ✓ Done (Steps 1-4), 🗣️ Proposed for discussion (Step 5)
+# Implementation Status: ✓ Done (Steps 1-5)
 
 `Setting` (`aquaPi/machineroom/msg_bus.py`) now supports `type='select'`/`'multiselect'`
 with an `options: list[str]` choice list, plus an `optional: bool` flag (fields are

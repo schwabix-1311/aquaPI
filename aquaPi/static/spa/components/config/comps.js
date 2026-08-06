@@ -259,6 +259,23 @@ const ConfigNodeDialog = {
 							:label="field.label"
 							dense
 						></v-switch>
+						<v-select
+							v-else-if="field.type === 'select'"
+							v-model="form.fields[field.key]"
+							:items="field.options || []"
+							:label="field.label"
+							outlined dense
+							clearable
+						></v-select>
+						<v-select
+							v-else-if="field.type === 'multiselect'"
+							v-model="form.fields[field.key]"
+							:items="field.options || []"
+							:label="field.label"
+							multiple chips
+							outlined dense
+							clearable
+						></v-select>
 						<v-text-field
 							v-else-if="field.type === 'number'"
 							v-model.number="form.fields[field.key]"
@@ -346,7 +363,7 @@ const ConfigNodeDialog = {
 			const values = {}
 			this.schemaFields.forEach(field => {
 				values[field.key] = (node && node[field.key] !== undefined) ? node[field.key]
-					: (field.default !== undefined ? field.default : '')
+					: (field.default !== undefined ? field.default : (field.type === 'multiselect' ? [] : ''))
 			})
 			return values
 		},

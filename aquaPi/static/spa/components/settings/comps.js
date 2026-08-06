@@ -455,15 +455,11 @@ const NodeReceivesEditor = {
 		node: {type: Object, required: true},
 	},
 	template: `
-		<v-select
-			v-model="selected"
-			:items="receivesItems"
-			multiple chips
-			:label="$t('pages.settings.inputs')"
-			outlined dense
-			:loading="saving"
-			@update:modelValue="onChange"
-		></v-select>
+		<setting-multi-select
+			:item="pseudoSetting"
+			:disabled="saving"
+			@update="onChange"
+		></setting-multi-select>
 	`,
 	data: function() {
 		return {
@@ -482,6 +478,16 @@ const NodeReceivesEditor = {
 			return Object.values(this.dashboardStore.nodes)
 				.filter(n => n.id !== this.node.id)
 				.map(n => ({title: n.name + ' (' + n.type + ')', value: n.id}))
+		},
+		pseudoSetting: function() {
+			return {
+				key: 'receives',
+				label: this.$t('pages.settings.inputs'),
+				value: this.selected,
+				attrs: {
+					options: this.receivesItems,
+				},
+			}
 		},
 	},
 	watch: {

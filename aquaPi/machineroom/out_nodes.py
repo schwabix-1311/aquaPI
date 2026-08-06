@@ -8,7 +8,7 @@ import time
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange, Setting)
-from ..driver import (IoRegistry, OutDriver)
+from ..driver import (IoRegistry, OutDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.out_nodes')
@@ -25,6 +25,7 @@ class DeviceNode(BusListener, ABC):
         truth testing, whatever is more intuitive for each dev.
     """
     ROLE = BusRole.OUT_ENDP
+    _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
 
     def __init__(self, name: str, receives: str, port: str,
                  _cont=False):
@@ -70,7 +71,10 @@ class DeviceNode(BusListener, ABC):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('port', 'Output port', self.port))
+        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
+        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
+        settings.append(Setting('port', 'Output port', self.port,
+                                type='select', options=options))
         return settings
 
 
@@ -87,6 +91,7 @@ class SwitchDevice(DeviceNode):
             drive output with bool(input), possibly inverted
     """
     data_range = DataRange.BINARY
+    _port_funcs = [PortFunc.Bout]
 
     def __init__(self, name: str, receives: str, port: str,
                  inverted: bool = False, _cont: bool = False):
@@ -155,6 +160,7 @@ class SlowPwmDevice(DeviceNode):
             drive output with PWM(input/100 * cycle), possibly inverted
     """
     data_range = DataRange.BINARY
+    _port_funcs = [PortFunc.Bout]
 
     def __init__(self, name: str, receives: str, port: str,
                  inverted: bool = False, cycle: float = 60.,
@@ -260,6 +266,7 @@ class AnalogDevice(DeviceNode):
             drive analog output with minimum...maximum, optional perceptive correction
     """
     data_range = DataRange.PERCENT
+    _port_funcs = [PortFunc.Aout]
 
     def __init__(self, name: str, receives: str, port: str,
                  percept: bool = False, minimum: float = 0, maximum: float = 100,

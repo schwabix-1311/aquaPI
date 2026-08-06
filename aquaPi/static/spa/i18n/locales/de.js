@@ -178,6 +178,7 @@ export default
 			confirm: 'Bestätigen',
 			cancel: 'Abbrechen',
 			ok: 'OK',
+			valueRequired: 'Ein Wert ist erforderlich',
 		},
 		toast: {
 			saveSuccess: 'Erfolgreich gespeichert',

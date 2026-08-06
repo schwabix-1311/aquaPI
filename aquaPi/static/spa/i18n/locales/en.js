@@ -178,6 +178,7 @@ export default
 			confirm: 'Confirm',
 			cancel: 'Cancel',
 			ok: 'OK',
+			valueRequired: 'A value is required',
 		},
 		toast: {
 			saveSuccess: 'Saved successfully',

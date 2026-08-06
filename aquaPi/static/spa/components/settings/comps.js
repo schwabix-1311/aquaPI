@@ -4,6 +4,16 @@ import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useConfigStore} from '../../store/modules/config.js'
 import {isHistOrAlert, chainAnchor, ancestors, descendants, flattenEntries} from './chains.js'
 
+// a Setting is required unless attrs.optional is true, and must not be
+// left empty - this is enforced server-side (api.py's _validate_and_cast),
+// the client-side rule is just an earlier visual hint before submit.
+function requiredRule(item, t) {
+	if (item.attrs && item.attrs.optional) {
+		return []
+	}
+	return [v => (Array.isArray(v) ? v.length > 0 : (v !== null && v !== undefined && v !== '')) || t('misc.dialog.valueRequired')]
+}
+
 const SettingNumber = {
 	props: {
 		item: {type: Object, required: true},
@@ -18,6 +28,7 @@ const SettingNumber = {
 			:max="attrs.max"
 			:step="attrs.step || 'any'"
 			:disabled="disabled"
+			:rules="rules"
 			dense
 			outlined
 			hide-details="auto"
@@ -32,7 +43,10 @@ const SettingNumber = {
 	computed: {
 		attrs: function() {
 			return this.item.attrs || {}
-		}
+		},
+		rules: function() {
+			return requiredRule(this.item, this.$t)
+		},
 	},
 	watch: {
 		'item.value': function(val) {
@@ -193,6 +207,7 @@ const SettingText = {
 			:label="item.label"
 			v-model="localValue"
 			:disabled="disabled"
+			:rules="rules"
 			dense
 			outlined
 			hide-details="auto"
@@ -203,6 +218,11 @@ const SettingText = {
 		return {
 			localValue: this.item.value
 		}
+	},
+	computed: {
+		rules: function() {
+			return requiredRule(this.item, this.$t)
+		},
 	},
 	watch: {
 		'item.value': function(val) {
@@ -216,6 +236,95 @@ const SettingText = {
 	}
 }
 registerGlobalComponent('SettingText', SettingText)
+
+const SettingSelect = {
+	props: {
+		item: {type: Object, required: true},
+		disabled: {type: Boolean, default: false},
+	},
+	template: `
+		<v-select
+			:label="item.label"
+			v-model="localValue"
+			:items="attrs.options || []"
+			:disabled="disabled"
+			:rules="rules"
+			dense
+			outlined
+			hide-details="auto"
+			@update:modelValue="onChange"
+		></v-select>
+	`,
+	data: function() {
+		return {
+			localValue: this.item.value
+		}
+	},
+	computed: {
+		attrs: function() {
+			return this.item.attrs || {}
+		},
+		rules: function() {
+			return requiredRule(this.item, this.$t)
+		},
+	},
+	watch: {
+		'item.value': function(val) {
+			this.localValue = val
+		}
+	},
+	methods: {
+		onChange: function() {
+			this.$emit('update', this.localValue)
+		}
+	}
+}
+registerGlobalComponent('SettingSelect', SettingSelect)
+
+const SettingMultiSelect = {
+	props: {
+		item: {type: Object, required: true},
+		disabled: {type: Boolean, default: false},
+	},
+	template: `
+		<v-select
+			:label="item.label"
+			v-model="localValue"
+			:items="attrs.options || []"
+			:disabled="disabled"
+			:rules="rules"
+			multiple chips
+			dense
+			outlined
+			hide-details="auto"
+			@update:modelValue="onChange"
+		></v-select>
+	`,
+	data: function() {
+		return {
+			localValue: this.item.value || []
+		}
+	},
+	computed: {
+		attrs: function() {
+			return this.item.attrs || {}
+		},
+		rules: function() {
+			return requiredRule(this.item, this.$t)
+		},
+	},
+	watch: {
+		'item.value': function(val) {
+			this.localValue = val || []
+		}
+	},
+	methods: {
+		onChange: function() {
+			this.$emit('update', this.localValue)
+		}
+	}
+}
+registerGlobalComponent('SettingMultiSelect', SettingMultiSelect)
 
 const SettingReadonly = {
 	props: {
@@ -244,6 +353,12 @@ function settingWidgetType(item) {
 	}
 	if (attrs.type === 'number') {
 		return (attrs.min !== undefined && attrs.max !== undefined) ? 'SettingSlider' : 'SettingNumber'
+	}
+	if (attrs.type === 'select') {
+		return 'SettingSelect'
+	}
+	if (attrs.type === 'multiselect') {
+		return 'SettingMultiSelect'
 	}
 	return 'SettingText'
 }

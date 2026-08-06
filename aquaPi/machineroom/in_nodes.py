@@ -9,7 +9,7 @@ from croniter import croniter
 from threading import Thread
 
 from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData, Setting)
-from ..driver import (IoRegistry, DriverReadError, InDriver)
+from ..driver import (IoRegistry, DriverReadError, InDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.in_nodes')
@@ -25,6 +25,7 @@ class InputNode(BusNode, ABC):
         All use a reader thread, most reading from IoRegistry port
     """
     ROLE = BusRole.IN_ENDP
+    _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
 
     def __init__(self, name: str, port: str,
                  interval: float = 0.5, _cont: bool = False):
@@ -102,7 +103,10 @@ class InputNode(BusNode, ABC):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('port', 'Input port', self.port))
+        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
+        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
+        settings.append(Setting('port', 'Input port', self.port,
+                                type='select', options=options))
         settings.append(Setting('interval', 'Leseintervall [s]', self.interval,
                                 type='number', min=1, max=600, step=1))
         return settings
@@ -122,8 +126,9 @@ class SwitchInput(InputNode):
             bool - posts state changes only
     """
     data_range = DataRange.BINARY
+    _port_funcs = [PortFunc.Bin]
 
-    def __init__(self, name: str, port: str, 
+    def __init__(self, name: str, port: str,
                  interval: float = 0.5, inverted: bool = False,
                  _cont: bool = False):
         self.inverted: bool = inverted
@@ -174,6 +179,7 @@ class AnalogInput(InputNode):
             float - posts each change of measurement in driver units
     """
     data_range = DataRange.ANALOG
+    _port_funcs = [PortFunc.Ain]
 
     def __init__(self, name: str, port: str, initval: float, unit: str,
                  interval: float = 10.0, avg: int = 0,

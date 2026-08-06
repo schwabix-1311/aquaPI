@@ -48,10 +48,12 @@ class Setting:
     key: str | None       # None = read-only
     label: str
     value: Any
-    type: str = 'text'    # 'number' | 'checkbox' | 'text'
+    type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect'
     min: float | None = None
     max: float | None = None
     step: float | None = None
+    options: list[str] | None = None   # choices for 'select' / 'multiselect'
+    optional: bool = False             # True = value may be left empty/unset
 
     @property
     def editable(self) -> bool:

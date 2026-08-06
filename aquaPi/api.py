@@ -266,6 +266,7 @@ def _settings_entry_to_dict(entry: Setting) -> dict:
     """
     attrs = {k: v for k, v in {
         'type': entry.type, 'min': entry.min, 'max': entry.max, 'step': entry.step,
+        'options': entry.options, 'optional': entry.optional or None,
     }.items() if v is not None}
     return {
         'key': entry.key,
@@ -295,12 +296,17 @@ def api_get_node_settings(node_id: str) -> Response:
 
 
 def _validate_and_cast(key: str, raw_value, vtype: str,
-                        vmin: float | None = None, vmax: float | None = None):
-    """ validate & cast a single value against a type/min/max - shared by
-        the /settings API (sourced from a node's get_settings()) and the
-        /config node-schema API (sourced from NODE_TYPE_SCHEMA); raises
-        ValueError on an invalid type or an out-of-range value.
+                        vmin: float | None = None, vmax: float | None = None,
+                        voptions: list[str] | None = None, voptional: bool = False):
+    """ validate & cast a single value against a type/min/max/options -
+        shared by the /settings API (sourced from a node's get_settings())
+        and the /config node-schema API (sourced from NODE_TYPE_SCHEMA);
+        raises ValueError on an invalid type or an out-of-range/-list value.
+        Values are required (non-empty) unless voptional is set.
     """
+    if not voptional and raw_value in (None, '', []):
+        raise ValueError(f'{key}: value is required')
+
     if vtype == 'number':
         try:
             value = float(raw_value)
@@ -314,6 +320,18 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
     elif vtype == 'checkbox':
         if not isinstance(raw_value, bool):
             raise ValueError(f'{key}: expected a boolean')
+        return raw_value
+    elif vtype == 'select':
+        if not isinstance(raw_value, str):
+            raise ValueError(f'{key}: expected a string')
+        if voptions is not None and raw_value not in voptions:
+            raise ValueError(f'{key}: {raw_value!r} is not a valid choice')
+        return raw_value
+    elif vtype == 'multiselect':
+        if not isinstance(raw_value, list) or not all(isinstance(v, str) for v in raw_value):
+            raise ValueError(f'{key}: expected a list of strings')
+        if voptions is not None and not all(v in voptions for v in raw_value):
+            raise ValueError(f'{key}: contains an invalid choice')
         return raw_value
     else:
         return str(raw_value)
@@ -351,7 +369,8 @@ def api_set_node_settings(node_id: str) -> Response:
     try:
         for key, raw_value in body.items():
             entry = editable[key]
-            value = _validate_and_cast(key, raw_value, entry.type, entry.min, entry.max)
+            value = _validate_and_cast(key, raw_value, entry.type, entry.min, entry.max,
+                                       entry.options, entry.optional)
             if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
                 calibration_changes.append((key, getattr(node, key), value))
             setattr(node, key, value)
@@ -393,8 +412,13 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
     result = {}
     for key, field in by_key.items():
         if key in raw_fields:
+            # NODE_TYPE_SCHEMA already has its own required/default handling
+            # (below, for *missing* keys) - always pass voptional=True here
+            # so this shared validator doesn't also reject a submitted blank
+            # value; that's a separate, /settings-only concept (Setting.optional).
             result[key] = _validate_and_cast(key, raw_fields[key], field['type'],
-                                              field.get('min'), field.get('max'))
+                                              field.get('min'), field.get('max'),
+                                              voptional=True)
         elif require_all:
             if 'default' in field:
                 result[key] = field['default']

@@ -240,6 +240,8 @@ const ConfigNodeDialog = {
 						v-if="receivesKind !== 'none'"
 						v-model="form.receives"
 						:items="receivesItems"
+						item-title="title"
+						item-value="value"
 						:multiple="receivesKind === 'multi'"
 						:label="$t('pages.config.receives')"
 						outlined dense
@@ -332,7 +334,7 @@ const ConfigNodeDialog = {
 			const selfId = this.editNode ? this.editNode.id : null
 			return this.nodes
 				.filter(n => n.id !== selfId)
-				.map(n => ({text: n.name + ' (' + n.type + ')', value: n.id}))
+				.map(n => ({title: n.name + ' (' + n.type + ')', value: n.id, text: n.name + ' (' + n.type + ')'}))
 		},
 	},
 	watch: {

@@ -19,7 +19,7 @@ try:
 except Exception:
     QUEST_DB = False
 
-from .msg_bus import (BusListener, BusRole, MsgData)
+from .msg_bus import (BusListener, BusRole, MsgData, Setting)
 
 
 log = logging.getLogger('machineroom.hist_nodes')
@@ -451,9 +451,9 @@ class History(BusListener):
                     ) -> dict[int, TimeDb.ValueLst]:
         return self.db.query(self.receives, start, step) if self.db else dict()
 
-    def get_settings(self) -> list[tuple]:
-        return []
-##        settings = super().get_settings()
-##        settings.append(('duration', 'max. Dauer', self.duration,
-##                         'type="number" min="0" max="%d"' % (24*60*60)))
-##        return settings
+    def get_settings(self) -> list[Setting]:
+##        return []
+        settings = super().get_settings()
+        settings.append(Setting('duration', 'max. Dauer', self.duration,
+                                type='number', min=0, max=7*24*60*60, step=60*60))
+        return settings

@@ -3,6 +3,7 @@
 from abc import (ABC, abstractmethod)
 import logging
 import time
+from dataclasses import dataclass
 from queue import Queue
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
@@ -35,6 +36,26 @@ class DataRange(Enum):
 
 
 #############################
+
+
+@dataclass
+class Setting:
+    """ One entry returned by BusNode.get_settings(), describing a single
+        operational property for the /settings UI: its current value, and,
+        for editable ones, enough metadata (type/min/max/step) to render
+        and validate an input widget without any further parsing.
+    """
+    key: str | None       # None = read-only
+    label: str
+    value: Any
+    type: str = 'text'    # 'number' | 'checkbox' | 'text'
+    min: float | None = None
+    max: float | None = None
+    step: float | None = None
+
+    @property
+    def editable(self) -> bool:
+        return self.key is not None
 
 
 class BusNode(ABC):
@@ -158,7 +179,7 @@ class BusNode(ABC):
         return listeners
 
     @abstractmethod
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         return []
 
 
@@ -192,11 +213,10 @@ class BusListener(BusNode, ABC):
         self.pos_x = state.get('pos_x', 0.0)
         self.pos_y = state.get('pos_y', 0.0)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append((None, 'Receives',
-                         ';'.join(MsgBus.to_names(self.get_receives())),
-                         'type="text"'))
+        settings.append(Setting(None, 'Receives',
+                         ';'.join(MsgBus.to_names(self.get_receives()))))
         return settings
 
 

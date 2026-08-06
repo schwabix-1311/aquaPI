@@ -175,7 +175,7 @@ export default {
 		},
 		containerFluid() {
 			// TODO: maybe render container as 'fluid' (full viewport width) on all pages
-			return ['home', 'dashboard', 'config'].includes(this.$route.name)
+			return ['home', 'dashboard', 'config', 'settings'].includes(this.$route.name)
 		},
 		availableLocales() {
 			return Object.keys(i18n.global.messages.value)

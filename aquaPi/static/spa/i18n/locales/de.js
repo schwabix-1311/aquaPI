@@ -29,9 +29,11 @@ export default
 		settings: {
 			label: 'Einstellungen',
 			heading: 'Einstellungen',
-			hintEmpty: 'Keine einstellbaren Regler gefunden',
+			hintEmpty: 'Keine Nodes gefunden',
 			ungrouped: 'Ohne Gruppe',
 			scheduleHint: 'Minute Stunde Tag(Monat) Monat Wochentag',
+			inputs: 'Eingänge',
+			outputs: 'Ausgänge',
 		},
 		config: {
 			label: 'Konfiguration',
@@ -164,7 +166,6 @@ export default
 	},
 
 	misc: {
-		legacySettingsLink: '(alte) Settings',
 		dummyComponentText: 'Einfach nur \'ne Dummy-Komponente für Testzwecke',
 		genericLabel: 'Bezeichnung',
 		genericValue: 'Wert',

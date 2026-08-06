@@ -7,7 +7,7 @@ from threading import Thread
 import time
 
 from .msg_types import (Msg, MsgData)
-from .msg_bus import (BusListener, BusRole, DataRange)
+from .msg_bus import (BusListener, BusRole, DataRange, Setting)
 from ..driver import (IoRegistry, OutDriver)
 
 
@@ -68,10 +68,9 @@ class DeviceNode(BusListener, ABC):
         self.port = ''
         return super().pullout()
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('port', 'Output port',
-                         self.port, 'type="text"'))
+        settings.append(Setting('port', 'Output port', self.port))
         return settings
 
 
@@ -135,10 +134,10 @@ class SwitchDevice(DeviceNode):
                 self._driver.write(not self.data)
         self.post(MsgData(self.id, 100 if self.data else 0))
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('inverted', 'Inverted', self.inverted,
-                         'type="number" min="0" max="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        settings.append(Setting('inverted', 'Inverted', self.inverted,
+                                type='checkbox'))
         return settings
 
 
@@ -236,12 +235,12 @@ class SlowPwmDevice(DeviceNode):
                               daemon=True)
         self._thread.start()
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('cycle', 'PWM cycle time', self.cycle,
-                         'type="number" min="10" max="300" step="1"'))
-        settings.append(('inverted', 'Inverted', self.inverted,
-                         'type="number" min="0" max="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        settings.append(Setting('cycle', 'PWM cycle time', self.cycle,
+                                type='number', min=10, max=300, step=1))
+        settings.append(Setting('inverted', 'Inverted', self.inverted,
+                                type='checkbox'))
         return settings
 
 
@@ -310,9 +309,12 @@ class AnalogDevice(DeviceNode):
             self._driver.write(out_val)
         self.post(MsgData(self.id, round(out_val, 4)))  # to make our state known
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('minimum', 'Minimum [%]', self.minimum, 'type="number" min="0" max="99"'))
-        settings.append(('maximum', 'Maximum [%]', self.maximum, 'type="number" min="1" max="100"'))
-        settings.append(('percept', 'Perceptive', self.percept, 'type="number" min="0" max="1"'))  # 'type="checkbox"' )
+        settings.append(Setting('minimum', 'Minimum [%]', self.minimum,
+                                type='number', min=0, max=99))
+        settings.append(Setting('maximum', 'Maximum [%]', self.maximum,
+                                type='number', min=1, max=100))
+        settings.append(Setting('percept', 'Perceptive', self.percept,
+                                type='checkbox'))
         return settings

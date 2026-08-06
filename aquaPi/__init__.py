@@ -157,7 +157,7 @@ def create_app() -> Flask:
         log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
         return None
 
-    #FIXME bus is used by jinja template 'settings' only
+    #FIXME bus is used by jinja template 'config' only
     @app.context_processor
     def inject_globals():
         return dict(bus=app.extensions['machineroom'].bus)
@@ -169,9 +169,6 @@ def create_app() -> Flask:
 
     from .pages import home
     app.register_blueprint(home.bp)
-
-    from .pages import settings
-    app.register_blueprint(settings.bp)
 
     from .pages import config
     app.register_blueprint(config.bp)

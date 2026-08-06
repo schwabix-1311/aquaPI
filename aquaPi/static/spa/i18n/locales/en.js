@@ -29,9 +29,11 @@ export default
 		settings: {
 			label: 'Settings',
 			heading: 'Settings',
-			hintEmpty: 'No configurable controllers found',
+			hintEmpty: 'No nodes found',
 			ungrouped: 'Ungrouped',
 			scheduleHint: 'Minute Hour DayOfMonth Month DayOfWeek',
+			inputs: 'Inputs',
+			outputs: 'Outputs',
 		},
 		config: {
 			label: 'Configuration',
@@ -164,7 +166,6 @@ export default
 	},
 
 	misc: {
-		legacySettingsLink: '(old) Settings',
 		dummyComponentText: 'Just a dummy component for testing purposes',
 		genericLabel: 'Label',
 		genericValue: 'Value',

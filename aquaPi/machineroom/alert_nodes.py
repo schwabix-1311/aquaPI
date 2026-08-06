@@ -7,7 +7,7 @@ import operator
 from time import monotonic
 
 from .msg_types import (Msg, MsgData)
-from .msg_bus import (BusListener, BusRole, DataRange)
+from .msg_bus import (BusListener, BusRole, DataRange, Setting)
 from ..driver import (IoRegistry, PortFunc, OutDriver)
 from .. import db
 
@@ -360,11 +360,11 @@ class Alert(BusListener):
 
         super().listen(msg)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('repeat', 'Wiederholung [s]', self.repeat,
-                         'type="number" min="0" max="%d" step="60"' % (24*60*60)))
+        settings.append(Setting('repeat', 'Wiederholung [s]', self.repeat,
+                                type='number', min=0, max=24*60*60, step=60))
 # ??        for cond in self.conditions:
-#            settings.append(('cond.limit', f'{str(cond)} [min]', cond.limit,
-#                             'type="number" min="1" max="%d" step="1"'))
+#            settings.append(Setting('cond.limit', f'{str(cond)} [min]', cond.limit,
+#                             type='number', min=1, max=...))
         return settings

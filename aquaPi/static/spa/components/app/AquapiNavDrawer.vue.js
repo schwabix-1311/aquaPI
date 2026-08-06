@@ -22,6 +22,7 @@ const AquapiNavDrawer = {
 				</v-list-item-subtitle>
 				<v-btn
 					icon
+					variant="text"
 					@click.stop="navDrawerVisible = false"
 				>
 					<v-icon>mdi-chevron-left</v-icon>
@@ -34,12 +35,6 @@ const AquapiNavDrawer = {
 				dense
 				nav
 			>
-			<v-list-item>
-				<v-list-item-title>
-					<a href="/settings">{{ $t('misc.legacySettingsLink') }}</a>
-				</v-list-item-title>
-			</v-list-item>
-			
 				<v-list-item
 					v-for="item in items"
 					:key="item.name"

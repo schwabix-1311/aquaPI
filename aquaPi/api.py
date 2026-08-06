@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import logging
-import re
 import shutil
 import tempfile
 import time
@@ -17,7 +16,7 @@ from .auth import roles_required
 from .driver.base import DriverError
 from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
-from .machineroom.msg_bus import BusRole
+from .machineroom.msg_bus import (BusRole, Setting)
 from .machineroom.aux_nodes import ScaleAux
 from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable,
                                      log_calibration_event, get_calibration_log)
@@ -259,42 +258,21 @@ def api_set_dashboard() -> Response:
     return jsonify(layout)
 
 
-_ATTR_RE = re.compile(r'([\w-]+)="([^"]*)"')
-
-
-def _parse_settings_attrs(attrs: str) -> dict:
-    """ parse a node's get_settings() html-attribute string, e.g.
-        'type="number" min="0" max="99" step="0.1"', into a plain dict.
+def _settings_entry_to_dict(entry: Setting) -> dict:
+    """ convert one get_settings() Setting into a JSON-serializable dict
+        for the /settings page. Entries with key=None are read-only
+        informational fields (e.g. 'Receives') and are included, but
+        marked as not editable.
     """
-    return {k: v for k, v in _ATTR_RE.findall(attrs or '')}
-
-
-def _infer_type(value) -> str:
-    """ get_settings() entries without an explicit 'type' attr (e.g.
-        plain booleans) fall back to a type inferred from the value.
-    """
-    if isinstance(value, bool):
-        return 'checkbox'
-    if isinstance(value, (int, float)):
-        return 'number'
-    return 'text'
-
-
-def _settings_entry_to_dict(entry: tuple) -> dict:
-    """ convert one get_settings() tuple (key, label, value[, attrs])
-        into a JSON-serializable dict for the /settings page. Entries
-        with key=None are read-only informational fields (e.g.
-        'Receives') and are included, but marked as not editable.
-    """
-    key, label, value = entry[0], entry[1], entry[2]
-    attrs = _parse_settings_attrs(entry[3] if len(entry) > 3 else '')
-    attrs.setdefault('type', _infer_type(value))
+    attrs = {k: v for k, v in {
+        'type': entry.type, 'min': entry.min, 'max': entry.max, 'step': entry.step,
+    }.items() if v is not None}
     return {
-        'key': key,
-        'label': label,
-        'value': value,
+        'key': entry.key,
+        'label': entry.label,
+        'value': entry.value,
         'attrs': attrs,
-        'editable': key is not None,
+        'editable': entry.editable,
     }
 
 
@@ -316,21 +294,22 @@ def api_get_node_settings(node_id: str) -> Response:
     return jsonify(settings)
 
 
-def _validate_and_cast(key: str, raw_value, attrs: dict):
-    """ validate & cast a single settings value against the attrs
-        delivered by the node's get_settings(); raises ValueError on
-        an invalid type or an out-of-range value.
+def _validate_and_cast(key: str, raw_value, vtype: str,
+                        vmin: float | None = None, vmax: float | None = None):
+    """ validate & cast a single value against a type/min/max - shared by
+        the /settings API (sourced from a node's get_settings()) and the
+        /config node-schema API (sourced from NODE_TYPE_SCHEMA); raises
+        ValueError on an invalid type or an out-of-range value.
     """
-    vtype = attrs.get('type', 'text')
     if vtype == 'number':
         try:
             value = float(raw_value)
         except (TypeError, ValueError):
             raise ValueError(f'{key}: expected a number')
-        if 'min' in attrs and value < float(attrs['min']):
-            raise ValueError(f'{key}: value {value} below minimum {attrs["min"]}')
-        if 'max' in attrs and value > float(attrs['max']):
-            raise ValueError(f'{key}: value {value} above maximum {attrs["max"]}')
+        if vmin is not None and value < vmin:
+            raise ValueError(f'{key}: value {value} below minimum {vmin}')
+        if vmax is not None and value > vmax:
+            raise ValueError(f'{key}: value {value} above maximum {vmax}')
         return value
     elif vtype == 'checkbox':
         if not isinstance(raw_value, bool):
@@ -359,7 +338,7 @@ def api_set_node_settings(node_id: str) -> Response:
     if not isinstance(body, dict):
         return jsonify(error='Body must be a JSON object of {key: value}'), HTTPStatus.BAD_REQUEST
 
-    editable = {entry[0]: entry for entry in node.get_settings() if entry[0] is not None}
+    editable = {entry.key: entry for entry in node.get_settings() if entry.key is not None}
 
     for key in body:
         if key not in editable:
@@ -372,9 +351,7 @@ def api_set_node_settings(node_id: str) -> Response:
     try:
         for key, raw_value in body.items():
             entry = editable[key]
-            attrs = _parse_settings_attrs(entry[3] if len(entry) > 3 else '')
-            attrs.setdefault('type', _infer_type(entry[2]))
-            value = _validate_and_cast(key, raw_value, attrs)
+            value = _validate_and_cast(key, raw_value, entry.type, entry.min, entry.max)
             if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
                 calibration_changes.append((key, getattr(node, key), value))
             setattr(node, key, value)
@@ -399,18 +376,6 @@ def api_set_node_settings(node_id: str) -> Response:
 # --- /config: node-graph editor (Step 12) -----------------------------
 
 
-def _schema_field_attrs(field: dict) -> dict:
-    """ build the {type, min?, max?} attrs dict _validate_and_cast()
-        expects, from one NODE_TYPE_SCHEMA field descriptor
-    """
-    attrs = {'type': field['type']}
-    if 'min' in field:
-        attrs['min'] = field['min']
-    if 'max' in field:
-        attrs['max'] = field['max']
-    return attrs
-
-
 def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool) -> dict:
     """ validate/cast a {key: value} dict against a NODE_TYPE_SCHEMA
         field list. On creation (require_all=True), fields without a
@@ -428,7 +393,8 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
     result = {}
     for key, field in by_key.items():
         if key in raw_fields:
-            result[key] = _validate_and_cast(key, raw_fields[key], _schema_field_attrs(field))
+            result[key] = _validate_and_cast(key, raw_fields[key], field['type'],
+                                              field.get('min'), field.get('max'))
         elif require_all:
             if 'default' in field:
                 result[key] = field['default']

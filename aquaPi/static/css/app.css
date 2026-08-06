@@ -70,7 +70,8 @@ div.v-theme--light.v-application {
     height: 100vh;
 }
 .v-main {
-    flex: 1 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
 }
 
@@ -98,18 +99,29 @@ body > .v-navigation-drawer__scrim {
     width: auto;
 }
 
-div.aquapi-dashboard div.v-expansion-panels {
+div.aquapi-dashboard div.v-expansion-panels,
+div.aquapi-settings div.v-expansion-panels {
     border-radius: 0;
 }
-div.aquapi-dashboard div.v-expansion-panel:before {
+div.aquapi-dashboard div.v-expansion-panel:before,
+div.aquapi-settings div.v-expansion-panel:before {
     box-shadow: inherit;
 }
-div.aquapi-dashboard div.v-expansion-panel--active > .v-expansion-panel-header {
+div.aquapi-dashboard div.v-expansion-panel--active > .v-expansion-panel-header,
+div.aquapi-settings div.v-expansion-panel--active > .v-expansion-panel-header {
     min-height: 48px;
 }
 
-div.aquapi-dashboard div.v-expansion-panel-content__wrap {
+div.aquapi-dashboard div.v-expansion-panel-content__wrap,
+div.aquapi-settings div.v-expansion-panel-content__wrap {
     padding: 0;
+}
+
+div.aquapi-settings div.v-expansion-panel {
+    border: 1px solid rgba(0, 0, 0, 0.3);
+}
+div.aquapi-settings div.v-expansion-panel + div.v-expansion-panel {
+    border-top: none;
 }
 
 /* AquapiPageHeading (page titles like "Einstellungen"/"Konfiguration"):

@@ -8,7 +8,7 @@ from datetime import datetime
 from croniter import croniter
 from threading import Thread
 
-from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData)
+from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData, Setting)
 from ..driver import (IoRegistry, DriverReadError, InDriver)
 
 
@@ -100,12 +100,11 @@ class InputNode(BusNode, ABC):
         self._reader_thread = None
         self._reader_stop = False
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('port', 'Input port',
-                         self.port, 'type="text"'))
-        settings.append(('interval', 'Leseintervall [s]',
-                         self.interval, 'type="number" min="1" max="600" step="1"'))
+        settings.append(Setting('port', 'Input port', self.port))
+        settings.append(Setting('interval', 'Leseintervall [s]', self.interval,
+                                type='number', min=1, max=600, step=1))
         return settings
 
 
@@ -152,9 +151,10 @@ class SwitchInput(InputNode):
             val = not val
         return val
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('inverted', 'Invertiert', self.inverted))
+        settings.append(Setting('inverted', 'Invertiert', self.inverted,
+                                type='checkbox'))
         return settings
 
 
@@ -208,12 +208,11 @@ class AnalogInput(InputNode):
         val = round(val, 4)
         return val
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('unit', 'Einheit',
-                         self.unit, 'type="text"'))
-        settings.append(('avg', 'Mittelwert [1=direkt]',
-                         self.avg, 'type="number" min="1" max="5" step="1"'))
+        settings.append(Setting('unit', 'Einheit', self.unit))
+        settings.append(Setting('avg', 'Mittelwert [1=direkt]', self.avg,
+                                type='number', min=1, max=5, step=1))
         return settings
 
 
@@ -370,8 +369,7 @@ class ScheduleInput(BusNode):
             self._scheduler_stop = False
             log.brief('ScheduleInput %s: end', self.id)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('cronspec', 'CRON (m h DoM M DoW)',
-                         self.cronspec, 'type="text"'))
+        settings.append(Setting('cronspec', 'CRON (m h DoM M DoW)', self.cronspec))
         return settings

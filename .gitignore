@@ -141,7 +141,7 @@ logs/
 # JetBrains IDE
 .idea/
 
-# JwtBrains Junie AI
+# JetBrains Junie AI
 .junie/
 
 # the installed instance of QuestDB

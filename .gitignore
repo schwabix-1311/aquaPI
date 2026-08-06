@@ -141,6 +141,9 @@ logs/
 # JetBrains IDE
 .idea/
 
+# JwtBrains Junie AI
+.junie/
+
 # the installed instance of QuestDB
 questdb-7.1.3/
 !questdb-*-.tar.gz

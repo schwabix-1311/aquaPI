@@ -66,6 +66,7 @@ export default
 			label: 'Configuration',
 			heading: 'Configuration',
 			addNode: 'Add node',
+			autoArrange: 'Auto-arrange',
 			editNode: 'Edit node',
 			nodeType: 'Node type',
 			nodeName: 'Name',

@@ -757,8 +757,25 @@ const NodeSettingsCard = {
 		inputs: function() {
 			return flattenEntries(ancestors(this.anchor, this.dashboardStore.nodes))
 		},
+		// Computed from this.node (the chain's actual root), not this.anchor
+		// - chainAnchor() can re-center the card on a CTRL node found
+		// anywhere downstream (e.g. root A feeding both a CTRL B and a
+		// second real node C: chainAnchor(A) picks B since it's the first
+		// CTRL found walking A's full downstream tree), and descendants(B)
+		// alone would then miss C entirely, since C is a *sibling* of B, not
+		// B's ancestor or descendant - invisible to a walk rooted at B, and
+		// C isn't a root itself either, so it'd have no card anywhere on
+		// the page. Using the root's full descendant tree here means every
+		// real chain member always ends up shown somewhere on this card,
+		// regardless of where in the tree the anchor got picked from.
+		//
+		// Still need to exclude the anchor itself and its own ancestors
+		// (already shown as the headline + `inputs` above) from that full
+		// list, or they'd double up.
 		outputs: function() {
-			return flattenEntries(descendants(this.anchor, this.dashboardStore.nodes))
+			const allDescendants = flattenEntries(descendants(this.node, this.dashboardStore.nodes))
+			const spine = new Set([this.anchor.id, ...this.inputs.map(n => n.id)])
+			return allDescendants.filter(n => !spine.has(n.id))
 		},
 	},
 	methods: {

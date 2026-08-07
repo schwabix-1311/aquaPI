@@ -3,9 +3,12 @@ import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useConfigStore} from '../../store/modules/config.js'
+import {isRoot, isHistOrAlert, descendants} from '../settings/chains.js'
 
 const CANVAS_MIN_WIDTH = 1200
 const CANVAS_MIN_HEIGHT = 700
+const LAYOUT_COL_GAP = 70
+const LAYOUT_ROW_GAP = 50
 
 const AquapiConfig = {
 	template: `
@@ -45,6 +48,10 @@ const AquapiConfig = {
 						<v-btn color="primary" class="mr-2" @click="openAddDialog">
 							<v-icon left small>mdi-plus</v-icon>
 							{{ $t('pages.config.addNode') }}
+						</v-btn>
+						<v-btn outlined class="mr-2" @click="applyChainLayout">
+							<v-icon left small>mdi-sitemap</v-icon>
+							{{ $t('pages.config.autoArrange') }}
 						</v-btn>
 						<v-btn text class="mr-2" :disabled="!draftDirty" @click="onDiscard">
 							<v-icon left small>mdi-undo</v-icon>
@@ -179,7 +186,134 @@ const AquapiConfig = {
 				this.configStore.fetchNodeTypes(),
 			])
 			this.configStore.initDraft()
+			// nobody has ever positioned anything yet (fresh/default topology) -
+			// lay it out by chain instead of leaving every node stacked at (0,0)
+			if (this.configStore.draftNodes.length > 0
+				&& this.configStore.draftNodes.every(n => !n.pos_x && !n.pos_y)) {
+				this.applyChainLayout()
+			}
 			this.loading = false
+		},
+
+		// One row per chain (or standalone node); within a chain, column =
+		// depth from its root so pipeline stages line up vertically, and a
+		// node's first (real, non-History/Alert) listener continues its own
+		// row while every further listener fans out to a new row beneath -
+		// keeps sibling branches from overlapping in the same row.
+		applyChainLayout() {
+			const nodes = this.configStore.draftNodes
+			const byId = {}
+			nodes.forEach(n => { byId[n.id] = n })
+
+			const positions = new Map()
+			const placed = new Set()
+			const usedCells = new Set()   // 'row:col' - collision guard, since
+			                               // History/Alert placement below can
+			                               // reuse an already-claimed row
+			let nextRow = 0
+
+			// bumps row down (same col) until free, so two nodes can never
+			// land on the exact same cell; returns the row actually used
+			const place = (nodeId, row, col) => {
+				while (usedCells.has(row + ':' + col)) row++
+				usedCells.add(row + ':' + col)
+				positions.set(nodeId, {row, col})
+				placed.add(nodeId)
+				return row
+			}
+
+			// like place(), but bumps the COLUMN instead on a collision - for
+			// History/Alert sinks, which have no listeners of their own, so
+			// nudging one a slot further right is harmless. Bumping their ROW
+			// instead (like place()) is a real bug: a column can be legitimately
+			// reused by many unrelated chains at different rows (e.g. each
+			// happens to be exactly deep enough to reach that same column), so
+			// row-bumping can march a sink down through many rows that have
+			// nothing to do with its own source before finding a gap - dragging
+			// it far away even when fed by a node in row 0.
+			const placeSink = (nodeId, row, col) => {
+				while (usedCells.has(row + ':' + col)) col++
+				usedCells.add(row + ':' + col)
+				positions.set(nodeId, {row, col})
+				placed.add(nodeId)
+			}
+
+			// Pass 1: real chain roots (empty/wildcard receives) - column =
+			// depth from root. History/Alert nodes are NOT included here even
+			// though isRoot() treats them as roots too (that's grouping
+			// semantics for /settings, where they always get their own card) -
+			// spatially they're sinks, not chain starts, handled in Pass 2
+			// below once every real node has its final position.
+			nodes.filter(n => isRoot(n) && !isHistOrAlert(n)).forEach(root => {
+				if (placed.has(root.id)) return
+				const tree = descendants(root, byId)
+				place(root.id, nextRow, 0)
+				const endRow = tree.length
+					? this.assignRows(tree, 1, nextRow, positions, placed, usedCells)
+					: nextRow + 1
+				nextRow = Math.max(endRow, nextRow + 1)
+			})
+
+			// Pass 2: History/Alert sinks. Every real node is positioned by
+			// now, so each one just drops in relative to its own (fully
+			// resolved) sources - no need to track "is this one ready yet"
+			// during Pass 1, and it naturally handles a sink fed by several
+			// different chains too, since all of them are already placed.
+			// row = the highest (bottom-most) row among its sources, so it
+			// lands right below whatever it's watching instead of many rows
+			// further down; col = one past their rightmost column, instead of
+			// column 0 - pinning it to column 0 like a real root previously
+			// sent its incoming connection's target-side trunk stub
+			// (targetTrunkX = pos_x - CONNECTION_STUB) to a negative x, off
+			// the left edge of the canvas and invisible. Falls back to its
+			// own fresh row/col 0 if nothing resolves (e.g. only `'*'`, a
+			// missing id, or no receives at all).
+			nodes.filter(isHistOrAlert).forEach(node => {
+				const sourcePositions = (node.receives || [])
+					.map(id => positions.get(id))
+					.filter(Boolean)
+				if (sourcePositions.length) {
+					const row = Math.max(...sourcePositions.map(p => p.row))
+					const col = Math.max(...sourcePositions.map(p => p.col)) + 1
+					placeSink(node.id, row, col)
+				} else {
+					placeSink(node.id, nextRow, 0)
+					nextRow++
+				}
+			})
+
+			// orphaned edge case (e.g. a receives-cycle with no root) - still
+			// give any leftover node its own row rather than skipping it
+			nodes.forEach(node => {
+				if (placed.has(node.id)) return
+				nextRow = place(node.id, nextRow, 0) + 1
+			})
+
+			positions.forEach((pos, nodeId) => {
+				this.configStore.draftUpdateNode({
+					nodeId,
+					changes: {
+						pos_x: pos.col * (NODE_BOX_WIDTH + LAYOUT_COL_GAP),
+						pos_y: pos.row * (NODE_BOX_HEIGHT + LAYOUT_ROW_GAP),
+					},
+				})
+			})
+		},
+
+		// entries: descendants()'s [{node, children}] tree at this depth;
+		// returns the next free row after placing this whole subtree
+		assignRows(entries, depth, startRow, positions, placed, usedCells) {
+			let row = startRow
+			entries.forEach(entry => {
+				const nodeRow = row
+				row = entry.children.length
+					? this.assignRows(entry.children, depth + 1, row, positions, placed, usedCells)
+					: row + 1
+				positions.set(entry.node.id, {row: nodeRow, col: depth})
+				placed.add(entry.node.id)
+				usedCells.add(nodeRow + ':' + depth)
+			})
+			return row
 		},
 
 		async onSave() {

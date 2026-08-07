@@ -202,6 +202,9 @@ html::-webkit-scrollbar {
     top: 0;
     left: 0;
     pointer-events: none;
+    /* above .config-node-box, so a connection routed behind an unrelated
+       node still renders visibly instead of disappearing under it */
+    z-index: 2;
 }
 .config-connection-hit {
     stroke: transparent;
@@ -232,6 +235,7 @@ html::-webkit-scrollbar {
     cursor: move;
     user-select: none;
     background-color: rgba(255, 255, 255, 0.95);
+    z-index: 1;
 }
 .v-theme--dark .config-node-box {
     background-color: rgba(48, 48, 48, 0.95);

@@ -377,6 +377,8 @@ export const useConfigStore = Pinia.defineStore('config', {
 				return fields
 			}
 
+			const dashboardNodes = useDashboardStore().nodes
+
 			const creates = []
 			const updates = []
 			const deletes = []
@@ -399,14 +401,33 @@ export const useConfigStore = Pinia.defineStore('config', {
 				} else if (node._deleted) {
 					deletes.push(node.id)
 				} else if (node._dirty) {
-					updates.push({
+					const upd = {
 						id: node.id,
-						receives: node.receives || [],
-						fields: fieldsOf(node),
 						group: node.group || '',
 						pos_x: node.pos_x || 0,
 						pos_y: node.pos_y || 0,
-					})
+					}
+
+					// Node types without a NODE_TYPE_SCHEMA entry (Alert,
+					// History) reject *any* update payload that even mentions
+					// 'receives'/'fields', regardless of value - their receives
+					// are edited through a dedicated endpoint instead (see
+					// NodeReceivesEditor). Since this node may be dirty for an
+					// unrelated reason (e.g. only pos_x/pos_y changed, as the
+					// /config auto-layout does for every node including these),
+					// only include receives/fields when they actually changed
+					// from the last-known server state, not unconditionally.
+					const original = dashboardNodes[node.id]
+					const receives = node.receives || []
+					if (!original || JSON.stringify(receives) !== JSON.stringify(original.receives || [])) {
+						upd.receives = receives
+					}
+					const fields = fieldsOf(node)
+					if (!original || JSON.stringify(fields) !== JSON.stringify(fieldsOf(original))) {
+						upd.fields = fields
+					}
+
+					updates.push(upd)
 				}
 			})
 

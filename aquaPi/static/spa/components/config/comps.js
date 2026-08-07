@@ -9,10 +9,11 @@ import {useConfigStore} from '../../store/modules/config.js'
 
 const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
+const CONNECTION_STUB = 30
 
 const ROLE_COLORS = {
 	IN_ENDP: 'blue',
-	OUT_ENDP: 'deep-orange',
+	OUT_ENDP: 'orange darken-2',
 	CTRL: 'green',
 	AUX: 'purple',
 	HISTORY: 'grey',
@@ -54,7 +55,7 @@ const ConfigNodeBox = {
 			</div>
 			<div class="px-2 pb-1">
 				<div class="font-weight-medium text-truncate">{{ node.name }}</div>
-				<div class="text-caption grey--text text-truncate">{{ node.type }}</div>
+				<div class="text-caption grey--text text-truncate">{{ displayType }}</div>
 			</div>
 		</v-sheet>
 	`,
@@ -73,6 +74,12 @@ const ConfigNodeBox = {
 	computed: {
 		color: function() {
 			return ROLE_COLORS[this.node.role] || 'grey'
+		},
+		displayType: function() {
+			if ((this.node.role === 'IN_ENDP' || this.node.role === 'OUT_ENDP') && this.node.port) {
+				return this.node.type + ' (' + this.node.port + ')'
+			}
+			return this.node.type
 		},
 		style: function() {
 			return {
@@ -132,12 +139,19 @@ const ConfigConnections = {
 				@mouseleave="hoveredEdgeKey = null"
 			>
 				<path
-					:d="edge.path"
+					:d="edge.hitPath"
 					fill="none"
 					class="config-connection-hit"
 				></path>
 				<path
-					:d="edge.path"
+					:d="edge.diagonalPath"
+					fill="none"
+					stroke="#90a4ae" stroke-width="2" stroke-dasharray="4 3"
+					class="config-connection-line"
+					:class="{'config-connection-line--hover': hoveredEdgeKey === edge.key}"
+				></path>
+				<path
+					:d="edge.stubPath"
 					fill="none"
 					stroke="#90a4ae" stroke-width="2" marker-end="url(#config-arrow)"
 					class="config-connection-line"
@@ -182,17 +196,33 @@ const ConfigConnections = {
 					const y1 = (source.pos_y || 0) + NODE_BOX_HEIGHT / 2
 					const x2 = (target.pos_x || 0)
 					const y2 = (target.pos_y || 0) + NODE_BOX_HEIGHT / 2
-					const midX = (x1 + x2) / 2
+					// Bundled route: a short exit/entry stub at a fixed offset
+					// from each port (not the dynamic midpoint of both
+					// endpoints), connected by a direct diagonal. Every edge
+					// leaving the same source shares its exit stub, and every
+					// edge entering the same target shares its entry stub -
+					// reads as a schematic bus fanning out/merging - while the
+					// diagonal (the one part of the route that's individual per
+					// edge, and most likely to need manual dragging to
+					// untangle) is drawn separately/dashed so the shared stubs
+					// stay the visually dominant, easy-to-read part.
+					const sourceTrunkX = x1 + CONNECTION_STUB
+					const targetTrunkX = x2 - CONNECTION_STUB
+					const midX = (sourceTrunkX + targetTrunkX) / 2
 					const midY = (y1 + y2) / 2
-					// Angled (elbow) route: horizontal-vertical-horizontal, so the
-					// side of a card a connection touches (right = output, left =
-					// input) stays visually clear, instead of a plain diagonal line.
-					const path = 'M' + x1 + ',' + y1 + ' H' + midX + ' V' + y2 + ' H' + x2
+					const stubPath = 'M' + x1 + ',' + y1 + ' H' + sourceTrunkX
+						+ ' M' + targetTrunkX + ',' + y2 + ' H' + x2
+					const diagonalPath = 'M' + sourceTrunkX + ',' + y1 + ' L' + targetTrunkX + ',' + y2
+					// combined, for the (invisible, wide) click-to-delete hit-area
+					const hitPath = 'M' + x1 + ',' + y1 + ' H' + sourceTrunkX
+						+ ' L' + targetTrunkX + ',' + y2 + ' H' + x2
 					edges.push({
 						key: sourceId + '->' + target.id,
 						sourceId, targetId: target.id,
 						x1, y1, x2, y2,
-						path,
+						hitPath,
+						stubPath,
+						diagonalPath,
 						midX,
 						midY,
 					})

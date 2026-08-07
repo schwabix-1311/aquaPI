@@ -99,6 +99,16 @@ body > .v-navigation-drawer__scrim {
     width: auto;
 }
 
+/* Vuetify's own .v-list-item--nav styling shrinks list-item titles to
+   0.8125rem (13px, vs. the normal 1rem) - intentional Material-Design
+   compactness for nav rails, but reads as "unusually small" for
+   AquapiNavDrawer's full-height mobile-style menu. Bump it back up while
+   keeping 'nav''s other styling (rounded active-item highlight, tighter
+   padding). */
+.v-navigation-drawer .v-list-item--nav .v-list-item-title {
+    font-size: 1rem;
+}
+
 div.aquapi-dashboard div.v-expansion-panels,
 div.aquapi-settings div.v-expansion-panels {
     border-radius: 0;

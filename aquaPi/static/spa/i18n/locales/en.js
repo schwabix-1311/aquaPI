@@ -34,6 +34,33 @@ export default
 			scheduleHint: 'Minute Hour DayOfMonth Month DayOfWeek',
 			inputs: 'Inputs',
 			outputs: 'Outputs',
+			fields: {
+				unit: 'Unit',
+				offset: 'Offset',
+				scaleFactor: 'Scale factor',
+				unfairAvg: 'Unweighted average [0=off]',
+				inputPort: 'Input port',
+				outputPort: 'Output port',
+				readInterval: 'Read interval',
+				inverted: 'Inverted',
+				avg: 'Averaging [1=direct]',
+				cronspec: 'CRON (m h DoM M DoW)',
+				repeat: 'Repeat',
+				receives: 'Receives from',
+				setpoint: 'Setpoint [%{unit}]',
+				hysteresis: 'Hysteresis [%{unit}]',
+				pFact: 'P factor',
+				iFact: 'I factor',
+				dFact: 'D factor',
+				fadeIn: 'Fade-in time',
+				fadeOut: 'Fade-out time',
+				ascendDescend: 'Ascend/descend time',
+				cycle: 'PWM cycle time',
+				minimum: 'Minimum [%]',
+				maximum: 'Maximum [%]',
+				percept: 'Perceptive',
+				duration: 'Max. duration',
+			},
 		},
 		config: {
 			label: 'Configuration',
@@ -42,7 +69,7 @@ export default
 			editNode: 'Edit node',
 			nodeType: 'Node type',
 			nodeName: 'Name',
-			receives: 'Receives from',
+			receives: '@:pages.settings.fields.receives',
 			group: 'Group',
 			connect: 'Connect',
 			edit: 'Edit',
@@ -161,7 +188,31 @@ export default
 				period: {
 					label: 'Period %s'
 				}
-			}
+			},
+			scaleAux: {
+				formula: 'reading * %{factor} + %{offset}',
+			},
+			avgAux: {
+				unweighted: 'Unweighted',
+				movingAvg: 'Moving average (%{n})',
+			},
+			sunCtrl: {
+				// odd cloudiness -> shorter, darker clouds (Cloud class,
+				// ctrl_nodes.py's `cloudiness & 1` check); even -> longer,
+				// milder ones. Wording alternates mood (moody/dark for odd,
+				// cosy/calm for even) on top of the increasing amount, to
+				// hint at that without showing the raw number.
+				cloudiness: {
+					c0: 'not a cloud in sight',
+					c1: 'grumpy clouds scurry by',
+					c2: 'cosy little clouds',
+					c3: 'moody wisps of cloud',
+					c4: 'clouds drifting leisurely',
+					c5: 'gloomy cloud bustle',
+					c6: 'melancholy sky, "Obscured by Clouds"',
+					c7: 'stormy, better stay indoors',
+				},
+			},
 		}
 	},
 

@@ -454,7 +454,7 @@ class History(BusListener):
     def get_settings(self) -> list[Setting]:
 ##        return []
         settings = super().get_settings()
-        settings.append(Setting('duration', 'max. Dauer', self.duration * 60*60,
+        settings.append(Setting('duration', 'duration', self.duration * 60*60,
                                 type='duration', min=0, max=7*24*60*60, step=60*60,
                                 factor=60*60))
         return settings

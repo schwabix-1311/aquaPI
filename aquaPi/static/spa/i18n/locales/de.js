@@ -34,6 +34,33 @@ export default
 			scheduleHint: 'Minute Stunde Tag(Monat) Monat Wochentag',
 			inputs: 'Eingänge',
 			outputs: 'Ausgänge',
+			fields: {
+				unit: 'Einheit',
+				offset: 'Offset',
+				scaleFactor: 'Skalierfaktor',
+				unfairAvg: 'Ungewichteter Mittelwert [0=aus]',
+				inputPort: 'Eingangsport',
+				outputPort: 'Ausgangsport',
+				readInterval: 'Leseintervall',
+				inverted: 'Invertiert',
+				avg: 'Mittelwert [1=direkt]',
+				cronspec: 'CRON (m h DoM M DoW)',
+				repeat: 'Wiederholung',
+				receives: 'Empfängt von',
+				setpoint: 'Sollwert [%{unit}]',
+				hysteresis: 'Hysterese [%{unit}]',
+				pFact: 'P-Faktor',
+				iFact: 'I-Faktor',
+				dFact: 'D-Faktor',
+				fadeIn: 'Einblenddauer',
+				fadeOut: 'Ausblenddauer',
+				ascendDescend: 'Auf-/Abblendzeit',
+				cycle: 'PWM-Zykluszeit',
+				minimum: 'Minimum [%]',
+				maximum: 'Maximum [%]',
+				percept: 'Wahrnehmungskorrektur',
+				duration: 'max. Dauer',
+			},
 		},
 		config: {
 			label: 'Konfiguration',
@@ -42,7 +69,7 @@ export default
 			editNode: 'Node bearbeiten',
 			nodeType: 'Node-Typ',
 			nodeName: 'Name',
-			receives: 'Empfängt von',
+			receives: '@:pages.settings.fields.receives',
 			group: 'Gruppe',
 			connect: 'Verbinden',
 			edit: 'Bearbeiten',
@@ -161,7 +188,31 @@ export default
 				period: {
 					label: 'Zeitraum %s'
 				}
-			}
+			},
+			scaleAux: {
+				formula: 'Messwert * %{factor} + %{offset}',
+			},
+			avgAux: {
+				unweighted: 'Ungewichtet',
+				movingAvg: 'Gleitender Mittelwert (%{n})',
+			},
+			sunCtrl: {
+				// odd cloudiness -> shorter, darker clouds (Cloud class,
+				// ctrl_nodes.py's `cloudiness & 1` check); even -> longer,
+				// milder ones. Wording alternates mood (moody/dark for odd,
+				// cosy/calm for even) on top of the increasing amount, to
+				// hint at that without showing the raw number.
+				cloudiness: {
+					c0: 'wolkenlos',
+					c1: 'mürrische Wolken huschen vorbei',
+					c2: 'gemütliche Wölkchen',
+					c3: 'launische Wolkenfetzen',
+					c4: 'gemächlich ziehende Wolken',
+					c5: 'düsteres Wolkentreiben',
+					c6: 'schwermütig – "Obscured by Clouds"',
+					c7: 'stürmisch, bleib besser zuhause',
+				},
+			},
 		}
 	},
 

@@ -597,8 +597,15 @@ const NodeSettingsFields = {
 		settingsStore() {
 			return useSettingsStore()
 		},
+		// item.label arrives from the backend as a short i18n key (e.g.
+		// 'setpoint'), not display text - resolved here once, centrally,
+		// so none of the individual Setting* widget components below need
+		// to know about i18n at all, they just render item.label as-is.
 		settings: function() {
-			return this.settingsStore.settingsForNode(this.node.id)
+			return this.settingsStore.settingsForNode(this.node.id).map(item => ({
+				...item,
+				label: this.$t('pages.settings.fields.' + item.label, item.labelParams || {}),
+			}))
 		},
 		error: function() {
 			return this.settingsStore.errorForNode(this.node.id)

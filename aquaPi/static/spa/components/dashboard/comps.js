@@ -289,9 +289,10 @@ const SunCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			//TODO: prefix a label: dusk/dawn  or ramp
-			let xscend = this.node.xscend
-			return '/~~\\ ' + this.humanPeriod(this.node.xscend * 60 * 60 * 1000)
+			const cloudiness = Math.max(0, Math.min(7, this.node.cloudiness || 0))
+			return this.$t('pages.settings.fields.ascendDescend') + ': '
+				+ this.humanPeriod(this.node.xscend * 60 * 60 * 1000)
+				+ ', ' + this.$t('dashboard.widget.sunCtrl.cloudiness.c' + cloudiness)
 		},
 		value() {
 			let node = this.node
@@ -313,8 +314,8 @@ const FadeCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			//TODO: prefix a label: dusk/dawn  or ramp
-			return this.humanPeriod(this.node.fade_time) + ' /==\\ ' + this.humanPeriod(this.node.fade_out)
+			return this.$t('pages.settings.fields.fadeIn') + ': ' + this.humanPeriod(this.node.fade_time)
+				+ ', ' + this.$t('pages.settings.fields.fadeOut') + ': ' + this.humanPeriod(this.node.fade_out)
 		},
 		value() {
 			let node = this.node
@@ -376,6 +377,23 @@ const AuxNode = {
 
 const AvgAux = {
 	extends: AuxNode,
+	computed: {
+		// unfair_avg has three distinct behaviors (aux_nodes.py) - 0 is the
+		// default equal-weight average across all senders and needs no
+		// subtitle; 1 is effectively no averaging at all (instant passthrough
+		// of the latest value); >1 is a real moving average over that many
+		// samples.
+		descript() {
+			const n = this.node.unfair_avg
+			if (!n) {
+				return ''
+			}
+			if (n === 1) {
+				return this.$t('dashboard.widget.avgAux.unweighted')
+			}
+			return this.$t('dashboard.widget.avgAux.movingAvg', {n: n})
+		},
+	},
 }
 registerGlobalComponent('AvgAux', AvgAux);
 
@@ -391,15 +409,22 @@ registerGlobalComponent('MaxAux', MaxAux)
 
 const ScaleAux = {
 	extends: AuxNode,
-//	computed: {
-//		descript() {
-//			return 'data * ' + this.node.factor.toFixed(2).toString()
-//			         + ' + ' + this.node.offset.toFixed(2).toString()
-//					 + '  [' + this.node.limit[0].toFixed(0).toString()
-//					   + '-' + this.node.limit[1].toFixed(0).toString()
-//					   + ']'
-//		},
-//	},
+	computed: {
+		descript() {
+			const node = this.node
+			let text = this.$t('dashboard.widget.scaleAux.formula', {
+				factor: node.factor.toFixed(2),
+				offset: node.offset.toFixed(2),
+			})
+			const limit = node.limit
+			// (0, 100) is ScaleAux's constructor default - only call it out
+			// when the node actually narrows/shifts that range
+			if (limit && (limit[0] !== 0.0 || limit[1] !== 100.0)) {
+				text += ' [' + limit[0] + '-' + limit[1] + ']'
+			}
+			return text
+		},
+	},
 }
 registerGlobalComponent('ScaleAux', ScaleAux)
 
@@ -509,54 +534,57 @@ const HistoryChart = {
 					v-else
 
 				>
-					<div class="d-flex justify-end px-0 py-2">
-						<v-menu
-							offset-y
-							open-on-hover
-						>
-							<template v-slot:activator="{ props }">
-								<v-btn
-									v-bind="props"
-									variant="text"
-									color="grey-darken-1"
-									small
-									class="text-none"
-									:loading="isLoading"
-								>
-									{{ $t('dashboard.widget.history.period.label').replace('%s', humanPeriod(period)) }}
-								</v-btn>
-							</template>
-							<v-list
-								dense
-								density="compact"
-								class="py-0"
+					<teleport :to="'#widget-title-actions-' + node.id" :disabled="renderType === 'modal'">
+						<div class="d-flex justify-end align-center px-0 py-2">
+							<v-menu
+								offset-y
+								open-on-hover
 							>
-								<v-list-item
-									v-for="(item, index) in periods"
-									:key="index"
+								<template v-slot:activator="{ props }">
+									<v-btn
+										v-bind="props"
+										variant="tonal"
+										color="grey-darken-1"
+										size="small"
+										class="text-none"
+										append-icon="mdi-menu-down"
+										:loading="isLoading"
+									>
+										{{ $t('dashboard.widget.history.period.label').replace('%s', humanPeriod(period)) }}
+									</v-btn>
+								</template>
+								<v-list
+									dense
 									density="compact"
-									min-height="28"
-									@click="setPeriod(item.value, chart)"
+									class="py-0"
 								>
-									<v-list-item-title class="text-caption">
-										{{ item.label }}
-									</v-list-item-title>
-								</v-list-item>
-							</v-list>
-						</v-menu>
+									<v-list-item
+										v-for="(item, index) in periods"
+										:key="index"
+										density="compact"
+										min-height="28"
+										@click="setPeriod(item.value, chart)"
+									>
+										<v-list-item-title class="text-caption">
+											{{ item.label }}
+										</v-list-item-title>
+									</v-list-item>
+								</v-list>
+							</v-menu>
 
-						<v-btn
-							v-if="renderType != 'modal'"
-							small
-							variant="text"
-							color="grey-darken-1"
-							class="ms-2 px-1"
-							min-width="0"
-							@click="openModal"
-						>
-							<v-icon>mdi-arrow-expand-all</v-icon>
-						</v-btn>
-					</div>
+							<v-btn
+								v-if="renderType != 'modal'"
+								variant="tonal"
+								color="grey-darken-1"
+								size="small"
+								class="ms-2 px-2"
+								min-width="0"
+								@click="openModal"
+							>
+								<v-icon>mdi-arrow-expand-all</v-icon>
+							</v-btn>
+						</div>
+					</teleport>
 
 					<div class="chart-container" style="position: relative; width:100%;">
 						<canvas :id="canvasId"></canvas>

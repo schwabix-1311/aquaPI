@@ -20,13 +20,15 @@ const AquapiNavDrawer = {
 				<v-list-item-subtitle>
 				{{ $t('app.subtitle') }}
 				</v-list-item-subtitle>
-				<v-btn
-					icon
-					variant="text"
-					@click.stop="navDrawerVisible = false"
-				>
-					<v-icon>mdi-chevron-left</v-icon>
-				</v-btn>
+				<template #append>
+					<v-btn
+						icon
+						variant="text"
+						@click.stop="navDrawerVisible = false"
+					>
+						<v-icon>mdi-chevron-left</v-icon>
+					</v-btn>
+				</template>
 			</v-list-item>
 
 			<v-divider></v-divider>

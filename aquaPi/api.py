@@ -268,13 +268,16 @@ def _settings_entry_to_dict(entry: Setting) -> dict:
         'type': entry.type, 'min': entry.min, 'max': entry.max, 'step': entry.step,
         'options': entry.options, 'optional': entry.optional or None,
     }.items() if v is not None}
-    return {
+    result = {
         'key': entry.key,
         'label': entry.label,
         'value': entry.value,
         'attrs': attrs,
         'editable': entry.editable,
     }
+    if entry.label_params is not None:
+        result['labelParams'] = entry.label_params
+    return result
 
 
 @bp.route('/api/nodes/<node_id>/settings', methods=['GET'])

@@ -105,9 +105,9 @@ class InputNode(BusNode, ABC):
         settings = super().get_settings()
         free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
         options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
-        settings.append(Setting('port', 'Input port', self.port,
+        settings.append(Setting('port', 'inputPort', self.port,
                                 type='select', options=options))
-        settings.append(Setting('interval', 'Leseintervall', self.interval,
+        settings.append(Setting('interval', 'readInterval', self.interval,
                                 type='duration', min=1, max=600, step=1))
         return settings
 
@@ -158,7 +158,7 @@ class SwitchInput(InputNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('inverted', 'Invertiert', self.inverted,
+        settings.append(Setting('inverted', 'inverted', self.inverted,
                                 type='checkbox'))
         return settings
 
@@ -216,8 +216,8 @@ class AnalogInput(InputNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('unit', 'Einheit', self.unit))
-        settings.append(Setting('avg', 'Mittelwert [1=direkt]', self.avg,
+        settings.append(Setting('unit', 'unit', self.unit))
+        settings.append(Setting('avg', 'avg', self.avg,
                                 type='number', min=1, max=5, step=1))
         return settings
 
@@ -377,5 +377,5 @@ class ScheduleInput(BusNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('cronspec', 'CRON (m h DoM M DoW)', self.cronspec))
+        settings.append(Setting('cronspec', 'cronspec', self.cronspec))
         return settings

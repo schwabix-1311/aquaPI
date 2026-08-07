@@ -46,7 +46,7 @@ class Setting:
         and validate an input widget without any further parsing.
     """
     key: str | None       # None = read-only
-    label: str
+    label: str             # i18n key into pages.settings.fields.<label>, not raw text
     value: Any
     type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration'
     min: float | None = None
@@ -65,6 +65,11 @@ class Setting:
     # seconds; 3600 = node stores hours, etc.) - see get_settings()/
     # api_set_node_settings().
     factor: float = 1
+    # named interpolation values for label's i18n template, e.g.
+    # label='setpoint', label_params={'unit': 'pH'} for a locale string
+    # like 'Sollwert [%{unit}]' - same %{name} convention vue-i18n already
+    # uses elsewhere in the SPA (e.g. '%{count} node(s) selected').
+    label_params: dict[str, Any] | None = None
 
     @property
     def editable(self) -> bool:
@@ -228,7 +233,7 @@ class BusListener(BusNode, ABC):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting(None, 'Receives',
+        settings.append(Setting(None, 'receives',
                          ';'.join(MsgBus.to_names(self.get_receives()))))
         return settings
 

@@ -267,7 +267,7 @@ const AquapiDashboardWidget = {
 			style="border-color: rgba(0,0,0,0.3);"
 		>
 			<v-card-title
-				class="pb-1"
+				class="pb-1 d-flex align-center flex-nowrap"
 			>
 				<template v-if="widgetTitleIcon">
 					<v-img
@@ -275,7 +275,7 @@ const AquapiDashboardWidget = {
 						:src="'static/' + widgetTitleIcon"
 						max-height="24"
 						max-width="24"
-						class="mr-2"
+						class="mr-2 flex-shrink-0"
 					/>
 					<v-icon
 						v-else
@@ -286,22 +286,26 @@ const AquapiDashboardWidget = {
 						{{ widgetTitleIcon }}
 					</v-icon>
 				</template>
-				{{ item.name }}
-				
-				<template
+				<span class="text-truncate">{{ item.name }}</span>
+
+				<v-spacer />
+
+				<!-- widgets rendered below (e.g. History) can teleport per-widget
+				     title-row controls in here, to sit on the same line as the
+				     title instead of in their own row further down -->
+				<div :id="'widget-title-actions-' + item.id" class="d-flex align-center flex-shrink-0"></div>
+
+				<v-chip
 					v-if="alert"
+					label
+					:ripple="false"
+					size="small"
+					:color="alertColor"
+					text-color="white"
+					class="ml-2 flex-shrink-0"
 				>
-					<v-spacer />
-					<v-chip
-						label
-						:ripple="false"
-						small
-						:color="alertColor"
-						text-color="white"
-					>
-						{{ alert }}
-					</v-chip>
-				</template>
+					{{ alert }}
+				</v-chip>
 			</v-card-title>
 
 			<template v-if="node">

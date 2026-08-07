@@ -156,10 +156,12 @@ class ThresholdCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('setpoint', f'Setpoint [{self.rcv_unit}]', self.setpoint,
-                                type='number', **get_unit_limits(self.rcv_unit)))
-        settings.append(Setting('hysteresis', f'Hysteresis [{self.rcv_unit}]', self.hysteresis,
-                                type='number', min=0, max=5, step=0.01))
+        settings.append(Setting('setpoint', 'setpoint', self.setpoint,
+                                type='number', label_params={'unit': self.rcv_unit},
+                                **get_unit_limits(self.rcv_unit)))
+        settings.append(Setting('hysteresis', 'hysteresis', self.hysteresis,
+                                type='number', min=0, max=5, step=0.01,
+                                label_params={'unit': self.rcv_unit}))
         return settings
 
 
@@ -332,13 +334,14 @@ class PidCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('setpoint', f'Sollwert [{self.rcv_unit}]', self.setpoint,
-                                type='number', step=0.1))
-        settings.append(Setting('p_fact', 'P Faktor', self.p_fact,
+        settings.append(Setting('setpoint', 'setpoint', self.setpoint,
+                                type='number', step=0.1,
+                                label_params={'unit': self.rcv_unit}))
+        settings.append(Setting('p_fact', 'pFact', self.p_fact,
                                 type='number', min=-10, max=10, step=0.1))
-        settings.append(Setting('i_fact', 'I Faktor', self.i_fact,
+        settings.append(Setting('i_fact', 'iFact', self.i_fact,
                                 type='number', min=-10, max=10, step=0.01))
-        settings.append(Setting('d_fact', 'D Faktor', self.d_fact,
+        settings.append(Setting('d_fact', 'dFact', self.d_fact,
                                 type='number', min=-10, max=10, step=0.1))
         return settings
 
@@ -455,9 +458,9 @@ class FadeCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('fade_time', 'Fade-In time', self.fade_time,
+        settings.append(Setting('fade_time', 'fadeIn', self.fade_time,
                                 type='duration', min=0))
-        settings.append(Setting('fade_out', 'Fade-Out time', self.fade_out,
+        settings.append(Setting('fade_out', 'fadeOut', self.fade_out,
                                 type='duration', min=0))
         return settings
 
@@ -548,6 +551,7 @@ class SunCtrl(ControllerNode):
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state["xscend"] = self.xscend
+        state["cloudiness"] = self.cloudiness
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -641,7 +645,7 @@ class SunCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('xscend', 'Ascend/descend', self.xscend * 3600,
+        settings.append(Setting('xscend', 'ascendDescend', self.xscend * 3600,
                                 type='duration', min=0.1*3600, max=5*3600, step=0.1*3600,
                                 factor=3600))
         return settings

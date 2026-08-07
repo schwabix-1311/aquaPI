@@ -362,7 +362,7 @@ class Alert(BusListener):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('repeat', 'Wiederholung', self.repeat,
+        settings.append(Setting('repeat', 'repeat', self.repeat,
                                 type='duration', min=0, max=24*60*60, step=60))
 # ??        for cond in self.conditions:
 #            settings.append(Setting('cond.limit', f'{str(cond)} [min]', cond.limit,

@@ -141,11 +141,11 @@ class ScaleAux(SingleInAux):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('unit', 'Einheit', self.unit))
+        settings.append(Setting('unit', 'unit', self.unit))
         # TODO frontend should also offer 2-point calibration, this is most practical for pH
-        settings.append(Setting('offset', 'Offset', round(self.offset, 4),
+        settings.append(Setting('offset', 'offset', round(self.offset, 4),
                                 type='number', step=0.0001))
-        settings.append(Setting('factor', 'Skalierfaktor', round(self.factor, 4),
+        settings.append(Setting('factor', 'scaleFactor', round(self.factor, 4),
                                 type='number', step=0.0001))
         # settings.append(Setting('limit', 'Grenzen', self.limit,
         #                         type='combo'))  #  None/0..100/(min,max)
@@ -209,7 +209,7 @@ class AvgAux(MultiInAux):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('unfair_avg', 'Unweighted avg.', self.unfair_avg,
+        settings.append(Setting('unfair_avg', 'unfairAvg', self.unfair_avg,
                                 type='number', min=0, step=1))
         return settings
 

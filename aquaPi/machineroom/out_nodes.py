@@ -99,7 +99,7 @@ class DeviceNode(BusListener, ABC):
         settings = super().get_settings()
         free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
         options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
-        settings.append(Setting('port', 'Output port', self.port,
+        settings.append(Setting('port', 'outputPort', self.port,
                                 type='select', options=options))
         return settings
 
@@ -170,7 +170,7 @@ class SwitchDevice(DeviceNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('inverted', 'Inverted', self.inverted,
+        settings.append(Setting('inverted', 'inverted', self.inverted,
                                 type='checkbox'))
         return settings
 
@@ -272,9 +272,9 @@ class SlowPwmDevice(DeviceNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('cycle', 'PWM cycle time', self.cycle,
+        settings.append(Setting('cycle', 'cycle', self.cycle,
                                 type='duration', min=10, max=300, step=1))
-        settings.append(Setting('inverted', 'Inverted', self.inverted,
+        settings.append(Setting('inverted', 'inverted', self.inverted,
                                 type='checkbox'))
         return settings
 
@@ -355,10 +355,10 @@ class AnalogDevice(DeviceNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('minimum', 'Minimum [%]', self.minimum,
+        settings.append(Setting('minimum', 'minimum', self.minimum,
                                 type='number', min=0, max=99))
-        settings.append(Setting('maximum', 'Maximum [%]', self.maximum,
+        settings.append(Setting('maximum', 'maximum', self.maximum,
                                 type='number', min=1, max=100))
-        settings.append(Setting('percept', 'Perceptive', self.percept,
+        settings.append(Setting('percept', 'percept', self.percept,
                                 type='checkbox'))
         return settings

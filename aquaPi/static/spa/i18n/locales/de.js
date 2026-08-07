@@ -59,7 +59,7 @@ export default
 				minimum: 'Minimum [%]',
 				maximum: 'Maximum [%]',
 				percept: 'Wahrnehmungskorrektur',
-				duration: 'max. Dauer',
+				duration: 'Verlaufsdauer (In-Memory)',
 			},
 		},
 		config: {

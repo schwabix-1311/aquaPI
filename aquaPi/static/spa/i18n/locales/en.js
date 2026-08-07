@@ -59,7 +59,7 @@ export default
 				minimum: 'Minimum [%]',
 				maximum: 'Maximum [%]',
 				percept: 'Perceptive',
-				duration: 'Max. duration',
+				duration: 'In-mem history time range',
 			},
 		},
 		config: {
@@ -186,7 +186,7 @@ export default
 			},
 			history: {
 				period: {
-					label: 'Period %s'
+					label: 'Time range %s'
 				},
 				forceDailySampling: {
 					label: 'Daily averages'

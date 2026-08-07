@@ -430,12 +430,14 @@ class History(BusListener):
         for rcv in self.receives:
             self.db.add_field(rcv)
 
-    # def __getstate__(self) -> dict[str, Any]:
-    #    state = super().__getstate__()
-    #    return state
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state['duration'] = self.duration
+        return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        History.__init__(self, state['name'], state['receives'], _cont=True)
+        History.__init__(self, state['name'], state['receives'],
+                         duration=state.get('duration', 24), _cont=True)
 
     def listen(self, msg) -> None:
         if isinstance(msg, MsgData):

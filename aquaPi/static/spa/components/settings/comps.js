@@ -68,8 +68,8 @@ const SettingSlider = {
 	},
 	template: `
 		<div>
-			<div class="d-flex justify-space-between align-center">
-				<span>{{ item.label }}</span>
+			<div class="d-flex justify-space-between align-end flex-wrap" style="gap: 4px 8px;">
+				<span class="text-truncate" style="min-width: 0;">{{ item.label }}</span>
 				<v-text-field
 					v-model.number="localValue"
 					type="number"
@@ -81,7 +81,7 @@ const SettingSlider = {
 					variant="underlined"
 					hide-details
 					class="text-right text-body-2"
-					style="max-width: 72px;"
+					style="flex: 0 0 64px; min-width: 0;"
 					@change="onChange"
 				></v-text-field>
 			</div>
@@ -192,33 +192,29 @@ const SettingDuration = {
 	},
 	template: `
 		<div>
-			<div class="d-flex justify-space-between align-center">
-				<span>{{ item.label }}</span>
-				<div class="d-flex align-center" style="gap: 4px;">
-					<v-text-field
-						v-model.number="localValue"
-						type="number"
-						:step="displayStep || 'any'"
-						:disabled="disabled"
-						:rules="rules"
-						density="compact"
-						variant="underlined"
-						hide-details
-						class="text-right text-body-2"
-						style="width: 96px;"
-						@change="onChange"
-					></v-text-field>
-					<v-select
-						v-model="unit"
-						:items="unitOptions"
-						:disabled="disabled"
-						density="compact"
-						variant="underlined"
-						hide-details
-						style="width: 68px;"
-						@update:modelValue="onUnitChange"
-					></v-select>
-				</div>
+			<div style="display: grid; grid-template-columns: minmax(0, 1fr) 60px 76px; align-items: end; gap: 4px 8px;">
+				<span class="text-truncate">{{ item.label }}</span>
+				<v-text-field
+					v-model.number="localValue"
+					type="number"
+					:step="displayStep || 'any'"
+					:disabled="disabled"
+					:rules="rules"
+					density="compact"
+					variant="underlined"
+					hide-details
+					class="text-right text-body-2"
+					@change="onChange"
+				></v-text-field>
+				<v-select
+					v-model="unit"
+					:items="unitOptions"
+					:disabled="disabled"
+					density="compact"
+					variant="underlined"
+					hide-details
+					@update:modelValue="onUnitChange"
+				></v-select>
 			</div>
 			<div v-if="hasRange" class="d-flex align-center" style="gap: 8px;">
 				<span class="text-body-2 text-grey" style="white-space: nowrap;">{{ minLabel }}</span>

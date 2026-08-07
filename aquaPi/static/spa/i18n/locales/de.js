@@ -187,6 +187,8 @@ export default
 			deleteError: 'Löschen fehlgeschlagen',
 		},
 		duration: {
+			sec: 's',
+			secs: 's',
 			min: 'min',
 			mins: 'min',
 			hour: 'h',

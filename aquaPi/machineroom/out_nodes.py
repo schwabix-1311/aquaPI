@@ -273,7 +273,7 @@ class SlowPwmDevice(DeviceNode):
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
         settings.append(Setting('cycle', 'PWM cycle time', self.cycle,
-                                type='number', min=10, max=300, step=1))
+                                type='duration', min=10, max=300, step=1))
         settings.append(Setting('inverted', 'Inverted', self.inverted,
                                 type='checkbox'))
         return settings

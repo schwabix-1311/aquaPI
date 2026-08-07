@@ -107,8 +107,8 @@ class InputNode(BusNode, ABC):
         options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
         settings.append(Setting('port', 'Input port', self.port,
                                 type='select', options=options))
-        settings.append(Setting('interval', 'Leseintervall [s]', self.interval,
-                                type='number', min=1, max=600, step=1))
+        settings.append(Setting('interval', 'Leseintervall', self.interval,
+                                type='duration', min=1, max=600, step=1))
         return settings
 
 

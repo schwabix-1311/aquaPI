@@ -455,10 +455,10 @@ class FadeCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('fade_time', 'Fade-In time [s]', self.fade_time,
-                                type='number', min=0))
-        settings.append(Setting('fade_out', 'Fade-Out time [s]', self.fade_out,
-                                type='number', min=0))
+        settings.append(Setting('fade_time', 'Fade-In time', self.fade_time,
+                                type='duration', min=0))
+        settings.append(Setting('fade_out', 'Fade-Out time', self.fade_out,
+                                type='duration', min=0))
         return settings
 
 
@@ -641,6 +641,7 @@ class SunCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('xscend', 'Ascend/descend hours [h]', self.xscend,
-                                type='number', min=0.1, max=5, step=0.1))
+        settings.append(Setting('xscend', 'Ascend/descend', self.xscend * 3600,
+                                type='duration', min=0.1*3600, max=5*3600, step=0.1*3600,
+                                factor=3600))
         return settings

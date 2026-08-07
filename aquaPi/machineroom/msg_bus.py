@@ -48,12 +48,23 @@ class Setting:
     key: str | None       # None = read-only
     label: str
     value: Any
-    type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect'
+    type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration'
     min: float | None = None
     max: float | None = None
     step: float | None = None
     options: list[str] | None = None   # choices for 'select' / 'multiselect'
     optional: bool = False             # True = value may be left empty/unset
+    # for type='duration': value/min/max/step always travel the API as
+    # seconds (wire unit) - the /settings widget lets the user display/edit
+    # in s, min or h, converting back to seconds before saving. The largest
+    # unit offered/auto-picked is derived client-side from `max` itself
+    # (e.g. a 600s max reads as "10 min", but a 300s max won't offer hours
+    # - "0.083 h" helps no one); a field with no `max` is unbounded (up to
+    # h). factor converts between the wire unit (seconds) and whatever
+    # unit the node itself stores internally (1 = node already stores
+    # seconds; 3600 = node stores hours, etc.) - see get_settings()/
+    # api_set_node_settings().
+    factor: float = 1
 
     @property
     def editable(self) -> bool:

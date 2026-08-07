@@ -307,7 +307,11 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
     if not voptional and raw_value in (None, '', []):
         raise ValueError(f'{key}: value is required')
 
-    if vtype == 'number':
+    if vtype in ('number', 'duration'):
+        # 'duration' is a plain number on the wire (always seconds) - the
+        # only difference is the /settings widget used to render/edit it
+        # and the factor-conversion applied afterward in
+        # api_set_node_settings(), not the validation itself.
         try:
             value = float(raw_value)
         except (TypeError, ValueError):
@@ -371,6 +375,10 @@ def api_set_node_settings(node_id: str) -> Response:
             entry = editable[key]
             value = _validate_and_cast(key, raw_value, entry.type, entry.min, entry.max,
                                        entry.options, entry.optional)
+            if entry.type == 'duration' and entry.factor != 1:
+                # raw_value/value is in the wire unit (seconds) - convert
+                # back to whatever unit the node itself stores internally
+                value = value / entry.factor
             if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
                 calibration_changes.append((key, getattr(node, key), value))
             setattr(node, key, value)

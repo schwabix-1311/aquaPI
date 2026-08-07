@@ -33,7 +33,11 @@ class DeviceNode(BusListener, ABC):
         self.unit: str = '%'
         self._driver: OutDriver | None = None
         self._port: str = ''
-        self.port = port
+        # bypass the port setter here - it's too early for _sync_driver()
+        # to run (subclass attrs like _inverted/minimum/maximum aren't set
+        # yet); each subclass's own __init__ does its own initial sync
+        # (switch()/set_percent()/set()) once fully constructed.
+        self._apply_port(port)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -51,8 +55,11 @@ class DeviceNode(BusListener, ABC):
     def port(self) -> str:
         return self._port
 
-    @port.setter
-    def port(self, port: str) -> None:
+    def _apply_port(self, port: str) -> None:
+        """ (re)connect self._driver to `port`, destructing any previous
+            one. Does not push the node's current state to a freshly
+            attached driver - see the port setter/_sync_driver() for that.
+        """
         if self._driver:
             IoRegistry.get().driver_destruct(self._port, self._driver)
             self._driver = None
@@ -64,6 +71,25 @@ class DeviceNode(BusListener, ABC):
                 log.error('Port %s does not support writing data. %s will be ignored.',
                           port, self.name)
         self._port = port
+
+    @port.setter
+    def port(self, port: str) -> None:
+        self._apply_port(port)
+        if self._driver:
+            # a runtime port change (e.g. via /settings) attaches a driver
+            # that starts in its own default state - push the node's
+            # current data to it now, instead of leaving it stale until
+            # the next MsgData that happens to differ from self.data.
+            self._sync_driver()
+
+    def _sync_driver(self) -> None:
+        """ push the node's current state to a freshly (re)attached
+            driver. No-op by default; overridden by subclasses that can
+            re-push their state (SwitchDevice, AnalogDevice).
+            SlowPwmDevice doesn't need this - its background pulse thread
+            already re-reads self._driver on its own on every toggle.
+        """
+        pass
 
     def pullout(self) -> bool:
         self.port = ''
@@ -127,6 +153,9 @@ class SwitchDevice(DeviceNode):
                 self.switch(data)
 
         super().listen(msg)
+
+    def _sync_driver(self) -> None:
+        self.switch(self.data)
 
     def switch(self, state: bool) -> None:
         self.data: bool = state
@@ -315,6 +344,14 @@ class AnalogDevice(DeviceNode):
         if self._driver:
             self._driver.write(out_val)
         self.post(MsgData(self.id, round(out_val, 4)))  # to make our state known
+
+    def _sync_driver(self) -> None:
+        # NOT set_percent(self.data) - self.data already holds the fully
+        # scaled/percept-corrected *output* value (see set_percent() above),
+        # so re-running it through set_percent() would double-apply that
+        # scaling. Push the already-computed value straight to the driver.
+        if self._driver:
+            self._driver.write(self.data)
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()

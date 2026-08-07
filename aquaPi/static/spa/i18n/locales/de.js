@@ -187,6 +187,9 @@ export default
 			history: {
 				period: {
 					label: 'Zeitraum %s'
+				},
+				forceDailySampling: {
+					label: 'Tagesmittelwerte'
 				}
 			},
 			scaleAux: {

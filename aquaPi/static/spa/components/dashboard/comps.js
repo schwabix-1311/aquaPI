@@ -566,6 +566,25 @@ const HistoryChart = {
 											{{ item.label }}
 										</v-list-item-title>
 									</v-list-item>
+
+									<v-divider></v-divider>
+
+									<v-list-item
+										density="compact"
+										min-height="28"
+										@click.stop
+									>
+										<v-checkbox
+											v-model="forceDailySampling"
+											:disabled="forceDailySamplingDisabled"
+											density="compact"
+											hide-details
+											class="ma-0"
+											:label="$t('dashboard.widget.history.forceDailySampling.label')"
+											@click.stop
+											@update:modelValue="onForceDailySamplingChange(chart)"
+										></v-checkbox>
+									</v-list-item>
 								</v-list>
 							</v-menu>
 
@@ -600,6 +619,7 @@ const HistoryChart = {
 			dataPrepared: false,
 			isLoading: false,
 			currentPeriod: (60 * 60 * 1000),
+			currentForceDailySampling: false,
 			// NOTE: markRaw() prevents Vue from wrapping this in a reactive Proxy - Chart.js
 			// performs its own internal option resolution (also Proxy-based) on this object,
 			// and nesting it inside a Vue reactive Proxy causes infinite recursion on update().
@@ -716,7 +736,7 @@ const HistoryChart = {
 					} else {
 						config = {}
 					}
-					config[this.storageId] = {period: val}
+					config[this.storageId] = {...config[this.storageId], period: val}
 					storage.setItem('aquapi.history', JSON.stringify(config))
 				} catch(e) {}
 
@@ -737,21 +757,64 @@ const HistoryChart = {
 				return this.currentPeriod
 			}
 		},
+		forceDailySampling: {
+			set(val) {
+				try {
+					const storage = window.localStorage
+					let config = storage.getItem('aquapi.history');
+					if (config) {
+						config = JSON.parse(config)
+					} else {
+						config = {}
+					}
+					config[this.storageId] = {...config[this.storageId], forceDailySampling: val}
+					storage.setItem('aquapi.history', JSON.stringify(config))
+				} catch(e) {}
+
+				this.currentForceDailySampling = val
+			},
+			get() {
+				try {
+					const storage = window.localStorage
+					let config = storage.getItem('aquapi.history')
+					if (config) {
+						config = JSON.parse(config)
+						if (config[this.storageId]?.forceDailySampling !== undefined) {
+							this.currentForceDailySampling = config[this.storageId].forceDailySampling
+						}
+					}
+				} catch(e) {}
+
+				return this.currentForceDailySampling
+			}
+		},
+		forceDailySamplingDisabled() {
+			return this.period < 24 * 60 * 60 * 1000
+		},
 		chartStep() {
-			if (!this.chartWidth) {
-				return 5
+			// NOTE: period is millisecs, result must be secs
+			let periodSec = this.period / 1000
+
+			if (this.forceDailySampling && periodSec >= 24 * 60 * 60) {
+				return 24 * 60 * 60
 			}
 
-			// NOTE: period is millisecs, result must be secs
-			// NOTE: for now, we round up to 15 seconds
-			let minStep = 60  //?15
-			// TODO: (?) calculate factor based on period, chartWidth, ...
-			let factor = this.period / 1000 / 3600
-			let val = this.period / 1000 / this.chartWidth * factor
-			let rounded = Math.ceil(val / minStep) * minStep
+			if (!this.chartWidth) {
+				return (periodSec <= 3600) ? 1 : 60
+			}
 
-			//return rounded
-			return (factor <= 1) ? 1 : rounded
+			// target ~1 sample per available chart pixel
+			let rawStep = periodSec / this.chartWidth
+			if (rawStep <= 1) {
+				// DB's native resolution; also smooths rare faster-than-1s bursts
+				return 1
+			}
+
+			// round up to the next "nice" bucket so QuestDB's ALIGN TO
+			// CALENDAR grid produces stable, calendar-aligned boundaries
+			let niceSteps = [1, 5, 10, 15, 30, 60, 300, 900, 1800, 3600, 7200, 21600, 43200, 86400]
+			let nice = niceSteps.find((s) => s >= rawStep)
+			return nice ?? Math.ceil(rawStep / 86400) * 86400
 		}
 	},
 	methods: {
@@ -843,6 +906,15 @@ const HistoryChart = {
 				}
 			}
 		},
+		async onForceDailySamplingChange(chart) {
+			// v-model already persisted the new value via the
+			// forceDailySampling computed setter - just reload at the
+			// new step
+			if (chart) {
+				await this.loadHistory()
+				chart.update()
+			}
+		},
 		async openModal() {
 			// NOTE: the 2nd ("hideOthers") arg is intentionally dropped here -
 			// Vuex's dispatch(type, payload, options) never forwarded a 3rd
@@ -876,9 +948,35 @@ const HistoryChart = {
 		this.chart = null
 		this.currentPeriod = this.period
 
-		let elContainer = await document.getElementById(this.wrapperId)
+		let elContainer = document.getElementById(this.wrapperId)
 		if (elContainer) {
 			this.chartContainerWidth = elContainer.offsetWidth
+
+			// re-fetch at the new pixel-driven step (see chartStep) once
+			// resizing settles, so an already-loaded chart's resolution
+			// adapts instead of staying pinned to its width at mount time
+			this._resizeObserver = new ResizeObserver((entries) => {
+				const width = Math.round(entries[0].contentRect.width)
+				if (width && width !== this.chartContainerWidth) {
+					this.chartContainerWidth = width
+
+					// Chart.js doesn't always pick up its container growing
+					// on its own here (canvas stays at its old size) -
+					// resize() forces it to re-measure and redraw immediately
+					if (this.chart != null) {
+						this.chart.resize()
+					}
+
+					clearTimeout(this._resizeDebounce)
+					this._resizeDebounce = setTimeout(async () => {
+						await this.loadHistory()
+						if (this.chart != null) {
+							this.chart.update()
+						}
+					}, 300)
+				}
+			})
+			this._resizeObserver.observe(elContainer)
 		}
 
 		await this.loadHistory()
@@ -894,6 +992,12 @@ const HistoryChart = {
 
 	unmounted() {
 		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this._sseHandler)
+
+		if (this._resizeObserver) {
+			this._resizeObserver.disconnect()
+			this._resizeObserver = null
+		}
+		clearTimeout(this._resizeDebounce)
 
 		if (this.chart != null) {
 			this.chart.destroy()

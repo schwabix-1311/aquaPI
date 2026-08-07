@@ -195,9 +195,6 @@ const BusNode = {
 				</v-expansion-panels>
 				
 				<div v-else class="mt-2">
-					<div class="px-4 py-2 font-weight-bold text-caption text-uppercase text--secondary">
-						{{ node.name }}
-					</div>
 					<v-card
 						v-for="(item, index) in receivesNodes"
 						:key="item.identifier"

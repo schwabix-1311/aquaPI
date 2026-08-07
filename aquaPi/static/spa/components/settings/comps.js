@@ -69,7 +69,7 @@ const SettingSlider = {
 	template: `
 		<div>
 			<div class="d-flex justify-space-between align-end flex-wrap" style="gap: 4px 8px;">
-				<span class="text-truncate" style="min-width: 0;">{{ item.label }}</span>
+				<span class="text-truncate aquapi-shrinkable">{{ item.label }}</span>
 				<v-text-field
 					v-model.number="localValue"
 					type="number"
@@ -80,13 +80,13 @@ const SettingSlider = {
 					density="compact"
 					variant="underlined"
 					hide-details
-					class="text-right text-body-2"
-					style="flex: 0 0 64px; min-width: 0;"
+					class="text-right text-body-2 aquapi-shrinkable"
+					style="flex: 0 0 64px;"
 					@change="onChange"
 				></v-text-field>
 			</div>
 			<div class="d-flex align-center" style="gap: 8px;">
-				<span class="text-body-2 text-grey" style="min-width: 2em;">{{ attrs.min }}</span>
+				<span class="text-body-2 text-grey aquapi-setting-bound">{{ attrs.min }}</span>
 				<v-slider
 					v-model="localValue"
 					:min="Number(attrs.min || 0)"
@@ -99,7 +99,7 @@ const SettingSlider = {
 					hide-details
 					@end="onEnd"
 				></v-slider>
-				<span class="text-body-2 text-grey text-right" style="min-width: 2em;">{{ attrs.max }}</span>
+				<span class="text-body-2 text-grey text-right aquapi-setting-bound">{{ attrs.max }}</span>
 			</div>
 		</div>
 	`,
@@ -192,8 +192,8 @@ const SettingDuration = {
 	},
 	template: `
 		<div>
-			<div style="display: grid; grid-template-columns: minmax(0, 1fr) 60px 76px; align-items: end; gap: 4px 8px;">
-				<span class="text-truncate">{{ item.label }}</span>
+			<div class="aquapi-setting-duration-grid">
+				<span class="text-truncate aquapi-shrinkable">{{ item.label }}</span>
 				<v-text-field
 					v-model.number="localValue"
 					type="number"
@@ -217,7 +217,7 @@ const SettingDuration = {
 				></v-select>
 			</div>
 			<div v-if="hasRange" class="d-flex align-center" style="gap: 8px;">
-				<span class="text-body-2 text-grey" style="white-space: nowrap;">{{ minLabel }}</span>
+				<span class="text-body-2 text-grey aquapi-setting-bound">{{ minLabel }}</span>
 				<v-slider
 					v-model="localValue"
 					:min="displayMin"
@@ -230,7 +230,7 @@ const SettingDuration = {
 					hide-details
 					@end="onEnd"
 				></v-slider>
-				<span class="text-body-2 text-grey text-right" style="white-space: nowrap;">{{ maxLabel }}</span>
+				<span class="text-body-2 text-grey text-right aquapi-setting-bound">{{ maxLabel }}</span>
 			</div>
 		</div>
 	`,

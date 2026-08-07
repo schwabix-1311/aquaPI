@@ -109,6 +109,24 @@ body > .v-navigation-drawer__scrim {
     font-size: 1rem;
 }
 
+/* Settings widgets (comps.js's SettingSlider/SettingDuration) - small
+   reusable utility classes so the Vue template strings don't need long
+   inline `style="..."` attributes repeated per instance (those were
+   making the already tab-indented template markup run very wide). */
+.aquapi-shrinkable {
+    min-width: 0;
+}
+.aquapi-setting-bound {
+    white-space: nowrap;
+    min-width: 2em;
+}
+.aquapi-setting-duration-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 60px 76px;
+    align-items: end;
+    gap: 4px 8px;
+}
+
 div.aquapi-dashboard div.v-expansion-panels,
 div.aquapi-settings div.v-expansion-panels {
     border-radius: 0;

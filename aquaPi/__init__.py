@@ -57,8 +57,13 @@ log_default = {
       "handlers": ["stdout", "file"]
     },
 
+    # the following list should occasionally be synced
+    # with the result of 'grep logging.getLogger $(git ls-files *.py)'
+
     "aquaPi":     {"level": "NOTSET"},
-    # "aquaPi.api": {"level": "NOTSET"},
+    # "aquaPi.api" : {"level": "NOTSET"},
+    # "aquaPi.auth": {"level": "NOTSET"},
+    # "aquaPi.db":   {"level": "NOTSET"},
 
     "machineroom":             {"level": "NOTSET"},
     # "machineroom.alert_nodes": {"level": "NOTSET"},
@@ -80,10 +85,6 @@ log_default = {
     # "driver.DriverText":    {"level": "NOTSET"},
 
     "pages":          {"level": "NOTSET"},
-    # "pages.about":    {"level": "NOTSET"},
-    # "pages.config":   {"level": "NOTSET"},
-    # "pages.home":     {"level": "NOTSET"},
-    # "pages.settings": {"level": "NOTSET"},
     # "pages.spa":      {"level": "NOTSET"},
     # "pages.sse_util": {"level": "NOTSET"},
 

@@ -1,28 +1,35 @@
-import store from './store/index.js'
+import pinia from './store/index.js'
 import router from './router/index.js'
 import i18n from './i18n/index.js'
 import App from './App.vue.js'
 import {AQUAPI_EVENTS, EventBus} from './components/app/EventBus.js'
+import {installGlobalComponents} from './components/app/registry.js'
+import {useUiStore} from './store/modules/ui.js'
+import {useAuthStore} from './store/modules/auth.js'
+import {useUsersStore} from './store/modules/users.js'
 
-Vue.config.productionTip = true;
-
-// Vue.use(VueToast, {
-// 	position: 'top',
-// 	duration: 0
-// });
-
-const app = new Vue({
-	eventbus: new Vue(),
-	store,
-	router,
-	i18n,
-	vuetify: new Vuetify({
-		icons: {
-			iconfont: 'mdi', // 'mdi' || 'mdiSvg' || 'md' || 'fa' || 'fa4' || 'faSvg'
-		},
-		theme: {
-			themes: {
-				light: {
+const vuetify = Vuetify.createVuetify({
+	icons: {
+		defaultSet: 'mdi', // 'mdi' || 'mdiSvg' || 'md' || 'fa' || 'fa4' || 'faSvg'
+	},
+	theme: {
+		defaultTheme: 'light',
+		themes: {
+			light: {
+				dark: false,
+				colors: {
+					primary: '#1976D2',
+					secondary: '#424242',
+					accent: '#82B1FF',
+					error: '#FF5252',
+					info: '#2196F3',
+					success: '#4CAF50',
+					warning: '#FFC107',
+				},
+			},
+			dark: {
+				dark: true,
+				colors: {
 					primary: '#1976D2',
 					secondary: '#424242',
 					accent: '#82B1FF',
@@ -33,26 +40,51 @@ const app = new Vue({
 				},
 			},
 		},
-	}),
-	render: (h) => h(App),
+	},
+})
+
+// Vue.use(VueToast, {
+// 	position: 'top',
+// 	duration: 0
+// });
+
+const app = Vue.createApp({
+	render() {
+		return Vue.h(App)
+	},
+	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		authStore() {
+			return useAuthStore()
+		},
+		usersStore() {
+			return useUsersStore()
+		},
+	},
 	methods: {
 		toggleNavDrawer() {
 			const dialogName = 'AquapiNavDrawer'
-			let active = this.$store.getters['ui/isActiveDialog'](dialogName)
+			let active = this.uiStore.isActiveDialog(dialogName)
 			if (active) {
-				this.$store.dispatch('ui/hideDialog', dialogName)
+				this.uiStore.hideDialog(dialogName)
 			} else {
-				this.$store.dispatch('ui/showDialog', dialogName)
+				this.uiStore.showDialog(dialogName)
 			}
 		},
 		toggleDarkMode() {
-			if (this.$vuetify.theme.dark) {
-				this.$vuetify.theme.dark = false
-				this.$store.dispatch('ui/setDarkMode', false)
+			if (this.$vuetify.theme.global.name === 'dark') {
+				this.$vuetify.theme.change('light')
+				this.uiStore.setDarkMode(false)
 			} else {
-				this.$vuetify.theme.dark = true
-				this.$store.dispatch('ui/setDarkMode', true)
+				this.$vuetify.theme.change('dark')
+				this.uiStore.setDarkMode(true)
 			}
+		},
+		setLocale(locale) {
+			i18n.global.locale.value = locale
+			this.uiStore.setLocale(locale)
 		},
 		navigate(item) {
 			if (item.route == this.$route.name) return
@@ -61,12 +93,13 @@ const app = new Vue({
 
 		initEventListeners() {
 			EventBus.$on(AQUAPI_EVENTS.APP_LOADING, (value) => {
-				this.$store.dispatch('ui/showAppLoader', value)
+				this.uiStore.showAppLoader(value)
 			})
 
 			EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_IN, () => {
-				this.$store.dispatch('ui/hideDialog', 'AquapiLoginDialog')
-				this.$store.dispatch('ui/hideDialog', 'AquapiNavDrawer')
+				this.uiStore.hideDialog('AquapiLoginDialog')
+				this.uiStore.hideDialog('AquapiNavDrawer')
+				this.usersStore.fetchCurrentUser()
 
 				// TODO: adapt to final root (dashboard on home)
 				this.$router.replace({name: 'home'})
@@ -84,36 +117,75 @@ const app = new Vue({
 		this.initEventListeners()
 	},
 
-	beforeMount() {
+	async beforeMount() {
 		EventBus.$emit(AQUAPI_EVENTS.APP_LOADING, true)
 
-		// TODO: implement server side check ...
-		// Check localStorage for authenticated user
-		try {
-			const itemUser = JSON.parse(window.localStorage.getItem('aquapi.user'))
-			if (itemUser && itemUser.username) {
-				this.$store.commit('auth/setUser', {username: itemUser.username})
-			} else {
-				this.$store.commit('auth/setUser', null)
-			}
-		} catch(e) {
-			this.$store.commit('auth/setUser', null)
+		// Resolve the real, server-side user (id/username/role) via the
+		// authenticated Flask-Login session, so a browser refresh keeps
+		// reflecting an already-existing session instead of defaulting
+		// to logged-out until the next explicit login.
+		const user = await this.usersStore.fetchCurrentUser()
+		if (user && user.username) {
+			this.authStore.setUser({username: user.username})
+		} else {
+			this.authStore.setUser(null)
 		}
 
 		// Check localStorage for theme mode
 		try {
 			const itemTheme = window.localStorage.getItem('aquapi.theme')
 			if (itemTheme) {
-				this.$vuetify.theme.dark = (itemTheme == 'dark')
-				this.$store.dispatch('ui/setDarkMode', (itemTheme == 'dark'))
+				this.$vuetify.theme.change((itemTheme == 'dark') ? 'dark' : 'light')
+				this.uiStore.setDarkMode((itemTheme == 'dark'))
 			}
 		} catch(e) {}
+
+		// Check localStorage for a persisted language choice, otherwise
+		// keep the navigator.language-derived default set in i18n/index.js
+		try {
+			const itemLocale = window.localStorage.getItem('aquapi.locale')
+			if (itemLocale && Object.prototype.hasOwnProperty.call(i18n.global.messages.value, itemLocale)) {
+				i18n.global.locale.value = itemLocale
+			}
+		} catch(e) {}
+		this.uiStore.setLocale(i18n.global.locale.value)
 	},
 
-	beforeDestroy() {
+	beforeUnmount() {
 		this.detachEventListeners()
 	}
+})
 
-}).$mount('#app');
+app.config.globalProperties.$confirm = function(message, options = {}) {
+	return new Promise((resolve) => {
+		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {message, options, resolve})
+	})
+}
+app.config.globalProperties.$alert = function(message, options = {}) {
+	return new Promise((resolve) => {
+		EventBus.$emit(AQUAPI_EVENTS.CONFIRM_REQUESTED, {
+			message,
+			options: Object.assign({}, options, {alertOnly: true}),
+			resolve,
+		})
+	})
+}
+app.config.globalProperties.$toast = {
+	success(message) {
+		EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {message, color: 'success', timeout: 4000})
+	},
+	error(message) {
+		EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {message, color: 'error', timeout: 6000})
+	},
+}
+
+app.use(pinia)
+app.use(router)
+app.use(i18n)
+app.use(vuetify)
+
+installGlobalComponents(app)
+
+app.mount('#app')
 
 // vim: set noet ts=4 sw=4:

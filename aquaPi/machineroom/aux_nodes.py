@@ -5,7 +5,7 @@ import logging
 from typing import (Iterable, Any)
 
 from .msg_types import (Msg, MsgData)
-from .msg_bus import (BusListener, BusRole, DataRange)
+from .msg_bus import (BusListener, BusRole, DataRange, Setting)
 
 
 log = logging.getLogger('machineroom.aux_nodes')
@@ -139,17 +139,16 @@ class ScaleAux(SingleInAux):
 
         super().listen(msg)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('unit', 'Einheit',
-                         self.unit, 'type="text"'))
+        settings.append(Setting('unit', 'unit', self.unit))
         # TODO frontend should also offer 2-point calibration, this is most practical for pH
-        settings.append(('offset', 'Offset', round(self.offset, 4),
-                         'type="number" step="0.0001"'))
-        settings.append(('factor', 'Skalierfaktor', round(self.factor, 4),
-                         'type="number" step="0.0001"'))
-        # settings.append(('limit', 'Grenzen', self.limit,
-        #                  'type="combo"'))  #  None/0..100/(min,max)
+        settings.append(Setting('offset', 'offset', round(self.offset, 4),
+                                type='number', step=0.0001))
+        settings.append(Setting('factor', 'scaleFactor', round(self.factor, 4),
+                                type='number', step=0.0001))
+        # settings.append(Setting('limit', 'Grenzen', self.limit,
+        #                         type='combo'))  #  None/0..100/(min,max)
         return settings
 
 
@@ -208,10 +207,10 @@ class AvgAux(MultiInAux):
 
         super().listen(msg)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('unfair_avg', 'Unweighted avg.',
-                         self.unfair_avg, 'type="number" min="0" step="1"'))
+        settings.append(Setting('unfair_avg', 'unfairAvg', self.unfair_avg,
+                                type='number', min=0, step=1))
         return settings
 
 

@@ -3,6 +3,9 @@
 // TODO: change masonry direction, if possible; maybe use other masonry plugin
 
 import {AQUAPI_EVENTS, EventBus} from '../app/EventBus.js';
+import {registerGlobalComponent} from '../app/registry.js';
+import {useUiStore} from '../../store/modules/ui.js';
+import {useDashboardStore} from '../../store/modules/dashboard.js';
 
 const AnyNode = {
 	props: {
@@ -33,6 +36,9 @@ const AnyNode = {
 	},
 
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		descript() {
 			return ''  // just a sample
 		},
@@ -74,7 +80,7 @@ const AnyNode = {
 
 			node.receives.forEach(id => {
 				if (id !== '*') {
-					nodes.push(this.$store.getters['dashboard/node'](id))
+					nodes.push(this.dashboardStore.node(id))
 				}
 			})
 
@@ -100,7 +106,7 @@ const AnyNode = {
 		},
 	},
 }
-Vue.component('AnyNode', AnyNode)  //??
+registerGlobalComponent('AnyNode', AnyNode)  //??
 
 const DebugNode = {
 	extends: AnyNode,
@@ -115,7 +121,7 @@ const DebugNode = {
 		</div>
 	`
 }
-Vue.component('DebugNode', DebugNode)
+registerGlobalComponent('DebugNode', DebugNode)
 
 
 const BusNode = {
@@ -153,59 +159,70 @@ const BusNode = {
 			<template
 				v-if="receivesNodes.length > 0"
 			>
-				<template
+				<v-expansion-panels
 					v-if="level == 1"
+					multiple
+					v-model="openPanels"
+					tile
 				>
-					<v-expansion-panels
-						tile
-					>
-						<v-expansion-panel>
-							<v-expansion-panel-header
-								class="py-0 px-4"
+					<v-expansion-panel>
+						<v-expansion-panel-title
+							class="py-0 px-4 text-caption"
+						>
+							{{ $t('dashboard.widget.inputs.label') }}
+						</v-expansion-panel-title>
+						<v-expansion-panel-text>
+							<v-card
+								v-for="(item, index) in receivesNodes"
+								:key="item.identifier"
+								variant="outlined"
+								tile
+								class="ma-3 mt-0"
 							>
-								{{ $t('dashboard.widget.inputs.label') }}
-							</v-expansion-panel-header>
-							<v-expansion-panel-content>
-								<v-card
-									v-for="(item, index) in receivesNodes"
-									:key="item.identifier"
-									outlined
-									tile
-									class="ma-3 mt-0"
-								>
-									<component
-										:is="item.type"
-										:id="item.identifier"
-										:node="item"
-										:level="(level + 1)"
-									></component>
-								</v-card>
-							</v-expansion-panel-content>
-						</v-expansion-panel>
-					</v-expansion-panels>
-				</template>
-				<template
-					v-else
-				>
+								<component
+									v-if="item"
+									:is="item.type"
+									:id="item.identifier"
+									:node="item"
+									:level="(level + 1)"
+								></component>
+								<v-card-text v-else class="red--text">
+									Error: Node not found
+								</v-card-text>
+							</v-card>
+						</v-expansion-panel-text>
+					</v-expansion-panel>
+				</v-expansion-panels>
+				
+				<div v-else class="mt-2">
 					<v-card
 						v-for="(item, index) in receivesNodes"
 						:key="item.identifier"
-						outlined
+						variant="outlined"
 						tile
 						class="ma-3 mt-0"
 					>
 						<component
+							v-if="item"
 							:is="item.type"
 							:id="item.identifier"
 							:node="item"
 							:level="(level + 1)"
 						></component>
+						<v-card-text v-else class="red--text">
+							Error: Node not found
+						</v-card-text>
 					</v-card>
-				</template>
+				</div>
 			</template>
 		</div>
 	`,
 
+	data() {
+		return {
+			openPanels: [],
+		}
+	},
 	computed: {},
 }
 //Vue.component('BusNode', BusNode)  //??
@@ -216,6 +233,18 @@ const BusNode = {
 
 const ControllerNode = {
 	extends: BusNode,
+	computed: {
+		// only append rcv_unit when the setpoint is a numeric value - for
+		// BINARY/PERCENT controllers the setpoint is rendered as on/off
+		// text instead (see misc.dataRange.binary/percent), where a unit
+		// suffix wouldn't make sense.
+		setpointUnitSuffix() {
+			const node = this.node
+			if (!node || !node.rcv_unit) return ''
+			if (typeof node.setpoint !== 'number') return ''
+			return ' ' + node.rcv_unit.trim()
+		}
+	},
 }
 //Vue.component('ControllerNode', ControllerNode)  //??
 
@@ -224,42 +253,43 @@ const MinimumCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return this.$t('dashboard.widget.setpoint.minimum') + this.node.setpoint.toString()
+			return this.$t('dashboard.widget.setpoint.minimum') + this.node.setpoint.toString() + this.setpointUnitSuffix
 		},
 	},
 }
-Vue.component('MinimumCtrl', MinimumCtrl)
+registerGlobalComponent('MinimumCtrl', MinimumCtrl)
 
 
 const MaximumCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return this.$t('dashboard.widget.setpoint.maximum') + this.node.setpoint.toString()
+			return this.$t('dashboard.widget.setpoint.maximum') + this.node.setpoint.toString() + this.setpointUnitSuffix
 		},
 	},
 }
-Vue.component('MaximumCtrl', MaximumCtrl)
+registerGlobalComponent('MaximumCtrl', MaximumCtrl)
 
 
 const PidCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			return this.$t('dashboard.widget.setpoint.equals') + this.node.setpoint.toString()
+			return this.$t('dashboard.widget.setpoint.equals') + this.node.setpoint.toString() + this.setpointUnitSuffix
 		},
 	},
 }
-Vue.component('PidCtrl', PidCtrl)
+registerGlobalComponent('PidCtrl', PidCtrl)
 
 
 const SunCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			//TODO: prefix a label: dusk/dawn  or ramp
-			let xscend = this.node.xscend
-			return '/~~\\ ' + this.humanPeriod(this.node.xscend * 60 * 60 * 1000)
+			const cloudiness = Math.max(0, Math.min(7, this.node.cloudiness || 0))
+			return this.$t('pages.settings.fields.ascendDescend') + ': '
+				+ this.humanPeriod(this.node.xscend * 60 * 60 * 1000)
+				+ ', ' + this.$t('dashboard.widget.sunCtrl.cloudiness.c' + cloudiness)
 		},
 		value() {
 			let node = this.node
@@ -274,15 +304,15 @@ const SunCtrl = {
 		}
 	}
 }
-Vue.component('SunCtrl', SunCtrl);
+registerGlobalComponent('SunCtrl', SunCtrl);
 
 
 const FadeCtrl = {
 	extends: ControllerNode,
 	computed: {
 		descript() {
-			//TODO: prefix a label: dusk/dawn  or ramp
-			return this.humanPeriod(this.node.fade_time) + ' /==\\ ' + this.humanPeriod(this.node.fade_out)
+			return this.$t('pages.settings.fields.fadeIn') + ': ' + this.humanPeriod(this.node.fade_time)
+				+ ', ' + this.$t('pages.settings.fields.fadeOut') + ': ' + this.humanPeriod(this.node.fade_out)
 		},
 		value() {
 			let node = this.node
@@ -297,18 +327,18 @@ const FadeCtrl = {
 		}
 	}
 }
-Vue.component('FadeCtrl', FadeCtrl)
+registerGlobalComponent('FadeCtrl', FadeCtrl)
 
 
 const SwitchInput = {
 	extends: BusNode,
 }
-Vue.component('SwitchInput', SwitchInput)
+registerGlobalComponent('SwitchInput', SwitchInput)
 
 const AnalogInput = {
 	extends: BusNode,
 }
-Vue.component('AnalogInput', AnalogInput)
+registerGlobalComponent('AnalogInput', AnalogInput)
 
 
 const ScheduleInput = {
@@ -319,19 +349,19 @@ const ScheduleInput = {
 		},
 	}
 }
-Vue.component('ScheduleInput', ScheduleInput)
+registerGlobalComponent('ScheduleInput', ScheduleInput)
 
 
 const SwitchDevice = {
 	extends: BusNode,
 }
-Vue.component('SwitchDevice', SwitchDevice)
+registerGlobalComponent('SwitchDevice', SwitchDevice)
 
 const AnalogDevice = {
 	extends: BusNode,
 }
-Vue.component('AnalogDevice', AnalogDevice)
-Vue.component('SlowPwmDevice', AnalogDevice)
+registerGlobalComponent('AnalogDevice', AnalogDevice)
+registerGlobalComponent('SlowPwmDevice', AnalogDevice)
 
 const AuxNode = {
 	extends: BusNode,
@@ -344,32 +374,56 @@ const AuxNode = {
 
 const AvgAux = {
 	extends: AuxNode,
+	computed: {
+		// unfair_avg has three distinct behaviors (aux_nodes.py) - 0 is the
+		// default equal-weight average across all senders and needs no
+		// subtitle; 1 is effectively no averaging at all (instant passthrough
+		// of the latest value); >1 is a real moving average over that many
+		// samples.
+		descript() {
+			const n = this.node.unfair_avg
+			if (!n) {
+				return ''
+			}
+			if (n === 1) {
+				return this.$t('dashboard.widget.avgAux.unweighted')
+			}
+			return this.$t('dashboard.widget.avgAux.movingAvg', {n: n})
+		},
+	},
 }
-Vue.component('AvgAux', AvgAux);
+registerGlobalComponent('AvgAux', AvgAux);
 
 const MinAux = {
 	extends: AuxNode,
 }
-Vue.component('MinAux', MinAux)
+registerGlobalComponent('MinAux', MinAux)
 
 const MaxAux = {
 	extends: AuxNode,
 }
-Vue.component('MaxAux', MaxAux)
+registerGlobalComponent('MaxAux', MaxAux)
 
 const ScaleAux = {
 	extends: AuxNode,
-//	computed: {
-//		descript() {
-//			return 'data * ' + this.node.factor.toFixed(2).toString()
-//			         + ' + ' + this.node.offset.toFixed(2).toString()
-//					 + '  [' + this.node.limit[0].toFixed(0).toString()
-//					   + '-' + this.node.limit[1].toFixed(0).toString()
-//					   + ']'
-//		},
-//	},
+	computed: {
+		descript() {
+			const node = this.node
+			let text = this.$t('dashboard.widget.scaleAux.formula', {
+				factor: node.factor.toFixed(2),
+				offset: node.offset.toFixed(2),
+			})
+			const limit = node.limit
+			// (0, 100) is ScaleAux's constructor default - only call it out
+			// when the node actually narrows/shifts that range
+			if (limit && (limit[0] !== 0.0 || limit[1] !== 100.0)) {
+				text += ' [' + limit[0] + '-' + limit[1] + ']'
+			}
+			return text
+		},
+	},
 }
-Vue.component('ScaleAux', ScaleAux)
+registerGlobalComponent('ScaleAux', ScaleAux)
 
 
 const History = {
@@ -390,19 +444,21 @@ const History = {
 			></history-chart>
 			
 			<v-dialog
-				v-model="$store.getters['ui/isActiveDialog'](modalDialogName)"
+				:model-value="uiStore.isActiveDialog(modalDialogName)"
+				@update:model-value="(val) => { if (!val) closeModal() }"
 				persistent
 				width="80vw"
 			>
 				<v-card>
-					<v-card-title class="text-h6">
-						{{ node.name }}
-						<v-spacer></v-spacer>
+					<v-card-title class="text-h6 d-flex align-center justify-space-between">
+						<span>{{ node.name }}</span>
 						<v-btn
 							icon
+							variant="text"
+							color="grey-darken-1"
 							@click="closeModal"
 						>
-							<v-icon color="grey">mdi-close</v-icon>
+							<v-icon>mdi-close</v-icon>
 						</v-btn>
 					</v-card-title>
 					<v-divider></v-divider>
@@ -429,17 +485,20 @@ const History = {
 	},
 
 	computed: {
+		uiStore() {
+			return useUiStore()
+		},
 		modalDialogName() {
 			return `chart_modal_${this.id}`
 		}
 	},
 	methods: {
 		closeModal() {
-			this.$store.dispatch('ui/hideDialog', this.modalDialogName)
+			this.uiStore.hideDialog(this.modalDialogName)
 		}
 	}
 }
-Vue.component('History', History)
+registerGlobalComponent('History', History)
 
 
 const HistoryChart = {
@@ -472,52 +531,76 @@ const HistoryChart = {
 					v-else
 
 				>
-					<div class="d-flex justify-end px-0 py-2">
-						<v-menu
-							offset-y
-							open-on-hover
-						>
-							<template v-slot:activator="{ on, attrs }">
-								<v-btn
-									v-bind="attrs"
-									v-on="on"
-									depressed
-									small
-									class="text-none"
-									:loading="isLoading"
-								>
-									{{ $t('dashboard.widget.history.period.label').replace('%s', humanPeriod(period)) }}
-								</v-btn>
-							</template>
-							<v-list
-								dense
-								class="py-0"
+					<teleport :to="'#widget-title-actions-' + node.id" :disabled="renderType === 'modal'">
+						<div class="d-flex justify-end align-center px-0 py-2">
+							<v-menu
+								offset-y
+								open-on-hover
 							>
-								<v-list-item
-									v-for="(item, index) in periods"
-									:key="index"
-									@click="setPeriod(item.value, chart)"
+								<template v-slot:activator="{ props }">
+									<v-btn
+										v-bind="props"
+										variant="tonal"
+										color="grey-darken-1"
+										size="small"
+										class="text-none"
+										append-icon="mdi-menu-down"
+										:loading="isLoading"
+									>
+										{{ $t('dashboard.widget.history.period.label').replace('%s', humanPeriod(period)) }}
+									</v-btn>
+								</template>
+								<v-list
+									dense
+									density="compact"
+									class="py-0"
 								>
-									<v-list-item-title>
-										{{ item.label }}
-									</v-list-item-title>
-								</v-list-item>
-							</v-list>
-						</v-menu>
+									<v-list-item
+										v-for="(item, index) in periods"
+										:key="index"
+										density="compact"
+										min-height="28"
+										@click="setPeriod(item.value, chart)"
+									>
+										<v-list-item-title class="text-caption">
+											{{ item.label }}
+										</v-list-item-title>
+									</v-list-item>
 
-						<v-btn
-							v-if="renderType != 'modal'"
-							depressed
-							small
-							class="text-none ms-2 px-0 v-btn--icon"
-							width="28"
-							max-width="28"
-							min-width="28"
-							@click="openModal"
-						>
-							<v-icon class="text-button">mdi-arrow-expand-all</v-icon>
-						</v-btn>
-					</div>
+									<v-divider></v-divider>
+
+									<v-list-item
+										density="compact"
+										min-height="28"
+										@click.stop
+									>
+										<v-checkbox
+											v-model="forceDailySampling"
+											:disabled="forceDailySamplingDisabled"
+											density="compact"
+											hide-details
+											class="ma-0"
+											:label="$t('dashboard.widget.history.forceDailySampling.label')"
+											@click.stop
+											@update:modelValue="onForceDailySamplingChange(chart)"
+										></v-checkbox>
+									</v-list-item>
+								</v-list>
+							</v-menu>
+
+							<v-btn
+								v-if="renderType != 'modal'"
+								variant="tonal"
+								color="grey-darken-1"
+								size="small"
+								class="ms-2 px-2"
+								min-width="0"
+								@click="openModal"
+							>
+								<v-icon>mdi-arrow-expand-all</v-icon>
+							</v-btn>
+						</div>
+					</teleport>
 
 					<div class="chart-container" style="position: relative; width:100%;">
 						<canvas :id="canvasId"></canvas>
@@ -536,7 +619,11 @@ const HistoryChart = {
 			dataPrepared: false,
 			isLoading: false,
 			currentPeriod: (60 * 60 * 1000),
-			cd: {
+			currentForceDailySampling: false,
+			// NOTE: markRaw() prevents Vue from wrapping this in a reactive Proxy - Chart.js
+			// performs its own internal option resolution (also Proxy-based) on this object,
+			// and nesting it inside a Vue reactive Proxy causes infinite recursion on update().
+			cd: window.Vue.markRaw({
 				type: "scatter",
 				data: {
 					// labels: [],
@@ -571,7 +658,7 @@ const HistoryChart = {
 								tooltipFormat: "tt",
 							},
 							grid: {
-								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+								color: useUiStore().darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
 							}
 						},
 						y: {
@@ -584,24 +671,30 @@ const HistoryChart = {
 								beginAtZero: true
 							},
 							grid: {
-								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.12)' : 'rgba(0, 0, 0, 0.12)'
+								color: useUiStore().darkMode ? 'rgba(220, 220, 220, 0.12)' : 'rgba(0, 0, 0, 0.12)'
 							}
 						},
 						yAnalog: {
 							display: 'auto',
 							axis: 'y',
 							position: 'right',
-							grid: {
-								color: this.$store.state.ui.darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+ 						grid: {
+								color: useUiStore().darkMode ? 'rgba(220, 220, 220, 0.08)' : 'rgba(0, 0, 0, 0.05)'
 							}
 						},
 					}
 				}
-			},
+			}),
 		}
 	},
 
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
+		uiStore() {
+			return useUiStore()
+		},
 		wrapperId() {
 			return `chart_wrapper_${this.id}_${this.renderType}`
 		},
@@ -643,7 +736,7 @@ const HistoryChart = {
 					} else {
 						config = {}
 					}
-					config[this.storageId] = {period: val}
+					config[this.storageId] = {...config[this.storageId], period: val}
 					storage.setItem('aquapi.history', JSON.stringify(config))
 				} catch(e) {}
 
@@ -664,21 +757,64 @@ const HistoryChart = {
 				return this.currentPeriod
 			}
 		},
+		forceDailySampling: {
+			set(val) {
+				try {
+					const storage = window.localStorage
+					let config = storage.getItem('aquapi.history');
+					if (config) {
+						config = JSON.parse(config)
+					} else {
+						config = {}
+					}
+					config[this.storageId] = {...config[this.storageId], forceDailySampling: val}
+					storage.setItem('aquapi.history', JSON.stringify(config))
+				} catch(e) {}
+
+				this.currentForceDailySampling = val
+			},
+			get() {
+				try {
+					const storage = window.localStorage
+					let config = storage.getItem('aquapi.history')
+					if (config) {
+						config = JSON.parse(config)
+						if (config[this.storageId]?.forceDailySampling !== undefined) {
+							this.currentForceDailySampling = config[this.storageId].forceDailySampling
+						}
+					}
+				} catch(e) {}
+
+				return this.currentForceDailySampling
+			}
+		},
+		forceDailySamplingDisabled() {
+			return this.period < 24 * 60 * 60 * 1000
+		},
 		chartStep() {
-			if (!this.chartWidth) {
-				return 5
+			// NOTE: period is millisecs, result must be secs
+			let periodSec = this.period / 1000
+
+			if (this.forceDailySampling && periodSec >= 24 * 60 * 60) {
+				return 24 * 60 * 60
 			}
 
-			// NOTE: period is millisecs, result must be secs
-			// NOTE: for now, we round up to 15 seconds
-			let minStep = 60  //?15
-			// TODO: (?) calculate factor based on period, chartWidth, ...
-			let factor = this.period / 1000 / 3600
-			let val = this.period / 1000 / this.chartWidth * factor
-			let rounded = Math.ceil(val / minStep) * minStep
+			if (!this.chartWidth) {
+				return (periodSec <= 3600) ? 1 : 60
+			}
 
-			//return rounded
-			return (factor <= 1) ? 1 : rounded
+			// target ~1 sample per available chart pixel
+			let rawStep = periodSec / this.chartWidth
+			if (rawStep <= 1) {
+				// DB's native resolution; also smooths rare faster-than-1s bursts
+				return 1
+			}
+
+			// round up to the next "nice" bucket so QuestDB's ALIGN TO
+			// CALENDAR grid produces stable, calendar-aligned boundaries
+			let niceSteps = [1, 5, 10, 15, 30, 60, 300, 900, 1800, 3600, 7200, 21600, 43200, 86400]
+			let nice = niceSteps.find((s) => s >= rawStep)
+			return nice ?? Math.ceil(rawStep / 86400) * 86400
 		}
 	},
 	methods: {
@@ -695,7 +831,7 @@ const HistoryChart = {
 				for (let dsIdx in historySeries) {
 					values[dsIdx] = {}
 
-					const node = this.$store.getters['dashboard/node'](historySeries[dsIdx])
+					const node = this.dashboardStore.node(historySeries[dsIdx])
 
 					if (this.cd.data.datasets[dsIdx] === undefined) {
 						this.cd.data.datasets[dsIdx] = {
@@ -741,7 +877,7 @@ const HistoryChart = {
 		},
 
 		async loadHistory() {
-			if (this.renderType === 'modal' && !this.$store.getters['ui/isActiveDialog'](this.modalDialogName)) {
+			if (this.renderType === 'modal' && !this.uiStore.isActiveDialog(this.modalDialogName)) {
 				return
 			}
 
@@ -750,7 +886,7 @@ const HistoryChart = {
 			let tsNow = Math.floor(Date.now() / 1000)
 			let start = tsNow - this.currentPeriod / 1000
 
-			const result = await this.$store.dispatch('dashboard/fetchNodeHistory', {
+			const result = await this.dashboardStore.fetchNodeHistory({
 				nodeId: this.node.id,
 				start: start,
 				step: this.chartStep
@@ -770,12 +906,26 @@ const HistoryChart = {
 				}
 			}
 		},
+		async onForceDailySamplingChange(chart) {
+			// v-model already persisted the new value via the
+			// forceDailySampling computed setter - just reload at the
+			// new step
+			if (chart) {
+				await this.loadHistory()
+				chart.update()
+			}
+		},
 		async openModal() {
-			await this.$store.dispatch('ui/showDialog', this.modalDialogName, true)
+			// NOTE: the 2nd ("hideOthers") arg is intentionally dropped here -
+			// Vuex's dispatch(type, payload, options) never forwarded a 3rd
+			// positional argument to the action anyway, so `true` was always
+			// silently ignored and showDialog() always used its hideOthers=true
+			// default; this preserves that exact prior behavior.
+			await this.uiStore.showDialog(this.modalDialogName)
 			await this.loadHistory()
 		},
 		closeModal() {
-			this.$store.dispatch('ui/hideDialog', this.modalDialogName)
+			this.uiStore.hideDialog(this.modalDialogName)
 			if (this.chart != null) {
 				this.chart.destroy()
 				this.chart = null
@@ -783,23 +933,50 @@ const HistoryChart = {
 		}
 	},
 	async created() {
-		EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, async (payload) => {
+		this._sseHandler = async (payload) => {
 			if (payload.id === this.node.id) {
 				await this.loadHistory()
 				if (this.chart !== null) {
 					this.chart.update()
 				}
 			}
-		})
+		}
+		EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this._sseHandler)
 	},
 
 	async mounted() {
 		this.chart = null
 		this.currentPeriod = this.period
 
-		let elContainer = await document.getElementById(this.wrapperId)
+		let elContainer = document.getElementById(this.wrapperId)
 		if (elContainer) {
 			this.chartContainerWidth = elContainer.offsetWidth
+
+			// re-fetch at the new pixel-driven step (see chartStep) once
+			// resizing settles, so an already-loaded chart's resolution
+			// adapts instead of staying pinned to its width at mount time
+			this._resizeObserver = new ResizeObserver((entries) => {
+				const width = Math.round(entries[0].contentRect.width)
+				if (width && width !== this.chartContainerWidth) {
+					this.chartContainerWidth = width
+
+					// Chart.js doesn't always pick up its container growing
+					// on its own here (canvas stays at its old size) -
+					// resize() forces it to re-measure and redraw immediately
+					if (this.chart != null) {
+						this.chart.resize()
+					}
+
+					clearTimeout(this._resizeDebounce)
+					this._resizeDebounce = setTimeout(async () => {
+						await this.loadHistory()
+						if (this.chart != null) {
+							this.chart.update()
+						}
+					}, 300)
+				}
+			})
+			this._resizeObserver.observe(elContainer)
 		}
 
 		await this.loadHistory()
@@ -807,13 +984,20 @@ const HistoryChart = {
 		if (this.chart == null) {
 			let el = document.getElementById(this.canvasId)
 			if (el != null) {
-				this.chart = new Chart(el, this.cd)
+				// NOTE: markRaw() - see the comment on `cd` in data() above.
+				this.chart = window.Vue.markRaw(new Chart(el, this.cd))
 			}
 		}
 	},
 
-	destroyed() {
-		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
+	unmounted() {
+		EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE, this._sseHandler)
+
+		if (this._resizeObserver) {
+			this._resizeObserver.disconnect()
+			this._resizeObserver = null
+		}
+		clearTimeout(this._resizeDebounce)
 
 		if (this.chart != null) {
 			this.chart.destroy()
@@ -822,7 +1006,7 @@ const HistoryChart = {
 		this.chartContainerWidth = null
 	}
 }
-Vue.component('HistoryChart', HistoryChart)
+registerGlobalComponent('HistoryChart', HistoryChart)
 
 
 const AlertNode = {
@@ -861,7 +1045,7 @@ const AlertNode = {
 		}
 	}
 }
-Vue.component('Alert', AlertNode)
+registerGlobalComponent('Alert', AlertNode)
 
 
 const AquapiNodeDescription = {
@@ -886,7 +1070,7 @@ const AquapiNodeDescription = {
 		}
 	}
 }
-Vue.component('AquapiNodeDescription', AquapiNodeDescription)
+registerGlobalComponent('AquapiNodeDescription', AquapiNodeDescription)
 
 
 const AquapiNodeData = {
@@ -900,12 +1084,12 @@ const AquapiNodeData = {
 		<v-row no-gutters>
 			<v-col cols="6">
 				<slot name="label">
-					Label
+					{{ $t('misc.genericLabel') }}
 				</slot>
 			</v-col>
 			<v-col cols="6">
 				<slot name="value">
-					Value
+					{{ $t('misc.genericValue') }}
 				</slot>
 			</v-col>
 		</v-row>
@@ -913,7 +1097,7 @@ const AquapiNodeData = {
 
 	computed: {}
 }
-Vue.component('AquapiNodeData', AquapiNodeData)
+registerGlobalComponent('AquapiNodeData', AquapiNodeData)
 
 
 
@@ -926,7 +1110,7 @@ const AquapiNodeAlert = {
 	},
 	template: `
 		<slot name="value">
-			Value
+			{{ $t('misc.genericValue') }}
 			<v-list-item
 				v-for="(item, index) in value"
 				:key="index"
@@ -940,6 +1124,6 @@ const AquapiNodeAlert = {
 
 	computed: {}
 }
-Vue.component('AquapiNodeAlert', AquapiNodeAlert)
+registerGlobalComponent('AquapiNodeAlert', AquapiNodeAlert)
 
 // vim: set noet sts ts=4 sw=4:

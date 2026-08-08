@@ -1,0 +1,7 @@
+# additional dependencies only needed to run the test suite (tests/),
+# not required to run aquaPi itself - install with:
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest>=7.4.0
+pytest-mock>=3.11.1

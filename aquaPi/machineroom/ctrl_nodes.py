@@ -11,23 +11,23 @@ from datetime import timedelta
 from threading import Thread
 
 from .msg_bus import (Msg, MsgData)
-from .msg_bus import (BusListener, BusRole, DataRange)
+from .msg_bus import (BusListener, BusRole, DataRange, Setting)
 
 
 log = logging.getLogger('machineroom.ctrl_nodes')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
-def get_unit_limits(unit: str) -> str:
+def get_unit_limits(unit: str) -> dict:
     if ('°C') in unit:
-        return 'min="15" max="35" step="0.1"'
+        return {'min': 15, 'max': 35, 'step': 0.1}
     elif ('°F') in unit:
-        return 'min="59" max="95" step="0.2"'
+        return {'min': 59, 'max': 95, 'step': 0.2}
     elif ('pH') in unit:
-        return 'min="5.0" max="9.0" step="0.05"'
+        return {'min': 5.0, 'max': 9.0, 'step': 0.05}
     elif ('%') in unit:
-        return 'min="0" max="100" step="1"'
-    return ''
+        return {'min': 0, 'max': 100, 'step': 1}
+    return {}
 
 
 # ========== controllers ==========
@@ -75,7 +75,7 @@ class ControllerNode(BusListener, ABC):
                 return True
         return False
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         if not self.rcv_unit:
             for rcv in self.get_receives():
                 self.rcv_unit = rcv.unit
@@ -154,13 +154,14 @@ class ThresholdCtrl(ControllerNode):
 
         super().listen(msg)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        limits = get_unit_limits(self.rcv_unit)
-        settings.append(('setpoint', f'Setpoint [{self.rcv_unit}]', self.setpoint,
-                         f'type="number" {limits}'))
-        settings.append(('hysteresis', f'Hysteresis [{self.rcv_unit}]', self.hysteresis,
-                         'type="number" min="0" max="5" step="0.01"'))
+        settings.append(Setting('setpoint', 'setpoint', self.setpoint,
+                                type='number', label_params={'unit': self.rcv_unit},
+                                **get_unit_limits(self.rcv_unit)))
+        settings.append(Setting('hysteresis', 'hysteresis', self.hysteresis,
+                                type='number', min=0, max=5, step=0.01,
+                                label_params={'unit': self.rcv_unit}))
         return settings
 
 
@@ -331,16 +332,17 @@ class PidCtrl(ControllerNode):
 
         super().listen(msg)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('setpoint', f'Sollwert [{self.rcv_unit}]', self.setpoint,
-                         'type="number" step="0.1"'))
-        settings.append(('p_fact', 'P Faktor', self.p_fact,
-                         'type="number" min="-10" max="10" step="0.1"'))
-        settings.append(('i_fact', 'I Faktor', self.i_fact,
-                         'type="number" min="-10" max="10" step="0.01"'))
-        settings.append(('d_fact', 'D Faktor', self.d_fact,
-                         'type="number" min="-10" max="10" step="0.1"'))
+        settings.append(Setting('setpoint', 'setpoint', self.setpoint,
+                                type='number', step=0.1,
+                                label_params={'unit': self.rcv_unit}))
+        settings.append(Setting('p_fact', 'pFact', self.p_fact,
+                                type='number', min=-10, max=10, step=0.1))
+        settings.append(Setting('i_fact', 'iFact', self.i_fact,
+                                type='number', min=-10, max=10, step=0.01))
+        settings.append(Setting('d_fact', 'dFact', self.d_fact,
+                                type='number', min=-10, max=10, step=0.1))
         return settings
 
 
@@ -454,12 +456,12 @@ class FadeCtrl(ControllerNode):
         self._fader_thread = None
         self._fader_stop = False
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('fade_time', 'Fade-In time [s]',
-                         self.fade_time, 'type="number" min="0"'))
-        settings.append(('fade_out', 'Fade-Out time [s]',
-                         self.fade_out, 'type="number" min="0"'))
+        settings.append(Setting('fade_time', 'fadeIn', self.fade_time,
+                                type='duration', min=0))
+        settings.append(Setting('fade_out', 'fadeOut', self.fade_out,
+                                type='duration', min=0))
         return settings
 
 
@@ -549,6 +551,7 @@ class SunCtrl(ControllerNode):
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state["xscend"] = self.xscend
+        state["cloudiness"] = self.cloudiness
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -640,8 +643,9 @@ class SunCtrl(ControllerNode):
         self._fader_thread = None
         self._fader_stop = False
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('xscend', 'Ascend/descend hours [h]',
-                         self.xscend, 'type="number" min="0.1" max="5" step="0.1"'))
+        settings.append(Setting('xscend', 'ascendDescend', self.xscend * 3600,
+                                type='duration', min=0.1*3600, max=5*3600, step=0.1*3600,
+                                factor=3600))
         return settings

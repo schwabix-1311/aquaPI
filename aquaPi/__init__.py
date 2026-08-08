@@ -57,8 +57,13 @@ log_default = {
       "handlers": ["stdout", "file"]
     },
 
+    # the following list should occasionally be synced
+    # with the result of 'grep logging.getLogger $(git ls-files *.py)'
+
     "aquaPi":     {"level": "NOTSET"},
-    # "aquaPi.api": {"level": "NOTSET"},
+    # "aquaPi.api" : {"level": "NOTSET"},
+    # "aquaPi.auth": {"level": "NOTSET"},
+    # "aquaPi.db":   {"level": "NOTSET"},
 
     "machineroom":             {"level": "NOTSET"},
     # "machineroom.alert_nodes": {"level": "NOTSET"},
@@ -80,10 +85,6 @@ log_default = {
     # "driver.DriverText":    {"level": "NOTSET"},
 
     "pages":          {"level": "NOTSET"},
-    # "pages.about":    {"level": "NOTSET"},
-    # "pages.config":   {"level": "NOTSET"},
-    # "pages.home":     {"level": "NOTSET"},
-    # "pages.settings": {"level": "NOTSET"},
     # "pages.spa":      {"level": "NOTSET"},
     # "pages.sse_util": {"level": "NOTSET"},
 
@@ -146,6 +147,9 @@ def create_app() -> Flask:
     #    if not app.debug:
     #        app.logger.addHandler(mail_handler)
 
+    from . import auth
+    auth.init_app(app)
+
     from .machineroom import MachineRoom
     try:
         app.extensions['machineroom'] = MachineRoom(app.config)
@@ -154,25 +158,10 @@ def create_app() -> Flask:
         log.fatal("Fatal error in App.__init__. Subsequent errors are a side effect.")
         return None
 
-    #FIXME bus is used by jinja template 'settings' only
-    @app.context_processor
-    def inject_globals():
-        return dict(bus=app.extensions['machineroom'].bus)
+    app.register_blueprint(auth.bp)
 
     from . import api
     app.register_blueprint(api.bp)
-
-    from .pages import home
-    app.register_blueprint(home.bp)
-
-    from .pages import settings
-    app.register_blueprint(settings.bp)
-
-    from .pages import config
-    app.register_blueprint(config.bp)
-
-    from .pages import about
-    app.register_blueprint(about.bp)
 
     from .pages import spa
     app.register_blueprint(spa.bp)

@@ -19,7 +19,7 @@ try:
 except Exception:
     QUEST_DB = False
 
-from .msg_bus import (BusListener, BusRole, MsgData)
+from .msg_bus import (BusListener, BusRole, MsgData, Setting)
 
 
 log = logging.getLogger('machineroom.hist_nodes')
@@ -27,6 +27,88 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 
 # ========== interface to time series DB ==========
+
+
+def check_questdb_reachable(timeout: float = 1.0) -> bool:
+    """ lightweight, side-effect-free reachability check for QuestDB
+        (Step 25 /api/health): tries a short-timeout connection and a
+        trivial query, without creating/touching any tables - unlike
+        TimeDbQuest.__init__(), which is only used once a History node
+        is actually instantiated. Returns False immediately if the
+        'psycopg' driver isn't even installed (QUEST_DB == False).
+    """
+    if not QUEST_DB:
+        return False
+    try:
+        conn_str = ('host=localhost port=8812 user=admin password=quest '
+                    'dbname=aquaPi application_name=aquaPi connect_timeout=%d'
+                    % max(1, int(timeout)))
+        with pg.connect(conn_str, autocommit=True) as conn:
+            conn.execute('SELECT 1')
+        return True
+    except Exception:
+        return False
+
+
+def _questdb_conn_str() -> str:
+    return ('host=localhost port=8812 user=admin password=quest '
+            'dbname=aquaPi application_name=aquaPi')
+
+
+def log_calibration_event(node_id: str, field: str,
+                          old_value: float, new_value: float) -> bool:
+    """ record a calibration change (e.g. a ScaleAux node's 'offset'/
+        'factor', typically adjusted after re-calibrating a pH probe or
+        similar sensor) with timestamp and old/new value in QuestDB, so
+        it can be reviewed later (Step 28). Like the rest of this module,
+        this degrades gracefully: if QuestDB isn't installed/reachable,
+        the event is just logged and skipped, never raises.
+    """
+    if not QUEST_DB:
+        log.warning('Calibration event for %s.%s not recorded: QuestDB not available',
+                    node_id, field)
+        return False
+    try:
+        with pg.connect(_questdb_conn_str(), autocommit=True) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS calibration_log (
+                    ts        timestamp,
+                    node_id   symbol CAPACITY 64,
+                    field     symbol CAPACITY 16,
+                    old_value double,
+                    new_value double )
+                    timestamp(ts) PARTITION BY MONTH;
+            """)
+            qry = SQL("INSERT INTO {} VALUES (now(), %s, %s, %s, %s)"
+                      ).format(Identifier('calibration_log'))
+            conn.execute(qry, [node_id, field, old_value, new_value])
+        log.brief('Calibration event recorded: %s.%s %s -> %s', node_id, field, old_value, new_value)
+        return True
+    except Exception:
+        log.exception('Failed to record calibration event for %s.%s', node_id, field)
+        return False
+
+
+def get_calibration_log(node_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    """ return the most recent calibration events for one node, newest
+        first; empty list if QuestDB is unavailable or on any error
+    """
+    if not QUEST_DB:
+        return []
+    try:
+        with pg.connect(_questdb_conn_str(), autocommit=True) as conn:
+            with conn.cursor() as curs:
+                qry = SQL("SELECT ts, field, old_value, new_value FROM {} "
+                          "WHERE node_id=%s ORDER BY ts DESC LIMIT %s"
+                          ).format(Identifier('calibration_log'))
+                curs.execute(qry, [node_id, limit])
+                rows = curs.fetchall()
+                return [{'ts': ts.isoformat(), 'field': field,
+                        'old_value': old_value, 'new_value': new_value}
+                       for (ts, field, old_value, new_value) in rows]
+    except Exception:
+        log.exception('Failed to read calibration log for %s', node_id)
+        return []
 
 
 class TimeDb(ABC):
@@ -348,12 +430,14 @@ class History(BusListener):
         for rcv in self.receives:
             self.db.add_field(rcv)
 
-    # def __getstate__(self) -> dict[str, Any]:
-    #    state = super().__getstate__()
-    #    return state
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state['duration'] = self.duration
+        return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        History.__init__(self, state['name'], state['receives'], _cont=True)
+        History.__init__(self, state['name'], state['receives'],
+                         duration=state.get('duration', 24), _cont=True)
 
     def listen(self, msg) -> None:
         if isinstance(msg, MsgData):
@@ -369,9 +453,10 @@ class History(BusListener):
                     ) -> dict[int, TimeDb.ValueLst]:
         return self.db.query(self.receives, start, step) if self.db else dict()
 
-    def get_settings(self) -> list[tuple]:
-        return []
-##        settings = super().get_settings()
-##        settings.append(('duration', 'max. Dauer', self.duration,
-##                         'type="number" min="0" max="%d"' % (24*60*60)))
-##        return settings
+    def get_settings(self) -> list[Setting]:
+##        return []
+        settings = super().get_settings()
+        settings.append(Setting('duration', 'duration', self.duration * 60*60,
+                                type='duration', min=0, max=7*24*60*60, step=60*60,
+                                factor=60*60))
+        return settings

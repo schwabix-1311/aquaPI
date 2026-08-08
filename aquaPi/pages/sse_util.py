@@ -2,7 +2,7 @@
 
 import logging
 import time
-from flask import Response, request, render_template
+from flask import Response
 
 
 log = logging.getLogger('pages.sse_util')
@@ -34,25 +34,6 @@ if (!!window.EventSource) {
     if event is not None:
         msg = f'event: {event}\n{msg}'
     return msg
-
-
-def render_sse_template(html, read, delay=1, **context):
-    """ render a Jinja2 template with SSE updatable elements
-        html - the Jinja2 template file
-        read - long poll method returning a hash of updates
-        update - hash of key:value, should be a superset of what
-                 read() returns
-        delay - timespan between updates, or None for read blocks itself
-    """
-    if request.headers.get('accept') == 'text/event-stream':
-        def events():
-            while True:
-                yield format_msg(read())
-                if delay:
-                    time.sleep(delay)
-
-        return Response(events(), content_type='text/event-stream')
-    return render_template(html, **context, now=time.asctime())
 
 
 def send_sse_events(read, delay=1):

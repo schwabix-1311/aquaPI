@@ -8,8 +8,8 @@ from datetime import datetime
 from croniter import croniter
 from threading import Thread
 
-from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData)
-from ..driver import (IoRegistry, DriverReadError, InDriver)
+from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData, Setting)
+from ..driver import (IoRegistry, DriverReadError, InDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.in_nodes')
@@ -25,6 +25,7 @@ class InputNode(BusNode, ABC):
         All use a reader thread, most reading from IoRegistry port
     """
     ROLE = BusRole.IN_ENDP
+    _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
 
     def __init__(self, name: str, port: str,
                  interval: float = 0.5, _cont: bool = False):
@@ -100,12 +101,14 @@ class InputNode(BusNode, ABC):
         self._reader_thread = None
         self._reader_stop = False
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('port', 'Input port',
-                         self.port, 'type="text"'))
-        settings.append(('interval', 'Leseintervall [s]',
-                         self.interval, 'type="number" min="1" max="600" step="1"'))
+        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
+        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
+        settings.append(Setting('port', 'inputPort', self.port,
+                                type='select', options=options))
+        settings.append(Setting('interval', 'readInterval', self.interval,
+                                type='duration', min=1, max=600, step=1))
         return settings
 
 
@@ -123,8 +126,9 @@ class SwitchInput(InputNode):
             bool - posts state changes only
     """
     data_range = DataRange.BINARY
+    _port_funcs = [PortFunc.Bin]
 
-    def __init__(self, name: str, port: str, 
+    def __init__(self, name: str, port: str,
                  interval: float = 0.5, inverted: bool = False,
                  _cont: bool = False):
         self.inverted: bool = inverted
@@ -152,9 +156,10 @@ class SwitchInput(InputNode):
             val = not val
         return val
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('inverted', 'Invertiert', self.inverted))
+        settings.append(Setting('inverted', 'inverted', self.inverted,
+                                type='checkbox'))
         return settings
 
 
@@ -174,6 +179,7 @@ class AnalogInput(InputNode):
             float - posts each change of measurement in driver units
     """
     data_range = DataRange.ANALOG
+    _port_funcs = [PortFunc.Ain]
 
     def __init__(self, name: str, port: str, initval: float, unit: str,
                  interval: float = 10.0, avg: int = 0,
@@ -208,12 +214,11 @@ class AnalogInput(InputNode):
         val = round(val, 4)
         return val
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('unit', 'Einheit',
-                         self.unit, 'type="text"'))
-        settings.append(('avg', 'Mittelwert [1=direkt]',
-                         self.avg, 'type="number" min="1" max="5" step="1"'))
+        settings.append(Setting('unit', 'unit', self.unit))
+        settings.append(Setting('avg', 'avg', self.avg,
+                                type='number', min=1, max=5, step=1))
         return settings
 
 
@@ -370,8 +375,7 @@ class ScheduleInput(BusNode):
             self._scheduler_stop = False
             log.brief('ScheduleInput %s: end', self.id)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('cronspec', 'CRON (m h DoM M DoW)',
-                         self.cronspec, 'type="text"'))
+        settings.append(Setting('cronspec', 'cronspec', self.cronspec))
         return settings

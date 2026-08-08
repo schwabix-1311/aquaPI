@@ -3,6 +3,7 @@
 from abc import (ABC, abstractmethod)
 import logging
 import time
+from dataclasses import dataclass
 from queue import Queue
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
@@ -37,6 +38,44 @@ class DataRange(Enum):
 #############################
 
 
+@dataclass
+class Setting:
+    """ One entry returned by BusNode.get_settings(), describing a single
+        operational property for the /settings UI: its current value, and,
+        for editable ones, enough metadata (type/min/max/step) to render
+        and validate an input widget without any further parsing.
+    """
+    key: str | None       # None = read-only
+    label: str             # i18n key into pages.settings.fields.<label>, not raw text
+    value: Any
+    type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration'
+    min: float | None = None
+    max: float | None = None
+    step: float | None = None
+    options: list[str] | None = None   # choices for 'select' / 'multiselect'
+    optional: bool = False             # True = value may be left empty/unset
+    # for type='duration': value/min/max/step always travel the API as
+    # seconds (wire unit) - the /settings widget lets the user display/edit
+    # in s, min or h, converting back to seconds before saving. The largest
+    # unit offered/auto-picked is derived client-side from `max` itself
+    # (e.g. a 600s max reads as "10 min", but a 300s max won't offer hours
+    # - "0.083 h" helps no one); a field with no `max` is unbounded (up to
+    # h). factor converts between the wire unit (seconds) and whatever
+    # unit the node itself stores internally (1 = node already stores
+    # seconds; 3600 = node stores hours, etc.) - see get_settings()/
+    # api_set_node_settings().
+    factor: float = 1
+    # named interpolation values for label's i18n template, e.g.
+    # label='setpoint', label_params={'unit': 'pH'} for a locale string
+    # like 'Sollwert [%{unit}]' - same %{name} convention vue-i18n already
+    # uses elsewhere in the SPA (e.g. '%{count} node(s) selected').
+    label_params: dict[str, Any] | None = None
+
+    @property
+    def editable(self) -> bool:
+        return self.key is not None
+
+
 class BusNode(ABC):
     """ BusNode is a minimal bus participant
         It has little overhead, can only post messages.
@@ -55,6 +94,7 @@ class BusNode(ABC):
         self.id = self.id.replace('Ö', 'Oe').replace('ö', 'oe')
         self.id = self.id.replace('Ü', 'Ue').replace('ü', 'ue')
         self.id = self.id.replace('-', '_').replace('ß', 'ss')
+        self.id = self.id.replace('/', '_').replace('\\', '_')
         # hack: replace non-ASCII with xml refs, then back to utf-8
         self.id = str(self.id.encode('ascii', 'xmlcharrefreplace'), errors='strict')
         self.identifier = self.__class__.__qualname__ + '.' + self.id
@@ -67,6 +107,10 @@ class BusNode(ABC):
         self.unit: str = ''
         self.rcv_unit: str = ''
         self.alert: tuple[str, str] | None = None
+        self.group: str = ''  # optional user-defined group, used to filter/fold
+                              # nodes in the dashboard and on /settings
+        self.pos_x: float = 0.0  # canvas position on the /config graph editor
+        self.pos_y: float = 0.0
 
     def __getstate__(self) -> dict[str, Any]:
         state = {'name': self.name}
@@ -77,6 +121,9 @@ class BusNode(ABC):
         state["unit"] = self.unit
         state["rcv_unit"] = self.rcv_unit
         state["data_range"] = self.data_range.name
+        state["group"] = self.group
+        state["pos_x"] = self.pos_x
+        state["pos_y"] = self.pos_y
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -84,6 +131,9 @@ class BusNode(ABC):
         BusNode.__init__(self, state['name'], _cont=True)
         self.receives = state['receives']
         self.unit = state['unit']
+        self.group = state.get('group', '')
+        self.pos_x = state.get('pos_x', 0.0)
+        self.pos_y = state.get('pos_y', 0.0)
 
     def __str__(self) -> str:
         return f'{type(self).__name__}({self.name})'
@@ -147,7 +197,7 @@ class BusNode(ABC):
         return listeners
 
     @abstractmethod
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         return []
 
 
@@ -177,12 +227,14 @@ class BusListener(BusNode, ABC):
         BusListener.__init__(self, state['name'],
                              receives=state['receives'],
                              _cont=True)
+        self.group = state.get('group', '')
+        self.pos_x = state.get('pos_x', 0.0)
+        self.pos_y = state.get('pos_y', 0.0)
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append((None, 'Receives',
-                         ';'.join(MsgBus.to_names(self.get_receives())),
-                         'type="text"'))
+        settings.append(Setting(None, 'receives',
+                         ';'.join(MsgBus.to_names(self.get_receives()))))
         return settings
 
 

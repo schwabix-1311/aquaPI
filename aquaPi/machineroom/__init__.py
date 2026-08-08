@@ -3,9 +3,10 @@
 import logging
 from os import (environ, path)
 import json
-import pickle
 import atexit
+from threading import Timer
 
+from .. import db
 from .msg_bus import MsgBus
 from .ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl, SunCtrl, FadeCtrl)  # noqa
 from .in_nodes import (AnalogInput, SwitchInput, ScheduleInput)  # noqa
@@ -47,22 +48,57 @@ class MachineRoom:
                 custom_cfg = json.load(f_in)
             self.globals.update(custom_cfg)
 
-        topo_file = 'topo.pickle'
+        # AQUAPI_TOPO used to name the pickle file directly (e.g. 'topo.pickle'
+        # or, via `run -t nodes`, 'nodes.pickle'). It now names the *base*
+        # topology, whose legacy '.pickle' file (if any) gets migrated once
+        # into an equally named '.sqlite' database.
+        topo_base = 'topo.pickle'
         if 'AQUAPI_TOPO' in environ:
-            topo_file = environ['AQUAPI_TOPO']
-        topo_file = path.join(instance_path, topo_file)
+            topo_base = environ['AQUAPI_TOPO']
+        topo_base, _ = path.splitext(topo_base)
+
+        legacy_topo_file = path.join(instance_path, topo_base + '.pickle')
+        topo_file = path.join(instance_path, topo_base + '.sqlite')
 
         self.globals['CUSTOM_CFG'] = cfg_file
         self.globals['BUS_TOPO'] = topo_file
 
-        if 'Email' in self.globals:
-            driver_config['Email'] = self.globals['Email']
-        if 'Telegram' in self.globals:
-            driver_config['Telegram'] = self.globals['Telegram']
+        # Email/Telegram credentials now live in the users SQLite DB
+        # (table 'notification_config'), not in config.json anymore.
+        # A config.json still present is migrated once, then ignored.
+        users_db_path = db.get_users_db_path(instance_path)
+        self.globals['USERS_DB'] = users_db_path
+
+        if db.migrate_notification_config_from_json(self.globals, users_db_path):
+            log.brief("=== Migrated notification config (Email/Telegram) from "
+                      "%s to %s", cfg_file, users_db_path)
+
+        for channel in db.NOTIFICATION_CHANNELS:
+            cfg_list = db.get_notification_config(users_db_path, channel)
+            if cfg_list:
+                driver_config[channel] = cfg_list
+
+        # let alert_nodes.py look up per-user notification prefs without
+        # needing Flask's app context (mirrors driver_config's pattern)
+        db.set_current_users_db_path(users_db_path)
+
+        # database backups (Step 24): daily rotating backup of both
+        # SQLite databases into instance/backups/, in addition to the
+        # on-demand GET /api/backup download (aquaPi/api.py)
+        self.globals['BACKUP_DIR'] = environ.get(
+            'AQUAPI_BACKUP_DIR', path.join(instance_path, 'backups'))
+        self._backup_interval = int(environ.get('AQUAPI_BACKUP_INTERVAL', 24 * 60 * 60))
+        self._backup_keep = int(environ.get('AQUAPI_BACKUP_KEEP', db.DEFAULT_BACKUP_KEEP))
+        self._backup_timer: Timer | None = None
+
         create_io_registry()
 
         try:
-            if not path.exists(self.globals['BUS_TOPO']):
+            if db.migrate_pickle_to_sqlite(legacy_topo_file, self.globals['BUS_TOPO']):
+                log.brief("=== Migrated legacy %s to SQLite %s",
+                          legacy_topo_file, self.globals['BUS_TOPO'])
+
+            if not db.topology_exists(self.globals['BUS_TOPO']):
                 self.bus: MsgBus = MsgBus(threaded=False)
 
                 log.brief("=== There are no controllers defined, creating default")
@@ -107,14 +143,42 @@ class MachineRoom:
         # Our __del__ would not be called after Ctrl-C.
         atexit.register(self.shutdown)
 
+        self._schedule_backup()
+
         log.brief("%s", str(self.bus))
         if self.bus:
             log.info(self.bus.get_nodes())
+
+    def _run_backup(self) -> None:
+        """ create one scheduled, rotating backup generation, then
+            reschedule the next run - runs in the Timer's own thread
+        """
+        try:
+            archive = db.create_scheduled_backup(
+                self.globals['BUS_TOPO'], self.globals['USERS_DB'],
+                self.globals['BACKUP_DIR'], keep=self._backup_keep)
+            log.brief('=== Scheduled backup created: %s', archive)
+        except Exception:
+            log.exception('Scheduled backup failed')
+        finally:
+            self._schedule_backup()
+
+    def _schedule_backup(self) -> None:
+        """ (re-)arm the daily backup timer; a daemon thread so it
+            never blocks process shutdown on its own
+        """
+        self._backup_timer = Timer(self._backup_interval, self._run_backup)
+        self._backup_timer.daemon = True
+        self._backup_timer.start()
 
     def shutdown(self) -> None:
         """ Prepare for shutdown, save bus state etc.
         """
         log.brief('Preparing shutdown ...')
+
+        if self._backup_timer:
+            self._backup_timer.cancel()
+            self._backup_timer = None
 
         # write changed data (onyl our!) back to self.globals['CUSTOM_CFG']
         # thus, load from file, update our dynamic keys, then write back
@@ -139,26 +203,23 @@ class MachineRoom:
             # self.bus = None
             log.brief('... shutdown completed')
 
-    def save_nodes(self, container, fname: str = '') -> None:
-        """ save the Bus, Nodes and Drivers to storage
+    def save_nodes(self, container: MsgBus, fname: str = '') -> None:
+        """ save the Bus, Nodes and Drivers to SQLite storage
             Parameters allow usage for controller templates,
             contained in "something", not a bus
         """
         if container:
             if not fname:
                 fname = self.globals['BUS_TOPO']
-            with open(fname, 'wb') as p:
-                pickle.dump(container, p, protocol=pickle.HIGHEST_PROTOCOL)
+            db.save_topology(container, fname)
 
-    def restore_nodes(self, fname: str = ''):
-        """ recreate the Bus, Nodes and Drivers from storage,
+    def restore_nodes(self, fname: str = '') -> MsgBus:
+        """ recreate the Bus, Nodes and Drivers from SQLite storage,
             or a controller template in a container from some file
         """
         if not fname:
             fname = self.globals['BUS_TOPO']
-        with open(fname, 'rb') as p:
-            container = pickle.load(p)
-        return container
+        return db.load_topology(fname)
 
     def create_default_nodes(self) -> None:
         """ "let there be light" and heating of course, what
@@ -168,12 +229,12 @@ class MachineRoom:
         """
         TEST_BUS = False      # prio 1: disables everything else
         # TEST_BUS = True
-        REAL_CONFIG = True    # prio 2: disables the remaining test configs
-        # REAL_CONFIG = False
+        REAL_CONFIG = False    # prio 2: disables the remaining test configs
+        # REAL_CONFIG = True
 
-        TEST_PH = False  # True
-        SIM_LIGHT = False  # True
-        SIM_TEMP = False  # True
+        TEST_PH = True  # True
+        SIM_LIGHT = True  # True
+        SIM_TEMP = True  # True
         COMPLEX_TEMP = SIM_TEMP and False
 
         # NOTE:

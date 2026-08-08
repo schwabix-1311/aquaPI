@@ -1,21 +1,110 @@
 import './comps.js'
+import {registerGlobalComponent} from '../app/registry.js'
+import {useUiStore} from '../../store/modules/ui.js'
+import {useDashboardStore} from '../../store/modules/dashboard.js'
+
+// Dependency-free replacement for vue-masonry-css (Vue-2-only, removed in
+// the Vue 3 migration): real masonry via native CSS column-count, so the
+// browser packs items into whichever column is shortest so far, instead of
+// round-robin bucketing by index (which can leave one column much taller
+// than the others when card heights vary).
+const Masonry = {
+	name: 'Masonry',
+	props: {
+		cols: {
+			type: [Number, Object],
+			default: 2
+		},
+		gutter: {
+			type: [Number, String],
+			default: 0
+		}
+	},
+	template: `
+		<div ref="wrapper" :style="wrapperStyle">
+			<slot></slot>
+		</div>
+	`,
+	data() {
+		return {
+			currentCols: 2,
+			resizeObserver: null
+		}
+	},
+	computed: {
+		gutterPx() {
+			return (typeof this.gutter === 'number') ? this.gutter + 'px' : this.gutter
+		},
+		wrapperStyle() {
+			return {
+				columnCount: this.currentCols,
+				columnGap: this.gutterPx
+			}
+		}
+	},
+	methods: {
+		resolveCols(width) {
+			if (typeof this.cols === 'number') {
+				return this.cols
+			}
+			if (typeof this.cols !== 'object' || this.cols === null) {
+				return 2
+			}
+			// Breakpoints ascending, first one >= current width wins - same
+			// semantics as vue-masonry-css's cols object.
+			const breakpoints = Object.keys(this.cols)
+				.filter(k => k !== 'default')
+				.map(Number)
+				.sort((a, b) => a - b)
+
+			for (const bp of breakpoints) {
+				if (width <= bp) {
+					return this.cols[bp]
+				}
+			}
+			return this.cols.default ?? 2
+		},
+		updateCols(width) {
+			this.currentCols = this.resolveCols(width)
+		}
+	},
+	mounted() {
+		// Measure the wrapper's own width via ResizeObserver (not raw
+		// window width), so nav-drawer toggling, container padding, etc.
+		// are accounted for - not just plain browser resize.
+		this.resizeObserver = new ResizeObserver((entries) => {
+			const width = entries[0]?.contentRect?.width
+			if (width !== undefined) {
+				this.updateCols(width)
+			}
+		})
+		this.resizeObserver.observe(this.$refs.wrapper)
+		this.updateCols(this.$refs.wrapper.offsetWidth)
+	},
+	unmounted() {
+		this.resizeObserver?.disconnect()
+		this.resizeObserver = null
+	}
+}
+registerGlobalComponent('Masonry', Masonry)
+
 const AquapiDashboardConfigurator = {
 	template: `
+		<teleport to="body">
 		<v-navigation-drawer
-			v-show="$store.getters['ui/isActiveDialog']('AquapiDashboardConfigurator')"
+			:model-value="uiStore.isActiveDialog('AquapiDashboardConfigurator')"
+			@update:model-value="(v) => (v ? null : hideConfigurator())"
 			width="500"
-			fixed
-			right
-			permanent
-			:overlay-opacity="0.8"
-			:style="'max-width:100vw;'"
+			location="right"
+			temporary
+			:style="($vuetify.theme.global.current.dark ? 'max-width:100vw; background-color: rgba(33,33,33,0.7);' : 'max-width:100vw; background-color: rgba(255,255,255,0.7);')"
 			id="dashboard_configurator"
 		>
-			<v-card elevation="0">
+			<v-card elevation="0" color="transparent">
 				<v-card-title class="d-flex flex-row pa-2">
 					{{ $t('dashboard.configurator.headline') }}
 					<v-spacer></v-spacer>
-					<v-btn icon @click.stop="hideConfigurator()">
+					<v-btn icon variant="text" color="grey-darken-1" @click.stop="hideConfigurator()">
 						<v-icon>
 							mdi-close
 						</v-icon>
@@ -28,57 +117,56 @@ const AquapiDashboardConfigurator = {
 				<v-divider></v-divider>
 
 				<v-card-text class="pa-2">
-					<draggable v-model="widgets" handle=".handle" direction="vertical">
+					<div ref="widgetList">
 						<v-card 
 							v-for="(item, idx) in widgets"
 							:key="item.identifier"
-							class="d-flex flex-row align-center col col-12 mb-1 pa-0" 
+							class="d-flex flex-row align-center col col-12 mb-1 pa-0"
 							elevation="0"
-							outlined
+							variant="outlined"
 							tile
 						>
-							<v-btn icon tile :ripple="false" class="handle text--grey">
-								<v-icon>
-									mdi-drag
-								</v-icon>
-							</v-btn>
-							<v-btn icon tile :ripple="false" @click.stop="toggleVisibility(item)">
-								<v-icon :class="(item.visible ? 'green--text text--lighten-2' : 'red--text text--lighten-2')">
-									{{ (item.visible ? 'mdi-eye-outline' : 'mdi-eye-off-outline') }}
-								</v-icon>
-							</v-btn>
+ 						<v-btn icon tile variant="text" color="grey-darken-1" :ripple="false" class="handle">
+ 							<v-icon>
+ 								mdi-drag
+ 							</v-icon>
+ 						</v-btn>
+ 						<v-btn icon tile variant="text" color="grey-darken-1" :ripple="false" @click.stop="toggleVisibility(item)">
+ 							<v-icon :color="(item.visible ? 'green-lighten-2' : 'red-lighten-2')">
+ 								{{ (item.visible ? 'mdi-eye-outline' : 'mdi-eye-off-outline') }}
+ 							</v-icon>
+ 						</v-btn>
 							<v-row class="ml-1 justify-space-between align-center">
 								<v-col cols="7">
 									<v-text-field
 										v-model="item.name"
-										solo
-										flat
-										dense
+										variant="underlined"
+										density="compact"
 										hide-details="auto"
-										:background-color="($vuetify.theme.dark ? 'grey darken-4' : 'grey lighten-5')"
 										class="pa-0 ma-0"
 									></v-text-field>
 								</v-col>
 								<v-col>
-									<div class="grey--text text--darken-1">
-										<v-icon small class="grey--text mr-1">{{ typeIcon(item) }}</v-icon>
+									<div class="text-grey-darken-1">
+										<v-icon size="small" color="grey" class="mr-1">{{ typeIcon(item) }}</v-icon>
 										<span>{{ typeLabel(item) }}</span>
 									</div>
 								</v-col>
 							</v-row>
 						</v-card>
-					</draggable>
+					</div>
 
 				</v-card-text>
 
 				<v-divider></v-divider>
 				<v-card-actions>
-					<v-btn block color="primary" @click.stop="persistConfig">
+					<v-btn block variant="flat" color="primary" @click.stop="persistConfig">
 						{{ $t('dashboard.configurator.btnSave.label') }}
 					</v-btn>
 				</v-card-actions>
 			</v-card>
 		</v-navigation-drawer>
+		</teleport>
 	`,
 
 	data: function() {
@@ -97,25 +185,40 @@ const AquapiDashboardConfigurator = {
 	},
 
 	computed: {
+		uiStore() {
+			return useUiStore()
+		},
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		widgets: {
 			get() {
-				return this.$store.getters['dashboard/widgets']
+				return this.dashboardStore.widgets
 			},
 			set(items) {
-				this.$store.commit('dashboard/setWidgets', items)
+				this.dashboardStore.setWidgets(items)
 			}
 		},
 	},
 
 	methods: {
 		showConfigurator() {
-			this.$store.dispatch('ui/showDialog', this.dialogName)
+			this.uiStore.showDialog(this.dialogName)
 		},
 		hideConfigurator() {
-			this.$store.dispatch('ui/hideDialog', this.dialogName)
+			this.uiStore.hideDialog(this.dialogName)
 		},
 		toggleVisibility(item) {
 			item.visible = !item.visible
+		},
+		reorderWidgets(from, to) {
+			if (from === to) {
+				return
+			}
+			const items = this.widgets.slice()
+			const [moved] = items.splice(from, 1)
+			items.splice(to, 0, moved)
+			this.widgets = items
 		},
 		typeLabel(item) {
 			return ['AUX', 'CTRL', 'HISTORY', 'IN_ENDP', 'OUT_ENDP', 'ALERTS'].includes(item.role)
@@ -128,24 +231,43 @@ const AquapiDashboardConfigurator = {
 				: 'mdi-user'
 		},
 		persistConfig: async function() {
-			const result = await this.$store.dispatch('dashboard/persistConfig', this.widgets)
+			const result = await this.dashboardStore.persistConfig(this.widgets)
+			if (result) {
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
+			} else {
+				this.$toast.error(this.$t('misc.toast.saveError'))
+			}
 			this.hideConfigurator()
 		},
-	}
+	},
+
+	mounted() {
+		this._sortable = Sortable.create(this.$refs.widgetList, {
+			handle: '.handle',
+			onEnd: (evt) => this.reorderWidgets(evt.oldIndex, evt.newIndex),
+		})
+	},
+	unmounted() {
+		if (this._sortable) {
+			this._sortable.destroy()
+			this._sortable = null
+		}
+	},
 }
-Vue.component('AquapiDashboardConfigurator', AquapiDashboardConfigurator)
+registerGlobalComponent('AquapiDashboardConfigurator', AquapiDashboardConfigurator)
 
 const AquapiDashboardWidget = {
 	template: `
-		<v-card 
-			tile 
-			outlined
-			elevation="3" 
+		<v-card
+			tile
+			variant="outlined"
+			elevation="3"
 			:loading="false"
 			class="pb-0"
+			style="border-color: rgba(0,0,0,0.3);"
 		>
 			<v-card-title
-				class="pb-1"
+				class="pb-1 d-flex align-center flex-nowrap"
 			>
 				<template v-if="widgetTitleIcon">
 					<v-img
@@ -153,33 +275,37 @@ const AquapiDashboardWidget = {
 						:src="'static/' + widgetTitleIcon"
 						max-height="24"
 						max-width="24"
-						class="mr-2"
+						class="mr-2 flex-shrink-0"
 					/>
 					<v-icon
 						v-else
 						:color="'blue-grey'"
-						:class="($vuetify.theme.dark ? 'text--darken-2' : 'text--lighten-4')"
+						:class="($vuetify.theme.global.current.dark ? 'text--darken-2' : 'text--lighten-4')"
 						left
 					>
 						{{ widgetTitleIcon }}
 					</v-icon>
 				</template>
-				{{ item.name }}
-				
-				<template
+				<span class="text-truncate">{{ item.name }}</span>
+
+				<v-spacer />
+
+				<!-- widgets rendered below (e.g. History) can teleport per-widget
+				     title-row controls in here, to sit on the same line as the
+				     title instead of in their own row further down -->
+				<div :id="'widget-title-actions-' + item.id" class="d-flex align-center flex-shrink-0"></div>
+
+				<v-chip
 					v-if="alert"
+					label
+					:ripple="false"
+					size="small"
+					:color="alertColor"
+					text-color="white"
+					class="ml-2 flex-shrink-0"
 				>
-					<v-spacer />
-					<v-chip
-						label
-						:ripple="false"
-						small
-						:color="alertColor"
-						text-color="white"
-					>
-						{{ alert }}
-					</v-chip>
-				</template>
+					{{ alert }}
+				</v-chip>
 			</v-card-title>
 
 			<template v-if="node">
@@ -246,15 +372,18 @@ const AquapiDashboardWidget = {
 		}
 	},
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		node() {
-			return this.$store.getters['dashboard/node'](this.item.id)
+			return this.dashboardStore.node(this.item.id)
 		},
 		nodes: {
 			get() {
-				return this.$store.getters['dashboard/nodes']
+				return this.dashboardStore.nodes
 			},
 			set(items) {
-				this.$store.commit('dashboard/setNodes', items)
+				this.dashboardStore.setNodes(items)
 			}
 		},
 		widgetTitleIcon() {
@@ -275,14 +404,14 @@ const AquapiDashboardWidget = {
 		},
 
 		alert() {
-			if ((this.node == null) || !('alert' in this.node)) {
+			if ((this.node == null) || (this.node.alert == null)) {
 				return ''
 			}
 			return this.node.alert[0]
 		},
 		alertColor() {
 			let ret = 'info lighten-1'
-			if ((this.node == null) || !('alert' in this.node)) {
+			if ((this.node == null) || (this.node.alert == null)) {
 				return ret
 			}
 			const severity = this.node.alert[1]
@@ -295,7 +424,7 @@ const AquapiDashboardWidget = {
 		},
 	}
 }
-Vue.component('AquapiDashboardWidget', AquapiDashboardWidget)
+registerGlobalComponent('AquapiDashboardWidget', AquapiDashboardWidget)
 
 const AquapiDashboard = {
 	template: `
@@ -336,10 +465,11 @@ const AquapiDashboard = {
 					:cols="{default: 3, 1264: 3, 960: 2, 600: 1}"
 					:gutter="24"
 				>
-					<div 
-						v-for="(item, index) in widgets" 
+					<div
+						v-for="(item, index) in widgets"
 						:key="item.identifier"
 						class="mb-6"
+						style="break-inside: avoid;"
 					>
 						<aquapi-dashboard-widget
 							:item="item"
@@ -352,42 +482,40 @@ const AquapiDashboard = {
 		</v-card>
 	`,
 
-	data() {
-		return {
-		};
-	},
-
 	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
 		widgets: {
 			get() {
-				return this.$store.getters['dashboard/widgets'].filter(item => item.visible)
+				return this.dashboardStore.widgets.filter(item => item.visible)
 			},
 			set(items) {
-				this.$store.commit('dashboard/setWidgets', items)
+				this.dashboardStore.setWidgets(items)
 			}
 		},
 		nodes: {
 			get() {
-				return this.$store.getters['dashboard/nodes']
+				return this.dashboardStore.nodes
 			},
 			set(items) {
-				this.$store.commit('dashboard/setNodes', items)
+				this.dashboardStore.setNodes(items)
 			}
-		}
+		},
 	},
 
 	methods: {
 		showConfigurator() {
-			this.$store.dispatch('ui/showDialog', 'AquapiDashboardConfigurator')
+			useUiStore().showDialog('AquapiDashboardConfigurator')
 			this.$nextTick(() => {
 				document.querySelectorAll('#dashboard_configurator div.v-navigation-drawer__content')[0].scrollTo(0, 0)
 			})
 		},
 		hideConfigurator() {
-			this.$store.dispatch('ui/hideDialog', 'AquapiDashboardConfigurator')
+			useUiStore().hideDialog('AquapiDashboardConfigurator')
 		},
 		async loadConfig() {
-			const result = await this.$store.dispatch('dashboard/loadConfig')
+			const result = await this.dashboardStore.loadConfig()
 			if (result)	{
 				this.widgets = result
 			}
@@ -397,7 +525,7 @@ const AquapiDashboard = {
 		await this.loadConfig()
 	},
 }
-Vue.component('AquapiDashboard', AquapiDashboard)
+registerGlobalComponent('AquapiDashboard', AquapiDashboard)
 export {AquapiDashboard, AquapiDashboardConfigurator}
 
 // vim: set noet sts ts=4 sw=4:

@@ -1,97 +1,92 @@
-import {AuthLayout} from '../layouts/Auth.vue.js'
-import {DefaultLayout} from '../layouts/Default.vue.js'
-import {AquapiLoginForm} from '../components/auth/AquapiLoginForm.vue.js'
-import {AquapiDummy} from '../components/app/index.js'
+import {loadSfc} from '../sfc/loadSfc.js'
 
-import {Settings} from '../pages/Settings.vue.js'
-import {Config} from '../pages/Config.vue.js'
-import {Home} from '../pages/Home.vue.js'
-import {About} from '../pages/About.vue.js'
+// Home/Config/Settings only wrap their respective `aquapi-dashboard` /
+// `aquapi-config` / `aquapi-settings` tags, whose actual component
+// definitions still live in these plain, eagerly-loaded `.js` modules
+// (self-registering into the global component registry, see
+// components/app/registry.js) - a `.vue` SFC's `<script>` can't `import`
+// them directly (see the comment in sfc/loadSfc.js).
+import '../components/app/index.js'
+import '../components/dashboard/index.js'
+import '../components/config/index.js'
+import '../components/settings/index.js'
+import '../components/users/index.js'
+import {useUsersStore} from '../store/modules/users.js'
 
 const routes = [
-	{
-		path: '/login',
-		// redirect: 'login',
-		component: AuthLayout,
-		// name: 'login',
-		// component: DefaultLayout,
-		children: [
-			{
-				path: '',
-				name: 'login',
-				components: {
-					default: AquapiLoginForm
-				},
-				// meta: {
-				//	 title: i18n.t("routes.login"),
-				// },
-			},
-		],
-	},
 	{
 		// TODO: maybe change /app to / when 'old app' is not used any longer
 		// partly DONE: old app is now /home, and / redirects to /#/
 		path: '/',
 		// name: 'app',
-		component: DefaultLayout,
+		component: () => loadSfc('/static/spa/layouts/Default.vue'),
 		children: [
 			{
 				path: '',
 				name: 'home',
 				alias: 'app',
 				components: {
-					default: Home
+					default: () => loadSfc('/static/spa/pages/Home.vue')
 				}
 			},
 			{
 				path: 'settings',
 				name: 'settings',
 				components: {
-					default: Settings,
-					view_bottom: AquapiDummy
+					default: () => loadSfc('/static/spa/pages/Settings.vue')
 				},
 			},
 			{
 				path: 'config',
 				name: 'config',
 				components: {
-					default: Config
+					default: () => loadSfc('/static/spa/pages/Config.vue')
 				},
 			},
 			{
 				path: 'about',
 				name: 'about',
 				components: {
-					default: About
+					default: () => loadSfc('/static/spa/pages/About.vue')
+				},
+			},
+			{
+				path: 'users',
+				name: 'users',
+				components: {
+					default: () => loadSfc('/static/spa/pages/Users.vue')
+				},
+				beforeEnter: async (to, from, next) => {
+					const usersStore = useUsersStore()
+					if (!usersStore.currentUser) {
+						await usersStore.fetchCurrentUser()
+					}
+					if (usersStore.isAdmin) {
+						next()
+					} else {
+						next({name: 'home'})
+					}
 				},
 			},
 		]
 	}
 ];
 
-const router =	new VueRouter({
-	// TODO: maybe switch to mode 'history', when we do not need old URL paths any longer
-	mode: 'hash', //'history',
-	// base: process.env.BASE_URL,
+const router = VueRouter.createRouter({
+	// TODO: maybe switch to createWebHistory(), when we do not need old URL paths any longer
+	history: VueRouter.createWebHashHistory(),
 	routes,
 	scrollBehavior(to, from, savedPosition) {
-		const mainWrapper = document.querySelector('div.v-main__wrap')
+		// Vuetify 3 no longer renders a `.v-main__wrap` child div (that was
+		// a Vuetify 2 implementation detail) - see app.css's own comment on
+		// `.v-main { overflow-y: auto }` - `.v-main` itself is now the
+		// actual scroll container in this app.
+		const mainWrapper = document.querySelector('.v-main')
 		if (mainWrapper) {
 			mainWrapper.scrollTop = 0
 		}
-		return {x: 0, y: 0}
-	}
-});
-
-router.beforeEach((to, from, next) => {
-	// TODO: implement authentication
-	console.log('[router/index.js] ROUTER BEFORE EACH')
-
-	// if (to.name !== 'login' && !isAuthenticated) {
-	if (to.name !== 'login' && !(999 == 999)) {
-		next({name: 'login'});
-	} else {
-		next();
+		// vue-router 4 expects {left, top}, not {x, y}
+		return {left: 0, top: 0}
 	}
 });
 

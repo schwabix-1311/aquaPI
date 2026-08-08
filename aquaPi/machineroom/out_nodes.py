@@ -7,8 +7,8 @@ from threading import Thread
 import time
 
 from .msg_types import (Msg, MsgData)
-from .msg_bus import (BusListener, BusRole, DataRange)
-from ..driver import (IoRegistry, OutDriver)
+from .msg_bus import (BusListener, BusRole, DataRange, Setting)
+from ..driver import (IoRegistry, OutDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.out_nodes')
@@ -25,6 +25,7 @@ class DeviceNode(BusListener, ABC):
         truth testing, whatever is more intuitive for each dev.
     """
     ROLE = BusRole.OUT_ENDP
+    _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
 
     def __init__(self, name: str, receives: str, port: str,
                  _cont=False):
@@ -32,7 +33,11 @@ class DeviceNode(BusListener, ABC):
         self.unit: str = '%'
         self._driver: OutDriver | None = None
         self._port: str = ''
-        self.port = port
+        # bypass the port setter here - it's too early for _sync_driver()
+        # to run (subclass attrs like _inverted/minimum/maximum aren't set
+        # yet); each subclass's own __init__ does its own initial sync
+        # (switch()/set_percent()/set()) once fully constructed.
+        self._apply_port(port)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -50,10 +55,14 @@ class DeviceNode(BusListener, ABC):
     def port(self) -> str:
         return self._port
 
-    @port.setter
-    def port(self, port: str) -> None:
+    def _apply_port(self, port: str) -> None:
+        """ (re)connect self._driver to `port`, destructing any previous
+            one. Does not push the node's current state to a freshly
+            attached driver - see the port setter/_sync_driver() for that.
+        """
         if self._driver:
             IoRegistry.get().driver_destruct(self._port, self._driver)
+            self._driver = None
         if port:
             driver = IoRegistry.get().driver_factory(port)
             if isinstance(driver, OutDriver):
@@ -63,10 +72,35 @@ class DeviceNode(BusListener, ABC):
                           port, self.name)
         self._port = port
 
-    def get_settings(self) -> list[tuple]:
+    @port.setter
+    def port(self, port: str) -> None:
+        self._apply_port(port)
+        if self._driver:
+            # a runtime port change (e.g. via /settings) attaches a driver
+            # that starts in its own default state - push the node's
+            # current data to it now, instead of leaving it stale until
+            # the next MsgData that happens to differ from self.data.
+            self._sync_driver()
+
+    def _sync_driver(self) -> None:
+        """ push the node's current state to a freshly (re)attached
+            driver. No-op by default; overridden by subclasses that can
+            re-push their state (SwitchDevice, AnalogDevice).
+            SlowPwmDevice doesn't need this - its background pulse thread
+            already re-reads self._driver on its own on every toggle.
+        """
+        pass
+
+    def pullout(self) -> bool:
+        self.port = ''
+        return super().pullout()
+
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('port', 'Output port',
-                         self.port, 'type="text"'))
+        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
+        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
+        settings.append(Setting('port', 'outputPort', self.port,
+                                type='select', options=options))
         return settings
 
 
@@ -83,6 +117,7 @@ class SwitchDevice(DeviceNode):
             drive output with bool(input), possibly inverted
     """
     data_range = DataRange.BINARY
+    _port_funcs = [PortFunc.Bout]
 
     def __init__(self, name: str, receives: str, port: str,
                  inverted: bool = False, _cont: bool = False):
@@ -119,6 +154,9 @@ class SwitchDevice(DeviceNode):
 
         super().listen(msg)
 
+    def _sync_driver(self) -> None:
+        self.switch(self.data)
+
     def switch(self, state: bool) -> None:
         self.data: bool = state
 
@@ -130,10 +168,10 @@ class SwitchDevice(DeviceNode):
                 self._driver.write(not self.data)
         self.post(MsgData(self.id, 100 if self.data else 0))
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('inverted', 'Inverted', self.inverted,
-                         'type="number" min="0" max="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        settings.append(Setting('inverted', 'inverted', self.inverted,
+                                type='checkbox'))
         return settings
 
 
@@ -151,6 +189,7 @@ class SlowPwmDevice(DeviceNode):
             drive output with PWM(input/100 * cycle), possibly inverted
     """
     data_range = DataRange.BINARY
+    _port_funcs = [PortFunc.Bout]
 
     def __init__(self, name: str, receives: str, port: str,
                  inverted: bool = False, cycle: float = 60.,
@@ -231,12 +270,12 @@ class SlowPwmDevice(DeviceNode):
                               daemon=True)
         self._thread.start()
 
-    def get_settings(self) -> list[tuple]:
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('cycle', 'PWM cycle time', self.cycle,
-                         'type="number" min="10" max="300" step="1"'))
-        settings.append(('inverted', 'Inverted', self.inverted,
-                         'type="number" min="0" max="1"'))  # FIXME   'class="uk-checkbox" type="checkbox" checked' fixes appearance, but result is always False )
+        settings.append(Setting('cycle', 'cycle', self.cycle,
+                                type='duration', min=10, max=300, step=1))
+        settings.append(Setting('inverted', 'inverted', self.inverted,
+                                type='checkbox'))
         return settings
 
 
@@ -256,6 +295,7 @@ class AnalogDevice(DeviceNode):
             drive analog output with minimum...maximum, optional perceptive correction
     """
     data_range = DataRange.PERCENT
+    _port_funcs = [PortFunc.Aout]
 
     def __init__(self, name: str, receives: str, port: str,
                  percept: bool = False, minimum: float = 0, maximum: float = 100,
@@ -305,9 +345,20 @@ class AnalogDevice(DeviceNode):
             self._driver.write(out_val)
         self.post(MsgData(self.id, round(out_val, 4)))  # to make our state known
 
-    def get_settings(self) -> list[tuple]:
+    def _sync_driver(self) -> None:
+        # NOT set_percent(self.data) - self.data already holds the fully
+        # scaled/percept-corrected *output* value (see set_percent() above),
+        # so re-running it through set_percent() would double-apply that
+        # scaling. Push the already-computed value straight to the driver.
+        if self._driver:
+            self._driver.write(self.data)
+
+    def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(('minimum', 'Minimum [%]', self.minimum, 'type="number" min="0" max="99"'))
-        settings.append(('maximum', 'Maximum [%]', self.maximum, 'type="number" min="1" max="100"'))
-        settings.append(('percept', 'Perceptive', self.percept, 'type="number" min="0" max="1"'))  # 'type="checkbox"' )
+        settings.append(Setting('minimum', 'minimum', self.minimum,
+                                type='number', min=0, max=99))
+        settings.append(Setting('maximum', 'maximum', self.maximum,
+                                type='number', min=1, max=100))
+        settings.append(Setting('percept', 'percept', self.percept,
+                                type='checkbox'))
         return settings

@@ -1,4 +1,5 @@
 import './AquapiNavDrawer.vue.js'
+import {registerGlobalComponent} from './registry.js'
 
 const AquapiPageHeading = {
 	template: `
@@ -7,7 +8,7 @@ const AquapiPageHeading = {
 				<v-icon 
 					v-if="icon" 
 					color="blue-grey" 
-					:class="($vuetify.theme.dark ? 'text--darken-2' : 'text--lighten-4')"
+					:class="($vuetify.theme.global.current.dark ? 'text--darken-2' : 'text--lighten-4')"
 					left
 				>
 					{{ icon }}
@@ -18,7 +19,8 @@ const AquapiPageHeading = {
 				<v-spacer></v-spacer>
 				<v-btn v-for="item, idx in buttons" :key="idx"
 					icon
-					color="primary"
+					variant="text"
+					color="grey-darken-1"
 					@click="item.action"
 				>
 					<v-icon>{{ item.icon }}</v-icon>
@@ -43,7 +45,7 @@ const AquapiPageHeading = {
 		}
 	}
 }
-Vue.component('AquapiPageHeading', AquapiPageHeading)
+registerGlobalComponent('AquapiPageHeading', AquapiPageHeading)
 
 const AquapiLoadingIndicator = {
 	template: `
@@ -72,7 +74,7 @@ const AquapiLoadingIndicator = {
 		}
 	}
 }
-Vue.component('AquapiLoadingIndicator', AquapiLoadingIndicator)
+registerGlobalComponent('AquapiLoadingIndicator', AquapiLoadingIndicator)
 const AquapiDummy = {
 	template: `
 		<v-hover
@@ -85,13 +87,13 @@ const AquapiDummy = {
 				max-width="350"
 			>
 				<v-card-text class="my-4 text-center text-h6">
-					Einfach nur 'ne Dummy-Komponente für Testzwecke
+					{{ $t('misc.dummyComponentText') }}
 				</v-card-text>
 			</v-card>
 		</v-hover>
 	`
 }
-Vue.component('AquapiDummy', AquapiDummy)
+registerGlobalComponent('AquapiDummy', AquapiDummy)
 
 export {AquapiPageHeading, AquapiDummy}
 

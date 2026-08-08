@@ -55,37 +55,113 @@ div.app-splash-content {
 }
 */
 
-div.theme--light.v-application {
+div.v-theme--light.v-application {
     background-color: #e4e4e4;
 }
-div.v-main__wrap {
+
+/* Vuetify 3's v-main no longer renders a `.v-main__wrap` child div (that
+   was a Vuetify 2 implementation detail), so the app-bar/footer (both
+   `app`-registered, absolutely positioned relative to `.v-application__wrap`)
+   only stay glued to the actual viewport bottom/top if that wrapper's
+   height is capped at the viewport height, with `v-main` scrolling its own
+   content internally - otherwise the wrapper grows with the page content
+   and the footer drifts down past the visible viewport. */
+.v-application__wrap {
+    height: 100vh;
+}
+.v-main {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
 }
 
-div.v-main__wrap > div.container {
-    /*background-color: #00bfa5;*/
-    /*border: 1px dashed blue;*/
-    /*min-height: calc(100% - 40px);*/
+.v-main .v-container {
     min-height: 100%;
     background-color: rgba(255, 255, 255, 0.4)
 }
-.theme--dark div.v-main__wrap > div.container {
+.v-theme--dark .v-main .v-container {
     background-color: rgba(255, 255, 255, 0.05)
 }
 
-div.aquapi-dashboard div.v-expansion-panels {
+/* AquapiDashboardConfigurator's <v-navigation-drawer> is teleported directly
+   to <body> (see the Round 3 app-bar-gap fix), so its auto-generated scrim
+   (`.v-navigation-drawer__scrim`) ends up as a direct child of <body> too,
+   outside `.v-application__wrap`'s `position: relative` context. Vuetify's
+   own scrim CSS only sets `position: absolute; height: 100%`, which then
+   resolves against the whole (possibly taller-than-viewport) document
+   instead of the viewport, so it scrolls away with the page content instead
+   of staying over it. Force it back to a real viewport-fixed overlay here,
+   without touching AquapiNavDrawer's scrim (which stays nested as before). */
+body > .v-navigation-drawer__scrim {
+    position: fixed;
+    inset: 0;
+    height: auto;
+    width: auto;
+}
+
+/* Vuetify's own .v-list-item--nav styling shrinks list-item titles to
+   0.8125rem (13px, vs. the normal 1rem) - intentional Material-Design
+   compactness for nav rails, but reads as "unusually small" for
+   AquapiNavDrawer's full-height mobile-style menu. Bump it back up while
+   keeping 'nav''s other styling (rounded active-item highlight, tighter
+   padding). */
+.v-navigation-drawer .v-list-item--nav .v-list-item-title {
+    font-size: 1rem;
+}
+
+/* Settings widgets (comps.js's SettingSlider/SettingDuration) - small
+   reusable utility classes so the Vue template strings don't need long
+   inline `style="..."` attributes repeated per instance (those were
+   making the already tab-indented template markup run very wide). */
+.aquapi-shrinkable {
+    min-width: 0;
+}
+.aquapi-setting-bound {
+    white-space: nowrap;
+    min-width: 2em;
+}
+.aquapi-setting-duration-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 60px 76px;
+    align-items: end;
+    gap: 4px 8px;
+}
+
+div.aquapi-dashboard div.v-expansion-panels,
+div.aquapi-settings div.v-expansion-panels {
     border-radius: 0;
 }
-div.aquapi-dashboard div.v-expansion-panel:before {
+div.aquapi-dashboard div.v-expansion-panel:before,
+div.aquapi-settings div.v-expansion-panel:before {
     box-shadow: inherit;
 }
-div.aquapi-dashboard div.v-expansion-panel--active > .v-expansion-panel-header {
+div.aquapi-dashboard div.v-expansion-panel--active > .v-expansion-panel-header,
+div.aquapi-settings div.v-expansion-panel--active > .v-expansion-panel-header {
     min-height: 48px;
 }
 
-div.aquapi-dashboard div.v-expansion-panel-content__wrap {
+div.aquapi-dashboard div.v-expansion-panel-content__wrap,
+div.aquapi-settings div.v-expansion-panel-content__wrap {
     padding: 0;
 }
+
+div.aquapi-settings div.v-expansion-panel {
+    border: 1px solid rgba(0, 0, 0, 0.3);
+}
+div.aquapi-settings div.v-expansion-panel + div.v-expansion-panel {
+    border-top: none;
+}
+
+/* AquapiPageHeading (page titles like "Einstellungen"/"Konfiguration"):
+   Vuetify 3's v-toolbar-title__placeholder is single-line by default
+   (overflow: hidden + text-overflow: ellipsis), which cuts off longer
+   German headings on narrow/mobile viewports. Let it wrap instead. */
+h1.v-toolbar-title .v-toolbar-title__placeholder {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+}
+
 div::-webkit-scrollbar-track {
     background-color: rgba(100, 100, 100, 0.1);
 }
@@ -110,4 +186,88 @@ html::-webkit-scrollbar {
 .fade-enter-from,
 .fade-leave-to {
     opacity: 0;
+}
+
+/* /config graph editor (Step 12) */
+.config-canvas-wrapper {
+    width: 100%;
+    overflow: auto;
+    border: 1px dashed rgba(128, 128, 128, 0.4);
+}
+.config-canvas {
+    position: relative;
+}
+.config-connections {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    /* above .config-node-box, so a connection routed behind an unrelated
+       node still renders visibly instead of disappearing under it */
+    z-index: 2;
+}
+.config-connection-hit {
+    stroke: transparent;
+    stroke-width: 14;
+    pointer-events: stroke;
+    fill: none;
+    cursor: pointer;
+}
+.config-connection-line {
+    pointer-events: none;
+}
+.config-connection-line--hover {
+    stroke: #f44336 !important;
+    stroke-width: 3;
+}
+.config-connection-delete {
+    pointer-events: all;
+    cursor: pointer;
+}
+.config-connection-delete circle {
+    transition: r 0.1s ease-in-out;
+}
+.config-connection-delete:hover circle {
+    r: 10;
+}
+.config-node-box {
+    position: absolute;
+    cursor: move;
+    user-select: none;
+    background-color: rgba(255, 255, 255, 0.95);
+    z-index: 1;
+}
+.v-theme--dark .config-node-box {
+    background-color: rgba(48, 48, 48, 0.95);
+}
+.config-node-box--connecting {
+    outline: 2px solid #1976d2;
+}
+.config-node-box--selected {
+    outline: 2px solid #43a047;
+}
+/* Small input/output port markers on node cards, so the connector
+   attachment side (left = input, right = output) is visually obvious
+   directly on the card, not just implied by the connector's geometry. */
+.config-node-port {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    /* auto (not none), so the title tooltip actually fires on hover;
+       mousedown still bubbles up to the card's own drag handler. */
+    pointer-events: auto;
+    cursor: move;
+    z-index: 1;
+}
+.config-node-port--in {
+    left: -5px;
+    background-color: #1976d2;
+}
+.config-node-port--out {
+    right: -5px;
+    background-color: #90a4ae;
 }

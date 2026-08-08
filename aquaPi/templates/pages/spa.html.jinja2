@@ -14,10 +14,9 @@
 		{# <link href="{{ url_for('static', filename='fonts/roboto-v30.css') }}" rel="stylesheet"> #}
 		<link href="{{ url_for('static', filename='fonts/blinker-v12.css') }}" rel="stylesheet">
 
-		{#- <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet"> -#}
-		{# <link href="{{ url_for('static', filename='css/vuetify.2.6.13.min.css') }}" rel="stylesheet"> #}
+		{#- <link href="https://cdn.jsdelivr.net/npm/vuetify@3.x/dist/vuetify.min.css" rel="stylesheet"> -#}
 		{# NOTE: vuetify ...customized uses font Blinker instead of default Roboto #}
-		<link href="{{ url_for('static', filename='css/vuetify.2.6.13.customized.min.css') }}" rel="stylesheet">
+		<link href="{{ url_for('static', filename='css/vuetify.3.13.0.customized.min.css') }}" rel="stylesheet">
 		<link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
 
 		{#- <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet"> -#}
@@ -43,14 +42,20 @@
 			</div>
 		</div>
 
-		{# TODO: for development use CDN file #}
-		<script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
-		{# <script src="{{ url_for('static', filename='libs/vue.2.7.14.js') }}"></script> #}
-
-		<script src="{{ url_for('static', filename='libs/vuex.3.6.2.js') }}"></script>
-		<script src="{{ url_for('static', filename='libs/vue-router.3.6.5.js') }}"></script>
-		<script src="{{ url_for('static', filename='libs/vue-i18n.8.28.2.js') }}"></script>
-		<script src="{{ url_for('static', filename='libs/vuetify.2.6.13.js') }}"></script>
+		{% if config.DEBUG %}
+		<script src="{{ url_for('static', filename='libs/vue.3.5.40.global.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/pinia.4.0.2.iife.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-router.4.6.4.global.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-i18n.9.14.5.global.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vuetify.3.13.0.global.js') }}"></script>
+		{% else %}
+		<script src="{{ url_for('static', filename='libs/vue.3.5.40.global.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/pinia.4.0.2.iife.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-router.4.6.4.global.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vue-i18n.9.14.5.global.min.js') }}"></script>
+		<script src="{{ url_for('static', filename='libs/vuetify.3.13.0.min.js') }}"></script>
+		{% endif %}
+		<script src="{{ url_for('static', filename='libs/vue3-sfc-loader.0.9.5.js') }}"></script>
 
 		<script src="{{ url_for('static', filename='libs/chart.js.4.0.1.js') }}"></script>
 		<script src="{{ url_for('static', filename='libs/luxon.3.1.1.js') }}"></script>
@@ -58,12 +63,6 @@
 
 		{# <script src="//cdn.jsdelivr.net/npm/sortablejs@1.8.4/Sortable.min.js"></script> #}
 		<script src="{{ url_for('static', filename='libs/sortablejs.1.8.4.js') }}"></script>
-		<!-- CDNJS :: Vue.Draggable (https://cdnjs.com/) -->
-		{# <script src="//cdnjs.cloudflare.com/ajax/libs/Vue.Draggable/2.20.0/vuedraggable.umd.min.js"></script> #}
-		<script src="{{ url_for('static', filename='libs/vuedraggable.2.20.0.js') }}"></script>
-
-		{# <script src="https://unpkg.com/vue-masonry-css"></script> #}
-		<script src="{{ url_for('static', filename='libs/vue-masonry-css.1.0.3.js') }}"></script>
 
 		<script type="module" src="{{ url_for('static', filename='spa/main.js') }}"></script>
 	</body>

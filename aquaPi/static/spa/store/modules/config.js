@@ -1,4 +1,6 @@
 import {useDashboardStore} from './dashboard.js';
+import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
+import i18n from '../../i18n/index.js';
 
 export const useConfigStore = Pinia.defineStore('config', {
 	state: () => ({
@@ -34,19 +36,29 @@ export const useConfigStore = Pinia.defineStore('config', {
 				return this.nodeTypes
 			}
 
-			const response = await fetch('/api/node-types/', {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-			})
+			try {
+				const response = await fetch('/api/node-types/', {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+				})
 
-			if (response.status == 200) {
-				const nodeTypes = await response.json()
-				this.setNodeTypes(nodeTypes)
+				if (response.status !== 200) {
+					throw new Error('GET /api/node-types/ returned ' + response.status)
+				}
+
+				this.setNodeTypes(await response.json())
+			} catch (e) {
+				console.error('ERROR loading node types: ' + e.message)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodeTypes')}),
+					color: 'error',
+					timeout: 6000,
+				})
 			}
 
 			return this.nodeTypes
@@ -135,17 +147,27 @@ export const useConfigStore = Pinia.defineStore('config', {
 		},
 
 		async fetchTemplates() {
-			const response = await fetch('/api/templates/', {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-			})
-			if (response.status == 200) {
+			try {
+				const response = await fetch('/api/templates/', {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+				})
+				if (response.status !== 200) {
+					throw new Error('GET /api/templates/ returned ' + response.status)
+				}
 				this.setTemplates(await response.json())
+			} catch (e) {
+				console.error('ERROR loading templates: ' + e.message)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.templates')}),
+					color: 'error',
+					timeout: 6000,
+				})
 			}
 		},
 
@@ -220,17 +242,27 @@ export const useConfigStore = Pinia.defineStore('config', {
 		},
 
 		async fetchSnapshots() {
-			const response = await fetch('/api/config/snapshots', {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-			})
-			if (response.status == 200) {
+			try {
+				const response = await fetch('/api/config/snapshots', {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+				})
+				if (response.status !== 200) {
+					throw new Error('GET /api/config/snapshots returned ' + response.status)
+				}
 				this.setSnapshots(await response.json())
+			} catch (e) {
+				console.error('ERROR loading snapshots: ' + e.message)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.snapshots')}),
+					color: 'error',
+					timeout: 6000,
+				})
 			}
 		},
 

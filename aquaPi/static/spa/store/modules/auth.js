@@ -33,12 +33,17 @@ export const useAuthStore = Pinia.defineStore('auth', {
 					body: new URLSearchParams({username: payload.username, password: payload.password}),
 				})
 				data = await response.json().catch(() => null)
+				if (!data) {
+					// non-JSON body (e.g. a 500 error page) - the status
+					// code is the only useful information left
+					return {ok: false, error: 'HTTP ' + response.status}
+				}
 			} catch (e) {
 				return {ok: false, error: e.message}
 			}
 
-			if (!data || data.result !== 'SUCCESS') {
-				return {ok: false, error: (data && data.message) || 'Login failed'}
+			if (data.result !== 'SUCCESS') {
+				return {ok: false, error: data.message || 'Login failed'}
 			}
 
 			// the login itself only confirms the credentials - fetch the

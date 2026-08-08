@@ -27,10 +27,6 @@ const AquapiConfig = {
 						<v-alert v-else-if="selectMode" dense text type="info" class="mb-0">
 							{{ $t('pages.config.hintSelecting', {count: selectedIds.length}) }}
 						</v-alert>
-						<v-chip v-else-if="draftDirty" small color="warning" text-color="white">
-							<v-icon left x-small>mdi-circle-medium</v-icon>
-							{{ $t('pages.config.unsavedChanges') }}
-						</v-chip>
 					</v-col>
 					<v-col cols="auto">
 						<v-btn
@@ -333,7 +329,10 @@ const AquapiConfig = {
 		},
 
 		async onDiscard() {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDiscard'))
+			const ok = await this.$confirm(this.$t('pages.config.confirmDiscard'), {
+				confirmLabel: this.$t('pages.config.discard'),
+				confirmColor: 'error',
+			})
 			if (!ok) {
 				return
 			}
@@ -444,7 +443,10 @@ const AquapiConfig = {
 		},
 
 		async onDelete(node) {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDelete', {name: node.name}))
+			const ok = await this.$confirm(this.$t('pages.config.confirmDelete', {name: node.name}), {
+				confirmLabel: this.$t('pages.config.delete'),
+				confirmColor: 'error',
+			})
 			if (!ok) {
 				return
 			}

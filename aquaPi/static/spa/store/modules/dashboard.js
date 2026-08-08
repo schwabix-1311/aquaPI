@@ -1,4 +1,5 @@
 import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
+import i18n from '../../i18n/index.js';
 
 export const useDashboardStore = Pinia.defineStore('dashboard', {
 	state: () => ({
@@ -106,8 +107,7 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 		fetchNode(payload) {
 			const { nodeId } = payload
 
-			/** @type {Promise.<any>} */
-			let fetchPromise = fetch('/api/nodes/' + nodeId, {
+			return fetch('/api/nodes/' + nodeId, {
 				method: 'get',
 				mode: 'same-origin',
 				cache: 'no-cache',
@@ -116,48 +116,55 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 					'Accept': 'application/json'
 				},
 				redirect: 'follow'
-			}).then(response => response.json())
-
-			let nodePromise = fetchPromise
-				.then(response => {
-					return (response.result == 'SUCCESS' ? response.data : null)
+			})
+				.then(response => response.json())
+				.then(response => (response.result == 'SUCCESS' ? response.data : null))
+				.catch((e) => {
+					console.error('Failed to load node ' + nodeId + ': ' + e.message)
+					return null
 				})
-				.catch((e) => { console.error(e.message) })
-			return nodePromise
 		},
 
 		async fetchNodes() {
 			let nodes = {}
 
-			// Fetch all nodes (returns array of node id)
-			const response = await fetch('/api/nodes/', {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-				redirect: 'follow'
-			});
+			try {
+				// Fetch all nodes (returns array of node id)
+				const response = await fetch('/api/nodes/', {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+					redirect: 'follow'
+				});
 
-			if (response.status == 200) {
-				let nodeIds = await response.json()
+				if (response.status !== 200) {
+					throw new Error('GET /api/nodes/ returned ' + response.status)
+				}
+
+				const nodeIds = await response.json()
 
 				if (nodeIds.length) {
-					let promises = nodeIds.map(nodeId => this.fetchNode({nodeId}))
-
-					await Promise.all(promises)
-						.then(values => {
-							values.forEach(item => {
-								nodes[item.id] = item
-							})
-
-							this.setNodes(nodes)
-							this.setAllNodesLoaded(true)
-							EventBus.$emit(AQUAPI_EVENTS.APP_LOADING, false)
-						})
+					const values = await Promise.all(nodeIds.map(nodeId => this.fetchNode({nodeId})))
+					values.filter(item => item).forEach(item => {
+						nodes[item.id] = item
+					})
 				}
+
+				this.setNodes(nodes)
+				this.setAllNodesLoaded(true)
+			} catch (e) {
+				console.error('ERROR loading nodes: ' + e.message)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodes')}),
+					color: 'error',
+					timeout: 6000,
+				})
+			} finally {
+				EventBus.$emit(AQUAPI_EVENTS.APP_LOADING, false)
 			}
 
 			return this.nodes
@@ -173,25 +180,36 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 				step = 0
 			}
 
-			const fetchResult = await fetch('/api/history/' + nodeId + '?start=' + start + '&step=' + step, {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-				redirect: 'follow'
-			});
+			try {
+				const fetchResult = await fetch('/api/history/' + nodeId + '?start=' + start + '&step=' + step, {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+					redirect: 'follow'
+				});
 
-			if (fetchResult.status == 200) {
-				let response = await fetchResult.json()
+				if (fetchResult.status !== 200) {
+					throw new Error('GET /api/history/ returned ' + fetchResult.status)
+				}
+
+				const response = await fetchResult.json()
 				if (response.result == 'SUCCESS' && response.data) {
 					return response.data
 				}
+				throw new Error('Unexpected response: ' + JSON.stringify(response))
+			} catch (e) {
+				console.error('ERROR loading history for node ' + nodeId + ': ' + e.message)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.history')}),
+					color: 'error',
+					timeout: 6000,
+				})
+				return null
 			}
-
-			return null
 		},
 
 		setWidgets(payload) {

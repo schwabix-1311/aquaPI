@@ -360,6 +360,10 @@ const ConfigNodeDialog = {
 		receivesKind: function() {
 			return this.schema.receives || 'none'
 		},
+		// TODO(config-receives-type-filtering): lists every other node
+		// unconditionally - doesn't filter by data_range compatibility
+		// (e.g. History can't handle a STRING source). See
+		// .junie/plans/config-receives-type-filtering.md
 		receivesItems: function() {
 			const selfId = this.editNode ? this.editNode.id : null
 			return this.nodes

@@ -366,6 +366,10 @@ class ConfigDiffError(ValueError):
         self.entry = entry
 
 
+# TODO(config-receives-type-filtering): only cardinality is checked here -
+# nothing validates the resolved sources' data_range compatibility (e.g. a
+# STRING-typed Alert can be wired into a History, which can't store it).
+# See .junie/plans/config-receives-type-filtering.md
 def _check_receives_cardinality(schema: dict[str, Any], resolved: list[str],
                                 entry: dict[str, Any]) -> None:
     if schema['receives'] == 'none' and resolved:

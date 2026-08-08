@@ -21,6 +21,7 @@ from .machineroom.aux_nodes import ScaleAux
 from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable,
                                      log_calibration_event, get_calibration_log)
 from .pages.sse_util import send_sse_events
+from .system_info import get_system_stats
 
 
 log = logging.getLogger('aquaPi.api')
@@ -228,6 +229,15 @@ def api_sse() -> Response:
         return json.dumps([id for id in changed_ids])
 
     return send_sse_events(sse_update)
+
+
+@bp.route('/api/system-info', methods=['GET'])
+@login_required
+def api_system_info() -> Response:
+    """ small set of system health stats for the footer status line -
+        OS name, load average, memory/disk usage (see system_info.py)
+    """
+    return jsonify(get_system_stats())
 
 
 def _users_db_path() -> str:
@@ -486,6 +496,9 @@ def api_create_node() -> Response:
     if schema['receives'] == 'single' and len(receives) > 1:
         return jsonify(error=f'{type_name} accepts at most 1 receives entry'), HTTPStatus.BAD_REQUEST
 
+    # TODO(config-receives-type-filtering): existence-only - doesn't check
+    # the referenced node's data_range compatibility. See
+    # .junie/plans/config-receives-type-filtering.md
     for rcv_id in receives:
         if not bus.get_node(rcv_id):
             return jsonify(error=f'Unknown receives node id: {rcv_id}'), HTTPStatus.BAD_REQUEST
@@ -550,6 +563,9 @@ def api_update_node(node_id: str) -> Response:
             return jsonify(error=f'{type(node).__name__} does not accept any receives'), HTTPStatus.BAD_REQUEST
         if schema['receives'] == 'single' and len(receives) > 1:
             return jsonify(error=f'{type(node).__name__} accepts at most 1 receives entry'), HTTPStatus.BAD_REQUEST
+        # TODO(config-receives-type-filtering): existence-only - doesn't
+        # check the referenced node's data_range compatibility. See
+        # .junie/plans/config-receives-type-filtering.md
         for rcv_id in receives:
             if not bus.get_node(rcv_id):
                 return jsonify(error=f'Unknown receives node id: {rcv_id}'), HTTPStatus.BAD_REQUEST

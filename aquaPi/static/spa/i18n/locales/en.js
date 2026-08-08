@@ -224,6 +224,13 @@ export default
 		dummyComponentText: 'Just a dummy component for testing purposes',
 		genericLabel: 'Label',
 		genericValue: 'Value',
+		footer: {
+			servedBy: 'Served by %{os}',
+			platform: ' on %{model}',
+			load: 'Load %{load} of %{cores}',
+			ram: 'RAM %{pct}% used',
+			disk: 'Disk %{pct}% used',
+		},
 		language: {
 			label: 'Language',
 			de: 'Deutsch',

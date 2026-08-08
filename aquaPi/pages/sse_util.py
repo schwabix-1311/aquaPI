@@ -36,12 +36,19 @@ if (!!window.EventSource) {
     return msg
 
 
-def send_sse_events(read, delay=1):
+def send_sse_events(read, delay=1, on_close=None):
     # if request.headers.get('accept') == 'text/event-stream':
     def events():
-        while True:
-            yield format_msg(read())
-            if delay:
-                time.sleep(delay)
+        try:
+            while True:
+                yield format_msg(read())
+                if delay:
+                    time.sleep(delay)
+        finally:
+            # runs on client disconnect (GeneratorExit) as well as any
+            # other exit path - lets the caller release per-connection
+            # resources (e.g. MsgBus.unsubscribe_changes())
+            if on_close:
+                on_close()
 
     return Response(events(), content_type='text/event-stream')

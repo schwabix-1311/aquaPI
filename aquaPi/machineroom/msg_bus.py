@@ -2,12 +2,11 @@
 
 from abc import (ABC, abstractmethod)
 import logging
-import time
 from dataclasses import dataclass
 from queue import Queue
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
-from threading import (Condition, Thread)
+from threading import (Lock, Thread)
 
 from .msg_types import (Msg, MsgInfra, MsgHello, MsgData, MsgBye)
 
@@ -256,8 +255,12 @@ class MsgBus:
         self._threaded = threaded
         self.nodes: set[BusNode] = set()
         self.dbg_cnt: int = 0
-        self._changes: set[str] = set()
-        self._changed = Condition()
+        # one Queue per subscribed SSE connection, so every connected
+        # client independently sees every change - a single shared
+        # "pending changes" set would let only whichever client reacted
+        # first actually consume each change, starving the others
+        self._change_subscribers: list[Queue] = []
+        self._subscribers_lock = Lock()
         self._queue: Queue | None = None
 
         if threaded:
@@ -408,28 +411,43 @@ class MsgBus:
         """
         return [node.name for node in node_list]
 
-    def report_change(self, node_id: str) -> None:
-        """ add ID to list of changed nodes and notify one (!) waiting thread
+    def subscribe_changes(self) -> Queue:
+        """ register a new SSE connection's change queue - call once per
+            connection (see api_sse()), and unsubscribe_changes() it
+            again when that connection closes.
         """
-        log.debug('report_change locked: %s', node_id)
-        with self._changed:
-            self._changes.add(node_id)
-            self._changed.notify()
-            log.debug('report_change notified & done: %s', node_id)
-            time.sleep(.01)  # this is a hack, I don't find the race cond.
+        q: Queue = Queue()
+        with self._subscribers_lock:
+            self._change_subscribers.append(q)
+        return q
 
-    def wait_for_changes(self) -> set[str]:
-        """ block until at least one node reported data changes,
-            then clear the internal list of changes
-            return ids of modified nodes [id1, id2, ...]
+    def unsubscribe_changes(self, q: Queue) -> None:
+        with self._subscribers_lock:
+            if q in self._change_subscribers:
+                self._change_subscribers.remove(q)
+
+    def report_change(self, node_id: str) -> None:
+        """ push the changed node id to every subscribed SSE connection's
+            own queue, so each one independently sees every change -
+            a single shared "pending changes" set would let only
+            whichever client reacted first actually consume each change,
+            starving the others.
         """
-        log.debug('wait_for_changes')
-        with self._changed:
-            self._changed.wait_for(lambda: len(self._changes))
-            change = {id for id in self._changes}
-            log.info('self.wait_for_changes returns %d: %s', len(self._changes), str(change))
-            self._changes.clear()
-            log.debug('cleared change_list: %r', change)
+        log.debug('report_change: %s', node_id)
+        with self._subscribers_lock:
+            subscribers = list(self._change_subscribers)
+        for q in subscribers:
+            q.put(node_id)
+
+    def wait_for_changes(self, q: Queue) -> set[str]:
+        """ block until at least one node reported a data change on this
+            connection's queue, then drain and return whatever else is
+            already pending too (coalesces bursts into one SSE message)
+        """
+        change = {q.get()}
+        while not q.empty():
+            change.add(q.get_nowait())
+        log.info('self.wait_for_changes returns %d: %s', len(change), str(change))
         return change
 
 

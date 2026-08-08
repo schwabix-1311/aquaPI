@@ -258,13 +258,17 @@ def api_sse() -> Response:
         return Response('MUST ACCEPT content type text/event-stream', status=HTTPStatus.BAD_REQUEST)
 
     bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    change_queue = bus.subscribe_changes()
 
     def sse_update():
-        changed_ids = bus.wait_for_changes()
+        changed_ids = bus.wait_for_changes(change_queue)
         log.debug('API sse reply: %r', changed_ids)
         return json.dumps([id for id in changed_ids])
 
-    return send_sse_events(sse_update)
+    return send_sse_events(sse_update, on_close=lambda: bus.unsubscribe_changes(change_queue))
 
 
 @bp.route('/api/system-info', methods=['GET'])

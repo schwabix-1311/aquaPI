@@ -61,7 +61,7 @@ log_default = {
     # with the result of 'grep logging.getLogger $(git ls-files *.py)'
 
     "aquaPi":     {"level": "NOTSET"},
-    # "aquaPi.api" : {"level": "NOTSET"},
+    # "aquaPi.api":  {"level": "NOTSET"},
     # "aquaPi.auth": {"level": "NOTSET"},
     # "aquaPi.db":   {"level": "NOTSET"},
 

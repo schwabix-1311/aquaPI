@@ -6,6 +6,7 @@ import {AQUAPI_EVENTS, EventBus} from '../app/EventBus.js';
 import {registerGlobalComponent} from '../app/registry.js';
 import {useUiStore} from '../../store/modules/ui.js';
 import {useDashboardStore} from '../../store/modules/dashboard.js';
+import {useSettingsStore} from '../../store/modules/settings.js';
 
 const AnyNode = {
 	props: {
@@ -341,6 +342,63 @@ const AnalogInput = {
 registerGlobalComponent('AnalogInput', AnalogInput)
 
 
+const UiSwitchInput = {
+	extends: AnyNode,
+	template: `
+		<div>
+			<v-card-title v-if="addNodeTitle">{{ node.name }}</v-card-title>
+			<v-card-text class="text--secondary">
+				<setting-switch :item="settingItem" @update="onUpdate"></setting-switch>
+			</v-card-text>
+		</div>
+	`,
+	computed: {
+		settingsStore() {
+			return useSettingsStore()
+		},
+		settingItem() {
+			return {value: this.node.data, label: this.node.name}
+		},
+	},
+	methods: {
+		onUpdate(val) {
+			this.settingsStore.updateNodeSetting({nodeId: this.node.id, key: 'value', value: val})
+		},
+	},
+}
+registerGlobalComponent('UiSwitchInput', UiSwitchInput)
+
+const UiAnalogInput = {
+	extends: AnyNode,
+	template: `
+		<div>
+			<v-card-title v-if="addNodeTitle">{{ node.name }}</v-card-title>
+			<v-card-text class="text--secondary">
+				<setting-slider :item="settingItem" @update="onUpdate"></setting-slider>
+			</v-card-text>
+		</div>
+	`,
+	computed: {
+		settingsStore() {
+			return useSettingsStore()
+		},
+		settingItem() {
+			return {
+				value: this.node.data,
+				label: this.node.name,
+				attrs: {min: this.node.min, max: this.node.max, step: this.node.step},
+			}
+		},
+	},
+	methods: {
+		onUpdate(val) {
+			this.settingsStore.updateNodeSetting({nodeId: this.node.id, key: 'value', value: val})
+		},
+	},
+}
+registerGlobalComponent('UiAnalogInput', UiAnalogInput)
+
+
 const ScheduleInput = {
 	extends: BusNode,
 	computed: {
@@ -403,6 +461,59 @@ const MaxAux = {
 	extends: AuxNode,
 }
 registerGlobalComponent('MaxAux', MaxAux)
+
+// no aggregation/math - just a flat, read-only name/value row per
+// received node (not each source's own full widget, which would
+// nest recursively for anything with receives of its own, and would
+// duplicate live *interactive* controls inside what's meant to be a
+// passive display)
+const UiDisplay = {
+	extends: AuxNode,
+	template: `
+		<div>
+			<v-card-title v-if="addNodeTitle">{{ node.name }}</v-card-title>
+			<v-card-text v-if="receivesNodes.length" class="text--secondary">
+				<v-row
+					v-for="item in receivesNodes"
+					:key="item.identifier"
+					no-gutters
+					class="py-1"
+				>
+					<v-col cols="6" class="text-truncate">{{ item.name }}</v-col>
+					<v-col cols="6">{{ formatValue(item) }}</v-col>
+				</v-row>
+			</v-card-text>
+		</div>
+	`,
+	methods: {
+		formatValue(item) {
+			// prefer what this node itself actually received (node.values,
+			// keyed by sender id) over the source's own re-fetched state -
+			// a sender's .data doesn't necessarily reflect every message it
+			// posts (e.g. SlowPwmDevice._pulse() posts transient on/off
+			// states without updating its own .data), so falling back to
+			// item.data would silently miss those. Only truly falls back
+			// to item.data before any message has arrived from that sender.
+			const values = this.node.values || {}
+			const val = (item.id in values) ? values[item.id] : item.data
+
+			switch (item.data_range) {
+				case 'ANALOG':
+				case 'PERCENT':
+					return val.toFixed(2).toString() + (item.unit ? ' ' + item.unit : '')
+				case 'BINARY':
+					return (val > 0
+						? this.$t('misc.dataRange.' + item.data_range.toLowerCase() + '.value.on')
+						: this.$t('misc.dataRange.' + item.data_range.toLowerCase() + '.value.off')
+					)
+				default:
+					return val
+			}
+		},
+	},
+}
+
+registerGlobalComponent('UiDisplay', UiDisplay)
 
 const ScaleAux = {
 	extends: AuxNode,

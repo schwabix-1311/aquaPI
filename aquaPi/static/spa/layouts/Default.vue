@@ -64,7 +64,7 @@
 		</v-app-bar>
 
 		<v-main>
-			<v-container :fluid="containerFluid" class="pa-5">
+			<v-container fluid class="pa-5">
 				<router-view name="default" v-slot="{ Component }">
 					<transition name="fade" mode="out-in" :duration="uiStore.navigation.transitionDuration">
 						<component :is="Component" class="view"></component>
@@ -172,10 +172,6 @@ export default {
 				route: 'about'
 			})
 			return items
-		},
-		containerFluid() {
-			// TODO: maybe render container as 'fluid' (full viewport width) on all pages
-			return ['home', 'dashboard', 'config', 'settings'].includes(this.$route.name)
 		},
 		availableLocales() {
 			return Object.keys(i18n.global.messages.value)

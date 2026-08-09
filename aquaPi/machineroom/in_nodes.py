@@ -123,7 +123,8 @@ class SwitchInput(InputNode):
             inverted - swap the boolean interpretation of input
 
         Output:
-            bool - posts state changes only
+            BINARY (100/0, project convention: 100=True=on) - posts state
+            changes only
     """
     data_range = DataRange.BINARY
     _port_funcs = [PortFunc.Bin]
@@ -146,15 +147,15 @@ class SwitchInput(InputNode):
                              interval=state['interval'], inverted=state['inverted'],
                              _cont=True)
 
-    def read(self) -> bool:
+    def read(self) -> int:
         # TODO: reduce load & improve response time by using interrupt-driven IO, either here or in DriverGPIO
-        val = self.data
+        val = self.data > 0
         if self._driver:
             val = bool(self._driver.read())
-            log.debug('Bin.read %f', val)
+            log.debug('Bin.read %d', val)
         if self.inverted:
             val = not val
-        return val
+        return 100 if val else 0
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
@@ -405,29 +406,43 @@ class UiInput(BusNode, ABC):
 class UiSwitchInput(UiInput):
     """ A checkbox the user sets directly, e.g. from a dashboard
         widget - for direct manual control, testing, or overriding
-        automation. Posts BINARY on every change.
+        automation.
 
         Options:
             name    - unique name of this input in UI
             initval - initial state
 
         Output:
-            bool - posts on every change
+            BINARY (100/0, project convention: 100=True=on) - posts on
+            every change. value/get_settings() present this as a plain
+            bool for the checkbox widget; self.data/MsgData stay 100/0
+            like every other BINARY-range sender (e.g. ThresholdCtrl),
+            so downstream *Device nodes' `data > 50` checks keep working
+            without needing to special-case a sender-specific type.
     """
     data_range = DataRange.BINARY
 
     def __init__(self, name: str, initval: bool = False, _cont: bool = False):
         super().__init__(name, _cont=_cont)
         if not _cont:
-            self.data = bool(initval)
+            self.data = 100 if initval else 0
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         UiSwitchInput.__init__(self, state['name'], _cont=True)
 
+    @property
+    def value(self) -> bool:
+        return self.data > 0
+
+    @value.setter
+    def value(self, val: bool) -> None:
+        self.data = 100 if val else 0
+        self.post(MsgData(self.id, self.data))
+
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('value', 'value', bool(self.value),
+        settings.append(Setting('value', 'value', self.value,
                                 type='checkbox'))
         return settings
 

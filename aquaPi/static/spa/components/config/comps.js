@@ -617,7 +617,10 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async deleteTemplate(tpl) {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteTemplate', {name: tpl.name}))
+			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteTemplate', {name: tpl.name}), {
+				confirmLabel: this.$t('pages.config.delete'),
+				confirmColor: 'error',
+			})
 			if (!ok) {
 				return
 			}
@@ -645,7 +648,10 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async restoreSnapshot(snap) {
-			const ok = await this.$confirm(this.$t('pages.config.confirmRestoreSnapshot', {name: snap.name}))
+			const ok = await this.$confirm(this.$t('pages.config.confirmRestoreSnapshot', {name: snap.name}), {
+				confirmLabel: this.$t('pages.config.restore'),
+				confirmColor: 'error',
+			})
 			if (!ok) {
 				return
 			}
@@ -665,7 +671,10 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async deleteSnapshot(snap) {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteSnapshot', {name: snap.name}))
+			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteSnapshot', {name: snap.name}), {
+				confirmLabel: this.$t('pages.config.delete'),
+				confirmColor: 'error',
+			})
 			if (!ok) {
 				return
 			}

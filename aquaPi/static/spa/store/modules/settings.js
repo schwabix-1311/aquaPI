@@ -1,3 +1,6 @@
+import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
+import i18n from '../../i18n/index.js';
+
 export const useSettingsStore = Pinia.defineStore('settings', {
 	state: () => ({
 		byNode: {},   // nodeId -> array of settings entries (from get_settings())
@@ -34,9 +37,21 @@ export const useSettingsStore = Pinia.defineStore('settings', {
 				}
 
 				this.setError({nodeId, error: 'HTTP ' + response.status})
+				console.error('ERROR loading settings for node ' + nodeId + ': HTTP ' + response.status)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodeSettings')}),
+					color: 'error',
+					timeout: 6000,
+				})
 				return false
 			} catch (e) {
 				this.setError({nodeId, error: e.message})
+				console.error('ERROR loading settings for node ' + nodeId + ': ' + e.message)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodeSettings')}),
+					color: 'error',
+					timeout: 6000,
+				})
 				return false
 			}
 		},

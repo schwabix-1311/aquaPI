@@ -379,3 +379,104 @@ class ScheduleInput(BusNode):
         settings = super().get_settings()
         settings.append(Setting('cronspec', 'cronspec', self.cronspec))
         return settings
+
+
+# ========== user-driven virtual inputs ==========
+
+
+class UiInput(BusNode, ABC):
+    """ Base for nodes whose value is set directly by the user via
+        get_settings()/PUT .../settings (dashboard or /settings), not
+        read from a hardware/simulated port driver. Posts MsgData
+        immediately when set - no polling thread involved.
+    """
+    ROLE = BusRole.IN_ENDP
+
+    @property
+    def value(self):
+        return self.data
+
+    @value.setter
+    def value(self, val) -> None:
+        self.data = val
+        self.post(MsgData(self.id, self.data))
+
+
+class UiSwitchInput(UiInput):
+    """ A checkbox the user sets directly, e.g. from a dashboard
+        widget - for direct manual control, testing, or overriding
+        automation. Posts BINARY on every change.
+
+        Options:
+            name    - unique name of this input in UI
+            initval - initial state
+
+        Output:
+            bool - posts on every change
+    """
+    data_range = DataRange.BINARY
+
+    def __init__(self, name: str, initval: bool = False, _cont: bool = False):
+        super().__init__(name, _cont=_cont)
+        if not _cont:
+            self.data = bool(initval)
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.data = state['data']
+        UiSwitchInput.__init__(self, state['name'], _cont=True)
+
+    def get_settings(self) -> list[Setting]:
+        settings = super().get_settings()
+        settings.append(Setting('value', 'value', bool(self.value),
+                                type='checkbox'))
+        return settings
+
+
+class UiAnalogInput(UiInput):
+    """ A numeric slider the user sets directly, e.g. from a dashboard
+        widget - for a manual setpoint override or a simulated input
+        for testing. Posts its value on every change.
+
+        Options:
+            name    - unique name of this input in UI
+            unit    - unit of posted data
+            initval - initial value
+            vmin    - lower bound offered by the slider/settings widget
+            vmax    - upper bound offered by the slider/settings widget
+            step    - step size offered by the slider/settings widget
+
+        Output:
+            float - posts on every change
+    """
+    data_range = DataRange.ANALOG
+
+    def __init__(self, name: str, unit: str = '', initval: float = 0.0,
+                 vmin: float = 0.0, vmax: float = 100.0, step: float = 1.0,
+                 _cont: bool = False):
+        super().__init__(name, _cont=_cont)
+        self.unit = unit
+        self.min = vmin
+        self.max = vmax
+        self.step = step
+        if not _cont:
+            self.data = float(initval)
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state["min"] = self.min
+        state["max"] = self.max
+        state["step"] = self.step
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.data = state['data']
+        UiAnalogInput.__init__(self, state['name'], unit=state['unit'],
+                               vmin=state['min'], vmax=state['max'],
+                               step=state['step'], _cont=True)
+
+    def get_settings(self) -> list[Setting]:
+        settings = super().get_settings()
+        settings.append(Setting('value', 'value', float(self.value),
+                                type='number', min=self.min, max=self.max,
+                                step=self.step, label_params={'unit': self.unit}))
+        return settings

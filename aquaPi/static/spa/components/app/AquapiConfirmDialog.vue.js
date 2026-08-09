@@ -16,7 +16,8 @@ const AquapiConfirmDialog = {
 				<v-card-actions>
 					<v-spacer></v-spacer>
 					<v-btn v-if="!alertOnly" text @click="onCancel">{{ $t('misc.dialog.cancel') }}</v-btn>
-					<v-btn color="primary" text @click="onConfirm">{{ alertOnly ? $t('misc.dialog.ok') : $t('misc.dialog.confirm') }}</v-btn>
+					<v-btn v-if="extraAction" :color="extraAction.color || 'primary'" text @click="onExtra">{{ extraAction.label }}</v-btn>
+					<v-btn :color="confirmColor" text @click="onConfirm">{{ confirmLabel || (alertOnly ? $t('misc.dialog.ok') : $t('misc.dialog.confirm')) }}</v-btn>
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
@@ -28,6 +29,9 @@ const AquapiConfirmDialog = {
 			title: '',
 			message: '',
 			alertOnly: false,
+			confirmLabel: null,
+			confirmColor: 'primary',
+			extraAction: null,
 			resolve: null,
 		}
 	},
@@ -43,20 +47,26 @@ const AquapiConfirmDialog = {
 			this.title = (payload.options && payload.options.title) || ''
 			this.message = payload.message
 			this.alertOnly = !!(payload.options && payload.options.alertOnly)
+			this.confirmLabel = (payload.options && payload.options.confirmLabel) || null
+			this.confirmColor = (payload.options && payload.options.confirmColor) || 'primary'
+			this.extraAction = (payload.options && payload.options.extraAction) || null
 			this.resolve = payload.resolve
 			this.visible = true
 		},
 		onConfirm() {
-			this.visible = false
-			const resolve = this.resolve
-			this.resolve = null
-			if (resolve) resolve(true)
+			this.settle(true)
 		},
 		onCancel() {
+			this.settle(false)
+		},
+		onExtra() {
+			this.settle(this.extraAction.value)
+		},
+		settle(value) {
 			this.visible = false
 			const resolve = this.resolve
 			this.resolve = null
-			if (resolve) resolve(false)
+			if (resolve) resolve(value)
 		},
 	},
 

@@ -93,7 +93,10 @@ const AquapiUsers = {
 			this.editingUser = null
 		},
 		async onDelete(user) {
-			const ok = await this.$confirm(this.$t('pages.users.confirmDelete', {name: user.username}))
+			const ok = await this.$confirm(this.$t('pages.users.confirmDelete', {name: user.username}), {
+				confirmLabel: this.$t('pages.config.delete'),
+				confirmColor: 'error',
+			})
 			if (!ok) {
 				return
 			}

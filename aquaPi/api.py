@@ -43,6 +43,39 @@ def _topo_db_path() -> str:
     return mr.globals['BUS_TOPO']
 
 
+@bp.route('/api/', methods=['GET'])
+@login_required
+def api_index() -> Response:
+    """ list every registered /api/... route with its HTTP method(s)
+        and description - derived from the live URL map and each
+        route's own docstring, so this stays correct without any
+        manual upkeep as routes are added, changed or removed
+    """
+    routes = []
+    for rule in current_app.url_map.iter_rules():
+        if rule.rule == '/api/' or not rule.rule.startswith('/api'):
+            continue
+        view = current_app.view_functions.get(rule.endpoint)
+        doc = ' '.join((view.__doc__ or '').split())
+
+        # roles_required() (auth.py) stashes the roles it was given on
+        # the wrapped view - surface them here instead of relying on
+        # each docstring to mention it, so a route can't silently drift
+        # out of sync with its actual restriction. Routes open to every
+        # valid role are equivalent to plain login_required, so skip those.
+        required_roles = getattr(view, 'required_roles', None)
+        if required_roles and set(required_roles) != set(db.VALID_ROLES):
+            doc = (doc + ' ' if doc else '') + f"Requires role: {'/'.join(required_roles)}."
+
+        routes.append({
+            'path': rule.rule,
+            'methods': sorted((rule.methods or set()) - {'HEAD', 'OPTIONS'}),
+            'description': doc,
+        })
+    routes.sort(key=lambda r: r['path'])
+    return jsonify(routes)
+
+
 @bp.route('/api/nodes/')
 @login_required
 def api_nodes() -> Response:
@@ -123,8 +156,10 @@ def api_history_nodes() -> Response:
 @login_required
 def api_history(node_id: str) -> Response:
     """ return a single history, may contains several series
-        optionally starting at specified age, and clustered by step.
-        Clustering ATM only works whith the real DB, in-mem DB can't cluster
+        (?start=<unix timestamp>, default/0 means everything on the
+        in-mem DB, or the last 24h on the real DB; ?step=<cluster size
+        in seconds>, default 0/none). Clustering ATM only works whith
+        the real DB, in-mem DB can't cluster
     """
     bus = the_bus()
     if bus:
@@ -198,8 +233,9 @@ def api_history_export(node_id: str) -> Response:
 @login_required
 def api_calibration_log(node_id: str) -> Response:
     """ return the recorded calibration history (offset/factor changes)
-        of a ScaleAux node (Step 28); empty list if QuestDB is unavailable
-        or the node never had a calibration change recorded.
+        of a ScaleAux node (Step 28; ?limit=<max entries>, default 100);
+        empty list if QuestDB is unavailable or the node never had a
+        calibration change recorded.
     """
     bus = the_bus()
     if not bus:
@@ -222,13 +258,17 @@ def api_sse() -> Response:
         return Response('MUST ACCEPT content type text/event-stream', status=HTTPStatus.BAD_REQUEST)
 
     bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    change_queue = bus.subscribe_changes()
 
     def sse_update():
-        changed_ids = bus.wait_for_changes()
+        changed_ids = bus.wait_for_changes(change_queue)
         log.debug('API sse reply: %r', changed_ids)
         return json.dumps([id for id in changed_ids])
 
-    return send_sse_events(sse_update)
+    return send_sse_events(sse_update, on_close=lambda: bus.unsubscribe_changes(change_queue))
 
 
 @bp.route('/api/system-info', methods=['GET'])
@@ -689,7 +729,7 @@ def api_config_apply() -> Response:
 
 
 @bp.route('/api/templates/', methods=['GET'])
-@roles_required('admin')
+@roles_required('viewer', 'operator', 'admin')
 def api_list_templates() -> Response:
     """ list all node-combination templates (name, description, node count) """
     return jsonify(db.list_templates(_topo_db_path()))
@@ -792,7 +832,7 @@ def api_insert_template(name: str) -> Response:
 
 
 @bp.route('/api/config/snapshots', methods=['GET'])
-@roles_required('admin')
+@roles_required('viewer', 'operator', 'admin')
 def api_list_snapshots() -> Response:
     """ list all saved configuration snapshots (name, created_at) """
     return jsonify(db.list_snapshots(_topo_db_path()))
@@ -875,9 +915,9 @@ def api_restore_snapshot(name: str) -> Response:
 @bp.route('/api/audit-log', methods=['GET'])
 @roles_required('admin')
 def api_audit_log() -> Response:
-    """ list audit log entries (newest first), admin only. Supports
-        pagination via 'limit'/'offset' and optional exact-match
-        filters 'action'/'username' query parameters.
+    """ list audit log entries (newest first)
+        (?limit=<max entries>, default 50; ?offset=<skip>, default 0;
+        optional exact-match filters ?action=/?username=).
     """
     try:
         limit = int(request.args.get('limit', 50))
@@ -898,9 +938,9 @@ def api_audit_log() -> Response:
 @roles_required('admin')
 def api_backup() -> Response:
     """ build a fresh, consistent backup archive (topology + users
-        SQLite databases) on the fly and offer it as a file download,
-        admin only. Uses the same db.create_backup_archive() code path
-        as the daily scheduled backup (MachineRoom), just written to a
+        SQLite databases) on the fly and offer it as a file download.
+        Uses the same db.create_backup_archive() code path as the
+        daily scheduled backup (MachineRoom), just written to a
         throwaway temp directory that is removed again once the
         response has been sent.
     """

@@ -1,3 +1,6 @@
+import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
+import i18n from '../../i18n/index.js';
+
 export const useUsersStore = Pinia.defineStore('users', {
 	state: () => ({
 		list: [],
@@ -43,22 +46,33 @@ export const useUsersStore = Pinia.defineStore('users', {
 		},
 
 		async fetchAll() {
-			const response = await fetch('/api/users/', {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-			})
+			try {
+				const response = await fetch('/api/users/', {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+				})
 
-			if (response.status == 200) {
+				if (response.status !== 200) {
+					throw new Error('GET /api/users/ returned ' + response.status)
+				}
+
 				const users = await response.json()
 				this.setList(users)
 				return users
+			} catch (e) {
+				console.error('ERROR loading users: ' + e.message)
+				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.users')}),
+					color: 'error',
+					timeout: 6000,
+				})
+				return []
 			}
-			return []
 		},
 
 		async create(payload) {

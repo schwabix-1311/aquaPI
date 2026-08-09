@@ -38,9 +38,10 @@ from werkzeug.security import generate_password_hash
 from .machineroom.msg_bus import MsgBus, BusNode, BusRole
 from .machineroom.ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl,
                                      SunCtrl, FadeCtrl)
-from .machineroom.in_nodes import (AnalogInput, SwitchInput, ScheduleInput)
+from .machineroom.in_nodes import (AnalogInput, SwitchInput, ScheduleInput,
+                                   UiSwitchInput, UiAnalogInput)
 from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
-from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux)
+from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, UiDisplay)
 from .machineroom.hist_nodes import History
 from .machineroom.alert_nodes import (Alert, AlertAbove, AlertBelow)
 from .driver import IoRegistry
@@ -69,8 +70,9 @@ NODE_FACTORY: dict[str, type[BusNode]] = {
     cls.__name__: cls for cls in (
         MaximumCtrl, MinimumCtrl, PidCtrl, SunCtrl, FadeCtrl,
         AnalogInput, SwitchInput, ScheduleInput,
+        UiSwitchInput, UiAnalogInput,
         AnalogDevice, SlowPwmDevice, SwitchDevice,
-        AvgAux, MaxAux, MinAux, ScaleAux,
+        AvgAux, MaxAux, MinAux, ScaleAux, UiDisplay,
         History,
         Alert,
     )
@@ -125,6 +127,22 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
         'receives': 'none',
         'fields': [
             {'key': 'cronspec', 'label': 'CRON (m h DoM M DoW)', 'type': 'text', 'required': True},
+        ],
+    },
+    'UiSwitchInput': {
+        'receives': 'none',
+        'fields': [
+            {'key': 'initval', 'label': 'Initial value', 'type': 'checkbox', 'default': False},
+        ],
+    },
+    'UiAnalogInput': {
+        'receives': 'none',
+        'fields': [
+            {'key': 'initval', 'label': 'Initial value', 'type': 'number', 'default': 0.0},
+            {'key': 'unit', 'label': 'Unit', 'type': 'text', 'default': ''},
+            {'key': 'vmin', 'label': 'Minimum', 'type': 'number', 'default': 0.0},
+            {'key': 'vmax', 'label': 'Maximum', 'type': 'number', 'default': 100.0},
+            {'key': 'step', 'label': 'Step', 'type': 'number', 'default': 1.0},
         ],
     },
     'AnalogDevice': {
@@ -209,6 +227,10 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
         'receives': 'multi',
         'fields': [],
     },
+    'UiDisplay': {
+        'receives': 'multi',
+        'fields': [],
+    },
     'ScaleAux': {
         'receives': 'single',
         'fields': [
@@ -282,6 +304,11 @@ def build_node(type_name: str, name: str, receives: list[str],
                            interval=fields['interval'], inverted=fields['inverted'])
     if type_name == 'ScheduleInput':
         return ScheduleInput(name, fields['cronspec'])
+    if type_name == 'UiSwitchInput':
+        return UiSwitchInput(name, initval=fields['initval'])
+    if type_name == 'UiAnalogInput':
+        return UiAnalogInput(name, fields['unit'], initval=fields['initval'],
+                             vmin=fields['vmin'], vmax=fields['vmax'], step=fields['step'])
     if type_name == 'AnalogDevice':
         return AnalogDevice(name, rcv, fields['port'], percept=fields['percept'],
                             minimum=fields['minimum'], maximum=fields['maximum'])
@@ -307,6 +334,8 @@ def build_node(type_name: str, name: str, receives: list[str],
         return MaxAux(name, rcv)
     if type_name == 'MinAux':
         return MinAux(name, rcv)
+    if type_name == 'UiDisplay':
+        return UiDisplay(name, rcv)
     if type_name == 'ScaleAux':
         return ScaleAux(name, rcv, fields['unit'], offset=fields['offset'],
                         factor=fields['factor'])

@@ -60,12 +60,20 @@ class MultiInAux(AuxNode, ABC):
             self.data_range = rcv.data_range  # depends on inputs
             break
         state["unit"] = self.unit
+        # per-sender last-received values, keyed by sender node id - a
+        # sender's own .data doesn't necessarily reflect every message
+        # it posts (e.g. SlowPwmDevice._pulse() posts transient on/off
+        # states without updating its own .data), so a consumer that
+        # wants what THIS node actually received needs its own record,
+        # not the sender's separately-fetched current state
+        state["values"] = self.values
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         MultiInAux.__init__(self, state['name'], state['receives'],
                             _cont=True)
+        self.values = state.get('values', {})
 
 
 # ========== auxiliary ==========
@@ -257,6 +265,33 @@ class MaxAux(MultiInAux):
             self.values[msg.sender] = val
             self.data = round(max(self.values.values()), 4)
             log.info('MaxAux %s: output %f', self.id, self.data)
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
+
+
+# ========== user-facing visualization ==========
+
+
+class UiDisplay(MultiInAux):
+    """ Visualizes whatever it receives from other nodes on the
+        dashboard - no aggregation/math, purely presentational (e.g.
+        grouping a few related sensors/controls onto one card). Handles
+        any mix of data ranges; the dashboard widget formats each
+        received value according to its own data_range.
+
+        Options:
+            name     - unique name of this node in UI
+            receives - collection of input ids
+
+        Output:
+            mirrors the most recently received value
+    """
+
+    def listen(self, msg: Msg) -> None:
+        if isinstance(msg, MsgData):
+            self.values[msg.sender] = msg.data
+            self.data = msg.data
             self.post(MsgData(self.id, self.data))
 
         super().listen(msg)

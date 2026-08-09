@@ -86,6 +86,10 @@ def roles_required(*roles: str):
                     return jsonify(error='Forbidden'), HTTPStatus.FORBIDDEN
                 abort(HTTPStatus.FORBIDDEN)
             return func(*args, **kwargs)
+        # exposed so /api/'s self-documentation (api_index()) can append
+        # the required role(s) to a route's description without every
+        # docstring having to spell it out (and risk going stale)
+        wrapped.required_roles = roles
         return wrapped
     return decorator
 
@@ -263,7 +267,7 @@ def api_current_user():
 @bp.route('/api/users/', methods=['GET'])
 @roles_required('admin')
 def api_list_users():
-    """ list all users (admin only) """
+    """ list all users """
     users = db.list_users(_users_db_path())
     return jsonify([_user_to_dict(u) for u in users])
 
@@ -271,7 +275,7 @@ def api_list_users():
 @bp.route('/api/users/', methods=['POST'])
 @roles_required('admin')
 def api_create_user():
-    """ create a new user with a role (admin only) """
+    """ create a new user with a role """
     data = request.get_json(silent=True) or {}
     username = data.get('username', '')
     password = data.get('password', '')
@@ -297,9 +301,9 @@ def api_create_user():
 @bp.route('/api/users/<int:user_id>', methods=['PUT'])
 @roles_required('admin')
 def api_update_user(user_id: int):
-    """ change a user's role and/or reset their password (admin only).
-        Refuses to demote the last remaining admin, to avoid locking
-        everyone out of admin functionality.
+    """ change a user's role and/or reset their password. Refuses to
+        demote the last remaining admin, to avoid locking everyone out
+        of admin functionality.
     """
     row = db.get_user_by_id(_users_db_path(), user_id)
     if not row:
@@ -342,8 +346,8 @@ def api_update_user(user_id: int):
 @bp.route('/api/users/<int:user_id>', methods=['DELETE'])
 @roles_required('admin')
 def api_delete_user(user_id: int):
-    """ remove a user (admin only). Refuses to remove the last
-        remaining admin, to avoid locking everyone out.
+    """ remove a user. Refuses to remove the last remaining admin, to
+        avoid locking everyone out.
     """
     row = db.get_user_by_id(_users_db_path(), user_id)
     if not row:

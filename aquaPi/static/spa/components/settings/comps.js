@@ -330,8 +330,13 @@ const SettingSwitch = {
 		}
 	},
 	methods: {
-		onChange: function(val) {
-			this.$emit('update', !!val)
+		// v-switch's plain @change is a native-DOM-change alias, not a
+		// documented custom event with a reliable value argument (unlike
+		// e.g. v-slider's @end) - v-model has already updated localValue
+		// correctly by the time this fires, so use that instead of
+		// trusting whatever @change's own argument happens to be.
+		onChange: function() {
+			this.$emit('update', this.localValue)
 		}
 	}
 }

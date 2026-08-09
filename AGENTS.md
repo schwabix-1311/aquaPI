@@ -205,6 +205,8 @@ Testkonfiguration: `pytest.ini` (`testpaths = tests`). Gemeinsame Fixtures liege
   abhängige Tests separat betrachtet werden.
 - Frontend-Code liegt unter `aquaPi/static/spa`; Änderungen dort sollten den bestehenden Vue/Vuetify-Stil
   beibehalten.
+- Pläne liegen unter `.junie/plans/`; das ist ein Junie-spezifisches Format, andere Tools (Claude Code,
+  Cursor, ...) lesen diese Dateien nicht automatisch und müssen explizit darauf verwiesen werden.
 
 ## Bekannte Stolpersteine
 

@@ -311,6 +311,19 @@ class Alert(BusListener):
                 self._notify_one(pref, escalation_channel, text, escalated=True)
                 self._escalated_users.add(user_id)
 
+    @staticmethod
+    def _format_entry(cond: AlertCond, cond_change: bool | None) -> str | None:
+        """ Build this condition's display/notification entry for the
+            current state (new/ongoing alert, or just-resolved), or None
+            if it shouldn't be shown at all (not alerted, no change now).
+        """
+        if cond.alerted:
+            suffix = '  ... besteht weiterhin' if cond_change is None else ''
+            return f'Warnung: {cond}\n{cond.alert_text}{suffix}'
+        if cond_change is False:
+            return f'Entwarnung: {cond}\n{cond.alert_text}  ... beseitigt'
+        return None
+
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData) and self._bus:
             snd_name = self._bus.get_node(msg.sender).name or msg.sender
@@ -326,16 +339,9 @@ class Alert(BusListener):
                     any_change = True
                 any_alert |= cond.alerted
 
-                if cond.alerted:
-                    entry = f'Warnung: {cond}\n{cond.alert_text}'
-                    if cond_change is None:   # is not None and True!
-                        entry += '  ... besteht weiterhin'
-                else:
-                    entry = f'Entwarnung: {cond}\n{cond.alert_text}'
-                    if cond_change is False:
-                        entry += '  ... beseitigt'
-                if cond.alerted or cond_change is False:
-                    self.data.insert(0, entry)
+                entry = self._format_entry(cond, cond_change)
+                if entry:
+                    self.data.append(entry)
                 log.info(f'## {cond} re-checked: "{cond.alert_text}",\nchange to: {cond_change}')
 
             if any_alert:

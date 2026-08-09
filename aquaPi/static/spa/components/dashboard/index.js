@@ -286,7 +286,7 @@ const AquapiDashboardWidget = {
 						{{ widgetTitleIcon }}
 					</v-icon>
 				</template>
-				<span class="text-truncate">{{ item.name }}</span>
+				<span class="text-truncate" style="min-width: 0">{{ item.name }}</span>
 
 				<v-spacer />
 
@@ -367,7 +367,7 @@ const AquapiDashboardWidget = {
 				'act': 'success',
 				'wrn': 'warning',
 				'err': 'error',
-				'std': 'info lighten-1'
+				'std': 'info-lighten-1'
 			}
 		}
 	},
@@ -410,7 +410,7 @@ const AquapiDashboardWidget = {
 			return this.node.alert[0]
 		},
 		alertColor() {
-			let ret = 'info lighten-1'
+			let ret = 'info-lighten-1'
 			if ((this.node == null) || (this.node.alert == null)) {
 				return ret
 			}

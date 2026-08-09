@@ -223,6 +223,7 @@ export default
 		dummyComponentText: 'Einfach nur \'ne Dummy-Komponente für Testzwecke',
 		genericLabel: 'Bezeichnung',
 		genericValue: 'Wert',
+		noActiveAlerts: 'Keine aktiven Warnungen',
 		footer: {
 			servedBy: 'Server: %{os}',
 			platform: ' auf %{model}',

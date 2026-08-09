@@ -1136,16 +1136,17 @@ const AlertNode = {
 			<v-card-text
 				class="text--secondary"
 			>
-				<aquapi-node-alert
-					:item="node"
+				<div
+					v-for="(entry, index) in node.data"
+					:key="index"
+					style="white-space: pre-line"
+					class="mb-1"
 				>
-					<template v-slot:label>
-						<span>{{ label }}</span>
-					</template>
-					<template v-slot:value>
-						<span>{{ value }}</span>
-					</template>
-				</aquapi-node-alert>
+					{{ entryBody(entry) }}
+				</div>
+				<div v-if="!node.data || !node.data.length">
+					{{ $t('misc.noActiveAlerts') }}
+				</div>
 			</v-card-text>
 		</div>
 	`,
@@ -1153,6 +1154,14 @@ const AlertNode = {
 	computed: {
 		descript() {
 			return this.$parent?.conditions ?? ''
+		}
+	},
+
+	methods: {
+		// each entry's 1st line is only meant as an email subject
+		// (see Alert.listen() in alert_nodes.py) - not shown here
+		entryBody(entry) {
+			return entry.split('\n').slice(1).join('\n')
 		}
 	}
 }
@@ -1209,32 +1218,5 @@ const AquapiNodeData = {
 	computed: {}
 }
 registerGlobalComponent('AquapiNodeData', AquapiNodeData)
-
-
-
-const AquapiNodeAlert = {
-	props: {
-		item: {
-			type: Object,
-			required: true
-		},
-	},
-	template: `
-		<slot name="value">
-			{{ $t('misc.genericValue') }}
-			<v-list-item
-				v-for="(item, index) in value"
-				:key="index"
-			>
-				<v-list-item-title>
-					!{{ item }}
-				</v-list-item-title>
-			</v-list-item>
-		</slot>
-	`,
-
-	computed: {}
-}
-registerGlobalComponent('AquapiNodeAlert', AquapiNodeAlert)
 
 // vim: set noet sts ts=4 sw=4:

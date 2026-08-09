@@ -326,11 +326,12 @@ class Alert(BusListener):
                     any_change = True
                 any_alert |= cond.alerted
 
-                entry = f'Warnung: {cond}\n{cond.alert_text}'
                 if cond.alerted:
+                    entry = f'Warnung: {cond}\n{cond.alert_text}'
                     if cond_change is None:   # is not None and True!
                         entry += '  ... besteht weiterhin'
                 else:
+                    entry = f'Entwarnung: {cond}\n{cond.alert_text}'
                     if cond_change is False:
                         entry += '  ... beseitigt'
                 if cond.alerted or cond_change is False:

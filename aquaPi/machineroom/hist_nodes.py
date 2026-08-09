@@ -411,6 +411,17 @@ class History(BusListener):
     """
     ROLE = BusRole.HISTORY
 
+    @property
+    def duration(self) -> int:
+        return self._duration
+
+    @duration.setter
+    def duration(self, duration: int) -> None:
+        # TimeDbMemory's deque(maxlen=...) insists on a strict int; the API
+        # delivers duration as seconds/factor, which is a float even for
+        # whole-hour values (e.g. 86400/3600 == 24.0)
+        self._duration = int(duration)
+
     def __init__(self, name: str, receives: Iterable[str],
                  duration: int = 24, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
@@ -425,8 +436,8 @@ class History(BusListener):
             except (NotImplementedError, ModuleNotFoundError, ImportError):
                 log.error('QuestDB failed, will keep history in memory')
         if not self.db:
-            self.db = TimeDbMemory(duration)
-            log.brief('Recording history %s in main memory with limited depth of %dh!', name, duration)
+            self.db = TimeDbMemory(self.duration)
+            log.brief('Recording history %s in main memory with limited depth of %dh!', name, self.duration)
         for rcv in self.receives:
             self.db.add_field(rcv)
 

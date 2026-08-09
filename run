@@ -3,10 +3,15 @@
 topo_file='topo'
 while getopts "hrt:" arg; do
   case $arg in
-    h)
+    h*)
       echo "Parameters:"
-      echo "-t TOPO  use TOPO.pickle to store topology"
-      echo "-r       reset topology"
+      echo "-t NAME  use/create topology+config NAME (default: topo = the"
+      echo "         real/production config; any other name bootstraps the"
+      echo "         dev/test node set in its own instance/NAME.sqlite -"
+      echo "         see instance/config.json's DEFAULT_CONFIG for a"
+      echo "         persistent default instead of passing -t every time)"
+      echo "-r       reset topology (both the legacy .pickle and the"
+      echo "         actual .sqlite for the selected -t NAME)"
       exit 1
       ;;
     r)
@@ -19,7 +24,9 @@ while getopts "hrt:" arg; do
   done
 
 export AQUAPI_TOPO="${topo_file}.pickle"
-if [[ ${reset_topo} ]]; then rm "instance/${AQUAPI_TOPO}"; fi
+if [[ ${reset_topo} ]]; then
+  rm -f "instance/${topo_file}.pickle" "instance/${topo_file}.sqlite"
+fi
 
 export FLASK_APP=aquaPi
 export FLASK_DEBUG=0

@@ -9,7 +9,7 @@ from threading import Timer
 from .. import db
 from .msg_bus import MsgBus
 from .ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl, SunCtrl, FadeCtrl)  # noqa
-from .in_nodes import (AnalogInput, SwitchInput, ScheduleInput)  # noqa
+from .in_nodes import (AnalogInput, SwitchInput, ScheduleInput, UiSwitchInput)  # noqa
 from .out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)  # noqa
 from .aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux)  # noqa
 from .hist_nodes import History
@@ -52,10 +52,21 @@ class MachineRoom:
         # or, via `run -t nodes`, 'nodes.pickle'). It now names the *base*
         # topology, whose legacy '.pickle' file (if any) gets migrated once
         # into an equally named '.sqlite' database.
-        topo_base = 'topo.pickle'
+        #
+        # This name doubles as the default-config selector: 'topo' (the
+        # default, no config.json entry needed) bootstraps the real/
+        # production node set the first time instance/topo.sqlite doesn't
+        # exist yet; any other name (e.g. 'dev', set via config.json's
+        # "DEFAULT_CONFIG" or a one-off '-t NAME') bootstraps the dev/test
+        # node set instead, in its own separate instance/<name>.sqlite -
+        # see create_default_nodes(). This replaces the old TEST_BUS/
+        # REAL_CONFIG constants that used to live (and had to be kept out
+        # of commits) in create_default_nodes() itself.
+        topo_base = self.globals.get('DEFAULT_CONFIG', 'topo')
         if 'AQUAPI_TOPO' in environ:
             topo_base = environ['AQUAPI_TOPO']
         topo_base, _ = path.splitext(topo_base)
+        self.globals['DEFAULT_CONFIG'] = topo_base
 
         legacy_topo_file = path.join(instance_path, topo_base + '.pickle')
         topo_file = path.join(instance_path, topo_base + '.sqlite')
@@ -227,10 +238,13 @@ class MachineRoom:
             Distraction: interesting fact about English:
               "fish" is plural, "fishes" are several species of fish
         """
-        TEST_BUS = False      # prio 1: disables everything else
-        # TEST_BUS = True
-        REAL_CONFIG = False    # prio 2: disables the remaining test configs
-        # REAL_CONFIG = True
+        # which default node set to bootstrap is now driven by the
+        # topology name itself (see MachineRoom.__init__'s DEFAULT_CONFIG
+        # resolution) instead of source-level toggles: 'topo' (the
+        # default) -> the real/production config below; 'test_bus' -> the
+        # minimal test bus; anything else (e.g. 'dev') -> the dev/test
+        # scenarios further down.
+        default_config = self.globals.get('DEFAULT_CONFIG', 'topo')
 
         TEST_PH = True  # True
         SIM_LIGHT = True  # True
@@ -241,7 +255,7 @@ class MachineRoom:
         # plugin() nodes with Role.IN_ENDP last to have less
         # traffic during startup
 
-        if TEST_BUS:
+        if default_config == 'test_bus':
             wasser_i1 = AnalogInput('Input', 'DS1820 #1', 24.6, '°C',
                                     avg=1, interval=10)
             wasser = MinimumCtrl('Ctrl', wasser_i1.id, 25.0)
@@ -260,7 +274,7 @@ class MachineRoom:
             telegram_alert.plugin(self.bus)
             return
 
-        if REAL_CONFIG:
+        if default_config == 'topo':
             # __Lighting__ #
             # single PWM dimmed LED bar, perceptive correction
             light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
@@ -360,6 +374,12 @@ class MachineRoom:
             ph_history = History('pH Verlauf',
                                  [adc_ph.id, calib_ph.id, ph.id])  # , out_ph.id])
             ph_history.plugin(self.bus)
+
+            # a simple UI switch for the filter pump, should run continuously
+            filter_switch = UiSwitchInput('Filterpumpe', True)
+            filter_out = SwitchDevice('Filter', filter_switch.id, 'GPIO 13 out')
+            filter_switch.plugin(self.bus)
+            filter_out.plugin(self.bus)
 
             # Alert system
             email_alert = Alert('Email-Warnungen',

@@ -775,6 +775,56 @@ def save_topology(bus: MsgBus, db_path: str) -> None:
         conn.close()
 
 
+def _notify_startup_failures(failures: list[str]) -> bool:
+    """ best-effort: send one summary message via every configured
+        Email/Telegram channel about node(s) that failed to load - a
+        silently missing controller can be dangerous (e.g. a heater/pH
+        regulation), so this doesn't rely on the user having created
+        an Alert node or a browser being open to notice a log line.
+
+        Uses the raw system-wide channel slots (driver_config['Email']/
+        ['Telegram'], the same 'Email #1'/'Telegram #1'... ports Alert
+        nodes use directly) rather than any specific Alert node's own
+        config or per-user preferences, so this works even if the user
+        never set up any Alert node at all. Does nothing (beyond the
+        error already logged by the caller) if no Email/Telegram
+        credentials are configured at all - there is no channel to
+        reach the user through in that case.
+
+        Returns True if at least one channel actually sent the
+        message - callers that need a hard guarantee the user will be
+        reached (see load_topology()) should escalate instead of
+        continuing when this comes back False.
+    """
+    if not failures:
+        return True
+
+    from .driver import driver_config, IoRegistry
+    from .driver.base import OutDriver, PortFunc
+
+    text = ('aquaPi: %d node(s) failed to load at startup and are now '
+            'MISSING from the running system:\n' % len(failures)
+            + '\n'.join(failures))
+
+    notified = False
+    for channel in ('Email', 'Telegram'):
+        for idx in range(len(driver_config.get(channel, []))):
+            port_name = f'{channel} #{idx + 1}'
+            driver = None
+            try:
+                driver = IoRegistry.get().driver_factory(port_name)
+                if isinstance(driver, OutDriver) and driver.func == PortFunc.Tout:
+                    driver.write(text)
+                    log.info('Notified startup node-load failures via %s', port_name)
+                    notified = True
+            except Exception:
+                log.exception('Failed to notify startup node-load failures via %s', port_name)
+            finally:
+                if driver:
+                    IoRegistry.get().driver_destruct(port_name, driver)
+    return notified
+
+
 def load_topology(db_path: str) -> MsgBus:
     """ (re-)create a MsgBus and all its nodes from SQLite
     """
@@ -786,22 +836,53 @@ def load_topology(db_path: str) -> MsgBus:
 
     bus = MsgBus(threaded=False)
     nodes: list[BusNode] = []
+    failures: list[str] = []
     for row in rows:
         state = json.loads(row['params'])
         try:
             nodes.append(_deserialize_node(row['type'], state))
-        except (ValueError, KeyError, TypeError, DriverError):
+        except DriverError as ex:
+            # expected/actionable (e.g. an unknown or already-used port) -
+            # ex.msg alone says exactly what's wrong, a full traceback
+            # would only bury that behind noise
+            log.error('load_topology: failed to restore node %r (type %r), skipping: %s',
+                      row['id'], row['type'], ex.msg)
+            failures.append(f"{row['id']!r} ({row['type']}): {ex.msg}")
+        except (ValueError, KeyError, TypeError) as ex:
             log.exception('load_topology: failed to restore node %r (type %r), skipping',
                           row['id'], row['type'])
+            failures.append(f"{row['id']!r} ({row['type']}): {ex}")
 
     for node in nodes:
         try:
             node.plugin(bus)
-        except (ValueError, KeyError, TypeError, DriverError):
+        except DriverError as ex:
+            log.error('load_topology: failed to plug in node %r, skipping: %s',
+                      getattr(node, 'id', '?'), ex.msg)
+            failures.append(f"{getattr(node, 'id', '?')!r}: {ex.msg}")
+        except (ValueError, KeyError, TypeError) as ex:
             log.exception('load_topology: failed to plug in node %r, skipping',
                           getattr(node, 'id', '?'))
+            failures.append(f"{getattr(node, 'id', '?')!r}: {ex}")
 
     log.info('load_topology: %d nodes restored from %s', len(nodes), db_path)
+
+    if failures and not _notify_startup_failures(failures):
+        # nobody could be reached remotely either (no Email/Telegram
+        # configured, or every send attempt failed) - running with a
+        # silently missing controller (e.g. heater/pH regulation) is
+        # dangerous and no one would know. Abort startup loudly instead
+        # of pretending everything is fine - whoever started this
+        # process is far more likely to notice a hard failure right in
+        # front of them than a quietly degraded running system.
+        raise RuntimeError(
+            'load_topology: %d node(s) failed to load, and no Email/Telegram '
+            'notification could be sent either (nothing configured, or every '
+            'attempt failed) - refusing to start with silently missing '
+            'controllers. Fix the underlying issue (often another process, '
+            'e.g. a different aquarium controller, holding the same port) '
+            'and restart:\n%s' % (len(failures), '\n'.join(failures)))
+
     return bus
 
 
@@ -1083,20 +1164,33 @@ def restore_snapshot_into_bus(bus: MsgBus, snapshot_rows: list[dict[str, Any]]) 
     """
     bus.teardown()
     nodes = []
+    failures: list[str] = []
     for row in snapshot_rows:
         try:
             nodes.append(_deserialize_node(row['type'], row['params']
                                            if isinstance(row['params'], dict)
                                            else json.loads(row['params'])))
-        except (ValueError, KeyError, TypeError, DriverError):
+        except DriverError as ex:
+            log.error('restore_snapshot_into_bus: failed to restore node %r (type %r), skipping: %s',
+                      row.get('id'), row.get('type'), ex.msg)
+            failures.append(f"{row.get('id')!r} ({row.get('type')}): {ex.msg}")
+        except (ValueError, KeyError, TypeError) as ex:
             log.exception('restore_snapshot_into_bus: failed to restore node %r (type %r), skipping',
                           row.get('id'), row.get('type'))
+            failures.append(f"{row.get('id')!r} ({row.get('type')}): {ex}")
     for node in nodes:
         try:
             node.plugin(bus)
-        except (ValueError, KeyError, TypeError, DriverError):
+        except DriverError as ex:
+            log.error('restore_snapshot_into_bus: failed to plug in node %r, skipping: %s',
+                      getattr(node, 'id', '?'), ex.msg)
+            failures.append(f"{getattr(node, 'id', '?')!r}: {ex.msg}")
+        except (ValueError, KeyError, TypeError) as ex:
             log.exception('restore_snapshot_into_bus: failed to plug in node %r, skipping',
                           getattr(node, 'id', '?'))
+            failures.append(f"{getattr(node, 'id', '?')!r}: {ex}")
+
+    _notify_startup_failures(failures)
 
 
 # --- users / authentication -------------------------------------------

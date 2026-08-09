@@ -3,7 +3,7 @@
 from abc import ABC
 import logging
 from typing import Any
-from threading import Thread
+from threading import (Lock, Thread)
 import time
 
 from .msg_types import (Msg, MsgData)
@@ -200,6 +200,12 @@ class SlowPwmDevice(DeviceNode):
         self._inverted = inverted
         self._thread = None
         self._thread_stop = False
+        # protects the stop-old/start-new sequence in set() below - during
+        # startup, node.plugin()'s MsgHello cascades can re-enter set()
+        # for this same device several times in quick succession, racing
+        # unguarded self._thread/self._thread_stop access and deadlocking
+        # in .join() (found 2026-08-09 via a py-spy stack dump)
+        self._set_lock = Lock()
         self.set(self.data)
         log.info('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
 
@@ -261,14 +267,15 @@ class SlowPwmDevice(DeviceNode):
     def set(self, perc: float) -> None:
         log.info('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
                  self.id, perc, self.cycle * perc/100, self.cycle)
-        if self._thread:
-            self._thread_stop = True
-            self._thread.join()
-        self.data = perc
-        self._thread = Thread(name='PIDpulse', target=self._pulse,
-                              args=[perc / 100 * self.cycle, self.cycle],
-                              daemon=True)
-        self._thread.start()
+        with self._set_lock:
+            if self._thread:
+                self._thread_stop = True
+                self._thread.join()
+            self.data = perc
+            self._thread = Thread(name='PIDpulse', target=self._pulse,
+                                  args=[perc / 100 * self.cycle, self.cycle],
+                                  daemon=True)
+            self._thread.start()
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()

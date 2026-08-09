@@ -314,6 +314,7 @@ const SettingSwitch = {
 			:label="item.label"
 			v-model="localValue"
 			:disabled="disabled"
+			color="primary"
 			dense
 			hide-details
 			@change="onChange"

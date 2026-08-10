@@ -92,7 +92,14 @@ def test_combined_legacy_migration_starts_simulation_cleanly(tmp_path):
 
 def test_fresh_start_without_any_legacy_files_creates_default_topology(tmp_path):
     instance_path = str(tmp_path)
-    mr = MachineRoom({'INSTANCE_PATH': instance_path})
+    # DEFAULT_CONFIG must be anything other than 'topo' (the maintainer's
+    # own real/production hardware setup - see MachineRoom.create_default_nodes())
+    # or this test would build that instead of the intended simulated
+    # dev/test node set: it needs hardware ports and notification channels
+    # that don't exist in this fresh test instance (DriverInvalidPortError),
+    # and would write real rows into the real, shared QuestDB instance
+    # under the same node names as production (see machineroom/__init__.py)
+    mr = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
     try:
         # default simulated topology (TEST_PH/SIM_LIGHT/SIM_TEMP) has 13 nodes
         assert len(mr.bus.nodes) == 13

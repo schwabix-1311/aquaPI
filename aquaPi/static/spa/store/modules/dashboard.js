@@ -23,16 +23,41 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 	},
 
 	actions: {
-		persistConfig(payload) {
+		async fetchDashboard() {
 			try {
-				const config = []
-				payload.forEach((widget) => {
-					config.push({identifier: widget.identifier, id: widget.id, name: widget.name, role: widget.role, type: widget.type, visible: widget.visible})
+				const response = await fetch('/api/dashboard/', {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
 				})
-				window.localStorage.setItem('aquapi.dashboard', JSON.stringify(config))
-				return true
-			} catch(e) {
-				console.error(e.message)
+				if (response.status !== 200) {
+					return null
+				}
+				return await response.json()
+			} catch (e) {
+				return null
+			}
+		},
+		async saveDashboard(config) {
+			try {
+				const response = await fetch('/api/dashboard/', {
+					method: 'put',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json',
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(config),
+				})
+				return response.status === 200
+			} catch (e) {
+				console.error('ERROR saving dashboard config: ' + e.message)
 				return false
 			}
 		},
@@ -48,30 +73,13 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 			const nodes = this.nodes
 
 			try {
-				let config = window.localStorage.getItem('aquapi.dashboard')
-				if (null === config) {
-					// Create (default) dashboard config
-					let items = []
-
-					for (let nodeId in nodes) {
-						let node = nodes[nodeId]
-						items.push({
-							id: node.id,
-							identifier: node.identifier,
-							name: node.name,
-							role: node.role,
-							type: node.type,
-							visible: false
-						})
-					}
-
-					this.persistConfig(items)
-					config = JSON.stringify(items)
-
-					configChanged = true
+				// the per-user server layout is the sole source of truth;
+				// null (401/offline/error) is treated as "nothing saved
+				// yet", same as a legitimate empty '[]' response
+				let config = await this.fetchDashboard()
+				if (config === null) {
+					config = []
 				}
-
-				config = await JSON.parse(config)
 
 				// Remove dashboard items for no longer existing nodes
 				config = config.filter((item) => nodes[item.id] !== undefined)
@@ -113,7 +121,7 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 				}
 
 				if (configChanged) {
-					this.persistConfig(config)
+					await this.saveDashboard(config)
 				}
 
 				return config

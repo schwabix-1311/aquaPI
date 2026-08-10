@@ -232,7 +232,7 @@ const AquapiDashboardConfigurator = {
 				: 'mdi-user'
 		},
 		persistConfig: async function() {
-			const result = await this.dashboardStore.persistConfig(this.widgets)
+			const result = await this.dashboardStore.saveDashboard(this.widgets)
 			if (result) {
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 			} else {
@@ -521,17 +521,26 @@ const AquapiDashboard = {
 				this.widgets = result
 			}
 		},
+		async onLoggedOut() {
+			// clear immediately so the outgoing user's layout doesn't
+			// flash before the reload below picks up the now-active
+			// <anonymous> session's own dashboard
+			this.widgets = []
+			await this.loadConfig()
+		},
 	},
 	async mounted() {
 		await this.loadConfig()
 		// a fresh login doesn't remount this component (the login dialog
 		// is just an overlay on the already-active 'home' route), so the
-		// initial loadConfig() above may have run while still
-		// unauthenticated (401, nodes stay empty) - retry once logged in
+		// initial loadConfig() above may have run under a different
+		// session (e.g. still the <anonymous> one) - retry once logged in
 		EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_IN, this.loadConfig)
+		EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_OUT, this.onLoggedOut)
 	},
 	unmounted() {
 		EventBus.$off(AQUAPI_EVENTS.AUTH_LOGGED_IN, this.loadConfig)
+		EventBus.$off(AQUAPI_EVENTS.AUTH_LOGGED_OUT, this.onLoggedOut)
 	},
 }
 registerGlobalComponent('AquapiDashboard', AquapiDashboard)

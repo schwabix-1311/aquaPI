@@ -42,9 +42,14 @@ const AppFooComp = {
 	},
 	methods: {
 		severityColor(pct) {
-			const colors = this.$vuetify.theme.global.current.colors
-			if (pct > 90) return colors.error
-			if (pct > 80) return colors.warning
+			// the theme's error/warning swatches are tuned to pop as fills
+			// against a dark surface (or pair with on-error/on-warning text);
+			// used as plain text on the light theme's white background they
+			// fail contrast (warning #FFC107 is ~1.6:1 - near invisible), so
+			// light mode gets darker, WCAG-AA-legible stand-ins here instead
+			const dark = this.$vuetify.theme.global.current.dark
+			if (pct > 90) return dark ? '#FF5252' : '#C62828'
+			if (pct > 80) return dark ? '#FFC107' : '#E65100'
 			return null
 		},
 		async refresh() {

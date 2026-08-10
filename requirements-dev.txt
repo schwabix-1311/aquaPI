@@ -5,3 +5,9 @@
 
 pytest>=7.4.0
 pytest-mock>=3.11.1
+
+# needed so hist_nodes.QUEST_DB is True and hist_nodes.pg exists to be
+# monkeypatched - tests never connect to a real QuestDB instance (no
+# test uses the 'questdb' marker), but importing psycopg is required
+# for the patched-pg test paths to even run
+psycopg[binary]>=3.1.9

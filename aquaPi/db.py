@@ -27,7 +27,7 @@ import smtplib
 import sqlite3
 import tempfile
 import zipfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from os import path, replace, makedirs, remove, listdir
 from typing import Any
@@ -1481,6 +1481,15 @@ def ensure_anonymous_user(db_path: str) -> None:
     create_user(db_path, ANONYMOUS_USERNAME, generate_url_token(), role='viewer')
 
 
+def _utcnow() -> datetime:
+    """ naive (no tzinfo) current UTC time, matching the now-deprecated
+        datetime.utcnow() exactly - stored expires_at/window_start values
+        are naive ISO strings, so switching to timezone-aware datetimes
+        outright would break comparisons against already-stored rows.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 # --- self-service password reset (Step 22) -------------------------------
 
 def create_password_reset_token(db_path: str, user_id: int,
@@ -1490,7 +1499,7 @@ def create_password_reset_token(db_path: str, user_id: int,
         remain valid too (simplicity over strict single-token-per-user).
     """
     token = generate_url_token()
-    expires_at = (datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat()
+    expires_at = (_utcnow() + timedelta(minutes=ttl_minutes)).isoformat()
     conn = get_users_connection(db_path)
     try:
         with conn:
@@ -1514,7 +1523,7 @@ def get_password_reset_token(db_path: str, token: str) -> dict[str, Any] | None:
         ).fetchone()
         if not row or row['used']:
             return None
-        if datetime.fromisoformat(row['expires_at']) < datetime.utcnow():
+        if datetime.fromisoformat(row['expires_at']) < _utcnow():
             return None
         return dict(row)
     finally:
@@ -1633,7 +1642,7 @@ def is_login_locked_out(db_path: str, key: str) -> tuple[bool, int]:
         ).fetchone()
         if row and row['locked_until']:
             locked_until = datetime.fromisoformat(row['locked_until'])
-            now = datetime.utcnow()
+            now = _utcnow()
             if now < locked_until:
                 return True, int((locked_until - now).total_seconds()) + 1
         return False, 0
@@ -1654,7 +1663,7 @@ def register_failed_login(db_path: str, key: str,
     if key == ANONYMOUS_USERNAME:
         return
 
-    now = datetime.utcnow()
+    now = _utcnow()
     conn = get_users_connection(db_path)
     try:
         with conn:

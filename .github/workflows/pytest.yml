@@ -20,4 +20,4 @@ jobs:
         pip install -r requirements-dev.txt
     - name: Run the test suite
       run: |
-        pytest -q
+        python -m pytest -q

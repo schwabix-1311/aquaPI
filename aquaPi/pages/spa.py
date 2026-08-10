@@ -15,6 +15,6 @@ bp = Blueprint('spa', __name__)
 def spa():
     # the SPA shell itself is always served, even for unauthenticated
     # users - it forces its own login dialog open (see
-    # AquapiLoginDialog.vue) instead of relying on a server-side
-    # redirect to the separate login.html.jinja2 page
+    # AquapiLoginDialog.vue), which also covers password reset; there is
+    # no separate server-rendered login page anymore
     return render_template('pages/spa.html.jinja2')

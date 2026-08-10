@@ -164,6 +164,43 @@ export default
 					invalid: 'Benutzername oder Passwort ist falsch'
 				}
 			}
+		},
+		resetPassword: {
+			request: {
+				heading: 'Passwort zurücksetzen',
+				linkLabel: 'Passwort vergessen?',
+				hint: 'Benutzername eingeben - falls eine E-Mail-Adresse hinterlegt ist, senden wir einen Link zum Zurücksetzen.',
+				username: {
+					label: 'Benutzername'
+				},
+				btnSubmit: {
+					label: 'Link senden'
+				},
+				btnBack: {
+					label: 'Zurück zum Login'
+				},
+				sentHint: 'Falls dieses Konto existiert und eine E-Mail-Adresse hinterlegt ist, wurde ein Link gesendet. Bitte E-Mails prüfen.'
+			},
+			confirm: {
+				heading: 'Neues Passwort setzen',
+				password: {
+					label: 'Neues Passwort'
+				},
+				password2: {
+					label: 'Passwort wiederholen'
+				},
+				btnSubmit: {
+					label: 'Passwort setzen'
+				},
+				invalidHint: 'Dieser Link ist ungültig oder abgelaufen.',
+				btnRequestNew: {
+					label: 'Neuen Link anfordern'
+				},
+				errors: {
+					mismatch: 'Passwörter stimmen nicht überein'
+				},
+				successToast: 'Passwort wurde zurückgesetzt - bitte neu einloggen'
+			}
 		}
 	},
 

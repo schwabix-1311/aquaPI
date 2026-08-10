@@ -12,6 +12,8 @@ import '../components/config/index.js'
 import '../components/settings/index.js'
 import '../components/users/index.js'
 import {useUsersStore} from '../store/modules/users.js'
+import {useAuthStore} from '../store/modules/auth.js'
+import {useUiStore} from '../store/modules/ui.js'
 
 const routes = [
 	{
@@ -48,6 +50,21 @@ const routes = [
 				name: 'about',
 				components: {
 					default: () => loadSfc('/static/spa/pages/About.vue')
+				},
+			},
+			{
+				path: 'reset-password/:token',
+				name: 'reset-password',
+				// components field kept for consistency with the other
+				// child routes even though beforeEnter always redirects
+				// away before it would ever be rendered
+				components: {
+					default: () => loadSfc('/static/spa/pages/Home.vue')
+				},
+				beforeEnter: (to, from, next) => {
+					useAuthStore().setPendingResetToken(to.params.token)
+					useUiStore().showDialog('AquapiLoginDialog')
+					next({name: 'home'})
 				},
 			},
 			{

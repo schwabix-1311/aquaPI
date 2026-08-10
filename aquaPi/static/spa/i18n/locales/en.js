@@ -164,6 +164,43 @@ export default
 					invalid: 'Invalid username or password'
 				}
 			}
+		},
+		resetPassword: {
+			request: {
+				heading: 'Reset password',
+				linkLabel: 'Forgot your password?',
+				hint: 'Enter your username - if an email address is on file, we will send you a reset link.',
+				username: {
+					label: 'Username'
+				},
+				btnSubmit: {
+					label: 'Send link'
+				},
+				btnBack: {
+					label: 'Back to login'
+				},
+				sentHint: 'If this account exists and has an email address on file, a link has been sent. Please check your email.'
+			},
+			confirm: {
+				heading: 'Set new password',
+				password: {
+					label: 'New password'
+				},
+				password2: {
+					label: 'Repeat password'
+				},
+				btnSubmit: {
+					label: 'Set password'
+				},
+				invalidHint: 'This link is invalid or has expired.',
+				btnRequestNew: {
+					label: 'Request a new link'
+				},
+				errors: {
+					mismatch: 'Passwords do not match'
+				},
+				successToast: 'Password has been reset - please log in'
+			}
 		}
 	},
 

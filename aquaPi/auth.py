@@ -17,8 +17,7 @@ from os import path
 
 from http import HTTPStatus
 
-from flask import (Blueprint, abort, current_app, flash, jsonify,
-                   redirect, render_template, request, url_for)
+from flask import Blueprint, abort, current_app, jsonify, redirect, request, url_for
 from flask_login import (LoginManager, UserMixin, current_user,
                          login_required, login_user, logout_user)
 from werkzeug.security import check_password_hash
@@ -34,7 +33,6 @@ log.brief = log.warning  # alias, warning used as brief info, info is verbose
 bp = Blueprint('auth', __name__)
 
 login_manager = LoginManager()
-login_manager.login_view = 'auth.login'
 
 
 class User(UserMixin):
@@ -66,7 +64,7 @@ def unauthorized():
     # API routes must return a plain 401, not a redirect to the login page
     if request.path.startswith('/api/'):
         return jsonify(error='Unauthorized'), HTTPStatus.UNAUTHORIZED
-    return redirect(url_for('auth.login', next=request.path))
+    return redirect(url_for('auth.login'))
 
 
 def roles_required(*roles: str):
@@ -133,108 +131,110 @@ def _get_or_create_secret_key(instance_path: str) -> str:
 
 
 def _wants_json() -> bool:
-    """ the SPA marks its own fetch()-based login/logout requests with
-        this header, matching the convention already used by every
-        other API call in store/modules/*.js - a normal browser form
-        submit/navigation never sets it, so it keeps getting the
-        existing render_template()/redirect() behavior unchanged.
+    """ the SPA marks its own fetch()-based auth requests with this
+        header, matching the convention already used by every other API
+        call in store/modules/*.js - used to tell the SPA's JSON calls
+        apart from a plain browser GET (e.g. an emailed reset link).
     """
     return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
+    """ the SPA is the sole login UI (a modal dialog, always forced open
+        while unauthenticated) - this endpoint only still exists because
+        Flask-Login's unauthorized_handler and the SPA's own fetch()-based
+        login() action need a stable URL to redirect/POST to. GET never
+        renders a page of its own, it just sends the browser to the SPA.
+    """
     if current_user.is_authenticated:
         if _wants_json():
             return jsonify(result='SUCCESS')
         return redirect(url_for('spa.spa'))
 
-    if request.method == 'POST':
-        username = request.form.get('username', '')
-        password = request.form.get('password', '')
-        # lock out by username if known, else fall back to the remote
-        # IP - this also throttles brute-forcing of unknown usernames
-        lockout_key = username.strip().lower() or (request.remote_addr or 'unknown')
+    if request.method == 'GET':
+        return redirect(url_for('spa.spa'))
 
-        locked, retry_seconds = db.is_login_locked_out(_users_db_path(), lockout_key)
-        if locked:
-            log.info('Login blocked for %r: locked out for %d more second(s)',
-                     username, retry_seconds)
-            message = (f'Too many failed login attempts. Please try again in '
-                       f'{retry_seconds // 60 + 1} minute(s).')
-            if _wants_json():
-                return jsonify(result='ERROR', message=message), HTTPStatus.TOO_MANY_REQUESTS
-            flash(message)
-            return render_template('pages/login.html.jinja2')
+    username = request.form.get('username', '')
+    password = request.form.get('password', '')
+    # lock out by username if known, else fall back to the remote
+    # IP - this also throttles brute-forcing of unknown usernames
+    lockout_key = username.strip().lower() or (request.remote_addr or 'unknown')
 
-        row = db.get_user_by_username(_users_db_path(), username)
-        if row and check_password_hash(row['password_hash'], password):
-            db.clear_login_attempts(_users_db_path(), lockout_key)
-            login_user(User.from_row(row))
-            log.info('User %r logged in', username)
-            if _wants_json():
-                return jsonify(result='SUCCESS')
-            next_url = request.args.get('next') or url_for('spa.spa')
-            return redirect(next_url)
+    locked, retry_seconds = db.is_login_locked_out(_users_db_path(), lockout_key)
+    if locked:
+        log.info('Login blocked for %r: locked out for %d more second(s)',
+                 username, retry_seconds)
+        message = (f'Too many failed login attempts. Please try again in '
+                   f'{retry_seconds // 60 + 1} minute(s).')
+        return jsonify(result='ERROR', message=message), HTTPStatus.TOO_MANY_REQUESTS
 
-        db.register_failed_login(_users_db_path(), lockout_key,
-                                 max_attempts=db.LOGIN_MAX_ATTEMPTS,
-                                 window_minutes=db.LOGIN_ATTEMPT_WINDOW_MINUTES,
-                                 lockout_minutes=db.LOGIN_LOCKOUT_MINUTES)
-        log.info('Failed login attempt for %r', username)
-        if _wants_json():
-            return jsonify(result='ERROR', message='Invalid username or password'), HTTPStatus.UNAUTHORIZED
-        flash('Invalid username or password')
+    row = db.get_user_by_username(_users_db_path(), username)
+    if row and check_password_hash(row['password_hash'], password):
+        db.clear_login_attempts(_users_db_path(), lockout_key)
+        login_user(User.from_row(row))
+        log.info('User %r logged in', username)
+        return jsonify(result='SUCCESS')
 
-    return render_template('pages/login.html.jinja2')
+    db.register_failed_login(_users_db_path(), lockout_key,
+                             max_attempts=db.LOGIN_MAX_ATTEMPTS,
+                             window_minutes=db.LOGIN_ATTEMPT_WINDOW_MINUTES,
+                             lockout_minutes=db.LOGIN_LOCKOUT_MINUTES)
+    log.info('Failed login attempt for %r', username)
+    return jsonify(result='ERROR', message='Invalid username or password'), HTTPStatus.UNAUTHORIZED
 
 
 @bp.route('/reset-password', methods=['GET', 'POST'])
 def request_password_reset():
-    """ self-service password reset, step 1: user enters their
-        username, and - if the account has an email address on file -
-        gets sent a single-use reset link. Always shows the same
-        generic confirmation, regardless of whether the username
-        exists or has an email, to avoid leaking account existence.
+    """ self-service password reset, step 1: the SPA lets a user enter
+        their username, and - if the account has an email address on
+        file - gets sent a single-use reset link. Always reports the
+        same generic success, regardless of whether the username exists
+        or has an email, to avoid leaking account existence.
     """
-    sent = False
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        row = db.get_user_by_username(_users_db_path(), username)
-        if row and row.get('email'):
-            token = db.create_password_reset_token(_users_db_path(), row['id'])
-            reset_url = url_for('auth.confirm_password_reset', token=token, _external=True)
-            db.send_password_reset_email(_users_db_path(), row['email'], reset_url)
-            log.info('Password reset requested for user %r, email sent', row['username'])
-        else:
-            log.info('Password reset requested for unknown/emailless user %r', username)
-        sent = True
+    if request.method == 'GET':
+        return redirect(url_for('spa.spa'))
 
-    return render_template('pages/reset_password_request.html.jinja2', sent=sent)
+    username = request.form.get('username', '').strip()
+    row = db.get_user_by_username(_users_db_path(), username)
+    if row and row.get('email'):
+        token = db.create_password_reset_token(_users_db_path(), row['id'])
+        reset_url = url_for('auth.confirm_password_reset', token=token, _external=True)
+        db.send_password_reset_email(_users_db_path(), row['email'], reset_url)
+        log.info('Password reset requested for user %r, email sent', row['username'])
+    else:
+        log.info('Password reset requested for unknown/emailless user %r', username)
+
+    return jsonify(result='SUCCESS')
 
 
 @bp.route('/reset-password/<token>', methods=['GET', 'POST'])
 def confirm_password_reset(token: str):
-    """ self-service password reset, step 2: user follows the emailed
-        link and sets a new password, if the token is still valid.
+    """ self-service password reset, step 2. GET is reached two ways:
+        the SPA checking token validity via fetch() (JSON), or a real
+        browser navigation from the emailed link - the latter bridges
+        into the SPA's hash-routed 'reset-password' route, since Flask
+        never sees anything after a '#' (see router/index.js).
     """
-    row = db.get_password_reset_token(_users_db_path(), token)
-    if not row:
-        return render_template('pages/reset_password_confirm.html.jinja2', invalid=True)
+    if request.method == 'GET':
+        if _wants_json():
+            row = db.get_password_reset_token(_users_db_path(), token)
+            return jsonify(valid=row is not None)
+        return redirect(url_for('spa.spa') + '#/reset-password/' + token)
 
-    if request.method == 'POST':
-        password = request.form.get('password', '')
-        password2 = request.form.get('password2', '')
-        if not password or password != password2:
-            flash('Passwords are empty or do not match')
-            return render_template('pages/reset_password_confirm.html.jinja2', invalid=False)
+    password = request.form.get('password', '')
+    password2 = request.form.get('password2', '')
+    if not password or password != password2:
+        return jsonify(result='ERROR', message='Passwords are empty or do not match'), \
+            HTTPStatus.BAD_REQUEST
 
+    try:
         db.consume_password_reset_token(_users_db_path(), token, password)
-        log.info('Password reset completed for user_id %r', row['user_id'])
-        flash('Your password has been reset - please log in')
-        return redirect(url_for('auth.login'))
+    except ValueError as ex:
+        return jsonify(result='ERROR', message=str(ex)), HTTPStatus.BAD_REQUEST
 
-    return render_template('pages/reset_password_confirm.html.jinja2', invalid=False)
+    log.info('Password reset completed via token')
+    return jsonify(result='SUCCESS')
 
 
 @bp.route('/logout')

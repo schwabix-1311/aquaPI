@@ -100,13 +100,14 @@ def test_unauthenticated_page_access_redirects_to_login(client):
 
 def test_login_wrong_password_fails(client, default_admin_password):
     resp = _login(client, 'viewer1', 'wrong-password')
-    assert resp.status_code == HTTPStatus.OK  # re-renders login form
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
     assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_login_success_grants_access(client, default_admin_password):
     resp = _login(client, 'viewer1', 'viewerPass1')
-    assert resp.status_code == 302
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json() == {'result': 'SUCCESS'}
     assert client.get('/api/protected').status_code == HTTPStatus.OK
 
 
@@ -147,17 +148,6 @@ def test_xhr_login_while_locked_out_returns_json_error(client, default_admin_pas
     assert resp.status_code == HTTPStatus.TOO_MANY_REQUESTS
     body = resp.get_json()
     assert body['result'] == 'ERROR'
-
-
-def test_plain_form_login_unaffected_by_json_support(client, default_admin_password):
-    # a normal (non-XHR) browser login must keep getting the existing
-    # redirect/re-render behavior, unchanged
-    resp = _login(client, 'viewer1', 'wrong-password')
-    assert resp.status_code == HTTPStatus.OK  # re-renders login form
-    assert resp.content_type.startswith('text/html')
-
-    resp = _login(client, 'viewer1', 'viewerPass1')
-    assert resp.status_code == 302
 
 
 def test_xhr_logout_returns_json(client, default_admin_password):
@@ -258,7 +248,7 @@ def test_admin_can_reset_user_password(client, app, default_admin_password):
 
     client.get('/logout')
     resp = _login(client, 'viewer1', 'brandNewPass1')
-    assert resp.status_code == 302
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_update_user_invalid_role_rejected(client, app, default_admin_password):
@@ -466,11 +456,11 @@ def test_login_locks_out_after_too_many_failed_attempts(client, app, default_adm
 
     for _ in range(3):
         resp = _login(client, 'viewer1', 'wrong-password')
-        assert resp.status_code == HTTPStatus.OK
+        assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
     # 3rd failure triggered the lockout - even the correct password is now rejected
     resp = _login(client, 'viewer1', 'viewerPass1')
-    assert resp.status_code == HTTPStatus.OK  # re-renders login form, no redirect
+    assert resp.status_code == HTTPStatus.TOO_MANY_REQUESTS
     assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
 
 
@@ -482,7 +472,7 @@ def test_login_lockout_is_per_username(client, default_admin_password, monkeypat
 
     # viewer1 is now locked out, but operator1 must be unaffected
     resp = _login(client, 'operator1', 'operatorPass1')
-    assert resp.status_code == 302
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_successful_login_clears_previous_failed_attempts(client, app, default_admin_password, monkeypatch):
@@ -491,7 +481,7 @@ def test_successful_login_clears_previous_failed_attempts(client, app, default_a
     _login(client, 'viewer1', 'wrong-password')
     _login(client, 'viewer1', 'wrong-password')
     resp = _login(client, 'viewer1', 'viewerPass1')
-    assert resp.status_code == 302  # successful login, attempts were not yet exhausted
+    assert resp.status_code == HTTPStatus.OK  # successful login, attempts were not yet exhausted
 
     client.get('/logout')
     users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
@@ -502,15 +492,26 @@ def test_successful_login_clears_previous_failed_attempts(client, app, default_a
 # --- self-service password reset (Step 22) ---------------------------------
 
 def test_request_password_reset_page_loads(client):
+    # no standalone page anymore - a plain GET just bounces to the SPA
     resp = client.get('/reset-password')
-    assert resp.status_code == HTTPStatus.OK
+    assert resp.status_code == 302
+    assert resp.headers['Location'] == '/'
+
+
+def test_request_password_reset_bridges_emailed_link_into_the_spa(client):
+    # a real (non-XHR) browser navigation from the emailed link must not
+    # be validated/consumed server-side - just redirected into the SPA's
+    # hash-routed 'reset-password' route, which re-validates client-side
+    resp = client.get('/reset-password/some-token')
+    assert resp.status_code == 302
+    assert resp.headers['Location'] == '/#/reset-password/some-token'
 
 
 def test_request_password_reset_shows_generic_confirmation_for_unknown_user(client):
-    resp = client.post('/reset-password', data={'username': 'nobody-here'})
+    resp = client.post('/reset-password', data={'username': 'nobody-here'},
+                       headers={'X-Requested-With': 'XMLHttpRequest'})
     assert resp.status_code == HTTPStatus.OK
-    assert b'password reset link has been sent' in resp.data.lower() \
-        or b'reset link has been sent'.lower() in resp.data.lower()
+    assert resp.get_json() == {'result': 'SUCCESS'}
 
 
 def test_request_password_reset_creates_token_for_user_with_email(client, app, default_admin_password):
@@ -518,11 +519,12 @@ def test_request_password_reset_creates_token_for_user_with_email(client, app, d
     user_id = db.get_user_by_username(users_db, 'viewer1')['id']
     db.set_user_email(users_db, user_id, 'viewer1@example.com')
 
-    resp = client.post('/reset-password', data={'username': 'viewer1'})
+    resp = client.post('/reset-password', data={'username': 'viewer1'},
+                       headers={'X-Requested-With': 'XMLHttpRequest'})
     assert resp.status_code == HTTPStatus.OK
     # no Email channel configured in this test app -> sending fails, but the
-    # generic confirmation is shown either way, and no token/exception leaks
-    assert b'password reset' in resp.data.lower()
+    # generic confirmation is returned either way, and no token/exception leaks
+    assert resp.get_json() == {'result': 'SUCCESS'}
 
 
 def test_confirm_password_reset_with_valid_token_sets_new_password(client, app, default_admin_password):
@@ -530,12 +532,17 @@ def test_confirm_password_reset_with_valid_token_sets_new_password(client, app, 
     user_id = db.get_user_by_username(users_db, 'viewer1')['id']
     token = db.create_password_reset_token(users_db, user_id)
 
+    resp = client.get(f'/reset-password/{token}', headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert resp.get_json() == {'valid': True}
+
     resp = client.post(f'/reset-password/{token}',
-                       data={'password': 'brandNewPass1', 'password2': 'brandNewPass1'})
-    assert resp.status_code == 302
+                       data={'password': 'brandNewPass1', 'password2': 'brandNewPass1'},
+                       headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json() == {'result': 'SUCCESS'}
 
     resp = _login(client, 'viewer1', 'brandNewPass1')
-    assert resp.status_code == 302
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_confirm_password_reset_mismatched_passwords_rejected(client, app, default_admin_password):
@@ -544,18 +551,20 @@ def test_confirm_password_reset_mismatched_passwords_rejected(client, app, defau
     token = db.create_password_reset_token(users_db, user_id)
 
     resp = client.post(f'/reset-password/{token}',
-                       data={'password': 'brandNewPass1', 'password2': 'somethingElse'})
-    assert resp.status_code == HTTPStatus.OK  # re-renders the form
+                       data={'password': 'brandNewPass1', 'password2': 'somethingElse'},
+                       headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert resp.get_json()['result'] == 'ERROR'
 
     # original password must still work
     resp = _login(client, 'viewer1', 'viewerPass1')
-    assert resp.status_code == 302
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_confirm_password_reset_invalid_token_shows_invalid_state(client):
-    resp = client.get('/reset-password/not-a-real-token')
-    assert resp.status_code == HTTPStatus.OK
-    assert b'invalid' in resp.data.lower() or b'expired' in resp.data.lower()
+    resp = client.get('/reset-password/not-a-real-token',
+                      headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert resp.get_json() == {'valid': False}
 
 
 def test_confirm_password_reset_token_is_single_use(client, app, default_admin_password):
@@ -564,12 +573,14 @@ def test_confirm_password_reset_token_is_single_use(client, app, default_admin_p
     token = db.create_password_reset_token(users_db, user_id)
 
     client.post(f'/reset-password/{token}',
-               data={'password': 'brandNewPass1', 'password2': 'brandNewPass1'})
+                data={'password': 'brandNewPass1', 'password2': 'brandNewPass1'},
+                headers={'X-Requested-With': 'XMLHttpRequest'})
 
     resp = client.post(f'/reset-password/{token}',
-                       data={'password': 'anotherPass2', 'password2': 'anotherPass2'})
-    assert resp.status_code == HTTPStatus.OK
-    assert b'invalid' in resp.data.lower() or b'expired' in resp.data.lower()
+                       data={'password': 'anotherPass2', 'password2': 'anotherPass2'},
+                       headers={'X-Requested-With': 'XMLHttpRequest'})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert resp.get_json()['result'] == 'ERROR'
 
 
 # --- email field on user CRUD API (Step 22) ---------------------------------

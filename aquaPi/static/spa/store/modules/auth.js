@@ -6,6 +6,7 @@ export const useAuthStore = Pinia.defineStore('auth', {
 		user: {
 			username: null
 		},
+		resetToken: null,
 	}),
 
 	getters: {
@@ -79,7 +80,76 @@ export const useAuthStore = Pinia.defineStore('auth', {
 			} else if (payload.username) {
 				this.user = Object.assign({}, {username: payload.username})
 			}
-		}
+		},
+
+		setPendingResetToken(token) {
+			this.resetToken = token
+		},
+
+		async requestPasswordReset(username) {
+			try {
+				const response = await fetch('/reset-password', {
+					method: 'post',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Content-Type': 'application/x-www-form-urlencoded',
+						'Accept': 'application/json',
+					},
+					body: new URLSearchParams({username}),
+				})
+				const data = await response.json().catch(() => null)
+				if (!data || data.result !== 'SUCCESS') {
+					return {ok: false, error: (data && data.message) || 'HTTP ' + response.status}
+				}
+				return {ok: true}
+			} catch (e) {
+				return {ok: false, error: e.message}
+			}
+		},
+
+		async checkResetToken(token) {
+			try {
+				const response = await fetch('/reset-password/' + token, {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json',
+					},
+				})
+				const data = await response.json().catch(() => null)
+				return !!(data && data.valid)
+			} catch (e) {
+				return false
+			}
+		},
+
+		async confirmPasswordReset(token, password, password2) {
+			try {
+				const response = await fetch('/reset-password/' + token, {
+					method: 'post',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Content-Type': 'application/x-www-form-urlencoded',
+						'Accept': 'application/json',
+					},
+					body: new URLSearchParams({password, password2}),
+				})
+				const data = await response.json().catch(() => null)
+				if (!data || data.result !== 'SUCCESS') {
+					return {ok: false, error: (data && data.message) || 'HTTP ' + response.status}
+				}
+				this.resetToken = null
+				return {ok: true}
+			} catch (e) {
+				return {ok: false, error: e.message}
+			}
+		},
 	}
 })
 

@@ -2,6 +2,7 @@ import './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
 import {useUiStore} from '../../store/modules/ui.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
+import {EventBus, AQUAPI_EVENTS} from '../app/EventBus.js'
 
 // Dependency-free replacement for vue-masonry-css (Vue-2-only, removed in
 // the Vue 3 migration): real masonry via native CSS column-count, so the
@@ -523,6 +524,14 @@ const AquapiDashboard = {
 	},
 	async mounted() {
 		await this.loadConfig()
+		// a fresh login doesn't remount this component (the login dialog
+		// is just an overlay on the already-active 'home' route), so the
+		// initial loadConfig() above may have run while still
+		// unauthenticated (401, nodes stay empty) - retry once logged in
+		EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_IN, this.loadConfig)
+	},
+	unmounted() {
+		EventBus.$off(AQUAPI_EVENTS.AUTH_LOGGED_IN, this.loadConfig)
 	},
 }
 registerGlobalComponent('AquapiDashboard', AquapiDashboard)

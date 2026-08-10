@@ -1520,14 +1520,14 @@ def send_password_reset_email(db_path: str, to_email: str, reset_url: str) -> bo
 
     cfg = configs[0]
     msg = EmailMessage()
-    msg['Subject'] = 'aquaPi password reset'
+    msg['Subject'] = 'aquaPi Passwort zurücksetzen'
     msg['From'] = cfg['from']
     msg['To'] = to_email
     msg.set_content(
-        'Someone requested a password reset for your aquaPi account.\n'
-        f'Click the following link to set a new password:\n\n{reset_url}\n\n'
-        f'This link expires in {PASSWORD_RESET_TOKEN_TTL_MINUTES} minutes.\n'
-        'If you did not request this, you can safely ignore this email.'
+        'Für dein aquaPi-Konto wurde ein Zurücksetzen des Passworts angefordert.\n'
+        f'Klicke auf folgenden Link, um ein neues Passwort zu setzen:\n\n{reset_url}\n\n'
+        f'Dieser Link ist {PASSWORD_RESET_TOKEN_TTL_MINUTES} Minuten gültig.\n'
+        'Falls du das nicht angefordert hast, kannst du diese Email ignorieren.'
     )
 
     try:

@@ -26,7 +26,7 @@
 			</v-toolbar-title>
 			<v-spacer></v-spacer>
 
-			<template v-if="authenticated">
+			<template v-if="authenticated && !isAnonymous">
 				<v-sheet dark color="transparent" class="mr-3">
 					<v-icon class="mr-1">mdi-account-circle-outline</v-icon>{{ username }}
 				</v-sheet>
@@ -141,6 +141,13 @@ export default {
 		username() {
 			return this.authStore.username
 		},
+		// the reserved <anonymous> account is technically "authenticated"
+		// (see auth.py's before_request hook), but nobody actually chose
+		// to log in as it - the app bar should still offer the login icon,
+		// not a logout button for an account nobody deliberately entered
+		isAnonymous() {
+			return this.usersStore.isAnonymous
+		},
 		navItems() {
 			const items = [
 				{
@@ -148,18 +155,20 @@ export default {
 					icon: 'mdi-view-dashboard',
 					route: 'home'
 				},
-				{
+			]
+			if (this.usersStore.isOperatorOrAdmin) {
+				items.push({
 					name: 'settings',
 					icon: 'mdi-tune',
 					route: 'settings'
-				},
-				{
+				})
+			}
+			if (this.usersStore.isAdmin) {
+				items.push({
 					name: 'config',
 					icon: 'mdi-cog-outline',
 					route: 'config'
-				},
-			]
-			if (this.usersStore.isAdmin) {
+				})
 				items.push({
 					name: 'users',
 					icon: 'mdi-account-multiple',

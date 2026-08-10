@@ -18,6 +18,13 @@ export const useUsersStore = Pinia.defineStore('users', {
 		isAdmin: (state) => {
 			return !!state.currentUser && state.currentUser.role === 'admin'
 		},
+		isOperatorOrAdmin: (state) => {
+			return !!state.currentUser
+				&& (state.currentUser.role === 'operator' || state.currentUser.role === 'admin')
+		},
+		isAnonymous: (state) => {
+			return !!state.currentUser && !!state.currentUser.is_anonymous
+		},
 	},
 
 	actions: {

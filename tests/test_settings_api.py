@@ -13,7 +13,7 @@ import aquaPi
 from aquaPi import auth, db, api
 from aquaPi.driver import create_io_registry
 from aquaPi.machineroom.msg_bus import MsgBus
-from aquaPi.machineroom.in_nodes import AnalogInput
+from aquaPi.machineroom.in_nodes import AnalogInput, UiSwitchInput, UiAnalogInput
 from aquaPi.machineroom.out_nodes import SwitchDevice
 from aquaPi.machineroom.ctrl_nodes import MinimumCtrl
 
@@ -37,6 +37,12 @@ def bus():
 
     out = SwitchDevice('Heizstab', ctrl.id, '')
     out.plugin(bus)
+
+    ui_switch = UiSwitchInput('Filterpumpe', initval=False)
+    ui_switch.plugin(bus)
+
+    ui_slider = UiAnalogInput('Handregler', unit='%', initval=0.0, vmin=0.0, vmax=100.0)
+    ui_slider.plugin(bus)
 
     yield bus
     bus.teardown()
@@ -90,9 +96,12 @@ def _login(client, username, password):
 # --- GET /api/nodes/<id>/settings ------------------------------------------
 
 
-def test_get_settings_unauthenticated_returns_401(client):
+def test_get_settings_unauthenticated_succeeds_as_anonymous_viewer(client):
+    # no session at all is auto-logged-in as the reserved anonymous
+    # viewer account (see auth.py's before_request hook) - GET is
+    # already open to viewer regardless
     resp = client.get('/api/nodes/heizen/settings')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_get_settings_unknown_node_returns_404(client, users):
@@ -214,3 +223,47 @@ def test_put_settings_rejects_non_numeric_value(client, users, bus):
     resp = client.put('/api/nodes/heizen/settings', json={'setpoint': 'not-a-number'})
     assert resp.status_code == HTTPStatus.BAD_REQUEST
     assert bus.get_node('heizen').setpoint == 24.0
+
+
+# --- viewer exception for UiInput 'value' (dashboard widgets) --------------
+
+
+def test_put_settings_viewer_can_set_ui_input_value(client, users, bus):
+    _login(client, 'viewer1', 'viewerPass1')
+    resp = client.put('/api/nodes/filterpumpe/settings', json={'value': True})
+    assert resp.status_code == HTTPStatus.OK
+    assert bus.get_node('filterpumpe').value is True
+
+
+def test_put_settings_viewer_can_set_ui_slider_value(client, users, bus):
+    # UiAnalogInput (the dashboard slider widget) shares the UiInput
+    # base class with UiSwitchInput - same generic isinstance() check
+    _login(client, 'viewer1', 'viewerPass1')
+    resp = client.put('/api/nodes/handregler/settings', json={'value': 42.5})
+    assert resp.status_code == HTTPStatus.OK
+    assert bus.get_node('handregler').value == 42.5
+
+
+def test_put_settings_anonymous_can_set_ui_input_value(client, bus):
+    # no login at all - the reserved anonymous viewer account must be
+    # able to use dashboard toggle/slider widgets too
+    resp = client.put('/api/nodes/filterpumpe/settings', json={'value': True})
+    assert resp.status_code == HTTPStatus.OK
+    assert bus.get_node('filterpumpe').value is True
+
+
+def test_put_settings_viewer_cannot_set_other_key_on_ui_input(client, users):
+    # UiInput nodes only expose 'value' as their editable key, so this
+    # is already covered by the unknown-key check, but confirm a viewer
+    # doesn't get the operator+admin exception for a bogus key either
+    _login(client, 'viewer1', 'viewerPass1')
+    resp = client.put('/api/nodes/filterpumpe/settings', json={'value': True, 'name': 'x'})
+    assert resp.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_put_settings_viewer_cannot_set_regular_node(client, users):
+    # the viewer exception is scoped to UiInput nodes only - a regular
+    # node's settings (even a numeric one) must stay operator+admin
+    _login(client, 'viewer1', 'viewerPass1')
+    resp = client.put('/api/nodes/heizen/settings', json={'setpoint': 26.0})
+    assert resp.status_code == HTTPStatus.FORBIDDEN

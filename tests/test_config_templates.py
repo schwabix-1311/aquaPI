@@ -99,10 +99,10 @@ def _login(client, username, password):
 # --- templates: capture/list/get/delete ---------------------------------
 
 
-def test_list_templates_requires_admin(client, users):
+def test_list_templates_allows_operator(client, users):
     _login(client, 'operator1', 'operatorPass1')
     resp = client.get('/api/templates/')
-    assert resp.status_code == HTTPStatus.FORBIDDEN
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_list_templates_empty(client, users):
@@ -165,6 +165,17 @@ def test_get_template_unknown_returns_404(client, users):
     _login(client, 'admin1', 'adminPass123')
     resp = client.get('/api/templates/doesnotexist')
     assert resp.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_get_template_allows_operator(client, users):
+    _login(client, 'admin1', 'adminPass123')
+    client.post('/api/templates/', json={'name': 'X', 'node_ids': ['wasser']})
+    client.get('/logout')
+
+    _login(client, 'operator1', 'operatorPass1')
+    resp = client.get('/api/templates/X')
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json()['name'] == 'X'
 
 
 def test_delete_template(client, users):
@@ -314,10 +325,10 @@ def test_insert_template_persists_topology(client, users, app):
 # --- snapshots: save/list/get/delete ------------------------------------
 
 
-def test_list_snapshots_requires_admin(client, users):
+def test_list_snapshots_allows_operator(client, users):
     _login(client, 'operator1', 'operatorPass1')
     resp = client.get('/api/config/snapshots')
-    assert resp.status_code == HTTPStatus.FORBIDDEN
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_create_and_list_snapshot(client, users):

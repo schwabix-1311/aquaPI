@@ -37,12 +37,34 @@ const routes = [
 				components: {
 					default: () => loadSfc('/static/spa/pages/Settings.vue')
 				},
+				beforeEnter: async (to, from, next) => {
+					const usersStore = useUsersStore()
+					if (!usersStore.currentUser) {
+						await usersStore.fetchCurrentUser()
+					}
+					if (usersStore.isOperatorOrAdmin) {
+						next()
+					} else {
+						next({name: 'home'})
+					}
+				},
 			},
 			{
 				path: 'config',
 				name: 'config',
 				components: {
 					default: () => loadSfc('/static/spa/pages/Config.vue')
+				},
+				beforeEnter: async (to, from, next) => {
+					const usersStore = useUsersStore()
+					if (!usersStore.currentUser) {
+						await usersStore.fetchCurrentUser()
+					}
+					if (usersStore.isAdmin) {
+						next()
+					} else {
+						next({name: 'home'})
+					}
 				},
 			},
 			{

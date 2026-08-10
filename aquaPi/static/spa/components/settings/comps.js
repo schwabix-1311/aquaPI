@@ -2,6 +2,7 @@ import {registerGlobalComponent} from '../app/registry.js'
 import {useSettingsStore} from '../../store/modules/settings.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useConfigStore} from '../../store/modules/config.js'
+import {useUsersStore} from '../../store/modules/users.js'
 import {isHistOrAlert, chainAnchor, ancestors, descendants, flattenEntries} from './chains.js'
 
 // a Setting is required unless attrs.optional is true, and must not be
@@ -648,7 +649,7 @@ const NodeReceivesEditor = {
 	template: `
 		<setting-multi-select
 			:item="pseudoSetting"
-			:disabled="saving"
+			:disabled="saving || !isAdmin"
 			@update="onChange"
 		></setting-multi-select>
 	`,
@@ -664,6 +665,15 @@ const NodeReceivesEditor = {
 		},
 		dashboardStore() {
 			return useDashboardStore()
+		},
+		usersStore() {
+			return useUsersStore()
+		},
+		isAdmin() {
+			// PUT /api/nodes/<id> (what updateNode() below hits) is
+			// admin-only, unlike the regular settings fields on this same
+			// page (operator+admin) - gate this one control separately
+			return this.usersStore.isAdmin
 		},
 		receivesItems: function() {
 			return Object.values(this.dashboardStore.nodes)

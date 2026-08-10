@@ -18,6 +18,7 @@ from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import (BusRole, Setting)
 from .machineroom.aux_nodes import ScaleAux
+from .machineroom.in_nodes import UiInput
 from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable,
                                      log_calibration_event, get_calibration_log)
 from .pages.sse_util import send_sse_events
@@ -395,11 +396,16 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
 
 
 @bp.route('/api/nodes/<node_id>/settings', methods=['PUT'])
-@roles_required('operator', 'admin')
+@login_required
 def api_set_node_settings(node_id: str) -> Response:
     """ update one or more operational parameters of a node, validated
         against the min/max/type delivered by the node itself
-        (get_settings()), then persist the whole topology.
+        (get_settings()), then persist the whole topology. Normally
+        operator+admin only, EXCEPT for UiInput nodes' (dashboard toggle/
+        slider widgets, e.g. UiSwitchInput) own 'value' field, which any
+        role - including the anonymous placeholder viewer - may set, since
+        those widgets are meant to be usable straight from the Dashboard
+        without an account.
     """
     bus = the_bus()
     if not bus:
@@ -412,6 +418,10 @@ def api_set_node_settings(node_id: str) -> Response:
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify(error='Body must be a JSON object of {key: value}'), HTTPStatus.BAD_REQUEST
+
+    is_ui_value_only = isinstance(node, UiInput) and set(body.keys()) <= {'value'}
+    if not is_ui_value_only and current_user.role not in ('operator', 'admin'):
+        return jsonify(error='Forbidden'), HTTPStatus.FORBIDDEN
 
     editable = {entry.key: entry for entry in node.get_settings() if entry.key is not None}
 
@@ -774,7 +784,7 @@ def api_create_template() -> Response:
 
 
 @bp.route('/api/templates/<name>', methods=['GET'])
-@roles_required('admin')
+@roles_required('viewer', 'operator', 'admin')
 def api_get_template(name: str) -> Response:
     """ fetch one template including its full node data """
     template = db.get_template(_topo_db_path(), name)

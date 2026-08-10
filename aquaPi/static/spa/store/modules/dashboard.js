@@ -76,6 +76,25 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 				// Remove dashboard items for no longer existing nodes
 				config = config.filter((item) => nodes[item.id] !== undefined)
 
+				// Refresh role/type/identifier from the live node for
+				// existing items - a node's id is derived from its name,
+				// so if two nodes ever swap names (id stays the same, but
+				// the role/type behind that id changes), a stale cached
+				// role/type would otherwise persist forever. 'name' and
+				// 'visible' are intentionally left alone: 'name' can be
+				// user-customized in the configurator, 'visible' is a
+				// pure user preference.
+				config.forEach((item) => {
+					const node = nodes[item.id]
+					if (item.role !== node.role || item.type !== node.type
+						|| item.identifier !== node.identifier) {
+						item.role = node.role
+						item.type = node.type
+						item.identifier = node.identifier
+						configChanged = true
+					}
+				})
+
 				// Add dashboard items for new nodes
 				for (let nodeId in nodes) {
 					if (config.filter((item) => item.id === nodeId).length == 0) {

@@ -318,3 +318,54 @@ def test_send_user_password_email_smtp_failure_returns_false(users_db_path, monk
     result = db.send_user_password_email(users_db_path, 'someone@example.com',
                                          'alice', 'geheim123')
     assert result is False
+
+
+# --- reserved <anonymous> account (unauthenticated dashboard access) -------
+
+def test_ensure_anonymous_user_creates_once(users_db_path):
+    db.ensure_anonymous_user(users_db_path)
+    row = db.get_user_by_username(users_db_path, db.ANONYMOUS_USERNAME)
+    assert row is not None
+    assert row['role'] == 'viewer'
+
+    user_id = row['id']
+    db.ensure_anonymous_user(users_db_path)
+    row_again = db.get_user_by_username(users_db_path, db.ANONYMOUS_USERNAME)
+    assert row_again['id'] == user_id
+
+
+def test_anonymous_user_cannot_be_deleted(users_db_path):
+    db.ensure_anonymous_user(users_db_path)
+    user_id = db.get_user_by_username(users_db_path, db.ANONYMOUS_USERNAME)['id']
+
+    with pytest.raises(ValueError):
+        db.delete_user(users_db_path, user_id)
+    assert db.get_user_by_id(users_db_path, user_id) is not None
+
+
+def test_anonymous_user_role_can_be_changed_with_warning(users_db_path, caplog):
+    db.ensure_anonymous_user(users_db_path)
+    user_id = db.get_user_by_username(users_db_path, db.ANONYMOUS_USERNAME)['id']
+
+    with caplog.at_level('WARNING', logger='aquaPi.db'):
+        db.update_user_role(users_db_path, user_id, 'operator')
+
+    row = db.get_user_by_id(users_db_path, user_id)
+    assert row['role'] == 'operator'
+    assert any('operator' in rec.message for rec in caplog.records)
+
+
+def test_regular_user_role_change_does_not_warn(users_db_path, caplog):
+    user_id = db.create_user(users_db_path, 'paul', 'pwd12345', role='viewer')
+
+    with caplog.at_level('WARNING', logger='aquaPi.db'):
+        db.update_user_role(users_db_path, user_id, 'operator')
+
+    assert caplog.records == []
+
+
+def test_anonymous_username_exempt_from_login_lockout(users_db_path):
+    for _ in range(db.LOGIN_MAX_ATTEMPTS + 1):
+        db.register_failed_login(users_db_path, db.ANONYMOUS_USERNAME, max_attempts=1)
+    locked, _ = db.is_login_locked_out(users_db_path, db.ANONYMOUS_USERNAME)
+    assert locked is False

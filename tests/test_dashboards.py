@@ -179,9 +179,12 @@ def _login(client, username, password):
                        follow_redirects=False)
 
 
-def test_get_dashboard_unauthenticated_returns_401(client):
+def test_get_dashboard_unauthenticated_succeeds_as_anonymous_viewer(client):
+    # no session at all is auto-logged-in as the reserved anonymous
+    # viewer account, which has its own (initially empty) dashboard
     resp = client.get('/api/dashboard/')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json() == []
 
 
 def test_get_dashboard_default_empty(client, users):

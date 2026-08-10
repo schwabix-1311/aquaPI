@@ -87,21 +87,32 @@ def test_default_admin_created_on_first_start(app):
     assert any(u['username'] == 'admin' and u['role'] == 'admin' for u in users)
 
 
-def test_unauthenticated_api_access_returns_401(client):
+def _current_username(client):
+    return client.get('/api/users/me').get_json()['username']
+
+
+def test_unauthenticated_api_access_succeeds_as_anonymous_viewer(client):
+    # a request with no session at all is auto-logged-in as the reserved
+    # ANONYMOUS_USERNAME (role 'viewer') - @login_required-only routes
+    # succeed, unlike role-gated ones (see test_viewer_cannot_access_operator_route)
     resp = client.get('/api/protected')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
+    body = client.get('/api/users/me').get_json()
+    assert body['username'] == db.ANONYMOUS_USERNAME
+    assert body['role'] == 'viewer'
+    assert body['is_anonymous'] is True
 
 
-def test_unauthenticated_page_access_redirects_to_login(client):
+def test_unauthenticated_page_access_succeeds_as_anonymous_viewer(client):
     resp = client.get('/protected-page')
-    assert resp.status_code == 302
-    assert '/login' in resp.headers['Location']
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_login_wrong_password_fails(client, default_admin_password):
     resp = _login(client, 'viewer1', 'wrong-password')
     assert resp.status_code == HTTPStatus.UNAUTHORIZED
-    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+    # session stays the anonymous placeholder, not viewer1
+    assert _current_username(client) == db.ANONYMOUS_USERNAME
 
 
 def test_login_success_grants_access(client, default_admin_password):
@@ -113,10 +124,11 @@ def test_login_success_grants_access(client, default_admin_password):
 
 def test_logout_revokes_access(client, default_admin_password):
     _login(client, 'viewer1', 'viewerPass1')
-    assert client.get('/api/protected').status_code == HTTPStatus.OK
+    assert _current_username(client) == 'viewer1'
 
     client.get('/logout')
-    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+    # logout degrades back to the anonymous placeholder, not to "no access"
+    assert _current_username(client) == db.ANONYMOUS_USERNAME
 
 
 def _xhr_login(client, username, password):
@@ -137,7 +149,7 @@ def test_xhr_login_wrong_password_returns_json_error(client, default_admin_passw
     body = resp.get_json()
     assert body['result'] == 'ERROR'
     assert 'message' in body
-    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+    assert _current_username(client) == db.ANONYMOUS_USERNAME
 
 
 def test_xhr_login_while_locked_out_returns_json_error(client, default_admin_password, monkeypatch):
@@ -155,7 +167,7 @@ def test_xhr_logout_returns_json(client, default_admin_password):
     resp = client.get('/logout', headers={'X-Requested-With': 'XMLHttpRequest'})
     assert resp.status_code == HTTPStatus.OK
     assert resp.get_json() == {'result': 'SUCCESS'}
-    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+    assert _current_username(client) == db.ANONYMOUS_USERNAME
 
 
 def test_viewer_cannot_access_operator_route(client, default_admin_password):
@@ -220,9 +232,12 @@ def test_current_user_endpoint_returns_own_info(client, default_admin_password):
     assert 'password_hash' not in body
 
 
-def test_current_user_endpoint_requires_login(client):
+def test_current_user_endpoint_reports_anonymous_when_not_logged_in(client):
     resp = client.get('/api/users/me')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
+    body = resp.get_json()
+    assert body['username'] == db.ANONYMOUS_USERNAME
+    assert body['is_anonymous'] is True
 
 
 def test_admin_can_update_user_role(client, app, default_admin_password):
@@ -415,6 +430,28 @@ def test_admin_can_delete_user(client, app, default_admin_password):
     assert db.get_user_by_id(users_db, user_id) is None
 
 
+def test_cannot_delete_anonymous_user(client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    anon_id = db.get_user_by_username(users_db, db.ANONYMOUS_USERNAME)['id']
+
+    resp = client.delete(f'/api/users/{anon_id}')
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert db.get_user_by_id(users_db, anon_id) is not None
+
+
+def test_anonymous_user_listed_with_is_anonymous_flag(client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    resp = client.get('/api/users/')
+    users = resp.get_json()
+    anon = next(u for u in users if u['username'] == db.ANONYMOUS_USERNAME)
+    assert anon['is_anonymous'] is True
+    assert anon['role'] == 'viewer'
+
+    other = next(u for u in users if u['username'] == 'admin1')
+    assert other['is_anonymous'] is False
+
+
 def test_cannot_delete_last_remaining_admin(client, app, default_admin_password):
     users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
     admin_default_id = db.get_user_by_username(users_db, 'admin')['id']
@@ -461,7 +498,7 @@ def test_login_locks_out_after_too_many_failed_attempts(client, app, default_adm
     # 3rd failure triggered the lockout - even the correct password is now rejected
     resp = _login(client, 'viewer1', 'viewerPass1')
     assert resp.status_code == HTTPStatus.TOO_MANY_REQUESTS
-    assert client.get('/api/protected').status_code == HTTPStatus.UNAUTHORIZED
+    assert _current_username(client) == db.ANONYMOUS_USERNAME
 
 
 def test_login_lockout_is_per_username(client, default_admin_password, monkeypatch):

@@ -26,7 +26,8 @@ const UserDialog = {
 					<v-text-field
 						v-model="form.email"
 						:label="$t('pages.users.email')"
-						:hint="$t('pages.users.emailHint')"
+						:hint="isAnonymous ? $t('pages.users.anonymousFieldDisabledHint') : $t('pages.users.emailHint')"
+						:disabled="isAnonymous"
 						persistent-hint
 						outlined dense
 						class="mb-2"
@@ -36,7 +37,8 @@ const UserDialog = {
 						v-model="form.password"
 						:label="editUser ? $t('pages.users.newPassword') : $t('pages.users.password')"
 						:type="passwordVisible ? 'text' : 'password'"
-						:hint="editUser ? $t('pages.users.passwordHintOptional') : ''"
+						:hint="isAnonymous ? $t('pages.users.anonymousFieldDisabledHint') : (editUser ? $t('pages.users.passwordHintOptional') : '')"
+						:disabled="isAnonymous"
 						persistent-hint
 						outlined dense
 					>
@@ -47,6 +49,7 @@ const UserDialog = {
 								@click="passwordVisible = !passwordVisible"
 							>{{ passwordVisible ? 'mdi-eye-off' : 'mdi-eye' }}</v-icon>
 							<v-icon
+								v-if="!isAnonymous"
 								:title="$t('pages.users.suggestPassword')"
 								@click="suggestPassword"
 							>mdi-dice-5</v-icon>
@@ -80,6 +83,9 @@ const UserDialog = {
 	computed: {
 		usersStore() {
 			return useUsersStore()
+		},
+		isAnonymous() {
+			return !!(this.editUser && this.editUser.is_anonymous)
 		},
 		show: {
 			get() {
@@ -116,6 +122,17 @@ const UserDialog = {
 		},
 		async save() {
 			this.error = null
+
+			if (this.editUser && this.editUser.is_anonymous && this.form.role !== 'viewer') {
+				const confirmed = await this.$confirm(
+					this.$t('pages.users.confirmAnonymousRoleChange'),
+					{confirmColor: 'warning'}
+				)
+				if (!confirmed) {
+					return
+				}
+			}
+
 			let result
 
 			if (this.editUser) {

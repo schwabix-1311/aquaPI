@@ -226,9 +226,13 @@ def test_backup_endpoint_requires_admin(client, users):
     assert resp.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_backup_endpoint_requires_login(client):
+def test_backup_endpoint_rejects_no_session(client):
+    # no session at all is auto-logged-in as the reserved anonymous
+    # viewer account (see auth.py's before_request hook) - still
+    # correctly rejected by the admin-only role gate, just with 403
+    # instead of 401/302 now that there's always some session
     resp = client.get('/api/backup')
-    assert resp.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FOUND)
+    assert resp.status_code == HTTPStatus.FORBIDDEN
 
 
 def test_backup_endpoint_returns_loadable_archive(client, users, users_db_path, tmp_path):

@@ -1,6 +1,7 @@
 import {registerGlobalComponent} from './registry.js'
 import {useUiStore} from '../../store/modules/ui.js'
 import {useAuthStore} from '../../store/modules/auth.js'
+import {useUsersStore} from '../../store/modules/users.js'
 
 const AquapiNavDrawer = {
 	template: `
@@ -56,7 +57,7 @@ const AquapiNavDrawer = {
 
 				<v-divider class="mb-1"></v-divider>
 
-				<template v-if="authenticated">
+				<template v-if="authenticated && !isAnonymous">
 					<v-list-item
 						link
 						@click="authStore.logout()"
@@ -74,7 +75,7 @@ const AquapiNavDrawer = {
 				<template v-else>
 					<v-list-item
 						link
-						@click="$root.navigate({route: 'login'})"
+						@click.stop="uiStore.showDialog('AquapiLoginDialog')"
 					>
 						<template #prepend>
 							<v-icon class="mr-3">
@@ -104,6 +105,9 @@ const AquapiNavDrawer = {
 		authStore() {
 			return useAuthStore()
 		},
+		usersStore() {
+			return useUsersStore()
+		},
 		navDrawerVisible: {
 			get() {
 				return this.uiStore.isActiveDialog(this.dialogName)
@@ -121,6 +125,9 @@ const AquapiNavDrawer = {
 		},
 		authenticated() {
 			return this.authStore.authenticated
+		},
+		isAnonymous() {
+			return this.usersStore.isAnonymous
 		},
 	},
 }

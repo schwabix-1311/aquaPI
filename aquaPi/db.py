@@ -57,6 +57,11 @@ DEFAULT_USERS_DB_FILENAME = 'users.sqlite'
 
 VALID_ROLES = ('viewer', 'operator', 'admin')
 
+# reserved account auto-logged-in for requests with no session (see
+# auth.py's before_request hook) - lets the SPA show a dashboard without
+# requiring login, while still going through the normal role machinery
+ANONYMOUS_USERNAME = '<anonymous>'
+
 # --- login security (Step 22) ---------------------------------------
 PASSWORD_RESET_TOKEN_TTL_MINUTES = 30
 LOGIN_MAX_ATTEMPTS = 5
@@ -1361,13 +1366,20 @@ def count_admins(db_path: str) -> int:
 
 def update_user_role(db_path: str, user_id: int, role: str) -> None:
     """ change a user's role. Raises ValueError if the role is invalid
-        or the user does not exist.
+        or the user does not exist. Allowed (not blocked) for the
+        reserved ANONYMOUS_USERNAME account too - an admin may deliberately
+        grant unauthenticated visitors more than viewer access - but it's
+        logged, since it's an easy-to-forget, wide-reaching change.
     """
     if role not in VALID_ROLES:
         raise ValueError(f'Invalid role: {role!r}')
 
     conn = get_users_connection(db_path)
     try:
+        row = conn.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        if row and row['username'] == ANONYMOUS_USERNAME and role != 'viewer':
+            log.warning('Reserved account %r role changed to %r - this now applies to '
+                        'every unauthenticated visitor', ANONYMOUS_USERNAME, role)
         with conn:
             cur = conn.execute('UPDATE users SET role = ? WHERE id = ?', (role, user_id))
             if cur.rowcount == 0:
@@ -1409,12 +1421,17 @@ def set_user_email(db_path: str, user_id: int, email: str | None) -> None:
 
 
 def delete_user(db_path: str, user_id: int) -> None:
-    """ remove a user. Raises ValueError if the user does not exist.
+    """ remove a user. Raises ValueError if the user does not exist, or
+        if it is the reserved ANONYMOUS_USERNAME account (would break
+        auth.py's before_request auto-login for unauthenticated visitors).
         Callers are responsible for preventing removal of the last
         remaining admin (see count_admins()).
     """
     conn = get_users_connection(db_path)
     try:
+        row = conn.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        if row and row['username'] == ANONYMOUS_USERNAME:
+            raise ValueError(f'Cannot delete the reserved {ANONYMOUS_USERNAME!r} account')
         with conn:
             cur = conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
             if cur.rowcount == 0:
@@ -1441,6 +1458,27 @@ def ensure_default_admin(db_path: str) -> tuple[str, str] | None:
     password = generate_aquatic_passphrase()
     create_user(db_path, username, password, role='admin')
     return username, password
+
+
+def ensure_anonymous_user(db_path: str) -> None:
+    """ on first start, create the reserved ANONYMOUS_USERNAME account
+        (role 'viewer') that auth.py's before_request hook auto-logs-in
+        for requests with no session, so the SPA works without login.
+        Idempotent - does nothing once the account exists. The generated
+        password is never revealed/needed: the account is only ever
+        logged into directly via login_user(), never through the normal
+        password-checking /login path.
+    """
+    conn = get_users_connection(db_path)
+    try:
+        row = conn.execute('SELECT id FROM users WHERE username = ?',
+                           (ANONYMOUS_USERNAME,)).fetchone()
+        if row:
+            return
+    finally:
+        conn.close()
+
+    create_user(db_path, ANONYMOUS_USERNAME, generate_url_token(), role='viewer')
 
 
 # --- self-service password reset (Step 22) -------------------------------
@@ -1580,8 +1618,14 @@ def send_user_password_email(db_path: str, to_email: str, username: str,
 def is_login_locked_out(db_path: str, key: str) -> tuple[bool, int]:
     """ return (locked, seconds_remaining) for a given lockout key
         (typically the lower-cased username, or the remote IP as
-        fallback for unknown usernames)
+        fallback for unknown usernames). ANONYMOUS_USERNAME is exempt -
+        it never goes through the password-checking /login path (see
+        auth.py's before_request hook), so it can never legitimately
+        fail a login, but is exempted here too as defense in depth.
     """
+    if key == ANONYMOUS_USERNAME:
+        return False, 0
+
     conn = get_users_connection(db_path)
     try:
         row = conn.execute(
@@ -1604,8 +1648,12 @@ def register_failed_login(db_path: str, key: str,
     """ record one failed login attempt for a key, locking it out for
         lockout_minutes once max_attempts is reached within
         window_minutes; the attempt counter/window resets if the
-        window has already expired
+        window has already expired. ANONYMOUS_USERNAME is exempt - see
+        is_login_locked_out().
     """
+    if key == ANONYMOUS_USERNAME:
+        return
+
     now = datetime.utcnow()
     conn = get_users_connection(db_path)
     try:

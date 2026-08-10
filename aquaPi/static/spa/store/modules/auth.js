@@ -67,10 +67,15 @@ export const useAuthStore = Pinia.defineStore('auth', {
 					},
 				})
 			} catch (e) {
-				// best-effort: still clear the local state below
+				// best-effort: still refresh identity below
 			}
-			this.setUser(null)
-			useUsersStore().setCurrentUser(null)
+			// the backend immediately re-establishes the reserved
+			// <anonymous> session on the very next request (see auth.py's
+			// before_request hook) - refetch identity instead of freezing
+			// on a stale "nobody" state, symmetric to login()'s own
+			// fetchCurrentUser() call above
+			const user = await useUsersStore().fetchCurrentUser()
+			this.setUser(user)
 			EventBus.$emit(AQUAPI_EVENTS.AUTH_LOGGED_OUT)
 		},
 

@@ -122,6 +122,7 @@ export default
 			username: 'Username',
 			email: 'Email',
 			emailHint: 'Optional, only used to deliver the password reset link',
+			anonymousFieldDisabledHint: 'Not available for this reserved account',
 			password: 'Password',
 			newPassword: 'New password',
 			passwordHintOptional: 'Leave empty to keep the current password',
@@ -132,6 +133,7 @@ export default
 			editUser: 'Edit user',
 			errUsernamePassword: 'Username and password are required',
 			confirmDelete: 'Delete user "%{name}"?',
+			confirmAnonymousRoleChange: 'This role will then apply to every visitor who is not logged in. Really change it?',
 			passwordSentEmail: 'Saved. The password was emailed to %{email}.',
 			passwordSentLog: 'Saved. The password could not be emailed, check the server log.',
 		}

@@ -94,9 +94,9 @@ def _login(client, username, password):
 # --- GET /api/node-types/ ---------------------------------------------
 
 
-def test_node_types_unauthenticated_returns_401(client):
+def test_node_types_unauthenticated_succeeds_as_anonymous_viewer(client):
     resp = client.get('/api/node-types/')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_node_types_lists_creatable_types(client, users):

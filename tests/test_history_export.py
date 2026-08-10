@@ -98,10 +98,13 @@ def _login(client, username, password):
 # --- GET /api/history/<id>/export ----------------------------------------
 
 
-def test_export_requires_login(client, bus):
+def test_export_unauthenticated_succeeds_as_anonymous_viewer(client, bus):
+    # no session at all is auto-logged-in as the reserved anonymous
+    # viewer account (see auth.py's before_request hook) - GET is
+    # login_required only, no role restriction
     hist = next(n for n in bus.get_nodes() if isinstance(n, History))
     resp = client.get(f'/api/history/{hist.id}/export')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_export_unknown_node_returns_404(client, users):
@@ -176,10 +179,10 @@ def test_export_logs_audit_entry(client, users, bus, app):
 # --- GET /api/nodes/<id>/calibration-log ---------------------------------
 
 
-def test_calibration_log_requires_login(client, bus):
+def test_calibration_log_unauthenticated_succeeds_as_anonymous_viewer(client, bus):
     calib = next(n for n in bus.get_nodes() if isinstance(n, ScaleAux))
     resp = client.get(f'/api/nodes/{calib.id}/calibration-log')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
 
 
 def test_calibration_log_unknown_node_returns_404(client, users):

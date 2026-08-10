@@ -33,7 +33,7 @@ const AquapiUsers = {
       <v-btn icon small variant="text" color="grey-darken-1" @click="onEdit(item)" :title="$t('pages.config.edit')">
 							<v-icon small>mdi-pencil</v-icon>
 						</v-btn>
-      <v-btn icon small variant="text" color="grey-darken-1" @click="onDelete(item)" :title="$t('pages.config.delete')">
+      <v-btn icon small variant="text" color="grey-darken-1" :disabled="item.is_anonymous" @click="onDelete(item)" :title="$t('pages.config.delete')">
 							<v-icon small>mdi-delete</v-icon>
 						</v-btn>
 					</template>

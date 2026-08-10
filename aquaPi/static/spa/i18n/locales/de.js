@@ -122,6 +122,7 @@ export default
 			username: 'Benutzername',
 			email: 'E-Mail',
 			emailHint: 'Optional, wird nur für den Passwort-Reset-Link benötigt',
+			anonymousFieldDisabledHint: 'Für dieses reservierte Konto nicht verfügbar',
 			password: 'Passwort',
 			newPassword: 'Neues Passwort',
 			passwordHintOptional: 'Leer lassen, um das Passwort nicht zu ändern',
@@ -132,6 +133,7 @@ export default
 			editUser: 'Benutzer bearbeiten',
 			errUsernamePassword: 'Benutzername und Passwort sind erforderlich',
 			confirmDelete: 'Benutzer "%{name}" löschen?',
+			confirmAnonymousRoleChange: 'Diese Rolle gilt dann für jeden nicht angemeldeten Besucher der App. Wirklich ändern?',
 			passwordSentEmail: 'Gespeichert. Das Passwort wurde per Email an %{email} verschickt.',
 			passwordSentLog: 'Gespeichert. Das Passwort konnte nicht per Email verschickt werden, siehe Server-Log.',
 		}

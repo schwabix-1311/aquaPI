@@ -93,9 +93,26 @@ def roles_required(*roles: str):
     return decorator
 
 
+def _auto_login_anonymous() -> None:
+    """ before_request hook: a request with no session at all gets
+        silently logged in as the reserved ANONYMOUS_USERNAME account
+        (role 'viewer'), so the SPA shows a dashboard without requiring
+        login. Never touches the password-checking /login code path
+        (no lockout risk), and works for every route including /api/*.
+        A real login later simply replaces this session's user, same as
+        login_user() always does; a real logout naturally falls back to
+        this same anonymous session on the very next request.
+    """
+    if current_user.is_authenticated:
+        return
+    row = db.get_user_by_username(_users_db_path(), db.ANONYMOUS_USERNAME)
+    if row:
+        login_user(User.from_row(row))
+
+
 def init_app(app) -> None:
-    """ wire up Flask-Login and ensure the users DB/default admin exist.
-        Called once from create_app().
+    """ wire up Flask-Login and ensure the users DB/default admin/
+        anonymous account exist. Called once from create_app().
     """
     login_manager.init_app(app)
 
@@ -107,6 +124,9 @@ def init_app(app) -> None:
         log.brief('===   username: %s', username)
         log.brief('===   password: %s', password)
         log.brief('=== Please log in and change this password as soon as possible!')
+    db.ensure_anonymous_user(users_db)
+
+    app.before_request(_auto_login_anonymous)
 
     # a stable SECRET_KEY is required, otherwise all sessions
     # (and thus all logins) would be invalidated on every restart
@@ -141,13 +161,17 @@ def _wants_json() -> bool:
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
-    """ the SPA is the sole login UI (a modal dialog, always forced open
-        while unauthenticated) - this endpoint only still exists because
-        Flask-Login's unauthorized_handler and the SPA's own fetch()-based
-        login() action need a stable URL to redirect/POST to. GET never
-        renders a page of its own, it just sends the browser to the SPA.
+    """ the SPA is the sole login UI (a modal dialog) - this endpoint
+        only still exists because Flask-Login's unauthorized_handler and
+        the SPA's own fetch()-based login() action need a stable URL to
+        redirect/POST to. GET never renders a page of its own, it just
+        sends the browser to the SPA.
     """
-    if current_user.is_authenticated:
+    # the reserved ANONYMOUS_USERNAME session (see before_request hook
+    # below) must NOT count as "already logged in" here, or nobody could
+    # ever log in for real again - every request already carries an
+    # "authenticated" anonymous session by the time it reaches this check
+    if current_user.is_authenticated and current_user.username != db.ANONYMOUS_USERNAME:
         if _wants_json():
             return jsonify(result='SUCCESS')
         return redirect(url_for('spa.spa'))
@@ -250,7 +274,8 @@ def logout():
 def _user_to_dict(row: dict) -> dict:
     """ never expose the password hash via the API """
     return {'id': row['id'], 'username': row['username'], 'role': row['role'],
-            'email': row.get('email')}
+            'email': row.get('email'),
+            'is_anonymous': row['username'] == db.ANONYMOUS_USERNAME}
 
 
 @bp.route('/api/users/me', methods=['GET'])
@@ -387,7 +412,10 @@ def api_delete_user(user_id: int):
     if row['role'] == 'admin' and db.count_admins(_users_db_path()) <= 1:
         return jsonify(error='Cannot remove the last remaining admin'), HTTPStatus.BAD_REQUEST
 
-    db.delete_user(_users_db_path(), user_id)
+    try:
+        db.delete_user(_users_db_path(), user_id)
+    except ValueError as ex:
+        return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
     log.info('User %r deleted user %r', current_user.username, row['username'])
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'delete_user', row['username'])

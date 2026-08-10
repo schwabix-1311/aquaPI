@@ -108,9 +108,11 @@ def test_get_nodes_returns_plain_json_list(logged_in_client):
     assert 'py/object' not in resp.get_data(as_text=True)
 
 
-def test_get_nodes_unauthenticated_returns_401(client):
+def test_get_nodes_unauthenticated_succeeds_as_anonymous_viewer(client):
+    # no session at all is auto-logged-in as the reserved anonymous
+    # viewer account (see auth.py's before_request hook)
     resp = client.get('/api/nodes/')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
 
 
 # --- GET /api/nodes/<id> ----------------------------------------------------
@@ -147,9 +149,9 @@ def test_get_node_unknown_id_returns_404(logged_in_client):
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_get_node_unauthenticated_returns_401(client):
+def test_get_node_unauthenticated_succeeds_as_anonymous_viewer(client):
     resp = client.get('/api/nodes/wasser')
-    assert resp.status_code == HTTPStatus.UNAUTHORIZED
+    assert resp.status_code == HTTPStatus.OK
 
 
 # --- Alert.conditions serialization ----------------------------------------

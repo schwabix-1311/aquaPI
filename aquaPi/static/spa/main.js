@@ -104,6 +104,17 @@ const app = Vue.createApp({
 				// TODO: adapt to final root (dashboard on home)
 				this.$router.replace({name: 'home'})
 			})
+
+			EventBus.$on(AQUAPI_EVENTS.AUTH_LOGGED_OUT, () => {
+				// logout degrades back to the <anonymous> viewer (see
+				// auth.py's before_request hook) - leave any page that
+				// viewer role no longer has access to, same as the
+				// beforeEnter guards would if navigated to fresh
+				if (this.$route.name === 'config' || this.$route.name === 'settings'
+					|| this.$route.name === 'users') {
+					this.$router.replace({name: 'home'})
+				}
+			})
 		},
 
 		detachEventListeners() {

@@ -125,11 +125,15 @@ export default
 			password: 'Password',
 			newPassword: 'New password',
 			passwordHintOptional: 'Leave empty to keep the current password',
+			suggestPassword: 'Suggest a new password',
+			revealPassword: 'Show/hide password',
 			role: 'Role',
 			addUser: 'Add user',
 			editUser: 'Edit user',
 			errUsernamePassword: 'Username and password are required',
 			confirmDelete: 'Delete user "%{name}"?',
+			passwordSentEmail: 'Saved. The password was emailed to %{email}.',
+			passwordSentLog: 'Saved. The password could not be emailed, check the server log.',
 		}
 	},
 

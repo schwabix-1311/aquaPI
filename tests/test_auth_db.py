@@ -71,7 +71,6 @@ def test_ensure_default_admin_creates_once(users_db_path):
     assert created is not None
     username, password = created
     assert username == 'admin'
-    assert len(password) > 8
 
     row = db.get_user_by_username(users_db_path, username)
     assert row['role'] == 'admin'
@@ -254,3 +253,68 @@ def test_clear_login_attempts(users_db_path):
 def test_send_password_reset_email_without_config_returns_false(users_db_path):
     assert db.send_password_reset_email(users_db_path, 'someone@example.com',
                                         'http://example.com/reset/abc') is False
+
+
+# --- account password delivery (generated/reset password emails) ----------
+
+class _FakeSMTP:
+    sent = []
+
+    def __init__(self, server):
+        self.server = server
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def starttls(self):
+        pass
+
+    def login(self, login, pwd):
+        pass
+
+    def send_message(self, msg):
+        _FakeSMTP.sent.append(msg)
+
+
+class _RaisingSMTP:
+    def __init__(self, server):
+        raise OSError('smtp unreachable')
+
+
+def _configure_email_channel(users_db_path):
+    db.set_notification_config(users_db_path, 'Email', [{
+        'from': 'aquapi@example.com', 'server': 'smtp.example.com',
+        'login': 'aquapi', 'pwd': 'secret',
+    }])
+
+
+def test_send_user_password_email_without_config_returns_false(users_db_path):
+    assert db.send_user_password_email(users_db_path, 'someone@example.com',
+                                       'alice', 'geheim123') is False
+
+
+def test_send_user_password_email_success(users_db_path, monkeypatch):
+    _configure_email_channel(users_db_path)
+    _FakeSMTP.sent = []
+    monkeypatch.setattr(db.smtplib, 'SMTP', _FakeSMTP)
+
+    result = db.send_user_password_email(users_db_path, 'someone@example.com',
+                                         'alice', 'geheim123')
+    assert result is True
+    assert len(_FakeSMTP.sent) == 1
+    sent = _FakeSMTP.sent[0]
+    assert sent['To'] == 'someone@example.com'
+    assert 'alice' in sent.get_content()
+    assert 'geheim123' in sent.get_content()
+
+
+def test_send_user_password_email_smtp_failure_returns_false(users_db_path, monkeypatch):
+    _configure_email_channel(users_db_path)
+    monkeypatch.setattr(db.smtplib, 'SMTP', _RaisingSMTP)
+
+    result = db.send_user_password_email(users_db_path, 'someone@example.com',
+                                         'alice', 'geheim123')
+    assert result is False

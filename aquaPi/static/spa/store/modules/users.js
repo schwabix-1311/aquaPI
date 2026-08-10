@@ -75,6 +75,30 @@ export const useUsersStore = Pinia.defineStore('users', {
 			}
 		},
 
+		async suggestPassword() {
+			try {
+				const response = await fetch('/api/users/suggest-password', {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+				})
+
+				if (response.status !== 200) {
+					throw new Error('GET /api/users/suggest-password returned ' + response.status)
+				}
+
+				const body = await response.json()
+				return body.password
+			} catch (e) {
+				console.error('ERROR suggesting password: ' + e.message)
+				return null
+			}
+		},
+
 		async create(payload) {
 			try {
 				const response = await fetch('/api/users/', {

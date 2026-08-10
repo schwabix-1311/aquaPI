@@ -35,11 +35,23 @@ const UserDialog = {
 					<v-text-field
 						v-model="form.password"
 						:label="editUser ? $t('pages.users.newPassword') : $t('pages.users.password')"
-						type="password"
+						:type="passwordVisible ? 'text' : 'password'"
 						:hint="editUser ? $t('pages.users.passwordHintOptional') : ''"
 						persistent-hint
 						outlined dense
-					></v-text-field>
+					>
+						<template #append-inner>
+							<v-icon
+								:title="$t('pages.users.revealPassword')"
+								class="mr-1"
+								@click="passwordVisible = !passwordVisible"
+							>{{ passwordVisible ? 'mdi-eye-off' : 'mdi-eye' }}</v-icon>
+							<v-icon
+								:title="$t('pages.users.suggestPassword')"
+								@click="suggestPassword"
+							>mdi-dice-5</v-icon>
+						</template>
+					</v-text-field>
 
 					<v-select
 						v-model="form.role"
@@ -62,6 +74,7 @@ const UserDialog = {
 			roles: ['viewer', 'operator', 'admin'],
 			error: null,
 			saving: false,
+			passwordVisible: false,
 		}
 	},
 	computed: {
@@ -81,9 +94,13 @@ const UserDialog = {
 		modelValue(visible) {
 			if (visible) {
 				this.error = null
+				this.passwordVisible = false
 				this.form = this.editUser
 					? {username: this.editUser.username, email: this.editUser.email || '', password: '', role: this.editUser.role}
 					: {username: '', email: '', password: '', role: 'viewer'}
+				if (!this.editUser) {
+					this.suggestPassword()
+				}
 			}
 		},
 	},
@@ -91,8 +108,15 @@ const UserDialog = {
 		close() {
 			this.show = false
 		},
+		async suggestPassword() {
+			const password = await this.usersStore.suggestPassword()
+			if (password) {
+				this.form.password = password
+			}
+		},
 		async save() {
 			this.error = null
+			let result
 
 			if (this.editUser) {
 				const changes = {role: this.form.role, email: this.form.email || null}
@@ -100,7 +124,7 @@ const UserDialog = {
 					changes.password = this.form.password
 				}
 				this.saving = true
-				const result = await this.usersStore.update({userId: this.editUser.id, changes})
+				result = await this.usersStore.update({userId: this.editUser.id, changes})
 				this.saving = false
 				if (!result.ok) {
 					this.error = result.error
@@ -112,7 +136,7 @@ const UserDialog = {
 					return
 				}
 				this.saving = true
-				const result = await this.usersStore.create({
+				result = await this.usersStore.create({
 					username: this.form.username,
 					email: this.form.email || null,
 					password: this.form.password,
@@ -125,7 +149,14 @@ const UserDialog = {
 				}
 			}
 
-			this.$toast.success(this.$t('misc.toast.saveSuccess'))
+			const delivery = result.user && result.user.password_delivery
+			if (delivery === 'email') {
+				this.$toast.success(this.$t('pages.users.passwordSentEmail', {email: this.form.email}))
+			} else if (delivery === 'log') {
+				this.$toast.success(this.$t('pages.users.passwordSentLog'))
+			} else {
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
+			}
 			this.$emit('saved')
 			this.show = false
 		},

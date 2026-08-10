@@ -24,6 +24,7 @@ from flask_login import (LoginManager, UserMixin, current_user,
 from werkzeug.security import check_password_hash
 
 from . import db
+from .passphrase import generate_aquatic_passphrase
 
 
 log = logging.getLogger('aquaPi.auth')
@@ -272,6 +273,27 @@ def api_list_users():
     return jsonify([_user_to_dict(u) for u in users])
 
 
+@bp.route('/api/users/suggest-password', methods=['GET'])
+@roles_required('admin')
+def api_suggest_password():
+    """ return a freshly generated passphrase suggestion, does not
+        persist anything
+    """
+    return jsonify({'password': generate_aquatic_passphrase()})
+
+
+def _deliver_user_password(email: str | None, username: str, password: str) -> str:
+    """ deliver a newly set account password to its owner: by email if
+        possible, else fall back to a one-time server log line (same
+        pattern as the default-admin bootstrap, see init_app() below).
+        Returns 'email' or 'log' to let the caller inform the admin.
+    """
+    if email and db.send_user_password_email(_users_db_path(), email, username, password):
+        return 'email'
+    log.brief('=== Set password for user %r: %s', username, password)
+    return 'log'
+
+
 @bp.route('/api/users/', methods=['POST'])
 @roles_required('admin')
 def api_create_user():
@@ -295,7 +317,9 @@ def api_create_user():
     log.info('User %r created new user %r with role %r', current_user.username, username, role)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'create_user', username, {'role': role})
-    return jsonify({'id': user_id, 'username': username, 'role': role, 'email': email}), HTTPStatus.CREATED
+    password_delivery = _deliver_user_password(email, username, password)
+    return jsonify({'id': user_id, 'username': username, 'role': role, 'email': email,
+                    'password_delivery': password_delivery}), HTTPStatus.CREATED
 
 
 @bp.route('/api/users/<int:user_id>', methods=['PUT'])
@@ -325,6 +349,7 @@ def api_update_user(user_id: int):
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                                'update_user_role', row['username'], {'role': role})
 
+    password_delivery = None
     if password is not None:
         if not password:
             return jsonify(error='password must not be empty'), HTTPStatus.BAD_REQUEST
@@ -339,8 +364,14 @@ def api_update_user(user_id: int):
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                                'set_user_email', row['username'])
 
+    if password is not None:
+        effective_email = email if email is not None else row['email']
+        password_delivery = _deliver_user_password(effective_email, row['username'], password)
+
     updated = db.get_user_by_id(_users_db_path(), user_id)
-    return jsonify(_user_to_dict(updated))
+    result = _user_to_dict(updated)
+    result['password_delivery'] = password_delivery
+    return jsonify(result)
 
 
 @bp.route('/api/users/<int:user_id>', methods=['DELETE'])

@@ -125,11 +125,15 @@ export default
 			password: 'Passwort',
 			newPassword: 'Neues Passwort',
 			passwordHintOptional: 'Leer lassen, um das Passwort nicht zu ändern',
+			suggestPassword: 'Neues Passwort vorschlagen',
+			revealPassword: 'Passwort anzeigen/verbergen',
 			role: 'Rolle',
 			addUser: 'Benutzer hinzufügen',
 			editUser: 'Benutzer bearbeiten',
 			errUsernamePassword: 'Benutzername und Passwort sind erforderlich',
 			confirmDelete: 'Benutzer "%{name}" löschen?',
+			passwordSentEmail: 'Gespeichert. Das Passwort wurde per Email an %{email} verschickt.',
+			passwordSentLog: 'Gespeichert. Das Passwort konnte nicht per Email verschickt werden, siehe Server-Log.',
 		}
 	},
 

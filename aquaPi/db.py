@@ -23,7 +23,6 @@
 import copy
 import json
 import logging
-import secrets
 import smtplib
 import sqlite3
 import tempfile
@@ -38,6 +37,7 @@ from werkzeug.security import generate_password_hash
 from .machineroom.msg_bus import MsgBus, BusNode, BusRole
 from .machineroom.ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl,
                                      SunCtrl, FadeCtrl)
+from .passphrase import generate_aquatic_passphrase, generate_url_token
 from .machineroom.in_nodes import (AnalogInput, SwitchInput, ScheduleInput,
                                    UiSwitchInput, UiAnalogInput)
 from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
@@ -1438,7 +1438,7 @@ def ensure_default_admin(db_path: str) -> tuple[str, str] | None:
         conn.close()
 
     username = 'admin'
-    password = secrets.token_urlsafe(12)
+    password = generate_aquatic_passphrase()
     create_user(db_path, username, password, role='admin')
     return username, password
 
@@ -1451,7 +1451,7 @@ def create_password_reset_token(db_path: str, user_id: int,
         valid for ttl_minutes. Old, still-valid tokens of the same user
         remain valid too (simplicity over strict single-token-per-user).
     """
-    token = secrets.token_urlsafe(32)
+    token = generate_url_token()
     expires_at = (datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat()
     conn = get_users_connection(db_path)
     try:
@@ -1538,6 +1538,40 @@ def send_password_reset_email(db_path: str, to_email: str, reset_url: str) -> bo
         return True
     except Exception:
         log.exception('Failed to send password reset email to %r', to_email)
+        return False
+
+
+def send_user_password_email(db_path: str, to_email: str, username: str,
+                             password: str) -> bool:
+    """ email a newly generated/reset account password to a user,
+        reusing the same Email channel as send_password_reset_email().
+        Returns True/False like send_password_reset_email(), never raises.
+    """
+    configs = get_notification_config(db_path, 'Email')
+    if not configs:
+        log.error('Password delivery requested but no Email channel is configured')
+        return False
+
+    cfg = configs[0]
+    msg = EmailMessage()
+    msg['Subject'] = 'aquaPi Zugangsdaten'
+    msg['From'] = cfg['from']
+    msg['To'] = to_email
+    msg.set_content(
+        f'Für dich wurde ein aquaPi-Konto angelegt/aktualisiert.\n\n'
+        f'Benutzername: {username}\nPasswort: {password}\n\n'
+        'Bei Bedarf kannst du es über den Link "Forgot your password?" '
+        'auf der Login-Seite ändern.'
+    )
+
+    try:
+        with smtplib.SMTP(cfg['server']) as smtp:
+            smtp.starttls()
+            smtp.login(cfg['login'], cfg['pwd'])
+            smtp.send_message(msg)
+        return True
+    except Exception:
+        log.exception('Failed to send account password email to %r', to_email)
         return False
 
 

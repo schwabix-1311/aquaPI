@@ -276,6 +276,129 @@ def test_update_unknown_user_returns_404(client, default_admin_password):
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
+def test_suggest_password_returns_varying_passwords(client, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    passwords = {client.get('/api/users/suggest-password').get_json()['password']
+                 for _ in range(5)}
+    assert all(passwords)
+    assert len(passwords) > 1
+
+
+def test_viewer_cannot_suggest_password(client, default_admin_password):
+    _login(client, 'viewer1', 'viewerPass1')
+    resp = client.get('/api/users/suggest-password')
+    assert resp.status_code == HTTPStatus.FORBIDDEN
+
+
+# --- account password delivery on create/update ----------------------------
+
+class _FakeSMTP:
+    sent = []
+
+    def __init__(self, server):
+        self.server = server
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def starttls(self):
+        pass
+
+    def login(self, login, pwd):
+        pass
+
+    def send_message(self, msg):
+        _FakeSMTP.sent.append(msg)
+
+
+class _RaisingSMTP:
+    def __init__(self, server):
+        raise OSError('smtp unreachable')
+
+
+def _configure_email_channel(users_db):
+    db.set_notification_config(users_db, 'Email', [{
+        'from': 'aquapi@example.com', 'server': 'smtp.example.com',
+        'login': 'aquapi', 'pwd': 'secret',
+    }])
+
+
+def test_create_user_without_email_delivers_via_log(client, app, default_admin_password, caplog):
+    _login(client, 'admin1', 'adminPass1')
+    with caplog.at_level('WARNING', logger='aquaPi.auth'):
+        resp = client.post('/api/users/', json={
+            'username': 'newop', 'password': 'newopPass1', 'role': 'operator'
+        })
+    assert resp.status_code == HTTPStatus.CREATED
+    assert resp.get_json()['password_delivery'] == 'log'
+    assert any('newop' in rec.message and 'newopPass1' in rec.message for rec in caplog.records)
+
+
+def test_create_user_with_email_and_working_smtp_delivers_via_email(
+        client, app, default_admin_password, monkeypatch):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    _configure_email_channel(users_db)
+    _FakeSMTP.sent = []
+    monkeypatch.setattr(db.smtplib, 'SMTP', _FakeSMTP)
+
+    _login(client, 'admin1', 'adminPass1')
+    resp = client.post('/api/users/', json={
+        'username': 'newop2', 'password': 'newopPass2', 'role': 'operator',
+        'email': 'newop2@example.com',
+    })
+    assert resp.status_code == HTTPStatus.CREATED
+    assert resp.get_json()['password_delivery'] == 'email'
+    assert 'password' not in resp.get_json()
+    assert len(_FakeSMTP.sent) == 1
+
+
+def test_create_user_with_email_but_broken_smtp_falls_back_to_log(
+        client, app, default_admin_password, monkeypatch, caplog):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    _configure_email_channel(users_db)
+    monkeypatch.setattr(db.smtplib, 'SMTP', _RaisingSMTP)
+
+    _login(client, 'admin1', 'adminPass1')
+    with caplog.at_level('WARNING', logger='aquaPi.auth'):
+        resp = client.post('/api/users/', json={
+            'username': 'newop3', 'password': 'newopPass3', 'role': 'operator',
+            'email': 'newop3@example.com',
+        })
+    assert resp.status_code == HTTPStatus.CREATED
+    assert resp.get_json()['password_delivery'] == 'log'
+    assert any('newop3' in rec.message and 'newopPass3' in rec.message for rec in caplog.records)
+
+
+def test_update_user_password_delivers_and_reports_delivery(
+        client, app, default_admin_password, monkeypatch):
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    _configure_email_channel(users_db)
+    _FakeSMTP.sent = []
+    monkeypatch.setattr(db.smtplib, 'SMTP', _FakeSMTP)
+    db.set_user_email(users_db, db.get_user_by_username(users_db, 'viewer1')['id'],
+                      'viewer1@example.com')
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+
+    _login(client, 'admin1', 'adminPass1')
+    resp = client.put(f'/api/users/{user_id}', json={'password': 'brandNewPass2'})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json()['password_delivery'] == 'email'
+
+
+def test_update_user_role_only_reports_no_password_delivery(
+        client, app, default_admin_password):
+    _login(client, 'admin1', 'adminPass1')
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    user_id = db.get_user_by_username(users_db, 'viewer1')['id']
+
+    resp = client.put(f'/api/users/{user_id}', json={'role': 'operator'})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json()['password_delivery'] is None
+
+
 def test_cannot_demote_last_remaining_admin(client, app, default_admin_password):
     users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
     # remove the two extra admins ('admin', 'admin1') so exactly one remains

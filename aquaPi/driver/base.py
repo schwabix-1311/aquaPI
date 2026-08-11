@@ -125,6 +125,12 @@ class Driver:
     def __str__(self) -> str:
         return '{}({})'.format(type(self).__name__, self.cfg)
 
+    def _mark_fake(self, name: str) -> str:
+        """ prefix `name` with '!' when this driver instance is a fake
+            (simulated) one - a quick visual marker in logs/UI
+        """
+        return ('!' + name) if self._fake else name
+
     def close(self) -> None:
         log.debug('Closing %r', self)
 

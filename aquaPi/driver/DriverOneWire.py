@@ -25,7 +25,6 @@ class DriverDS1820(AInDriver):
             idx = 0
             for sensor in sorted(glob.glob('/sys/bus/w1/devices/28-*')):
                 port_key = f'DS1820 #{idx + 1}'
-                #port_name = f'DS1820 x{sensor[-5:].upper()}'
                 io_ports[port_key] = IoPort(PortFunc.Ain,
                                             DriverDS1820,
                                             {'adr': sensor},
@@ -55,7 +54,7 @@ class DriverDS1820(AInDriver):
         super().__init__(cfg, func)
         self.name: str = 'DS1820 @ ' + cfg['adr']
         if self._fake:
-            self.name = '!' + self.name
+            self.name = self._mark_fake(self.name)
 
         if not self._fake:
             self._val: float = 0
@@ -71,9 +70,6 @@ class DriverDS1820(AInDriver):
             self._temp: str = path.join(self._sysfs_adr, 'temperature')
             if not path.exists(self._temp):
                 self._temp = path.join(self._sysfs_adr, 'w1_slave')
-        else:
-            self._val = self.initval
-            self._dir: int = 1
 
     def read(self) -> float:
         if self._fake:

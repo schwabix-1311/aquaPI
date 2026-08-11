@@ -67,7 +67,7 @@ class DriverTC420(OutDriver):
 
         self.name = f'TC420 #{self._idx + 1} CH{self._channel + 1}'
         if self._fake:
-            self.name = '!' + self.name
+            self.name = self._mark_fake(self.name)
 
         if not self._fake:
             log.debug('  PlayInitPacket %r', self)

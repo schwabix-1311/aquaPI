@@ -67,20 +67,15 @@ class DriverGPIO(OutDriver, InDriver):
         io_ports = {}
         if is_raspi():
             for pin in range(28):
-                try:
-                    # func = PinFunc(GPIO.gpio_function(pin))
-                    port_name = 'GPIO %d ' % pin
-                    io_ports[port_name + 'in'] = IoPort(PortFunc.Bin,
-                                                        DriverGPIO,
-                                                        {'pin': pin},
-                                                        [])
-                    io_ports[port_name + 'out'] = IoPort(PortFunc.Bout,
-                                                         DriverGPIO,
-                                                         {'pin': pin},
-                                                         [])
-                except KeyError:
-                    log.debug('Unknown function on pin %d = %d',
-                              pin, GPIO.gpio_function(pin))
+                port_name = 'GPIO %d ' % pin
+                io_ports[port_name + 'in'] = IoPort(PortFunc.Bin,
+                                                    DriverGPIO,
+                                                    {'pin': pin},
+                                                    [])
+                io_ports[port_name + 'out'] = IoPort(PortFunc.Bout,
+                                                     DriverGPIO,
+                                                     {'pin': pin},
+                                                     [])
         else:
             # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
             # need all that are simulated somewhere - devices or dependencies
@@ -113,7 +108,7 @@ class DriverGPIO(OutDriver, InDriver):
         if not self._fake:
             GPIO.setup(self._pin, GPIO.IN if inout == 'in' else GPIO.OUT)
         else:
-            self.name = '!' + self.name
+            self.name = self._mark_fake(self.name)
 
     def _is_input_driver(self) -> bool:
         return self.func == PortFunc.Bin

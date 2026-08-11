@@ -14,7 +14,7 @@ log = logging.getLogger('driver.DriverText')
 log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
-# ========== PWM ==========
+# ========== text (Email/Telegram) ==========
 
 
 class DriverText(OutDriver):

@@ -72,7 +72,6 @@ class DriverPWM(DriverPWMbase):
 
         self.name: str = 'PWM %d @ pin %d' % (self._channel, self._pin)
         if not self._fake:
-            ##breakpoint()
             self.name = 'PWM %d @ sysfs' % self._channel
             self._pwmchip: str = '/sys/class/pwm/pwmchip0'
             self._pwmchannel: str = path.join(self._pwmchip, 'pwm%d' % self._channel)
@@ -91,7 +90,7 @@ class DriverPWM(DriverPWMbase):
             with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
                 p.write('0')
         else:
-            self.name = '!' + self.name
+            self.name = self._mark_fake(self.name)
 
         self.write(0)
 
@@ -106,7 +105,8 @@ class DriverPWM(DriverPWMbase):
         log.info('%s -> %f', self.name, float(value))
         if not self._fake:
             if not path.exists(self._pwmchannel):
-                breakpoint()
+                log.error('sysfs PWM channel %d vanished, skipping write', self._channel)
+                return
             with open(path.join(self._pwmchannel, 'duty_cycle'), 'wt', encoding='ascii') as p:
                 p.write('%d' % int(value / 100.0 * 3333333))
             with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:

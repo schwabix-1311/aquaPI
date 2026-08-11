@@ -282,9 +282,7 @@ def _user_to_dict(row: dict) -> dict:
 @login_required
 def api_current_user():
     """ return the currently logged-in user's own info (id, username,
-        role) - used by the SPA to reliably know its own role, since
-        the client-side Vuex auth store is only a placeholder without
-        a real tie to this server-side session.
+        role, email, is_anonymous).
     """
     row = db.get_user_by_id(_users_db_path(), current_user.id)
     return jsonify(_user_to_dict(row))
@@ -293,7 +291,7 @@ def api_current_user():
 @bp.route('/api/users/', methods=['GET'])
 @roles_required('admin')
 def api_list_users():
-    """ list all users """
+    """ list all users. """
     users = db.list_users(_users_db_path())
     return jsonify([_user_to_dict(u) for u in users])
 
@@ -301,8 +299,8 @@ def api_list_users():
 @bp.route('/api/users/suggest-password', methods=['GET'])
 @roles_required('admin')
 def api_suggest_password():
-    """ return a freshly generated passphrase suggestion, does not
-        persist anything
+    """ return a freshly generated passphrase suggestion; does not
+        persist anything.
     """
     return jsonify({'password': generate_aquatic_passphrase()})
 
@@ -322,7 +320,7 @@ def _deliver_user_password(email: str | None, username: str, password: str) -> s
 @bp.route('/api/users/', methods=['POST'])
 @roles_required('admin')
 def api_create_user():
-    """ create a new user with a role """
+    """ create a new user with a role. """
     data = request.get_json(silent=True) or {}
     username = data.get('username', '')
     password = data.get('password', '')
@@ -350,9 +348,9 @@ def api_create_user():
 @bp.route('/api/users/<int:user_id>', methods=['PUT'])
 @roles_required('admin')
 def api_update_user(user_id: int):
-    """ change a user's role and/or reset their password. Refuses to
-        demote the last remaining admin, to avoid locking everyone out
-        of admin functionality.
+    """ change a user's role, password and/or email address. Refuses
+        to demote the last remaining admin, to avoid locking everyone
+        out of admin functionality.
     """
     row = db.get_user_by_id(_users_db_path(), user_id)
     if not row:
@@ -425,7 +423,7 @@ def api_delete_user(user_id: int):
 @bp.route('/api/notifications/prefs', methods=['GET'])
 @login_required
 def api_list_notification_prefs():
-    """ list the current user's own preferred channel per alert node """
+    """ list the current user's own preferred channel per alert node. """
     prefs = db.list_user_notification_prefs(_users_db_path(), current_user.id)
     return jsonify(prefs)
 
@@ -437,7 +435,7 @@ def api_set_notification_pref(alert_node_id: str):
         ('email'/'telegram'/'none') for one specific Alert node, plus an
         optional 2nd escalation channel that gets additionally notified
         once the alert has stayed active for 'escalation_after_minutes'
-        (Step 28; 0 or 'none' disables escalation).
+        (0 or 'none' disables escalation).
     """
     data = request.get_json(silent=True) or {}
     channel = data.get('channel', '')

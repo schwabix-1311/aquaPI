@@ -162,7 +162,7 @@ def api_index() -> Response:
 @bp.route('/api/nodes/')
 @login_required
 def api_nodes() -> Response:
-    """ return array of all node's ids
+    """ return an array of all node ids.
     """
     bus = the_bus()
     if bus is None:
@@ -198,7 +198,7 @@ def _node_to_dict(node) -> dict:
 @bp.route('/api/nodes/<node_id>')
 @login_required
 def api_node(node_id: str) -> Response:
-    """ return state of a single node
+    """ return the current state of a single node.
     """
     bus = the_bus()
     if bus:
@@ -220,7 +220,7 @@ def api_node(node_id: str) -> Response:
 @bp.route('/api/history/')
 @login_required
 def api_history_nodes() -> Response:
-    """ return array of all history node ids
+    """ return an array of all history node ids.
     """
     bus = the_bus()
     if bus:
@@ -238,11 +238,11 @@ def api_history_nodes() -> Response:
 @bp.route('/api/history/<node_id>')
 @login_required
 def api_history(node_id: str) -> Response:
-    """ return a single history, may contains several series
-        (?start=<unix timestamp>, default/0 means everything on the
-        in-mem DB, or the last 24h on the real DB; ?step=<cluster size
-        in seconds>, default 0/none). Clustering ATM only works whith
-        the real DB, in-mem DB can't cluster
+    """ return a single node's history, which may contain several series
+        (?start=<unix timestamp>, default 0 means everything on the
+        in-memory DB, or the last 24h on the real DB; ?step=<cluster size
+        in seconds>, default 0/none). Clustering only works with the
+        real DB; the in-memory DB can't cluster.
     """
     bus = the_bus()
     if bus:
@@ -272,7 +272,7 @@ def api_history(node_id: str) -> Response:
 def api_history_export(node_id: str) -> Response:
     """ export a history node's recorded series as CSV or JSON
         (?format=csv|json, default json; optional ?start=/?step= like
-        /api/history/<id>), for offline analysis (Step 28).
+        /api/history/<id>), for offline analysis.
     """
     bus = the_bus()
     if not bus:
@@ -316,8 +316,8 @@ def api_history_export(node_id: str) -> Response:
 @login_required
 def api_calibration_log(node_id: str) -> Response:
     """ return the recorded calibration history (offset/factor changes)
-        of a ScaleAux node (Step 28; ?limit=<max entries>, default 100);
-        empty list if QuestDB is unavailable or the node never had a
+        of a ScaleAux node (?limit=<max entries>, default 100); empty
+        list if QuestDB is unavailable or the node never had a
         calibration change recorded.
     """
     bus = the_bus()
@@ -335,7 +335,8 @@ def api_calibration_log(node_id: str) -> Response:
 @bp.route('/api/sse', methods=['GET'])
 @login_required
 def api_sse() -> Response:
-    """ API to get SSE updates as an array of ids of modified nodes
+    """ stream Server-Sent Events with the ids of modified nodes.
+        Requires an 'Accept: text/event-stream' request header.
     """
     if request.headers.get('accept') != 'text/event-stream':
         return Response('MUST ACCEPT content type text/event-stream', status=HTTPStatus.BAD_REQUEST)
@@ -357,8 +358,8 @@ def api_sse() -> Response:
 @bp.route('/api/system-info', methods=['GET'])
 @login_required
 def api_system_info() -> Response:
-    """ small set of system health stats for the footer status line -
-        OS name, load average, memory/disk usage (see system_info.py)
+    """ return a small set of system stats: OS name, load average,
+        memory/disk usage.
     """
     return jsonify(get_system_stats())
 
@@ -372,7 +373,7 @@ def _users_db_path() -> str:
 def api_get_dashboard() -> Response:
     """ return the current user's own dashboard layout (visible
         controllers/groups, ordering). An empty list means the user
-        never saved one - the frontend then shows its own default view.
+        has never saved one; callers should fall back to a default view.
     """
     layout = db.get_dashboard(_users_db_path(), current_user.id)
     return jsonify(layout)
@@ -381,7 +382,7 @@ def api_get_dashboard() -> Response:
 @bp.route('/api/dashboard/', methods=['PUT'])
 @login_required
 def api_set_dashboard() -> Response:
-    """ save the current user's dashboard layout """
+    """ save the current user's dashboard layout. """
     layout = request.get_json(silent=True)
     if not isinstance(layout, list):
         return jsonify(error='Body must be a JSON array'), HTTPStatus.BAD_REQUEST
@@ -416,8 +417,9 @@ def _settings_entry_to_dict(entry: Setting) -> dict:
 @bp.route('/api/nodes/<node_id>/settings', methods=['GET'])
 @login_required
 def api_get_node_settings(node_id: str) -> Response:
-    """ return the node's operational parameters (get_settings()) as
-        JSON, used by the /settings page to render generic widgets.
+    """ return a node's configurable operational parameters: for each
+        one, its key, label, current value, value constraints
+        (type/min/max/options), and whether it's editable.
     """
     bus = the_bus()
     if not bus:
@@ -480,14 +482,12 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
 @bp.route('/api/nodes/<node_id>/settings', methods=['PUT'])
 @login_required
 def api_set_node_settings(node_id: str) -> Response:
-    """ update one or more operational parameters of a node, validated
-        against the min/max/type delivered by the node itself
-        (get_settings()), then persist the whole topology. Normally
-        operator+admin only, EXCEPT for UiInput nodes' (dashboard toggle/
-        slider widgets, e.g. UiSwitchInput) own 'value' field, which any
-        role - including the anonymous placeholder viewer - may set, since
-        those widgets are meant to be usable straight from the Dashboard
-        without an account.
+    """ update one or more of a node's operational parameters, validated
+        against each parameter's type/min/max, then persist the whole
+        topology. Requires operator/admin, except when the target is a
+        UiInput node (e.g. UiSwitchInput, UiAnalogInput) and the request
+        body contains only the 'value' key - that case is allowed for
+        any role, including the anonymous viewer.
     """
     bus = the_bus()
     if not bus:
@@ -583,11 +583,9 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
 @bp.route('/api/node-types/', methods=['GET'])
 @login_required
 def api_node_types() -> Response:
-    """ metadata describing every creatable node type (fields, how many
-        'receives' wires it accepts). Powers the node palette and the
-        add/edit dialog on /config. Alert nodes are intentionally not
-        listed here (their 'conditions' are out of scope for this
-        generic editor).
+    """ metadata describing every creatable node type: its fields and
+        how many 'receives' connections it accepts. Alert nodes are
+        not included.
     """
     return jsonify(db.get_node_type_schema())
 
@@ -747,10 +745,9 @@ def api_update_node(node_id: str) -> Response:
 @roles_required('admin')
 def api_delete_node(node_id: str) -> Response:
     """ remove a node from the live bus, cleanly disconnecting it from
-        any other (non-Alert) node that still listens to it, then
-        persist the topology. Alert nodes are skipped when cleaning up
-        references since their 'receives' is derived from 'conditions',
-        not an independently editable wire.
+        any other node that still listens to it (except Alert nodes,
+        whose 'receives' can't be edited directly), then persist the
+        topology.
     """
     bus = the_bus()
     if not bus:
@@ -781,10 +778,9 @@ def api_delete_node(node_id: str) -> Response:
 @bp.route('/api/config/apply', methods=['POST'])
 @roles_required('admin')
 def api_config_apply() -> Response:
-    """ atomically apply a bulk create/update/delete diff, as produced
-        by the /config editor's client-side draft ("Speichern"
-        button). Either every part of the diff is applied and persisted
-        exactly once, or (on any validation error) nothing is changed
+    """ atomically apply a bulk create/update/delete diff to the
+        topology. Either every part of the diff is applied and
+        persisted, or (on any validation error) nothing is changed
         at all.
     """
     bus = the_bus()
@@ -823,7 +819,7 @@ def api_config_apply() -> Response:
 @bp.route('/api/templates/', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_list_templates() -> Response:
-    """ list all node-combination templates (name, description, node count) """
+    """ list all node-combination templates (name, description, node count). """
     return jsonify(db.list_templates(_topo_db_path()))
 
 
@@ -868,7 +864,7 @@ def api_create_template() -> Response:
 @bp.route('/api/templates/<name>', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_get_template(name: str) -> Response:
-    """ fetch one template including its full node data """
+    """ fetch one template including its full node data. """
     template = db.get_template(_topo_db_path(), name)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
@@ -878,7 +874,7 @@ def api_get_template(name: str) -> Response:
 @bp.route('/api/templates/<name>', methods=['DELETE'])
 @roles_required('admin')
 def api_delete_template(name: str) -> Response:
-    """ remove a template """
+    """ remove a template. """
     if not db.delete_template(_topo_db_path(), name):
         return Response(status=HTTPStatus.NOT_FOUND)
 
@@ -893,7 +889,7 @@ def api_delete_template(name: str) -> Response:
 @roles_required('admin')
 def api_insert_template(name: str) -> Response:
     """ insert a template's nodes into the live bus with fresh,
-        collision-free ids, wire them up and persist the topology
+        collision-free ids, wire them up and persist the topology.
     """
     bus = the_bus()
     if not bus:
@@ -926,7 +922,7 @@ def api_insert_template(name: str) -> Response:
 @bp.route('/api/config/snapshots', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_list_snapshots() -> Response:
-    """ list all saved configuration snapshots (name, created_at) """
+    """ list all saved configuration snapshots (name, created_at). """
     return jsonify(db.list_snapshots(_topo_db_path()))
 
 
@@ -963,7 +959,7 @@ def api_create_snapshot() -> Response:
 @bp.route('/api/config/snapshots/<name>', methods=['DELETE'])
 @roles_required('admin')
 def api_delete_snapshot(name: str) -> Response:
-    """ remove a saved snapshot """
+    """ remove a saved snapshot. """
     if not db.delete_snapshot(_topo_db_path(), name):
         return Response(status=HTTPStatus.NOT_FOUND)
 
@@ -978,7 +974,7 @@ def api_delete_snapshot(name: str) -> Response:
 @roles_required('admin')
 def api_restore_snapshot(name: str) -> Response:
     """ replace the entire live topology with the one stored in a
-        snapshot, then persist it as the new current topology
+        snapshot, then persist it as the new current topology.
     """
     bus = the_bus()
     if not bus:
@@ -1030,11 +1026,7 @@ def api_audit_log() -> Response:
 @roles_required('admin')
 def api_backup() -> Response:
     """ build a fresh, consistent backup archive (topology + users
-        SQLite databases) on the fly and offer it as a file download.
-        Uses the same db.create_backup_archive() code path as the
-        daily scheduled backup (MachineRoom), just written to a
-        throwaway temp directory that is removed again once the
-        response has been sent.
+        databases) on the fly and offer it as a file download.
     """
     mr: MachineRoom = current_app.extensions['machineroom']
     tmp_dir = tempfile.mkdtemp(prefix='aquapi-backup-dl-')
@@ -1063,11 +1055,8 @@ def api_health() -> Response:
     """ unauthenticated health/monitoring endpoint: reports QuestDB
         availability/reachability, the number of currently active bus
         nodes, and whether the app is running in simulation or on real
-        hardware. Never blocks/fails just because an external service
-        (QuestDB) happens to be unreachable - that degradation is
-        already handled gracefully elsewhere (History falls back to
-        in-memory storage, see hist_nodes.py), this endpoint just
-        surfaces the current state for monitoring.
+        hardware. Always returns 200 even if QuestDB is unreachable;
+        check the 'questdb.reachable' field instead.
     """
     bus = the_bus()
     node_count = len(bus.get_nodes()) if bus else 0

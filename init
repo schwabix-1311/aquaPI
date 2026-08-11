@@ -58,6 +58,7 @@ if [ $(getconf LONG_BIT) == 64 ]
 then
   if ( grep -i "Raspberry Pi" /proc/cpuinfo >/dev/null )
   then
+    quest_sh="${MyHome}/questdb-${QuestRel}/questdb.sh"
     if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
       echo "===== install Quest DB & OpenJDK JRE"
@@ -70,22 +71,42 @@ then
       then
         sed "s/-XX:+UseParallelGC/-XX:+UseParallelGC\\n  -Xms32M\\n  -Xmx128M/" questdb-${QuestRel}/bin/questdb.sh
       fi
-
-      echo "===== ... and start QuestDB"
-      "${MyHome}/questdb-${QuestRel}/questdb.sh" start
     fi
     export JAVA_HOME=/usr/lib/jvm/java-${JavaRel}-openjdk-arm64
   else
+    quest_sh="${MyHome}/questdb-${QuestRel}/bin/questdb.sh"
     if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
       echo "===== install Quest DB incl. JRE for AMD64"
       tar -xvf questdb-${QuestRel}-rt-linux-amd64.tar.gz
       mv questdb-${QuestRel}-rt-linux-amd64 questdb-${QuestRel}
-
-      echo "===== ... and start QuestDB"
-      "${MyHome}/questdb-${QuestRel}/bin/questdb.sh" start
     fi
   fi
+
+  if ( "${quest_sh}" status 2>/dev/null | grep -q "^PID:" )
+  then
+    quest_running=1
+  else
+    quest_running=0
+  fi
+
+  read -t 10 -p "Start QuestDB now? [Y/n] (auto-Yes in 10s) " quest_answer
+  echo
+  if [[ -z "${quest_answer}" || "${quest_answer}" =~ ^[Yy] ]]
+  then
+    if [ "${quest_running}" -eq 0 ]
+    then
+      echo "===== starting Quest DB"
+      "${quest_sh}" start
+    fi
+  else
+    if [ "${quest_running}" -eq 1 ]
+    then
+      echo "===== stopping Quest DB"
+      "${quest_sh}" stop
+    fi
+  fi
+
   pip3 install 'psycopg[binary]>=3.1.9'
   echo "You can interact with Quest DB in your browser at localhost:9000"
   echo "====="

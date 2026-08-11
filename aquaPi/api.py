@@ -4,6 +4,7 @@ import logging
 import shutil
 import tempfile
 import time
+from html import escape
 from os import path
 
 from http import HTTPStatus
@@ -44,13 +45,11 @@ def _topo_db_path() -> str:
     return mr.globals['BUS_TOPO']
 
 
-@bp.route('/api/', methods=['GET'])
-@login_required
-def api_index() -> Response:
-    """ list every registered /api/... route with its HTTP method(s)
-        and description - derived from the live URL map and each
-        route's own docstring, so this stays correct without any
-        manual upkeep as routes are added, changed or removed
+def _collect_api_routes() -> list[dict]:
+    """ every registered /api/... route with its HTTP method(s) and
+        description - derived from the live URL map and each route's
+        own docstring, so this stays correct without any manual
+        upkeep as routes are added, changed or removed
     """
     routes = []
     for rule in current_app.url_map.iter_rules():
@@ -74,6 +73,89 @@ def api_index() -> Response:
             'description': doc,
         })
     routes.sort(key=lambda r: r['path'])
+    return routes
+
+
+# cosmetic-only: nicer section headers for the HTML view's known top-level
+# /api/<segment>/... groups. Any segment missing here still gets a sensible
+# auto-derived header (see _api_group_label()), so a newly added route
+# doesn't need an entry here to show up correctly grouped.
+_API_GROUP_NAMES = {
+    'users': 'User management',
+    'nodes': 'Nodes',
+    'node-types': 'Node types',
+    'dashboard': 'Dashboard',
+    'history': 'History',
+    'notifications': 'Notifications',
+    'templates': 'Config templates',
+    'config': 'Config snapshots',
+    'audit-log': 'Audit log',
+    'backup': 'Backup',
+    'health': 'Health',
+    'sse': 'Live updates (SSE)',
+    'system-info': 'System info',
+}
+
+
+def _api_group_label(route_path: str) -> str:
+    """ human-readable section header for a /api/<segment>/... path """
+    segment = route_path.removeprefix('/api/').split('/', 1)[0]
+    return _API_GROUP_NAMES.get(segment, segment.replace('-', ' ').title())
+
+
+def _render_api_routes_html(routes: list[dict]) -> str:
+    rows = []
+    prev_group = None
+    for route in routes:
+        group = _api_group_label(route['path'])
+        if group != prev_group:
+            rows.append(f'<tr><th colspan="3">{escape(group)}</th></tr>')
+            prev_group = group
+        rows.append(
+            '<tr><td>{}</td><td><code>{}</code></td><td>{}</td></tr>'.format(
+                escape('/'.join(route['methods'])),
+                escape(route['path']),
+                escape(route['description']),
+            )
+        )
+    return f'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aquaPi API</title>
+<style>
+  body {{ font-family: sans-serif; margin: 2em; color: #222; }}
+  table {{ border-collapse: collapse; width: 100%; }}
+  th, td {{ text-align: left; padding: 0.35em 0.8em; vertical-align: top; }}
+  td {{ border-bottom: 1px solid #ddd; }}
+  th {{ background: #f0f0f0; padding-top: 0.8em; }}
+  code {{ font-family: monospace; }}
+</style>
+</head>
+<body>
+<h1>aquaPi API</h1>
+<p>Machine-readable version: send an <code>Accept: application/json</code>
+   header to this same URL.</p>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+<tbody>
+{''.join(rows)}
+</tbody>
+</table>
+</body>
+</html>'''
+
+
+@bp.route('/api/', methods=['GET'])
+@login_required
+def api_index() -> Response:
+    """ list every registered /api/... route with its HTTP method(s)
+        and description, as JSON or - for a plain browser visit - as
+        a human-readable HTML page, based on the request's Accept header.
+    """
+    routes = _collect_api_routes()
+    if request.accept_mimetypes.best_match(['application/json', 'text/html']) == 'text/html':
+        return Response(_render_api_routes_html(routes), mimetype='text/html')
     return jsonify(routes)
 
 

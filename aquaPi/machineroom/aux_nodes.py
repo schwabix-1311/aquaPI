@@ -2,7 +2,7 @@
 
 from abc import ABC
 import logging
-from typing import (Iterable, Any)
+from typing import (Callable, Iterable, Any)
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange, Setting)
@@ -29,18 +29,6 @@ class SingleInAux(AuxNode, ABC):
     def __init__(self, name: str, receives: str, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.data = -1
-
-#   def __getstate__(self) -> dict[str, Any]:
-#       state = super().__getstate__()
-#       if not self.rcv_unit:
-#       if not self.rcv_unit:
-#           for rcv in self.get_receives():
-#               self.rcv_unit = self.rcv_unit
-#  ?            self.unit = rcv.unit
-#  ?            self.data_range = rcv.data_range  # depends on inputs
-#               break
-#       state["unit"] = self.unit
-#       return state
 
 
 class MultiInAux(AuxNode, ABC):
@@ -222,7 +210,24 @@ class AvgAux(MultiInAux):
         return settings
 
 
-class MinAux(MultiInAux):
+class _MinMaxAux(MultiInAux, ABC):
+    """ shared implementation for MinAux/MaxAux - only the aggregate
+        function differs between them
+    """
+    _AGGREGATE: Callable[[Iterable[float]], float]
+
+    def listen(self, msg: Msg) -> None:
+        if isinstance(msg, MsgData):
+            val = float(msg.data)
+            self.values[msg.sender] = val
+            self.data = round(self._AGGREGATE(self.values.values()), 4)
+            log.info('%s %s: output %f', type(self).__name__, self.id, self.data)
+            self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
+
+
+class MinAux(_MinMaxAux):
     """ Auxiliary node to post the lower of two or more inputs = boolenan AND.
         Can be used to let two controllers drive one output, or to have
         redundant inputs.
@@ -234,19 +239,10 @@ class MinAux(MultiInAux):
         Output:
             float - posts changes of minimum value of all inputs
     """
-
-    def listen(self, msg: Msg) -> None:
-        if isinstance(msg, MsgData):
-            val = float(msg.data)
-            self.values[msg.sender] = val
-            self.data = round(min(self.values.values()), 4)
-            log.info('MinAux %s: output %f', self.id, self.data)
-            self.post(MsgData(self.id, self.data))
-
-        super().listen(msg)
+    _AGGREGATE = staticmethod(min)
 
 
-class MaxAux(MultiInAux):
+class MaxAux(_MinMaxAux):
     """ Auxiliary node to post the higher of two or more inputs = boolean OR.
         Can be used to let two controllers drive one output, or to have
         redundant inputs.
@@ -258,16 +254,7 @@ class MaxAux(MultiInAux):
         Output:
             float - posts changes of maximum value of all inputs
     """
-
-    def listen(self, msg: Msg) -> None:
-        if isinstance(msg, MsgData):
-            val = float(msg.data)
-            self.values[msg.sender] = val
-            self.data = round(max(self.values.values()), 4)
-            log.info('MaxAux %s: output %f', self.id, self.data)
-            self.post(MsgData(self.id, self.data))
-
-        super().listen(msg)
+    _AGGREGATE = staticmethod(max)
 
 
 # ========== user-facing visualization ==========

@@ -10,7 +10,7 @@ from threading import Thread
 
 from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, HeartbeatMixin, MsgData, Setting)
 from .port_driver import PortDriverMixin
-from ..driver import (IoRegistry, DriverReadError, InDriver, PortFunc)
+from ..driver import (DriverReadError, InDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.in_nodes')
@@ -26,7 +26,6 @@ class InputNode(PortDriverMixin, BusNode, ABC):
         All use a reader thread, most reading from IoRegistry port
     """
     ROLE = BusRole.IN_ENDP
-    _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
     _DRIVER_BASE = InDriver
     _PORT_CAPABILITY = 'reading data'
 
@@ -46,10 +45,6 @@ class InputNode(PortDriverMixin, BusNode, ABC):
         state["port"] = self.port
         state["interval"] = self.interval
         return state
-
-    # def __setstate__(self, state: dict[str, Any]) -> None:
-    #     self.data = state['data']
-    #     InputNode.__init__(self, state, _cont=True)
 
     def __str__(self) -> str:
         return f'{type(self).__name__}({self.name}/{self.port})'
@@ -94,10 +89,7 @@ class InputNode(PortDriverMixin, BusNode, ABC):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
-        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
-        settings.append(Setting('port', 'inputPort', self.port,
-                                type='select', options=options))
+        settings.append(self._port_setting('inputPort'))
         settings.append(Setting('interval', 'readInterval', self.interval,
                                 type='duration', min=1, max=600, step=1))
         return settings

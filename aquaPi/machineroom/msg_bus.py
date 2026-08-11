@@ -252,10 +252,6 @@ class BusListener(BusNode, ABC):
             else:
                 self.receives = [rcv for rcv in receives]
 
-    # def __getstate__(self) -> dict[str, Any]:
-    #     state = super().__getstate__()
-    #     return state
-
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         BusListener.__init__(self, state['name'],
@@ -343,9 +339,6 @@ class MsgBus:
     def post(self, msg: Msg) -> None:
         """ Put message into the queue or dispatch in a
             blocking loop.
-            Descendants of MsgReply contain the id of
-            receiver (send_to) for 1:1 communication.
-            This might change too to a send_to parameter.
         """
         self.dbg_cnt += 1
         msg.dbg_cnt = self.dbg_cnt
@@ -370,11 +363,6 @@ class MsgBus:
         log.info('%s =>', str(msg))
         rcv_nodes: set[BusNode] = set()
 
-#        if isinstance(msg, MsgReply):
-#            # directed message sender -> receiver
-#            if node := self.get_node(msg.send_to):
-#                rcv_nodes = {node}
-#        else:
         # broadcast message: all but sender
         rcv_nodes = {n for n in self.nodes if n.id != msg.sender}
         # ... and apply each node's filter for non-Infra msgs
@@ -484,18 +472,3 @@ class MsgBus:
             change.add(q.get_nowait())
         log.info('self.wait_for_changes returns %d: %s', len(change), str(change))
         return change
-
-
-#############################
-
-
-if __name__ == "__main__":
-    # This is your playground ... not used in the application
-
-    mb = MsgBus()
-    # mb = MsgBus(threaded=True)
-
-    # relay = BusListener('TempRelay', msg_cbk=relay, inputs=temp_ctrl.id)
-    # relay.plugin(mb)
-
-    mb.teardown()

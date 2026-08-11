@@ -114,15 +114,30 @@ def get_calibration_log(node_id: str, limit: int = 100) -> list[dict[str, Any]]:
 class TimeDb(ABC):
     """ Base class for time series storage
     """
-    fields: set[str] = set()
-
     ValueLst = list[str | float | None]
 
     def __init__(self):
         pass
 
     def add_field(self, name: str) -> None:
-        TimeDb.fields.add(name)
+        pass
+
+    @staticmethod
+    def _insert(result: dict[int, 'TimeDb.ValueLst'], start: int,
+                ts: int, idx: int, val: str | float | None) -> None:
+        """ insert one (timestamp, series-index, value) triple into
+            `result`, creating a new all-None row for `ts` if this is
+            the first value seen at that timestamp. Values at or before
+            `start` are folded into the `start` row itself. Shared by
+            every TimeDb.query() implementation - only how they produce
+            each triple differs.
+        """
+        if ts <= start:
+            result[start][idx] = val
+        else:
+            if ts not in result:
+                result[ts] = [None] * len(result[0])
+            result[ts][idx] = val
 
     @abstractmethod
     def feed(self, name: str, value: int | float) -> None:
@@ -196,19 +211,12 @@ class TimeDbMemory(TimeDb):
             result[0] = [nm for nm in node_names]
 
             start = max(1, start)
-            result[start] = TimeDb.ValueLst = [None] * len(result[0])
+            result[start] = [None] * len(result[0])
             for idx, name in enumerate(node_names):
                 series = TimeDbMemory._store[name]
                 for measurement in series:
                     (ts, val) = measurement
-                    if ts <= start:
-                        # still <= start, so update
-                        result[start][idx] = val
-                    else:
-                        # past start, ensure a tupel for ts exists
-                        if ts not in result:
-                            result[ts] = TimeDb.ValueLst = [None] * len(result[0])
-                        result[ts][idx] = val
+                    self._insert(result, start, ts, idx, val)
 
             log.debug('TimeDbMemory.query %r start %r step %r', node_names, start, step)
             log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))
@@ -359,20 +367,12 @@ if QUEST_DB:
             # each val may be null!
             result: dict[int, TimeDb.ValueLst] = {}
             result[0] = names
-# FIXME: refactor!!
-            result[start] = TimeDb.ValueLst = [None] * len(result[0])
+            result[start] = [None] * len(result[0])
             for row in recs:
                 (dt_tm, node, val) = row
                 ts = int(dt_tm.timestamp())  # max resolution is 1sec
                 idx = names.index(node)
-                if ts <= start:
-                    # still <= start, so update
-                    result[start][idx] = val
-                else:
-                    # past start, ensure a tupel for ts exists
-                    if ts not in result:
-                        result[ts] = TimeDb.ValueLst = [None] * len(result[0])
-                    result[ts][idx] = val
+                self._insert(result, start, ts, idx, val)
 
             # null out the unchanged values,
             # this safes processing time for rare events in chart

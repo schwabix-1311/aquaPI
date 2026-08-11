@@ -9,7 +9,7 @@ import time
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange, Setting)
 from .port_driver import PortDriverMixin
-from ..driver import (IoRegistry, OutDriver, PortFunc)
+from ..driver import (OutDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.out_nodes')
@@ -26,7 +26,6 @@ class DeviceNode(PortDriverMixin, BusListener, ABC):
         truth testing, whatever is more intuitive for each dev.
     """
     ROLE = BusRole.OUT_ENDP
-    _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
     _DRIVER_BASE = OutDriver
     _PORT_CAPABILITY = 'writing data'
 
@@ -46,10 +45,6 @@ class DeviceNode(PortDriverMixin, BusListener, ABC):
         state = super().__getstate__()
         state["port"] = self.port
         return state
-
-    # def __setstate__(self, state: dict[str, Any]) -> None:
-    #     self.data = state['data']
-    #     DeviceNode.__init__(self, state, _cont=True)
 
     def __str__(self) -> str:
         return f'{type(self).__name__}({self.name}/{self.port})'
@@ -79,10 +74,7 @@ class DeviceNode(PortDriverMixin, BusListener, ABC):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
-        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
-        settings.append(Setting('port', 'outputPort', self.port,
-                                type='select', options=options))
+        settings.append(self._port_setting('outputPort'))
         return settings
 
 

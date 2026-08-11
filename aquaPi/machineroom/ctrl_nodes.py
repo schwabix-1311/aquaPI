@@ -46,41 +46,20 @@ class ControllerNode(BusListener, ABC):
         self.data: float = 0.0
         self.unit: str = '%'
 
-    def __getstate__(self) -> dict[str, Any]:
+    def _ensure_rcv_unit(self) -> None:
         if not self.rcv_unit:
             for rcv in self.get_receives():
                 self.rcv_unit = rcv.unit
                 break
+
+    def __getstate__(self) -> dict[str, Any]:
+        self._ensure_rcv_unit()
         state = super().__getstate__()
         state["rcv_unit"] = self.rcv_unit
         return state
 
-    # def __getstate__(self) -> dict[str, Any]:
-    #    return super().__getstate__()
-
-    # def __setstate__(self, state: dict[str, Any]) -> None:
-    #    ControllerNode.__init__(self, state, _cont=True)
-
-    def is_advanced(self) -> bool:
-        """ Advanced node chains include AUX nodes (or more than In->CTRL->OUT?)
-            might become obsolete: the ctrl centric model doesn't hold
-        """
-        if not self._bus:
-            return False
-        for node in self.get_receives():
-            if node.ROLE == BusRole.AUX:
-                return True
-        for node in self.get_listeners():
-            if node.ROLE == BusRole.AUX:
-                return True
-        return False
-
     def get_settings(self) -> list[Setting]:
-        if not self.rcv_unit:
-            for rcv in self.get_receives():
-                self.rcv_unit = rcv.unit
-                break
-
+        self._ensure_rcv_unit()
         return []  # don't inherit inputs!  Why not????
 
 
@@ -101,27 +80,12 @@ class ThresholdCtrl(ControllerNode):
         self._dir = direction
         self.alert: tuple[str, str] | None = None
 
-    # --- Pickling ---
-#    def __reduce__(self):
-#        ctor = self.__class__
-#        args = (self.name, self.receives, self.setpoint, self.hysteresis, True)
-#        state = {"data": self.data,
-#                 "alert": self.alert}
-#        return (ctor, args, state)
-
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state["setpoint"] = self.setpoint
         state["hysteresis"] = self.hysteresis
         state["alert"] = self.alert
         return state
-
-#    def __setstate__(self, state: dict[str, Any]) -> None:
-#        self.data = state['data']
-#        ThresholdCtrl.__init__(self, state['name'], state['receives'],
-#                               state['setpoint'], hysteresis=state['hysteresis'],
-#                               _cont=True)
-#        self.alert = state['alert']
 
     def _threshold_on(self) -> float:
         raise NotImplementedError
@@ -190,16 +154,6 @@ class MinimumCtrl(ThresholdCtrl):
                          direction='LOW',
                          _cont=_cont)
 
-    # --- Pickling ---
-#    def __reduce__(self):
-#        ctor = MinimumCtrl
-#        args = (self.name, self.receives, self.setpoint, self.hysteresis, True)
-#        state = {
-#            "data": self.data,
-#            "alert": self.alert,
-#        }
-#        return (ctor, args, state)
-
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         MinimumCtrl.__init__(self, state['name'], state['receives'],
@@ -238,16 +192,6 @@ class MaximumCtrl(ThresholdCtrl):
                          cmp_on=operator.gt, cmp_off=operator.le,
                          direction='HIGH',
                          _cont=_cont)
-
-    # --- Pickling ---
-#    def __reduce__(self):
-#        ctor = MinimumCtrl
-#        args = (self.name, self.receives, self.setpoint, self.hysteresis, True)
-#        state = {
-#            "data": self.data,
-#            "alert": self.alert,
-#        }
-#        return (ctor, args, state)
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
@@ -637,7 +581,6 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
                 now = time()
 
             # loop with clouds until fader_stop
-            #FIXME: post some heartbeat values to keep diagram nice - could help everywhere ...
             while not self._fader_stop:
                 shadow = self._calculate_clouds()
                 self.alert = ('\u219d', 'act') if shadow else None  # rightwards wave arrow

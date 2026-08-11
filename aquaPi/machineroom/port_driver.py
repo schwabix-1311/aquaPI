@@ -2,7 +2,8 @@
 
 import logging
 
-from ..driver import IoRegistry
+from .msg_bus import Setting
+from ..driver import IoRegistry, PortFunc
 
 
 log = logging.getLogger('machineroom.port_driver')
@@ -24,6 +25,7 @@ class PortDriverMixin:
     """
     _DRIVER_BASE: type
     _PORT_CAPABILITY: str = 'this'
+    _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
 
     @property
     def port(self) -> str:
@@ -59,3 +61,12 @@ class PortDriverMixin:
         """ push/pull the node's state to/from a freshly (re)attached
             driver. No-op by default.
         """
+
+    def _port_setting(self, label: str) -> Setting:
+        """ the 'port' Setting entry shared by InputNode/DeviceNode's
+            get_settings() - offers every currently-free port of this
+            node's function(s), plus its own current port if it holds one
+        """
+        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
+        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
+        return Setting('port', label, self.port, type='select', options=options)

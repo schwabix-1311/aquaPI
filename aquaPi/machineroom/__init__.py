@@ -114,31 +114,8 @@ class MachineRoom:
 
                 log.brief("=== There are no controllers defined, creating default")
 
-# WIP this constructs all nodes contained in this file, including all side effects
-#     of construction such as port driver creation, just it isn't plugged in yet
-#                with open('phsteuerung.chain', 'r', encoding='utf8') as p:
-#                    ch = jsonpickle.loads(p.read())
-#                breakpoint()
-#                print(ch)
-
                 self.create_default_nodes()
                 self.save_nodes(self.bus)
-
-# thoughts on chains:
-# - could have a couple of jsonpickeled chain files
-# - before decoding them (instantiate by loads), the file contents could run through a
-#   parser, interactively filling in variables
-# - with appropriate variable syntax the parser could offer choices from appropriate types or data from the live system
-# - should go through all possible variables to learn requirements
-# - same parser could later be used to pre-select choices of a nicer API
-
-                # instead iterate with bus.get_nodes().intersect(chain) until empty?
-#                for c in self.bus.get_nodes(BusRole.CTRL):
-#                    chain = {c}
-#                    chain |= {rcv for rcv in c.get_receives(True)}
-#                    chain |= {lst for lst in c.get_listeners(True)}
-#                    with open(c.id + '.chain', 'w', encoding='utf8') as p:
-#                        p.write(jsonpickle.dumps(chain, indent=2))
 
                 log.brief("=== Successfully created Bus and default Nodes")
                 log.brief("  ... and saved to %s", self.globals['BUS_TOPO'])
@@ -198,9 +175,6 @@ class MachineRoom:
         if path.exists(cfg_file):
             with open(cfg_file, 'r', encoding='utf8') as f_in:
                 custom_cfg = json.load(f_in)
-        # if 'Email' in custom_cfg:
-        #     for idx in range(len(custom_cfg['Email'])):
-        #         custom_cfg['Email'][idx].update(self.globals['Email'][idx])
         if 'Telegram' in custom_cfg:
             for idx in range(len(custom_cfg['Telegram'])):
                 custom_cfg['Telegram'][idx].update(self.globals['Telegram'][idx])

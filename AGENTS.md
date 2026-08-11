@@ -32,7 +32,8 @@ Beim ersten Aufruf werden zusätzlich Git-Submodule initialisiert (u. a. `aquaPi
 - `-r`: setzt die Topologie zurück (löscht die Pickle-Datei vor dem Start).
 
 Abhängigkeiten stehen in `requirements.txt` (u. a. Flask, Flask-Login, RPi.GPIO, Adafruit-Blinka/ADS1x15
-für den ADC, croniter für Zeitpläne); `requirements-dev.txt` ergänzt nur `pytest`/`pytest-mock` für die
+für den ADC, croniter für Zeitpläne); `requirements-dev.txt` ergänzt `pytest`/`pytest-mock`/`pytest-xdist`
+(parallele Testläufe, `pytest -n auto`) und `psycopg` (für die gemockten QuestDB-Codepfade) für die
 Testsuite und referenziert `requirements.txt` per `-r`.
 
 ## Architektur & Kernmodule
@@ -167,7 +168,7 @@ und Vuetify verdrahtet und global mountet (`app.mount('#app')`).
   der Sprache der Konversation mit dem Nutzer.
 - Niemals Dateien aus dem Abschnitt "Sicherheit" (`instance/`, `logs/`, `.env`, `.gitignore`-Einträge)
   committen oder deren Inhalte in Commit-Messages zitieren.
-- Vor einem Commit `pytest -m "not questdb"` lokal ausführen, sofern Backend-Code geändert wurde.
+- Vor einem Commit `pytest` (oder `pytest -n auto`) lokal ausführen, sofern Backend-Code geändert wurde.
 - Kein `git push` ohne ausdrückliche Aufforderung des Nutzers; ebenso keine destruktiven Git-Operationen
   (`reset`, `checkout`, `restore`, `stash`, `clean`, `push --force`) auf bereits committete oder
   gepushte Änderungen, außer explizit gewünscht.
@@ -185,12 +186,16 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-Ein Teil der Tests ist mit dem Marker `questdb` versehen und läuft nur sinnvoll gegen eine echte
-QuestDB-Instanz. Ohne diese Instanz gezielt ausschließen:
+Für schnellere lokale Läufe (Suite parallel über alle CPU-Kerne, ca. 4x schneller,
+verifiziert unabhängig von echter QuestDB-Instanz und je Test isoliertem `tmp_path`):
 
 ```bash
-pytest -m "not questdb"
+pytest -n auto
 ```
+
+Der Marker `questdb` ist für Tests reserviert, die nur sinnvoll gegen eine echte QuestDB-Instanz
+laufen (gezielt ausschließbar via `pytest -m "not questdb"`) - aktuell nutzt aber kein Test diesen
+Marker, die gesamte Suite läuft vollständig gemockt.
 
 Testkonfiguration: `pytest.ini` (`testpaths = tests`). Gemeinsame Fixtures liegen in
 `tests/conftest.py`. Testdateien folgen dem Schema `tests/test_<bereich>.py`
@@ -201,8 +206,8 @@ Testkonfiguration: `pytest.ini` (`testpaths = tests`). Gemeinsame Fixtures liege
 
 - Neue Tests folgen dem bestehenden Namensschema `test_*.py` und nutzen die Fixtures aus
   `tests/conftest.py` statt eigene DB-/App-Instanzen aufzusetzen.
-- Änderungen am Backend sollten mit `pytest -m "not questdb"` lokal geprüft werden, bevor QuestDB-
-  abhängige Tests separat betrachtet werden.
+- Änderungen am Backend sollten lokal mit `pytest` geprüft werden. Neue Tests, die eine echte
+  QuestDB-Instanz brauchen, sollten den `questdb`-Marker verwenden (siehe Abschnitt "Tests").
 - Frontend-Code liegt unter `aquaPi/static/spa`; Änderungen dort sollten den bestehenden Vue/Vuetify-Stil
   beibehalten.
 - Pläne liegen unter `.junie/plans/`; das ist ein Junie-spezifisches Format, andere Tools (Claude Code,

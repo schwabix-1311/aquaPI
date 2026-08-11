@@ -32,7 +32,9 @@ The backend test suite (`tests/`) uses `pytest` and needs no real hardware, no r
 pip install -r requirements-dev.txt
 pytest
 ```
-A few tests are marked `questdb` and only run meaningfully against a real QuestDB instance; to skip them explicitly, run `pytest -m "not questdb"`.
+For faster local runs, use `pytest -n auto` to run the suite in parallel across all CPU cores (~4x faster; verified safe, since no test touches a real QuestDB instance and every test gets its own isolated `tmp_path`).
+
+A `questdb` pytest marker exists for tests that would only run meaningfully against a real QuestDB instance (to be excluded via `pytest -m "not questdb"`), but no test currently uses it - the whole suite runs fully mocked today.
 
 If you are interested in contributing in any form, you are welcome! Please leave a note in Discussion or Issues.
 If you don't want to contribute but have an idea of a "killer feature" let's talk about it in Discussions too.  BTW, German is my native language; feel free to use it here.

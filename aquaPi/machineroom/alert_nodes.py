@@ -8,6 +8,7 @@ from time import monotonic
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange, Setting)
+from .port_driver import PortDriverMixin
 from ..driver import (IoRegistry, PortFunc, OutDriver)
 from .. import db
 
@@ -152,7 +153,7 @@ class AlertBelow(AlertThreshold):
 # ========== alert node ==========
 
 
-class Alert(BusListener):
+class Alert(PortDriverMixin, BusListener):
     """ A multi-input node, checking alert conditions with output
         to email/telegram/etc. One instance can handle several conditions as
         long as all have the same driver, e.g. all report thru email.
@@ -168,6 +169,8 @@ class Alert(BusListener):
     """
     ROLE = BusRole.ALERTS
     data_range = DataRange.STRING
+    _DRIVER_BASE = OutDriver
+    _PORT_CAPABILITY = 'writing alert messages'
 
     def __init__(self, name: str, conditions: set[AlertCond] | AlertCond,
                  port: str, repeat: int = 60 * 60, _cont: bool = False):
@@ -198,24 +201,6 @@ class Alert(BusListener):
     def __setstate__(self, state: dict[str, Any]) -> None:
         Alert.__init__(self, state['name'], state['conditions'], state['port'],
                        state['repeat'], _cont=True)
-
-    @property
-    def port(self) -> str:
-        return self._port
-
-    @port.setter
-    def port(self, port: str) -> None:
-        if self._driver:
-            IoRegistry.get().driver_destruct(self._port, self._driver)
-            self._driver = None
-        if port:
-            driver = IoRegistry.get().driver_factory(port)
-            if isinstance(driver, OutDriver):
-                self._driver = driver
-            else:
-                log.error('Port %s does not support writing alert messages. Alert %s will be ignored.',
-                          port, self.name)
-        self._port = port
 
     def _send_alert(self, alert_active: bool, alert_lst: list[str]):
         text = ' \n'.join(alert_lst)

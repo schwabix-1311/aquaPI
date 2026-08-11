@@ -9,6 +9,7 @@ from croniter import croniter
 from threading import Thread
 
 from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, HeartbeatMixin, MsgData, Setting)
+from .port_driver import PortDriverMixin
 from ..driver import (IoRegistry, DriverReadError, InDriver, PortFunc)
 
 
@@ -19,13 +20,15 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 # ========== inputs AKA sensors ==========
 
 
-class InputNode(BusNode, ABC):
+class InputNode(PortDriverMixin, BusNode, ABC):
     """ Base class for IN_ENDP delivering measurments,
         e.g. temperature, pH, water level switch
         All use a reader thread, most reading from IoRegistry port
     """
     ROLE = BusRole.IN_ENDP
     _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
+    _DRIVER_BASE = InDriver
+    _PORT_CAPABILITY = 'reading data'
 
     def __init__(self, name: str, port: str,
                  interval: float = 0.5, _cont: bool = False):
@@ -51,22 +54,10 @@ class InputNode(BusNode, ABC):
     def __str__(self) -> str:
         return f'{type(self).__name__}({self.name}/{self.port})'
 
-    @property
-    def port(self) -> str:
-        return self._port
+    def _port_driver_opts(self):
+        return self._driver_opts
 
-    @port.setter
-    def port(self, port: str) -> None:
-        if self._driver:
-            IoRegistry.get().driver_destruct(self._port, self._driver)
-        if port:
-            driver = IoRegistry.get().driver_factory(port, self._driver_opts)
-            if isinstance(driver, InDriver):
-                self._driver = driver
-            else:
-                log.error('Port %s does not support reading data. %s will be ignored.',
-                          port, self.name)
-        self._port = port
+    def _sync_driver(self) -> None:
         self.data = self.read()
 
     def plugin(self, bus: MsgBus) -> None:

@@ -8,6 +8,7 @@ import time
 
 from .msg_types import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange, Setting)
+from .port_driver import PortDriverMixin
 from ..driver import (IoRegistry, OutDriver, PortFunc)
 
 
@@ -18,7 +19,7 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 # ========== outputs AKA Device ==========
 
 
-class DeviceNode(BusListener, ABC):
+class DeviceNode(PortDriverMixin, BusListener, ABC):
     """ Base class for OUT_ENDP such as relay, PWM, GPIO pins.
         Receives float input from listened sender.
         Binary devices should use a threashold of 50 or pythonic
@@ -26,6 +27,8 @@ class DeviceNode(BusListener, ABC):
     """
     ROLE = BusRole.OUT_ENDP
     _port_funcs: list[PortFunc] = []  # overridden by concrete subclasses
+    _DRIVER_BASE = OutDriver
+    _PORT_CAPABILITY = 'writing data'
 
     def __init__(self, name: str, receives: str, port: str,
                  _cont=False):
@@ -51,28 +54,7 @@ class DeviceNode(BusListener, ABC):
     def __str__(self) -> str:
         return f'{type(self).__name__}({self.name}/{self.port})'
 
-    @property
-    def port(self) -> str:
-        return self._port
-
-    def _apply_port(self, port: str) -> None:
-        """ (re)connect self._driver to `port`, destructing any previous
-            one. Does not push the node's current state to a freshly
-            attached driver - see the port setter/_sync_driver() for that.
-        """
-        if self._driver:
-            IoRegistry.get().driver_destruct(self._port, self._driver)
-            self._driver = None
-        if port:
-            driver = IoRegistry.get().driver_factory(port)
-            if isinstance(driver, OutDriver):
-                self._driver = driver
-            else:
-                log.error('Port %s does not support writing data. %s will be ignored.',
-                          port, self.name)
-        self._port = port
-
-    @port.setter
+    @PortDriverMixin.port.setter
     def port(self, port: str) -> None:
         self._apply_port(port)
         if self._driver:

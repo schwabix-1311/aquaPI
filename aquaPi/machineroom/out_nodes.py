@@ -147,10 +147,11 @@ class SwitchDevice(DeviceNode):
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
-            #if self.data != bool(msg.data):
             data = (msg.data > 50.)
             if self.data != data:
-                self.switch(data)
+                self.switch(data)  # also posts
+            else:
+                self.post(MsgData(self.id, 100 if self.data else 0))
 
         super().listen(msg)
 
@@ -330,7 +331,9 @@ class AnalogDevice(DeviceNode):
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             if self.data != float(msg.data):
-                self.set_percent(float(msg.data))
+                self.set_percent(float(msg.data))  # also posts
+            else:
+                self.post(MsgData(self.id, round(self.data, 4)))
 
         super().listen(msg)
 

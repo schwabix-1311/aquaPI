@@ -8,7 +8,7 @@ from datetime import datetime
 from croniter import croniter
 from threading import Thread
 
-from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, MsgData, Setting)
+from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, HeartbeatMixin, MsgData, Setting)
 from ..driver import (IoRegistry, DriverReadError, InDriver, PortFunc)
 
 
@@ -385,13 +385,23 @@ class ScheduleInput(BusNode):
 # ========== user-driven virtual inputs ==========
 
 
-class UiInput(BusNode, ABC):
+class UiInput(HeartbeatMixin, BusNode, ABC):
     """ Base for nodes whose value is set directly by the user via
         get_settings()/PUT .../settings (dashboard or /settings), not
         read from a hardware/simulated port driver. Posts MsgData
-        immediately when set - no polling thread involved.
+        immediately when set, plus a periodic heartbeat (see HeartbeatMixin)
+        since nobody touching the widget for a long time is the normal
+        case, not an exception.
     """
     ROLE = BusRole.IN_ENDP
+
+    def plugin(self, bus: MsgBus) -> None:
+        super().plugin(bus)
+        self._start_heartbeat()
+
+    def pullout(self) -> bool:
+        self._stop_heartbeat()
+        return super().pullout()
 
     @property
     def value(self):

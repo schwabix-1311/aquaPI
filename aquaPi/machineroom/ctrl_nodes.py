@@ -11,7 +11,7 @@ from datetime import timedelta
 from threading import Thread
 
 from .msg_bus import (Msg, MsgData)
-from .msg_bus import (BusListener, BusRole, DataRange, Setting)
+from .msg_bus import (BusListener, BusRole, DataRange, HeartbeatMixin, MsgBus, Setting)
 
 
 log = logging.getLogger('machineroom.ctrl_nodes')
@@ -346,7 +346,7 @@ class PidCtrl(ControllerNode):
         return settings
 
 
-class FadeCtrl(ControllerNode):
+class FadeCtrl(HeartbeatMixin, ControllerNode):
     """ Single channel linear fading controller, usable for light (dusk/dawn).
         A change of input value will start a ramp from current to new
         percentage. The duration of this ramp is deltaPerc / 100 * fade_time.
@@ -399,6 +399,14 @@ class FadeCtrl(ControllerNode):
         FadeCtrl.__init__(self, state['name'], state['receives'],
                           fade_time=state['fade_time'], fade_out=state['fade_out'],
                           _cont=True)
+
+    def plugin(self, bus: MsgBus) -> None:
+        super().plugin(bus)
+        self._start_heartbeat()
+
+    def pullout(self) -> bool:
+        self._stop_heartbeat()
+        return super().pullout()
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
@@ -513,7 +521,7 @@ class Cloud(object):
         return math.sin(t) * max_p
 
 
-class SunCtrl(ControllerNode):
+class SunCtrl(HeartbeatMixin, ControllerNode):
     """ A single channel light controller, simulating ascend/descend
         aproximated by a sine wave (xscend).
         Any input change starts a new cycle; an ongoing cycle is aborted.
@@ -559,6 +567,14 @@ class SunCtrl(ControllerNode):
         SunCtrl.__init__(self, state['name'], state['receives'],
                          xscend=state['xscend'],
                          _cont=True)
+
+    def plugin(self, bus: MsgBus) -> None:
+        super().plugin(bus)
+        self._start_heartbeat()
+
+    def pullout(self) -> bool:
+        self._stop_heartbeat()
+        return super().pullout()
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):

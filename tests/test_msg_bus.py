@@ -6,9 +6,11 @@
     Step 30 for a broader test suite of the core components.
 """
 
+import time
+
 import pytest
 
-from aquaPi.machineroom.msg_bus import BusNode, BusListener, BusRole, MsgBus
+from aquaPi.machineroom.msg_bus import BusNode, BusListener, BusRole, HeartbeatMixin, MsgBus
 from aquaPi.machineroom.msg_types import MsgData
 
 
@@ -43,6 +45,29 @@ class _DummyListener(BusListener):
 
     def get_settings(self):
         return []
+
+
+class _DummyHeartbeatSource(HeartbeatMixin, BusNode):
+    """ minimal concrete BusNode using the HeartbeatMixin mixin, matching how
+        FadeCtrl/SunCtrl/UiInput wire it up in plugin()/pullout()
+    """
+    ROLE = BusRole.IN_ENDP
+    HEARTBEAT_INTERVAL = 0.02
+
+    def __init__(self, name, value=0):
+        super().__init__(name)
+        self.data = value
+
+    def get_settings(self):
+        return []
+
+    def plugin(self, bus):
+        super().plugin(bus)
+        self._start_heartbeat()
+
+    def pullout(self):
+        self._stop_heartbeat()
+        return super().pullout()
 
 
 @pytest.fixture
@@ -138,3 +163,31 @@ def test_get_nodes_filters_by_role(bus):
     assert bus.get_nodes(roles={BusRole.IN_ENDP}) == [source]
     assert bus.get_nodes(roles={BusRole.AUX}) == [listener]
     assert set(bus.get_nodes()) == {source, listener}
+
+
+def test_heartbeat_reposts_unchanged_value_while_plugged_in(bus):
+    source = _DummyHeartbeatSource('Quelle', value=42.0)
+    source.plugin(bus)
+
+    listener = _DummyListener('Verbraucher', receives=source.id)
+    listener.plugin(bus)
+    listener.received.clear()  # discard the initial state echo
+
+    time.sleep(0.1)  # a handful of heartbeat intervals
+
+    assert listener.received
+    assert all(v == 42.0 for v in listener.received)
+
+
+def test_heartbeat_stops_after_pullout(bus):
+    source = _DummyHeartbeatSource('Quelle', value=1.0)
+    source.plugin(bus)
+    source.pullout()
+
+    listener = _DummyListener('Verbraucher', receives=source.id)
+    listener.plugin(bus)
+    listener.received.clear()
+
+    time.sleep(0.1)
+
+    assert listener.received == []

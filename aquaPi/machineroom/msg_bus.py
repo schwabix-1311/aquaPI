@@ -7,6 +7,7 @@ from queue import Queue
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
 from threading import (Lock, Thread)
+from time import sleep
 
 from .msg_types import (Msg, MsgInfra, MsgHello, MsgData, MsgBye)
 
@@ -73,6 +74,40 @@ class Setting:
     @property
     def editable(self) -> bool:
         return self.key is not None
+
+
+class HeartbeatMixin:
+    """ Mixin for nodes that only post on an actual value change and have
+        no periodic upstream to piggyback on (e.g. a settled fade, or a
+        UI input nobody is touching) - they can otherwise stay silent for
+        hours. That silence has two visible costs: a downsampled/clustered
+        history query's FILL(PREV) can permanently latch onto whatever
+        (possibly still-transitioning) value was last averaged into a
+        bucket, and a live chart's line simply stops advancing towards
+        "now". Periodically re-posting the current, unchanged value keeps
+        History fed and self-correcting.
+        A using class must call _start_heartbeat()/_stop_heartbeat() from
+        its own plugin()/pullout() (after/before the super() call).
+    """
+    HEARTBEAT_INTERVAL = 60  # seconds
+
+    def _start_heartbeat(self) -> None:
+        self._heartbeat_stop = False
+        self._heartbeat_thread = Thread(name=self.id + '.heartbeat',
+                                        target=self._heartbeat, daemon=True)
+        self._heartbeat_thread.start()
+
+    def _stop_heartbeat(self) -> None:
+        if getattr(self, '_heartbeat_thread', None):
+            self._heartbeat_stop = True
+            self._heartbeat_thread.join()
+            self._heartbeat_thread = None
+
+    def _heartbeat(self) -> None:
+        while not self._heartbeat_stop:
+            sleep(self.HEARTBEAT_INTERVAL)
+            if not self._heartbeat_stop:
+                self.post(MsgData(self.id, self.data))
 
 
 class BusNode(ABC):

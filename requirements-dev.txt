@@ -5,6 +5,9 @@
 
 pytest>=7.4.0
 pytest-mock>=3.11.1
+# run the suite across all CPU cores: pytest -n auto (~4x faster, verified
+# safe - no real QuestDB access, every INSTANCE_PATH is tmp_path-based)
+pytest-xdist>=3.6.1
 
 # needed so hist_nodes.QUEST_DB is True and hist_nodes.pg exists to be
 # monkeypatched - tests never connect to a real QuestDB instance (no

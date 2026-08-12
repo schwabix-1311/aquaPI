@@ -158,9 +158,9 @@ class DriverADS1115(AInDriver):
         self._ana_in: AnalogIn = AnalogIn(self._ads, inp)
         self._median_filter: bool = True  # const ATM
 
-    def close(self) -> None:
+    def _do_close(self) -> None:
         if self._fake:
-            return super().close()
+            return
 
         # return chip to power-on defaults to allow future auto-detect
         self._ads.gain = 2

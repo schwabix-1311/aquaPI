@@ -37,8 +37,8 @@ class DriverTC420(OutDriver):
             while True:
                 tc = TC420(dev_index=idx)
                 tc.time_sync()
-                DriverTC420.devices[idx] = tc
-                DriverTC420.devices[idx] = [0, 0, 0, 0, 0]
+                DriverTC420.devices.append(tc)
+                DriverTC420.ports.append([0, 0, 0, 0, 0])
                 for ch in range(5):
                     port_name = f'TC420 #{idx + 1} CH{ch + 1}'
                     io_ports[port_name] = IoPort(PortFunc.Aout,
@@ -76,7 +76,7 @@ class DriverTC420(OutDriver):
 
         self.write(0)
 
-    def close(self) -> None:
+    def _do_close(self) -> None:
         if not self._fake:
             self.write(0)
             log.debug('  ModeStopPacket %r', self)
@@ -102,9 +102,9 @@ class DriverTC420(OutDriver):
             if DriverTC420._writer_timer:
                 DriverTC420._writer_timer.cancel()
 
-            for idx, device in enumerate(DriverTC420.devices):
-                log.debug('  PlaySetChannels #%d: %r', idx + 1, device[1])
-                device[0].send(PlaySetChannels(device[1]))
+            for idx, (tc, channels) in enumerate(zip(DriverTC420.devices, DriverTC420.ports)):
+                log.debug('  PlaySetChannels #%d: %r', idx + 1, channels)
+                tc.send(PlaySetChannels(channels))
 
             DriverTC420._writer_timer = Timer(9, DriverTC420._writer)
             DriverTC420._writer_timer.start()

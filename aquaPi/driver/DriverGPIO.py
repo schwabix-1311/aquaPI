@@ -113,8 +113,7 @@ class DriverGPIO(OutDriver, InDriver):
     def _is_input_driver(self) -> bool:
         return self.func == PortFunc.Bin
 
-    def close(self) -> None:
-        log.debug('Closing %r', self)
+    def _do_close(self) -> None:
         if not self._fake and self._pin is not None:
             GPIO.cleanup(self._pin)
             self._pin = None

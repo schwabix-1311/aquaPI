@@ -94,8 +94,7 @@ class DriverPWM(DriverPWMbase):
 
         self.write(0)
 
-    def close(self) -> None:
-        log.debug('Closing %r', self)
+    def _do_close(self) -> None:
         if not self._fake:
             with open(path.join(self._pwmchannel, 'enable'), 'wt', encoding='ascii') as p:
                 p.write('0')

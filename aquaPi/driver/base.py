@@ -118,6 +118,7 @@ class Driver:
         self._fake: bool = not is_raspi()
         if 'fake' in cfg:
             self._fake |= bool(cfg['fake'])
+        self._closed: bool = False
 
     def __del__(self) -> None:
         self.close()
@@ -132,7 +133,20 @@ class Driver:
         return ('!' + name) if self._fake else name
 
     def close(self) -> None:
+        """ IoRegistry.driver_destruct() calls this explicitly, then
+            __del__ calls it again once the caller drops its last
+            reference - guarded here so subclasses' _do_close() never
+            runs twice (e.g. re-sending hardware teardown commands to an
+            already-closed device)
+        """
+        if self._closed:
+            return
+        self._closed = True
         log.debug('Closing %r', self)
+        self._do_close()
+
+    def _do_close(self) -> None:
+        pass
 
 
 class InDriver(Driver):

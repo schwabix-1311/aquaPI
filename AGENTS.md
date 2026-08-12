@@ -216,7 +216,7 @@ Testkonfiguration: `pytest.ini` (`testpaths = tests`). Gemeinsame Fixtures liege
 
 ## Bekannte Stolpersteine
 
-- Im Projekt-Root liegen QuestDB-Archive/Verzeichnisse (`questdb-7.1.3*`) - diese sind Laufzeit-Artefakte
+- Im Projekt-Root liegen QuestDB-Archive/Verzeichnisse (`questdb-*`) - diese sind Laufzeit-Artefakte
   und keine zu bearbeitenden Quellcode-Dateien.
 - `instance/` und `logs/` enthalten Laufzeitdaten (u. a. `logs/aquaPi.log`) und sollten nicht versioniert
   oder als Quellcode behandelt werden.

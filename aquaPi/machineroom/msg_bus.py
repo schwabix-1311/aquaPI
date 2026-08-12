@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from queue import Queue
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
-from threading import (Lock, Thread)
-from time import sleep
+from threading import (Event, Lock, Thread)
 
 from .msg_types import (Msg, MsgInfra, MsgHello, MsgData, MsgBye)
 
@@ -92,22 +91,23 @@ class HeartbeatMixin:
     HEARTBEAT_INTERVAL = 60  # seconds
 
     def _start_heartbeat(self) -> None:
-        self._heartbeat_stop = False
+        self._heartbeat_stop = Event()
         self._heartbeat_thread = Thread(name=self.id + '.heartbeat',
                                         target=self._heartbeat, daemon=True)
         self._heartbeat_thread.start()
 
     def _stop_heartbeat(self) -> None:
         if getattr(self, '_heartbeat_thread', None):
-            self._heartbeat_stop = True
+            # wake the thread immediately instead of leaving it to sleep
+            # out its current interval (up to HEARTBEAT_INTERVAL seconds)
+            # before join() could ever return
+            self._heartbeat_stop.set()
             self._heartbeat_thread.join()
             self._heartbeat_thread = None
 
     def _heartbeat(self) -> None:
-        while not self._heartbeat_stop:
-            sleep(self.HEARTBEAT_INTERVAL)
-            if not self._heartbeat_stop:
-                self.post(MsgData(self.id, self.data))
+        while not self._heartbeat_stop.wait(self.HEARTBEAT_INTERVAL):
+            self.post(MsgData(self.id, self.data))
 
 
 class BusNode(ABC):

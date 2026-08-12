@@ -356,7 +356,4 @@ class Alert(PortDriverMixin, BusListener):
         settings = super().get_settings()
         settings.append(Setting('repeat', 'repeat', self.repeat,
                                 type='duration', min=0, max=24*60*60, step=60))
-# ??        for cond in self.conditions:
-#            settings.append(Setting('cond.limit', f'{str(cond)} [min]', cond.limit,
-#                             type='number', min=1, max=...))
         return settings

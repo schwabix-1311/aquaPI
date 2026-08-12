@@ -389,6 +389,29 @@ def would_create_cycle(bus: MsgBus, node_id: str, new_receives: list[str]) -> bo
     return False
 
 
+def prune_dangling_references(bus: MsgBus, deleted_id: str) -> None:
+    """ remove every reference to 'deleted_id' from every other live
+        node's wiring, right before it is actually deleted. Plain nodes:
+        drop it from their 'receives' list directly. Alert nodes: their
+        'receives' is derived from 'conditions' (never directly editable -
+        see NODE_TYPE_SCHEMA's Alert exclusion), so instead drop every
+        AlertCond that watches 'deleted_id' and recompute 'receives' from
+        what's left, or a deleted node would leave an orphaned/dangling
+        AlertCond and a stale 'receives' entry behind forever.
+    """
+    for other in bus.get_nodes():
+        if other.id == deleted_id:
+            continue
+        if other.ROLE == BusRole.ALERTS:
+            remaining = {c for c in other.conditions if c.node_id != deleted_id}
+            if len(remaining) != len(other.conditions):
+                other.conditions = remaining
+                other.receives = [c.node_id for c in other.conditions]
+            continue
+        if deleted_id in other.receives:
+            other.receives = [r for r in other.receives if r != deleted_id]
+
+
 class ConfigDiffError(ValueError):
     """ raised by apply_config_diff() when any single part of a diff is
         invalid. Carries the offending 'entry' (the create/update dict,
@@ -606,11 +629,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     #     real, deletes first, then updates, then creates ---
     for del_id in deleted_ids:
         node = live_nodes[del_id]
-        for other in bus.get_nodes():
-            if other is node or other.ROLE == BusRole.ALERTS:
-                continue
-            if del_id in other.receives:
-                other.receives = [r for r in other.receives if r != del_id]
+        prune_dangling_references(bus, del_id)
         node.pullout()
 
     for upd_id, upd in updates_by_id.items():

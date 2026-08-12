@@ -18,6 +18,7 @@ from .driver.base import DriverError
 from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import (BusRole, Setting)
+from .machineroom.alert_nodes import Alert
 from .machineroom.aux_nodes import ScaleAux
 from .machineroom.in_nodes import UiInput
 from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable,
@@ -741,6 +742,73 @@ def api_update_node(node_id: str) -> Response:
     return jsonify(_node_to_dict(node))
 
 
+@bp.route('/api/nodes/<node_id>/conditions', methods=['PUT'])
+@roles_required('admin')
+def api_set_alert_conditions(node_id: str) -> Response:
+    """ bulk-replace every AlertCond of an Alert node in one call -
+        add/change/remove are all expressed as the new, complete list.
+        AlertCond has no stable per-item id (stored/compared by Python
+        object identity inside a set, not a persisted key), so no
+        partial add/remove-by-id route is offered; a full bulk-replace
+        (matching PUT /api/dashboard/'s existing convention) is atomic
+        and needs no new identity scheme. An empty list is accepted -
+        it silences the alert without deleting the node (and its
+        port/repeat/notification prefs).
+    """
+    bus = the_bus()
+    if not bus:
+        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    node = bus.get_node(node_id)
+    if not node:
+        return Response(status=HTTPStatus.NOT_FOUND)
+    if not isinstance(node, Alert):
+        return jsonify(error=f'{type(node).__name__} does not have alert conditions'), HTTPStatus.BAD_REQUEST
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get('conditions'), list):
+        return jsonify(error="Body must be a JSON object with a 'conditions' list"), HTTPStatus.BAD_REQUEST
+
+    conditions = set()
+    for i, raw in enumerate(body['conditions']):
+        if not isinstance(raw, dict):
+            return jsonify(error=f'conditions[{i}] must be an object'), HTTPStatus.BAD_REQUEST
+
+        cls = db.ALERT_COND_FACTORY.get(raw.get('class'))
+        if not cls:
+            return jsonify(error=f"conditions[{i}]: unknown class {raw.get('class')!r}"), HTTPStatus.BAD_REQUEST
+
+        cond_node_id = raw.get('node_id')
+        if not isinstance(cond_node_id, str) or not bus.get_node(cond_node_id):
+            return jsonify(error=f'conditions[{i}]: unknown node_id {cond_node_id!r}'), HTTPStatus.BAD_REQUEST
+
+        try:
+            limit = _validate_and_cast(f'conditions[{i}].limit', raw.get('limit'), 'number')
+            duration = _validate_and_cast(f'conditions[{i}].duration', raw.get('duration', 0),
+                                          'number', vmin=0, voptional=True)
+        except ValueError as ex:
+            return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
+
+        conditions.add(cls(cond_node_id, limit=limit, duration=int(duration)))
+
+    receives = [c.node_id for c in conditions]
+    if db.would_create_cycle(bus, node_id, receives):
+        return jsonify(error='This wiring would create a cycle'), HTTPStatus.BAD_REQUEST
+
+    node.conditions = conditions
+    node.receives = receives
+
+    mr: MachineRoom = current_app.extensions['machineroom']
+    mr.save_nodes(bus)
+
+    log.info('User %r replaced conditions of alert %r: %d condition(s)',
+             current_user.username, node_id, len(conditions))
+    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
+                           'update_alert_conditions', node_id, {'count': len(conditions)})
+
+    return jsonify(_node_to_dict(node))
+
+
 @bp.route('/api/nodes/<node_id>', methods=['DELETE'])
 @roles_required('admin')
 def api_delete_node(node_id: str) -> Response:
@@ -757,11 +825,7 @@ def api_delete_node(node_id: str) -> Response:
     if not node:
         return Response(status=HTTPStatus.NOT_FOUND)
 
-    for other in bus.get_nodes():
-        if other is node or other.ROLE == BusRole.ALERTS:
-            continue
-        if node_id in other.receives:
-            other.receives = [r for r in other.receives if r != node_id]
+    db.prune_dangling_references(bus, node_id)
 
     node.pullout()
 

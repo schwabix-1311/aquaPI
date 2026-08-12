@@ -6,6 +6,7 @@
 
 import {registerGlobalComponent} from '../app/registry.js'
 import {useConfigStore} from '../../store/modules/config.js'
+import '../settings/alertCondEditor.js'
 
 const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
@@ -42,7 +43,7 @@ const ConfigNodeBox = {
 			<div class="d-flex align-center justify-space-between px-2 pt-1">
 				<v-chip x-small label :color="color" text-color="white">{{ node.role }}</v-chip>
 				<div>
-     <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
+     <v-btn v-if="node.role !== 'ALERTS'" icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
 						<v-icon size="small">mdi-vector-line</v-icon>
 					</v-btn>
      <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
@@ -158,7 +159,7 @@ const ConfigConnections = {
 					:class="{'config-connection-line--hover': hoveredEdgeKey === edge.key}"
 				></path>
 				<g
-					v-if="hoveredEdgeKey === edge.key"
+					v-if="edge.deletable && hoveredEdgeKey === edge.key"
 					class="config-connection-delete"
 					:transform="'translate(' + edge.midX + ',' + edge.midY + ')'"
 					@click="$emit('remove', edge)"
@@ -225,6 +226,11 @@ const ConfigConnections = {
 						diagonalPath,
 						midX,
 						midY,
+						// Alert.receives is derived from its conditions, not
+						// directly editable - the generic delete-X (which
+						// stages a plain receives edit) doesn't apply here,
+						// same reasoning as the missing 'connect' icon.
+						deletable: target.role !== 'ALERTS',
 					})
 				})
 			})
@@ -242,7 +248,7 @@ const ConfigNodeDialog = {
 		editNode: {type: Object, default: null},
 	},
 	template: `
-		<v-dialog v-model="show" max-width="520" persistent>
+		<v-dialog v-model="show" max-width="700" persistent>
 			<v-card>
 				<v-card-title>
 					{{ editNode ? $t('pages.config.editNode') : $t('pages.config.addNode') }}
@@ -267,7 +273,7 @@ const ConfigNodeDialog = {
 					></v-text-field>
 
 					<v-select
-						v-if="receivesKind !== 'none'"
+						v-if="receivesKind !== 'none' && !isAlert"
 						v-model="form.receives"
 						:items="receivesItems"
 						item-title="title"
@@ -284,7 +290,7 @@ const ConfigNodeDialog = {
 						outlined dense
 					></v-text-field>
 
-					<div v-for="field in schemaFields" :key="field.key">
+					<div v-if="!isAlert" v-for="field in schemaFields" :key="field.key">
 						<v-switch
 							v-if="field.type === 'checkbox'"
 							v-model="form.fields[field.key]"
@@ -323,6 +329,17 @@ const ConfigNodeDialog = {
 							outlined dense
 						></v-text-field>
 					</div>
+
+					<template v-if="isAlert">
+						<v-divider class="my-3"></v-divider>
+						<div class="text-overline mb-2">{{ $t('pages.settings.alertConds.heading') }}</div>
+						<alert-cond-editor
+							ref="alertCondEditor"
+							:node="editNode"
+							:hide-save-button="true"
+							:key="'alert-' + editNode.id + '-' + dialogInstanceKey"
+						></alert-cond-editor>
+					</template>
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
@@ -337,6 +354,7 @@ const ConfigNodeDialog = {
 			form: {type: '', name: '', receives: null, group: '', fields: {}},
 			saving: false,
 			error: null,
+			dialogInstanceKey: 0,
 		}
 	},
 	computed: {
@@ -360,6 +378,13 @@ const ConfigNodeDialog = {
 		receivesKind: function() {
 			return this.schema.receives || 'none'
 		},
+		// Alert nodes have no NODE_TYPE_SCHEMA entry (their conditions
+		// aren't a plain field) and are never creatable, so this is only
+		// ever true while editing - conditions are handled entirely by
+		// <alert-cond-editor>, not by the generic receives/fields controls.
+		isAlert: function() {
+			return !!this.editNode && this.editNode.role === 'ALERTS'
+		},
 		// TODO(config-receives-type-filtering): lists every other node
 		// unconditionally - doesn't filter by data_range compatibility
 		// (e.g. History can't handle a STRING source). See
@@ -381,6 +406,7 @@ const ConfigNodeDialog = {
 	methods: {
 		resetForm: function() {
 			this.error = null
+			this.dialogInstanceKey++
 			if (this.editNode) {
 				this.form = {
 					type: this.editNode.type,
@@ -415,18 +441,32 @@ const ConfigNodeDialog = {
 		cancel: function() {
 			this.show = false
 		},
-		save: function() {
+		save: async function() {
 			this.error = null
 			this.saving = true
 			try {
  			if (this.editNode) {
+					const changes = Object.assign({group: this.form.group}, this.form.fields)
+					if (this.receivesKind !== 'none') {
+						changes.receives = this.asReceivesList()
+					}
 					this.configStore.draftUpdateNode({
 						nodeId: this.editNode.id,
-						changes: Object.assign(
-							{receives: this.asReceivesList(), group: this.form.group},
-							this.form.fields
-						),
+						changes: changes,
 					})
+					if (this.isAlert) {
+						// single Save button covers both: 'group' above is
+						// only staged into the draft (committed later via
+						// the page's own "Save changes"), but conditions
+						// have no place in that schema-less diff, so they're
+						// persisted immediately here instead - see
+						// alertCondEditor.js's own comment on why.
+						const condResult = await this.$refs.alertCondEditor.save()
+						if (!condResult.ok) {
+							this.error = condResult.error || this.$t('misc.toast.saveError')
+							return
+						}
+					}
 				} else {
 					if (!this.form.type || !this.form.name) {
 						this.error = this.$t('pages.config.errNameType')

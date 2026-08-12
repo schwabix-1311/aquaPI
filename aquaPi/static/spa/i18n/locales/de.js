@@ -34,6 +34,18 @@ export default
 			scheduleHint: 'Minute Stunde Tag(Monat) Monat Wochentag',
 			inputs: 'Eingänge',
 			outputs: 'Ausgänge',
+			alertConds: {
+				heading: 'Alarm-Bedingungen',
+				condition: 'Bedingung',
+				watchedNode: 'Beobachteter Node',
+				limit: 'Grenzwert',
+				duration: 'Mindestdauer (Min)',
+				add: 'Bedingung hinzufügen',
+				remove: 'Bedingung entfernen',
+				save: 'Bedingungen speichern',
+				hintEmpty: 'Noch keine Bedingungen - dieser Alarm wird nie auslösen',
+				confirmClearAll: 'Letzte Bedingung entfernen? Dieser Alarm löst dann nicht mehr aus, bis wieder eine Bedingung hinzugefügt wird.',
+			},
 			fields: {
 				unit: 'Einheit',
 				offset: 'Offset',
@@ -325,6 +337,10 @@ export default
 			in_endp: 'Eingang',
 			out_endp: 'Ausgang',
 			alerts: 'Störung',
+		},
+		alertConds: {
+			AlertAbove: 'Über',
+			AlertBelow: 'Unter',
 		},
 		dataRange: {
 			default: {

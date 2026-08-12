@@ -34,6 +34,18 @@ export default
 			scheduleHint: 'Minute Hour DayOfMonth Month DayOfWeek',
 			inputs: 'Inputs',
 			outputs: 'Outputs',
+			alertConds: {
+				heading: 'Alert conditions',
+				condition: 'Condition',
+				watchedNode: 'Watched node',
+				limit: 'Limit',
+				duration: 'For at least (min)',
+				add: 'Add condition',
+				remove: 'Remove condition',
+				save: 'Save conditions',
+				hintEmpty: 'No conditions yet - this alert will never trigger',
+				confirmClearAll: 'Remove the last condition? This alert will no longer trigger until a condition is added again.',
+			},
 			fields: {
 				unit: 'Unit',
 				offset: 'Offset',
@@ -325,6 +337,10 @@ export default
 			in_endp: 'Input',
 			out_endp: 'Output',
 			alerts: 'Alert',
+		},
+		alertConds: {
+			AlertAbove: 'Above',
+			AlertBelow: 'Below',
 		},
 		dataRange: {
 			default: {

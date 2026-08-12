@@ -386,6 +386,14 @@ const AquapiConfig = {
 				this.connectingFrom = null
 				return
 			}
+			// Alert nodes have no 'connect' icon of their own (conditions
+			// are wired via the AlertCond editor, not drag-connect) and
+			// aren't valid drop targets either, for the same reason -
+			// silently ignore rather than erroring, since there's no
+			// affordance suggesting this would work in the first place.
+			if (node.role === 'ALERTS') {
+				return
+			}
 			this.connectTo(node)
 		},
 

@@ -301,7 +301,92 @@ def test_delete_referenced_node_cleans_dangling_reference(client, users, bus):
     assert 'wasser' not in bus.get_node('heizen').receives
 
 
+def test_delete_node_cleans_up_referencing_alert_condition(client, users, bus):
+    # 'warnungen' watches 'wasser' via an AlertCond - deleting 'wasser'
+    # must prune that condition too, not just plain 'receives' lists
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.delete('/api/nodes/wasser')
+    assert resp.status_code == HTTPStatus.NO_CONTENT
+    node = bus.get_node('warnungen')
+    assert all(c.node_id != 'wasser' for c in node.conditions)
+    assert 'wasser' not in node.receives
+
+
 def test_delete_node_persists_topology(client, users, app):
     _login(client, 'admin1', 'adminPass123')
     client.delete('/api/nodes/heizstab')
+    assert app.extensions['machineroom'].saved == 1
+
+
+# --- PUT /api/nodes/<id>/conditions -------------------------------------
+
+
+def test_set_conditions_requires_admin(client, users):
+    _login(client, 'operator1', 'operatorPass1')
+    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
+    assert resp.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_set_conditions_unknown_node_returns_404(client, users):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/doesnotexist/conditions', json={'conditions': []})
+    assert resp.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_set_conditions_rejects_non_alert_node(client, users):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/heizstab/conditions', json={'conditions': []})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_set_conditions_replaces_and_derives_receives(client, users, bus):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
+        {'class': 'AlertBelow', 'node_id': 'wasser', 'limit': 10.0, 'duration': 5},
+    ]})
+    assert resp.status_code == HTTPStatus.OK
+    node = bus.get_node('warnungen')
+    assert len(node.conditions) == 1
+    cond = next(iter(node.conditions))
+    assert type(cond).__name__ == 'AlertBelow'
+    assert cond.limit == 10.0 and cond.duration == 5
+    assert node.receives == ['wasser']
+
+
+def test_set_conditions_accepts_empty_list(client, users, bus):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
+    assert resp.status_code == HTTPStatus.OK
+    node = bus.get_node('warnungen')
+    assert node.conditions == set()
+    assert node.receives == []
+
+
+def test_set_conditions_rejects_unknown_class(client, users):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
+        {'class': 'AlertLongActive', 'node_id': 'wasser', 'limit': 1.0},
+    ]})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_set_conditions_rejects_unknown_node_id(client, users):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
+        {'class': 'AlertAbove', 'node_id': 'doesnotexist', 'limit': 1.0},
+    ]})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_set_conditions_rejects_self_reference(client, users):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
+        {'class': 'AlertAbove', 'node_id': 'warnungen', 'limit': 1.0},
+    ]})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_set_conditions_persists_topology(client, users, app):
+    _login(client, 'admin1', 'adminPass123')
+    client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
     assert app.extensions['machineroom'].saved == 1

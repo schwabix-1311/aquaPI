@@ -4,6 +4,7 @@ import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useConfigStore} from '../../store/modules/config.js'
 import {useUsersStore} from '../../store/modules/users.js'
 import {isHistOrAlert, chainAnchor, ancestors, descendants, flattenEntries} from './chains.js'
+import './alertCondEditor.js'
 
 // a Setting is required unless attrs.optional is true, and must not be
 // left empty - this is enforced server-side (api.py's _validate_and_cast),
@@ -604,10 +605,19 @@ const NodeSettingsFields = {
 		// 'setpoint'), not display text - resolved here once, centrally,
 		// so none of the individual Setting* widget components below need
 		// to know about i18n at all, they just render item.label as-is.
+		//
+		// Exception: UiSwitchInput/UiAnalogInput's own control ('value')
+		// mirrors their Dashboard widgets (dashboard/comps.js's
+		// settingItem computeds), which label it with the node's own
+		// name rather than a generic translated word - the control *is*
+		// the node, there's nothing else to distinguish it by.
 		settings: function() {
+			const ownControlTypes = ['UiSwitchInput', 'UiAnalogInput']
 			return this.settingsStore.settingsForNode(this.node.id).map(item => ({
 				...item,
-				label: this.$t('pages.settings.fields.' + item.label, item.labelParams || {}),
+				label: (ownControlTypes.includes(this.node.type) && item.key === 'value')
+					? this.node.name
+					: this.$t('pages.settings.fields.' + item.label, item.labelParams || {}),
 			}))
 		},
 		error: function() {
@@ -735,7 +745,8 @@ const NodeSettingsCard = {
 			<v-card-text>
 				<node-settings-fields :node="anchor"></node-settings-fields>
 
-				<node-receives-editor v-if="isHistOrAlert(anchor)" :node="anchor"></node-receives-editor>
+				<node-receives-editor v-if="anchor.role === 'HISTORY'" :node="anchor"></node-receives-editor>
+				<alert-cond-editor v-else-if="anchor.role === 'ALERTS'" :node="anchor"></alert-cond-editor>
 
 				<template v-else>
 					<template v-if="inputs.length">

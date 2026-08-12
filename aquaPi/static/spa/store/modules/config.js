@@ -120,6 +120,49 @@ export const useConfigStore = Pinia.defineStore('config', {
 			}
 		},
 
+		async updateNodeConditions(payload) {
+			const {nodeId, conditions} = payload
+
+			try {
+				const response = await fetch('/api/nodes/' + nodeId + '/conditions', {
+					method: 'put',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json',
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({conditions}),
+				})
+
+				const body = await response.json().catch(() => null)
+
+				if (response.status == 200) {
+					useDashboardStore().setNode(body)
+					// This bypasses the /config draft entirely (Alert has no
+					// NODE_TYPE_SCHEMA entry, so its conditions/receives are
+					// never part of the create/update diff) - if a draft
+					// happens to be active, patch just this one node's stale
+					// copy in place so the canvas/edit dialog reflect the
+					// change immediately, without discarding any of the
+					// draft's OTHER unrelated pending edits the way a full
+					// initDraft() refetch would.
+					if (this.draft && this.draft[nodeId]) {
+						this.setDraftNode(Object.assign({}, this.draft[nodeId], {
+							conditions: body.conditions,
+							receives: body.receives,
+						}))
+					}
+					return {ok: true, node: body}
+				}
+
+				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
+			} catch (e) {
+				return {ok: false, error: e.message}
+			}
+		},
+
 		async deleteNode(payload) {
 			const {nodeId} = payload
 

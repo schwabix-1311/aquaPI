@@ -435,6 +435,9 @@ class UiSwitchInput(UiInput):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
+        # label is a placeholder here - the frontend overrides it with
+        # this node's own name for this specific Setting, mirroring the
+        # Dashboard widget (see NodeSettingsFields' settings computed)
         settings.append(Setting('value', 'value', self.value,
                                 type='checkbox'))
         return settings
@@ -484,7 +487,10 @@ class UiAnalogInput(UiInput):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
+        # label is a placeholder here - the frontend overrides it with
+        # this node's own name for this specific Setting, mirroring the
+        # Dashboard widget (see NodeSettingsFields' settings computed)
         settings.append(Setting('value', 'value', float(self.value),
                                 type='number', min=self.min, max=self.max,
-                                step=self.step, label_params={'unit': self.unit}))
+                                step=self.step))
         return settings

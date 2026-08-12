@@ -33,7 +33,7 @@ const AlertCondEditor = {
 					v-model="row.class"
 					:items="condClassItems"
 					:label="$t('pages.settings.alertConds.condition')"
-					:disabled="!isAdmin"
+					:disabled="!canEdit"
 					density="compact" variant="outlined" hide-details
 					style="max-width:115px;"
 				></v-select>
@@ -41,15 +41,15 @@ const AlertCondEditor = {
 					v-model="row.node_id"
 					:items="nodeItems"
 					:label="$t('pages.settings.alertConds.watchedNode')"
-					:disabled="!isAdmin"
+					:disabled="!canEdit"
 					density="compact" variant="outlined" hide-details
-					style="flex:1;"
+					style="flex:1; max-width:320px;"
 				></v-select>
 				<v-text-field
 					v-model.number="row.limit"
 					type="number"
 					:label="$t('pages.settings.alertConds.limit')"
-					:disabled="!isAdmin"
+					:disabled="!canEdit"
 					density="compact" variant="outlined" hide-details
 					style="max-width:100px;"
 				></v-text-field>
@@ -57,13 +57,13 @@ const AlertCondEditor = {
 					v-model.number="row.duration"
 					type="number" min="0"
 					:label="$t('pages.settings.alertConds.duration')"
-					:disabled="!isAdmin"
+					:disabled="!canEdit"
 					density="compact" variant="outlined" hide-details
 					style="max-width:100px;"
 				></v-text-field>
 				<v-btn
 					icon variant="text" color="grey-darken-1" size="small"
-					:disabled="!isAdmin"
+					:disabled="!canEdit"
 					@click="removeRow(idx)"
 					:title="$t('pages.settings.alertConds.remove')"
 				>
@@ -71,14 +71,14 @@ const AlertCondEditor = {
 				</v-btn>
 			</div>
 			<div class="d-flex align-center mt-1" style="gap:8px;">
-				<v-btn variant="outlined" size="small" :disabled="!isAdmin" @click="addRow">
+				<v-btn variant="outlined" size="small" :disabled="!canEdit" @click="addRow">
 					<v-icon start size="small">mdi-plus</v-icon>{{ $t('pages.settings.alertConds.add') }}
 				</v-btn>
 				<v-spacer></v-spacer>
 				<v-btn
 					v-if="!hideSaveButton"
 					color="primary" size="small"
-					:disabled="!isAdmin || !dirty || !rowsValid"
+					:disabled="!canEdit || !dirty || !rowsValid"
 					:loading="saving"
 					@click="save"
 				>
@@ -100,10 +100,12 @@ const AlertCondEditor = {
 		usersStore() {
 			return useUsersStore()
 		},
-		isAdmin() {
-			// PUT /api/nodes/<id>/conditions is admin-only, same gate as
-			// NodeReceivesEditor uses for its own PUT /api/nodes/<id> call
-			return this.usersStore.isAdmin
+		canEdit() {
+			// PUT /api/nodes/<id>/conditions allows operator+admin, matching
+			// the regular Settings fields on this page - unlike
+			// NodeReceivesEditor's raw receives edit (admin-only, since it
+			// goes through the generic PUT /api/nodes/<id> route)
+			return this.usersStore.isOperatorOrAdmin
 		},
 		condClassItems: function() {
 			return ALERT_COND_CLASSES.map(cls => ({title: this.$t('misc.alertConds.' + cls), value: cls}))

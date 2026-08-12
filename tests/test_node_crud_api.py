@@ -321,10 +321,20 @@ def test_delete_node_persists_topology(client, users, app):
 # --- PUT /api/nodes/<id>/conditions -------------------------------------
 
 
-def test_set_conditions_requires_admin(client, users):
-    _login(client, 'operator1', 'operatorPass1')
+def test_set_conditions_rejects_viewer(client, users):
+    _login(client, 'viewer1', 'viewerPass1')
     resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
     assert resp.status_code == HTTPStatus.FORBIDDEN
+
+
+def test_set_conditions_allows_operator(client, users, bus):
+    _login(client, 'operator1', 'operatorPass1')
+    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
+        {'class': 'AlertAbove', 'node_id': 'wasser', 'limit': 30.0},
+    ]})
+    assert resp.status_code == HTTPStatus.OK
+    node = bus.get_node('warnungen')
+    assert len(node.conditions) == 1
 
 
 def test_set_conditions_unknown_node_returns_404(client, users):

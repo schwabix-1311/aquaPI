@@ -66,8 +66,8 @@ class Setting:
     factor: float = 1
     # named interpolation values for label's i18n template, e.g.
     # label='setpoint', label_params={'unit': 'pH'} for a locale string
-    # like 'Sollwert [%{unit}]' - same %{name} convention vue-i18n already
-    # uses elsewhere in the SPA (e.g. '%{count} node(s) selected').
+    # like 'Sollwert [{unit}]' - same {name} convention vue-i18n already
+    # uses elsewhere in the SPA (e.g. '{count} node(s) selected').
     label_params: dict[str, Any] | None = None
 
     @property

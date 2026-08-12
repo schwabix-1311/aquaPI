@@ -743,7 +743,7 @@ def api_update_node(node_id: str) -> Response:
 
 
 @bp.route('/api/nodes/<node_id>/conditions', methods=['PUT'])
-@roles_required('admin')
+@roles_required('operator', 'admin')
 def api_set_alert_conditions(node_id: str) -> Response:
     """ bulk-replace every AlertCond of an Alert node in one call -
         add/change/remove are all expressed as the new, complete list.

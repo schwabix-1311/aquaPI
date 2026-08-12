@@ -3,7 +3,7 @@ import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useConfigStore} from '../../store/modules/config.js'
-import {isRoot, isHistOrAlert, descendants} from '../settings/chains.js'
+import {isRoot, isHistOrAlert, descendants, flattenEntries} from '../settings/chains.js'
 
 const CANVAS_MIN_WIDTH = 1200
 const CANVAS_MIN_HEIGHT = 700
@@ -240,9 +240,22 @@ const AquapiConfig = {
 			// semantics for /settings, where they always get their own card) -
 			// spatially they're sinks, not chain starts, handled in Pass 2
 			// below once every real node has its final position.
-			nodes.filter(n => isRoot(n) && !isHistOrAlert(n)).forEach(root => {
+			// Longest chains first (by total descendant count): placing a
+			// tall chain into whatever's already a dense block of short
+			// ones (rather than the reverse) tends to force it further
+			// right/down than it needs, fragmenting the layout more than
+			// starting with the tall ones and filling shorter ones in
+			// around them. Sort key is the FLATTENED descendant count -
+			// tree.length itself is only the number of direct children
+			// (descendants() returns a nested {node, children} tree, not
+			// a flat list), which underweights deep-but-narrow chains and
+			// left equal-direct-children roots ordered by array insertion
+			// order instead of actual chain size.
+			const roots = nodes.filter(n => isRoot(n) && !isHistOrAlert(n))
+				.map(root => ({root, tree: descendants(root, byId)}))
+				.sort((a, b) => flattenEntries(b.tree).length - flattenEntries(a.tree).length)
+			roots.forEach(({root, tree}) => {
 				if (placed.has(root.id)) return
-				const tree = descendants(root, byId)
 				place(root.id, nextRow, 0)
 				const endRow = tree.length
 					? this.assignRows(tree, 1, nextRow, positions, placed, usedCells)
@@ -255,11 +268,16 @@ const AquapiConfig = {
 			// resolved) sources - no need to track "is this one ready yet"
 			// during Pass 1, and it naturally handles a sink fed by several
 			// different chains too, since all of them are already placed.
-			// row = the highest (bottom-most) row among its sources, so it
-			// lands right below whatever it's watching instead of many rows
-			// further down; col = one past their rightmost column, instead of
-			// column 0 - pinning it to column 0 like a real root previously
-			// sent its incoming connection's target-side trunk stub
+			// row = the MEDIAN row among its sources, so it lands near where
+			// most of them are instead of chasing whichever single source
+			// happens to sit lowest. Math.max() here used to mean one short,
+			// late-placed source (e.g. a leaf root chain with no
+			// descendants, sorted to the very end above) could drag a sink
+			// far down even though its other sources sit much higher - the
+			// sink inherited the worst case instead of the typical one.
+			// col = one past their rightmost column, instead of column 0 -
+			// pinning it to column 0 like a real root previously sent its
+			// incoming connection's target-side trunk stub
 			// (targetTrunkX = pos_x - CONNECTION_STUB) to a negative x, off
 			// the left edge of the canvas and invisible. Falls back to its
 			// own fresh row/col 0 if nothing resolves (e.g. only `'*'`, a
@@ -269,7 +287,11 @@ const AquapiConfig = {
 					.map(id => positions.get(id))
 					.filter(Boolean)
 				if (sourcePositions.length) {
-					const row = Math.max(...sourcePositions.map(p => p.row))
+					const rows = sourcePositions.map(p => p.row).sort((a, b) => a - b)
+					const mid = Math.floor(rows.length / 2)
+					const row = rows.length % 2
+						? rows[mid]
+						: Math.round((rows[mid - 1] + rows[mid]) / 2)
 					const col = Math.max(...sourcePositions.map(p => p.col)) + 1
 					placeSink(node.id, row, col)
 				} else {
@@ -286,11 +308,24 @@ const AquapiConfig = {
 			})
 
 			positions.forEach((pos, nodeId) => {
+				// nodes with more than one incoming connection get nudged
+				// down by half their own box height - their several
+				// diagonals converge from different rows, so centering on
+				// any one of those rows sends at least one wire straight
+				// through the box above/below; splitting the difference
+				// keeps them all visually distinct. Half the box's OWN
+				// height (not half a full row) keeps this unconditionally
+				// safe: even a same-column neighbor in the very next row
+				// still keeps LAYOUT_ROW_GAP/2 of clearance instead of
+				// overlapping it, so there's no need to check whether that
+				// cell happens to be occupied first.
+				const receivesCount = (byId[nodeId]?.receives || []).length
+				const rowOffsetPx = receivesCount > 1 ? NODE_BOX_HEIGHT / 2 : 0
 				this.configStore.draftUpdateNode({
 					nodeId,
 					changes: {
 						pos_x: pos.col * (NODE_BOX_WIDTH + LAYOUT_COL_GAP),
-						pos_y: pos.row * (NODE_BOX_HEIGHT + LAYOUT_ROW_GAP),
+						pos_y: pos.row * (NODE_BOX_HEIGHT + LAYOUT_ROW_GAP) + rowOffsetPx,
 					},
 				})
 			})

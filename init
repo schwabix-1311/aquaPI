@@ -64,7 +64,12 @@ then
     if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
       echo "===== install Quest DB & OpenJDK JRE"
-      tar -xvf questdb-${QuestRel}-no-jre-bin.tar.gz
+      quest_tgz="questdb-${QuestRel}-no-jre-bin.tar.gz"
+      if [ ! -f "${quest_tgz}" ]
+      then
+        curl -LO "https://github.com/questdb/questdb/releases/download/${QuestRel}/${quest_tgz}"
+      fi
+      tar -xvf "${quest_tgz}"
       mv questdb-${QuestRel}-no-jre-bin questdb-${QuestRel}
 
       sudo apt install openjdk-${JavaRel}-jre-headless -y
@@ -80,7 +85,12 @@ then
     if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
       echo "===== install Quest DB incl. JRE for AMD64"
-      tar -xvf questdb-${QuestRel}-rt-linux-amd64.tar.gz
+      quest_tgz="questdb-${QuestRel}-rt-linux-amd64.tar.gz"
+      if [ ! -f "${quest_tgz}" ]
+      then
+        curl -LO "https://github.com/questdb/questdb/releases/download/${QuestRel}/${quest_tgz}"
+      fi
+      tar -xvf "${quest_tgz}"
       mv questdb-${QuestRel}-rt-linux-amd64 questdb-${QuestRel}
     fi
   fi

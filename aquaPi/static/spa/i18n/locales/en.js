@@ -59,7 +59,7 @@ export default
 				minimum: 'Minimum [%]',
 				maximum: 'Maximum [%]',
 				percept: 'Perceptive',
-				duration: 'In-mem history time range',
+				capacity: 'In-memory history capacity',
 			},
 		},
 		config: {
@@ -312,6 +312,11 @@ export default
 			hours: 'h',
 			day: 'day',
 			days: 'days',
+			month: 'month',
+			months: 'months',
+			halfYear: '1/2 year',
+			year: 'year',
+			years: 'years',
 		},
 		nodeTypes: {
 			aux: 'Connection',

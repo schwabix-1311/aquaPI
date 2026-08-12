@@ -44,7 +44,7 @@ def bus(monkeypatch):
     calib = ScaleAux('pH Kalibrierung', sensor.id, 'pH', offset=1.0, factor=2.0)
     calib.plugin(bus)
 
-    hist = History('Verlauf', [sensor.id], duration=1)
+    hist = History('Verlauf', [sensor.id], capacity=1)
     hist.plugin(bus)
 
     yield bus

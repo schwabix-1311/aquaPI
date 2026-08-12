@@ -247,7 +247,7 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
     'History': {
         'receives': 'multi',
         'fields': [
-            {'key': 'duration', 'label': 'Duration [h]', 'type': 'number',
+            {'key': 'capacity', 'label': 'Capacity [h]', 'type': 'number',
              'min': 1, 'default': 24},
         ],
     },
@@ -345,7 +345,7 @@ def build_node(type_name: str, name: str, receives: list[str],
         return ScaleAux(name, rcv, fields['unit'], offset=fields['offset'],
                         factor=fields['factor'])
     if type_name == 'History':
-        return History(name, rcv, duration=int(fields['duration']))
+        return History(name, rcv, capacity=int(fields['capacity']))
 
     raise ValueError(f'Unknown or non-creatable node type: {type_name!r}')  # pragma: no cover
 

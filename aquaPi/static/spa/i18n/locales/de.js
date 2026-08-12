@@ -59,7 +59,7 @@ export default
 				minimum: 'Minimum [%]',
 				maximum: 'Maximum [%]',
 				percept: 'Wahrnehmungskorrektur',
-				duration: 'Verlaufsdauer (In-Memory)',
+				capacity: 'Verlaufskapazität (In-Memory)',
 			},
 		},
 		config: {
@@ -312,6 +312,11 @@ export default
 			hours: 'h',
 			day: 'Tag',
 			days: 'Tage',
+			month: 'Monat',
+			months: 'Monate',
+			halfYear: '1/2 Jahr',
+			year: 'Jahr',
+			years: 'Jahre',
 		},
 		nodeTypes: {
 			aux: 'Verknüpfung',

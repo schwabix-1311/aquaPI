@@ -14,8 +14,9 @@ import time as time_module
 
 import pytest
 
+from aquaPi import db as db_module
 from aquaPi.machineroom import hist_nodes
-from aquaPi.machineroom.hist_nodes import TimeDb, TimeDbMemory
+from aquaPi.machineroom.hist_nodes import History, TimeDb, TimeDbMemory
 
 
 def test_insert_folds_values_at_or_before_start_into_start_row():
@@ -49,7 +50,7 @@ def test_insert_does_not_mutate_the_shared_valuelst_type_alias():
 def test_timedb_memory_query_assembles_multi_series_multi_timestamp_result(monkeypatch):
     monkeypatch.setattr(TimeDbMemory, '_store', {})
     monkeypatch.setattr(hist_nodes, 'time', lambda: 1000.0)
-    db = TimeDbMemory(duration=1)
+    db = TimeDbMemory(capacity=1)
 
     db.feed('sensor_a', 1.0)
     db.feed('sensor_b', 2.0)
@@ -66,6 +67,36 @@ def test_timedb_memory_query_assembles_multi_series_multi_timestamp_result(monke
     result = db.query(['sensor_a', 'sensor_b'], start=1000)
     assert result[1000] == [1.0, 2.0]
     assert result[1010] == [3.0, None]
+
+
+def test_history_getstate_reports_capacity_and_memory_only(monkeypatch):
+    monkeypatch.setattr(hist_nodes, 'QUEST_DB', False)
+
+    hist = History('Verlauf', ['sensor'], capacity=3)
+    state = hist.__getstate__()
+
+    assert state['capacity'] == 3
+    assert state['memory_only'] is True
+
+
+def test_history_setstate_falls_back_to_pre_rename_duration_key(monkeypatch):
+    # TEMPORARY: covers the back-compat fallback in History.__setstate__()
+    # for a state dict saved before 'duration' was renamed to 'capacity' -
+    # delete this test alongside that fallback once it's removed.
+    monkeypatch.setattr(hist_nodes, 'QUEST_DB', False)
+
+    hist = History.__new__(History)
+    hist.__setstate__({'name': 'Verlauf', 'receives': ['sensor'], 'duration': 5})
+
+    assert hist.capacity == 5
+
+
+def test_build_node_history_uses_capacity_field(monkeypatch):
+    monkeypatch.setattr(hist_nodes, 'QUEST_DB', False)
+
+    node = db_module.build_node('History', 'Verlauf', ['sensor'], {'capacity': 2})
+
+    assert node.capacity == 2
 
 
 @pytest.mark.questdb

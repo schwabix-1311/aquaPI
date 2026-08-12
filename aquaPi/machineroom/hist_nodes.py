@@ -158,19 +158,19 @@ class TimeDbMemory(TimeDb):
     _store: dict[str, deque[tuple[int, int | float]]] = dict()
     _store_lock = Lock()
 
-    def __init__(self, duration: int):
-        """ in-memory storage is limited to {duration} hours
+    def __init__(self, capacity: int):
+        """ in-memory storage is limited to {capacity} hours
         """
         super().__init__()
-        self.duration = duration
+        self.capacity = capacity
 
     def add_field(self, name: str) -> None:
         super().add_field(name)
-        TimeDbMemory._store.setdefault(name, deque(maxlen=self.duration * 60 * 60))  # 1/sec
+        TimeDbMemory._store.setdefault(name, deque(maxlen=self.capacity * 60 * 60))  # 1/sec
 
     def feed(self, name: str, value: int | float) -> None:
         with TimeDbMemory._store_lock:
-            TimeDbMemory._store.setdefault(name, deque(maxlen=self.duration * 60 * 60))  # 1/sec
+            TimeDbMemory._store.setdefault(name, deque(maxlen=self.capacity * 60 * 60))  # 1/sec
 
             now = int(time())
             series = TimeDbMemory._store[name]
@@ -181,7 +181,7 @@ class TimeDbMemory(TimeDb):
                 series[-1] = (now, (series[-1][1] + value) / 2)
 
             # purge expired data
-            while series[0][0] < now - self.duration * 60 * 60:
+            while series[0][0] < now - self.capacity * 60 * 60:
                 series.popleft()
 
             log.debug('TimeDbMemory: append %s: %r @ %d, %d ent., %d Byte',
@@ -428,20 +428,20 @@ class History(BusListener):
     ROLE = BusRole.HISTORY
 
     @property
-    def duration(self) -> int:
-        return self._duration
+    def capacity(self) -> int:
+        return self._capacity
 
-    @duration.setter
-    def duration(self, duration: int) -> None:
+    @capacity.setter
+    def capacity(self, capacity: int) -> None:
         # TimeDbMemory's deque(maxlen=...) insists on a strict int; the API
-        # delivers duration as seconds/factor, which is a float even for
+        # delivers capacity as seconds/factor, which is a float even for
         # whole-hour values (e.g. 86400/3600 == 24.0)
-        self._duration = int(duration)
+        self._capacity = int(capacity)
 
     def __init__(self, name: str, receives: Iterable[str],
-                 duration: int = 24, _cont: bool = False):
+                 capacity: int = 24, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
-        self.duration = duration
+        self.capacity = capacity
         self.data: int = 0  # just anything for MsgHello
         self._nextrefresh = time()
         self.db: TimeDb | None = None
@@ -452,19 +452,26 @@ class History(BusListener):
             except (NotImplementedError, ModuleNotFoundError, ImportError):
                 log.error('QuestDB failed, will keep history in memory')
         if not self.db:
-            self.db = TimeDbMemory(self.duration)
-            log.brief('Recording history %s in main memory with limited depth of %dh!', name, self.duration)
+            self.db = TimeDbMemory(self.capacity)
+            log.brief('Recording history %s in main memory with limited depth of %dh!', name, self.capacity)
         for rcv in self.receives:
             self.db.add_field(rcv)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state['duration'] = self.duration
+        state['capacity'] = self.capacity
+        state['memory_only'] = isinstance(self.db, TimeDbMemory)
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
+        # TEMPORARY: 'duration' was renamed to 'capacity' 2026-08-12; this
+        # fallback only matters for a developer's already-saved local
+        # topo.sqlite from before the rename (no production data exists
+        # yet) - safe to delete this fallback (keep just state['capacity'])
+        # once everyone's local DB has been re-saved at least once.
+        capacity = state.get('capacity', state.get('duration', 24))
         History.__init__(self, state['name'], state['receives'],
-                         duration=state.get('duration', 24), _cont=True)
+                         capacity=capacity, _cont=True)
 
     def listen(self, msg) -> None:
         if isinstance(msg, MsgData):
@@ -483,7 +490,7 @@ class History(BusListener):
     def get_settings(self) -> list[Setting]:
 ##        return []
         settings = super().get_settings()
-        settings.append(Setting('duration', 'duration', self.duration * 60*60,
+        settings.append(Setting('capacity', 'capacity', self.capacity * 60*60,
                                 type='duration', min=0, max=7*24*60*60, step=60*60,
                                 factor=60*60))
         return settings

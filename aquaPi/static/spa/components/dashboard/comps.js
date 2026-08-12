@@ -101,6 +101,17 @@ const AnyNode = {
 					value /= 24
 					duration = (value == 1) ? this.$t('misc.duration.day')
 											: this.$t('misc.duration.days')
+					if (value >= 365) {
+						value /= 365
+						duration = (value == 1) ? this.$t('misc.duration.year')
+												: this.$t('misc.duration.years')
+					} else if (value >= 182) {
+						return this.$t('misc.duration.halfYear')
+					} else if (value >= 30) {
+						value /= 30
+						duration = (value == 1) ? this.$t('misc.duration.month')
+												: this.$t('misc.duration.months')
+					}
 				}
 			}
 			return `${value} ${duration}`
@@ -671,6 +682,7 @@ const HistoryChart = {
 										:key="index"
 										density="compact"
 										min-height="28"
+										:disabled="node.memory_only && item.value > node.capacity * 60 * 60 * 1000"
 										@click="setPeriod(item.value, chart)"
 									>
 										<v-list-item-title class="text-caption">
@@ -831,7 +843,7 @@ const HistoryChart = {
 		},
 		periods() {
 			const vm = this
-			return [0.25, 1, 4, 8, 12, 24, 48, 168].map((h) => {
+			return [0.25, 1, 4, 8, 12, 24, 48, 168, 720, 4380, 8760].map((h) => {
 				const value = (h * 60 * 60 * 1000)
 				return { value: value, label: vm.humanPeriod(value) }
 			})

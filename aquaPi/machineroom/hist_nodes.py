@@ -311,34 +311,50 @@ if QUEST_DB:
                 with pg.connect(self.conn_str, autocommit=True) as conn:
                     with conn.cursor() as curs:
                         q_names = SQL(',').join(map(Literal, node_names))
+                        # seed row per series: its most recent value
+                        # strictly before `start`, timestamped exactly at
+                        # `start` so it sorts as the window's first known
+                        # value - without this, a series that last changed
+                        # before `start` (e.g. an infrequently-posting
+                        # ScheduleInput) shows no history at all until its
+                        # next in-window change, even though its state
+                        # going into the window is perfectly well known.
+                        # LATEST ON is QuestDB's own "most recent per
+                        # partition" lookup; FILL(PREV) below then carries
+                        # this seed forward same as any other row.
+                        seeded = SQL("""
+                            SELECT to_utc({start} * 1000000L, {tz}) ts, node_id, value
+                              FROM value
+                              WHERE ts < to_utc({start} * 1000000L, {tz})
+                                AND node_id IN ({nodes})
+                              LATEST ON ts PARTITION BY node_id
+                            UNION ALL
+                            SELECT ts, node_id, value
+                              FROM value
+                              WHERE ts >= to_utc({start} * 1000000L, {tz})
+                                AND node_id IN ({nodes})
+                            """).format(tz=Literal(self.timezone), start=Literal(start),
+                                        nodes=q_names)
                         if step <= 0:
                             # unsampled = raw data
                             qry = SQL("""
                               SELECT to_timezone(ts,{tz}) ts, node_id, value
-                                FROM value -- JOIN node ON (node_id)
-                                WHERE ts >= to_utc({start} * 1000000L, {tz})
-                                  AND node_id IN ({nodes})
+                                FROM ({seeded}) timestamp(ts)
                                 ORDER BY ts,node_id;
-                              """).format(tz=Literal(self.timezone),
-                                          start=Literal(start),
-                                          nodes=q_names)
+                              """).format(tz=Literal(self.timezone), seeded=seeded)
                         else:
                             qry = SQL("""
                               SELECT to_timezone(ts,{tz}) span, id, avg(value)
                                 FROM (
                                   SELECT ts, node_id id, avg(value) value
-                                    FROM value -- JOIN node ON (node_id)
-                                    WHERE ts >= to_utc({start} *1000000L, {tz})
-                                      AND node_id IN ({nodes})
+                                    FROM ({seeded}) timestamp(ts)
                                     SAMPLE BY 1s FILL (PREV)
                                 )
-                                --WHERE id IN ({nodes})
                                 SAMPLE BY {step}s FILL (PREV) ALIGN TO CALENDAR
                                 GROUP BY ts,id ORDER BY span,id;
                               """).format(tz=Literal(self.timezone),
-                                          start=Literal(start),
                                           step=Literal(step),
-                                          nodes=q_names)
+                                          seeded=seeded)
                         #log.debug(qry.as_string(conn))
                         curs.execute(qry)
                         recs = curs.fetchall()

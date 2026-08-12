@@ -168,7 +168,8 @@ und Vuetify verdrahtet und global mountet (`app.mount('#app')`).
   der Sprache der Konversation mit dem Nutzer.
 - Niemals Dateien aus dem Abschnitt "Sicherheit" (`instance/`, `logs/`, `.env`, `.gitignore`-Einträge)
   committen oder deren Inhalte in Commit-Messages zitieren.
-- Vor einem Commit `pytest` (oder `pytest -n auto`) lokal ausführen, sofern Backend-Code geändert wurde.
+- Vor einem Commit `pytest` (oder `pytest -n auto`) lokal ausführen, sofern Backend-Code geändert wurde;
+  ohne erreichbare QuestDB-Instanz stattdessen `pytest -m "not questdb"` (siehe Abschnitt "Tests").
 - Kein `git push` ohne ausdrückliche Aufforderung des Nutzers; ebenso keine destruktiven Git-Operationen
   (`reset`, `checkout`, `restore`, `stash`, `clean`, `push --force`) auf bereits committete oder
   gepushte Änderungen, außer explizit gewünscht.
@@ -177,25 +178,25 @@ und Vuetify verdrahtet und global mountet (`app.mount('#app')`).
 
 ## Tests
 
-Die Backend-Testsuite (`tests/`) nutzt `pytest`, braucht keine echte Hardware und keine laufende
-QuestDB-Instanz - jeder Test baut sich eine eigene temporäre SQLite-DB und einen Node-Bus im
-Simulationsmodus auf.
+Die Backend-Testsuite (`tests/`) nutzt `pytest`, braucht keine echte Hardware - fast jeder Test baut
+sich eine eigene temporäre SQLite-DB und einen Node-Bus im Simulationsmodus auf, ganz ohne QuestDB.
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
 ```
 
-Für schnellere lokale Läufe (Suite parallel über alle CPU-Kerne, ca. 4x schneller,
-verifiziert unabhängig von echter QuestDB-Instanz und je Test isoliertem `tmp_path`):
+Für schnellere lokale Läufe (Suite parallel über alle CPU-Kerne, ca. 4x schneller; jeder Test ist
+über sein eigenes isoliertes `tmp_path` sauber getrennt, auch der eine QuestDB-Test unten läuft dank
+eindeutigem Wegwerf-Node-Namen problemlos parallel mit):
 
 ```bash
 pytest -n auto
 ```
 
-Der Marker `questdb` ist für Tests reserviert, die nur sinnvoll gegen eine echte QuestDB-Instanz
-laufen (gezielt ausschließbar via `pytest -m "not questdb"`) - aktuell nutzt aber kein Test diesen
-Marker, die gesamte Suite läuft vollständig gemockt.
+Der Marker `questdb` markiert den (aktuell einen) Test, der eine echte, erreichbare QuestDB-Instanz
+braucht, um sinnvoll zu laufen - gezielt ausschließbar via `pytest -m "not questdb"` (z. B. in CI,
+wo keine QuestDB läuft).
 
 Testkonfiguration: `pytest.ini` (`testpaths = tests`). Gemeinsame Fixtures liegen in
 `tests/conftest.py`. Testdateien folgen dem Schema `tests/test_<bereich>.py`

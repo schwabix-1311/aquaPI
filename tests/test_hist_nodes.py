@@ -10,6 +10,10 @@
 # _insert() is the shared internal helper under test here - calling it
 # directly is the point, not an accident.
 
+import time as time_module
+
+import pytest
+
 from aquaPi.machineroom import hist_nodes
 from aquaPi.machineroom.hist_nodes import TimeDb, TimeDbMemory
 
@@ -62,3 +66,37 @@ def test_timedb_memory_query_assembles_multi_series_multi_timestamp_result(monke
     result = db.query(['sensor_a', 'sensor_b'], start=1000)
     assert result[1000] == [1.0, 2.0]
     assert result[1010] == [3.0, None]
+
+
+@pytest.mark.questdb
+def test_timedb_quest_query_seeds_start_row_from_before_the_window():
+    """ integration test against a real, reachable QuestDB instance -
+        the actual bug this fixes: a series whose last change was
+        before the query's `start` used to show no history at all
+        until its next in-window change (TimeDbQuest._query()'s SQL
+        only ever fetched `ts >= start`), even though its state going
+        into the window was perfectly well known. Fixed by having the
+        query itself UNION in a LATEST ON ... WHERE ts < start seed row,
+        timestamped exactly at `start`, for QuestDB's own FILL(PREV) to
+        carry forward - see TimeDbQuest._query().
+
+        Uses a throwaway, uniquely-named node id so this neither reads
+        nor depends on real production data; the few leftover rows it
+        writes are harmless and not cleaned up (QuestDB's DELETE
+        support is limited).
+    """
+    from aquaPi.machineroom.hist_nodes import QUEST_DB, TimeDbQuest
+    if not QUEST_DB:
+        pytest.skip('psycopg not installed')
+
+    db = TimeDbQuest()
+    node = f'_test_seed_{int(time_module.time() * 1000)}'
+
+    db.feed(node, 42.0)
+    time_module.sleep(1.2)  # land the feed in a distinct second, before `start`
+
+    start = int(time_module.time())
+    result = db.query([node], start=start, step=60)
+
+    assert result[0] == [node]
+    assert result[start] == [42.0]

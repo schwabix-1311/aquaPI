@@ -27,14 +27,14 @@ The configuration of controller blocks has no user interface yet; you need to ed
 
 **Running the automated tests**
 
-The backend test suite (`tests/`) uses `pytest` and needs no real hardware, no running QuestDB instance and no manual setup - each test builds its own temporary, isolated SQLite database and simulation-mode node bus. From the project root, with your virtual environment activated:
+The backend test suite (`tests/`) uses `pytest` and needs no real hardware and no manual setup - almost every test builds its own temporary, isolated SQLite database and simulation-mode node bus, no QuestDB required. From the project root, with your virtual environment activated:
 ```
 pip install -r requirements-dev.txt
 pytest
 ```
-For faster local runs, use `pytest -n auto` to run the suite in parallel across all CPU cores (~4x faster; verified safe, since no test touches a real QuestDB instance and every test gets its own isolated `tmp_path`).
+For faster local runs, use `pytest -n auto` to run the suite in parallel across all CPU cores (~4x faster; every test gets its own isolated `tmp_path`, and the one test below that does use QuestDB is self-contained via a uniquely-named throwaway node id).
 
-A `questdb` pytest marker exists for tests that would only run meaningfully against a real QuestDB instance (to be excluded via `pytest -m "not questdb"`), but no test currently uses it - the whole suite runs fully mocked today.
+A `questdb` pytest marker marks the (currently one) test that needs a real, reachable QuestDB instance to run meaningfully - exclude it with `pytest -m "not questdb"` (e.g. in CI, which has none).
 
 If you are interested in contributing in any form, you are welcome! Please leave a note in Discussion or Issues.
 If you don't want to contribute but have an idea of a "killer feature" let's talk about it in Discussions too.  BTW, German is my native language; feel free to use it here.

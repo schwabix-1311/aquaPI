@@ -48,6 +48,7 @@ def get_system_stats() -> dict:
         load1 = None  # not available on Windows
 
     mem_used_pct = None
+    swap_used_pct = None
     try:
         mem = {}
         with open('/proc/meminfo') as f:
@@ -57,6 +58,14 @@ def get_system_stats() -> dict:
         mem_total = mem['MemTotal']
         mem_used = mem_total - mem.get('MemAvailable', mem['MemFree'])
         mem_used_pct = round(mem_used / mem_total * 100, 1)
+
+        # None both when unavailable (non-Linux) and when swap is simply
+        # not configured (common on Raspberry Pi) - omit the footer segment
+        # rather than show a meaningless 0%
+        swap_total = mem['SwapTotal']
+        if swap_total > 0:
+            swap_used = swap_total - mem['SwapFree']
+            swap_used_pct = round(swap_used / swap_total * 100, 1)
     except (FileNotFoundError, KeyError, ValueError):
         pass  # /proc/meminfo is Linux-only
 
@@ -67,6 +76,7 @@ def get_system_stats() -> dict:
         'hw_model': hw_model,
         'load1': load1,
         'mem_used_pct': mem_used_pct,
+        'swap_used_pct': swap_used_pct,
         'cpu_count': os.cpu_count(),
         'disk_used_pct': round(disk.used / disk.total * 100, 1),
     }

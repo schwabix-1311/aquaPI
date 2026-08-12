@@ -270,9 +270,11 @@ export default
 		footer: {
 			servedBy: 'Server: %{os}',
 			platform: ' auf %{model}',
-			load: 'Auslastung %{load} von %{cores}',
-			ram: 'RAM %{pct}% belegt',
-			disk: 'Speicherplatz %{pct}% belegt',
+			pct: '%{pct}%',
+			cpuLabel: 'CPU',
+			ramLabel: 'RAM',
+			swapLabel: 'Swap',
+			diskLabel: 'Speicher',
 		},
 		language: {
 			label: 'Sprache',

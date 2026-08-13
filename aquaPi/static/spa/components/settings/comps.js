@@ -554,7 +554,13 @@ function settingWidgetType(item) {
 // (carries a persistent hint line) get more breathing room than the default
 // 3-per-row grid used by compact fields like sliders/numbers/switches.
 function settingColSpan(item) {
-	const wide = ['SettingSelect', 'SettingMultiSelect', 'SettingSchedule'].includes(settingWidgetType(item))
+	// port selects (item.key === 'port', regardless of label - inputPort/
+	// outputPort/alertPort all share this key, see PortDriverMixin) list
+	// short option text (e.g. "GPIO 12 out") - no need for the wider
+	// column reserved for genuinely long content like other selects'
+	// option text or multiselect chips.
+	const wide = item.key !== 'port'
+		&& ['SettingSelect', 'SettingMultiSelect', 'SettingSchedule'].includes(settingWidgetType(item))
 	return wide ? {cols: 12, md: 6} : {cols: 12, sm: 6, md: 4}
 }
 

@@ -29,7 +29,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from os import path, replace, makedirs, remove, listdir
+from os import path, makedirs, remove, listdir
 from typing import Any
 
 from werkzeug.security import generate_password_hash
@@ -910,41 +910,6 @@ def load_topology(db_path: str) -> MsgBus:
     return bus
 
 
-def migrate_pickle_to_sqlite(pickle_path: str, db_path: str) -> bool:
-    """ one-time migration of an existing topo.pickle into the new
-        SQLite database. The original file is kept as '<pickle_path>.bak',
-        never deleted.
-        Returns True if a migration was performed.
-    """
-    if not path.exists(pickle_path):
-        return False
-    if topology_exists(db_path):
-        # already migrated (or a fresh SQLite topology exists) - don't overwrite
-        return False
-
-    import pickle  # local import: only ever used for this one-time migration
-    log.brief('Migrating legacy %s to SQLite %s ...', pickle_path, db_path)
-    try:
-        with open(pickle_path, 'rb') as p:
-            bus: MsgBus = pickle.load(p)
-    except Exception:
-        # a damaged or incompatible (e.g. from an older code version)
-        # topo.pickle must never crash startup - just skip the migration,
-        # the caller falls back to a fresh default topology instead.
-        log.exception('Migration of %s failed, file is damaged or incompatible.'
-                      ' Keeping it untouched and starting with a fresh topology.',
-                      pickle_path)
-        return False
-
-    save_topology(bus, db_path)
-    bus.teardown()
-
-    backup_path = pickle_path + '.bak'
-    replace(pickle_path, backup_path)
-    log.brief('Migration done, legacy file kept as %s', backup_path)
-    return True
-
-
 # --- node-combination templates (/config, Step 13) ----------------------
 #
 # A template is a small, portable sub-graph of nodes (e.g. "pH control
@@ -1139,7 +1104,7 @@ def create_snapshot(db_path: str, name: str) -> None:
     conn = get_connection(db_path)
     try:
         rows = conn.execute('SELECT id, type, name, params FROM nodes').fetchall()
-        data = [dict(row) for row in rows]
+        data = [{**dict(row), 'params': json.loads(row['params'])} for row in rows]
         with conn:
             conn.execute("""
                 INSERT INTO topology_snapshots (name, data) VALUES (?, ?)
@@ -1191,9 +1156,7 @@ def restore_snapshot_into_bus(bus: MsgBus, snapshot_rows: list[dict[str, Any]]) 
     failures: list[str] = []
     for row in snapshot_rows:
         try:
-            nodes.append(_deserialize_node(row['type'], row['params']
-                                           if isinstance(row['params'], dict)
-                                           else json.loads(row['params'])))
+            nodes.append(_deserialize_node(row['type'], row['params']))
         except DriverError as ex:
             log.error('restore_snapshot_into_bus: failed to restore node %r (type %r), skipping: %s',
                       row.get('id'), row.get('type'), ex.msg)

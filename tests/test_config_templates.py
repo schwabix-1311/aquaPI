@@ -338,6 +338,7 @@ def test_create_and_list_snapshot(client, users):
     data = resp.get_json()
     assert data['name'] == 'backup1'
     assert len(data['data']) == 4  # wasser, heizen, heizstab, warnungen
+    assert isinstance(data['data'][0]['params'], dict)  # single-encoded, not a JSON string
 
     resp = client.get('/api/config/snapshots')
     assert resp.status_code == HTTPStatus.OK

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """ Step 10: overall verification that Steps 1-9 work together correctly.
     Scenarios (see plan, "Key Scenarios" / Step 10):
-    - combined migration of a legacy config.json (Email/Telegram) and a
-      legacy topo.pickle into the new SQLite persistence, simulation
-      starts without errors
+    - migration of a legacy config.json's Email/Telegram credentials into
+      the new SQLite persistence, simulation starts without errors
     - two simulated users with different dashboards and alert channels
       show correctly separated results
     - all simulated nodes remain reachable via the new plain-JSON API
@@ -11,7 +10,6 @@
 
 import json
 import os
-import pickle
 from http import HTTPStatus
 
 import pytest
@@ -39,21 +37,10 @@ def _io_registry():
     create_io_registry()
 
 
-# --- Scenario 1: combined config.json + topo.pickle migration ------------
+# --- Scenario 1: legacy config.json migration -----------------------------
 
 
-def _build_legacy_bus() -> MsgBus:
-    bus = MsgBus(threaded=False)
-    sensor = AnalogInput('Wasser', '', 25.0, '°C')
-    sensor.plugin(bus)
-    ctrl = MinimumCtrl('Heizen', sensor.id, setpoint=24.0, hysteresis=0.5)
-    ctrl.plugin(bus)
-    alert = Alert('Warnung', AlertAbove(sensor.id, limit=30.0, duration=5), port='')
-    alert.plugin(bus)
-    return bus
-
-
-def test_combined_legacy_migration_starts_simulation_cleanly(tmp_path):
+def test_legacy_config_json_migration_starts_simulation_cleanly(tmp_path):
     instance_path = str(tmp_path)
 
     # legacy config.json with Email/Telegram credentials
@@ -65,21 +52,14 @@ def test_combined_legacy_migration_starts_simulation_cleanly(tmp_path):
     with open(os.path.join(instance_path, 'config.json'), 'w', encoding='utf8') as f:
         json.dump(legacy_cfg, f)
 
-    # legacy topo.pickle with a small hand-built bus
-    legacy_bus = _build_legacy_bus()
-    legacy_ids = {n.id for n in legacy_bus.nodes}
-    with open(os.path.join(instance_path, 'topo.pickle'), 'wb') as f:
-        pickle.dump(legacy_bus, f, protocol=pickle.HIGHEST_PROTOCOL)
-    legacy_bus.teardown()
-
-    mr = MachineRoom({'INSTANCE_PATH': instance_path})
+    # DEFAULT_CONFIG must be anything other than 'topo' (the maintainer's own
+    # real/production hardware setup) or this would build that instead of a
+    # simulated topology - see test_fresh_start_without_any_legacy_files_
+    # creates_default_topology below for why that matters.
+    mr = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
     try:
-        # topology was migrated, not replaced by the default topology
-        assert {n.id for n in mr.bus.nodes} == legacy_ids
-
-        # original pickle kept as backup, DB now exists
-        assert not os.path.exists(os.path.join(instance_path, 'topo.pickle'))
-        assert os.path.exists(os.path.join(instance_path, 'topo.pickle.bak'))
+        # no topology to migrate, so a fresh default one is created
+        assert len(mr.bus.nodes) > 0
         assert db.topology_exists(mr.globals['BUS_TOPO'])
 
         # notification config was migrated into the users DB
@@ -88,6 +68,33 @@ def test_combined_legacy_migration_starts_simulation_cleanly(tmp_path):
         assert db.get_notification_config(users_db, 'Telegram')[0]['bot_token'] == 'tok123'
     finally:
         mr.bus.teardown()
+
+
+def test_config_json_global_keys_are_reimported_every_start(tmp_path):
+    """ unlike the Email/Telegram sub-migration above (which moves out of
+        config.json once and for all, into the users DB), the rest of
+        config.json has no editor yet - it must stay a live merge into
+        self.globals on every start, not a one-time import, so an admin
+        can still hand-edit it and have the change take effect on restart
+    """
+    instance_path = str(tmp_path)
+    cfg_path = os.path.join(instance_path, 'config.json')
+
+    with open(cfg_path, 'w', encoding='utf8') as f:
+        json.dump({'SOME_CUSTOM_SETTING': 'first'}, f)
+
+    mr1 = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
+    assert mr1.globals['SOME_CUSTOM_SETTING'] == 'first'
+    mr1.bus.teardown()
+
+    with open(cfg_path, 'w', encoding='utf8') as f:
+        json.dump({'SOME_CUSTOM_SETTING': 'second'}, f)
+
+    mr2 = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
+    try:
+        assert mr2.globals['SOME_CUSTOM_SETTING'] == 'second'
+    finally:
+        mr2.bus.teardown()
 
 
 def test_fresh_start_without_any_legacy_files_creates_default_topology(tmp_path):
@@ -108,26 +115,20 @@ def test_fresh_start_without_any_legacy_files_creates_default_topology(tmp_path)
         mr.bus.teardown()
 
 
-def test_restart_after_migration_is_stable(tmp_path):
+def test_restart_reloads_existing_sqlite_topology_unchanged(tmp_path):
     """ a 2nd MachineRoom instance against the same instance dir must load
-        the already-migrated SQLite topology unchanged (no re-migration,
-        no pickle fallback)
+        the already-persisted SQLite topology unchanged, not recreate the
+        default one
     """
     instance_path = str(tmp_path)
-    legacy_bus = _build_legacy_bus()
-    legacy_ids = {n.id for n in legacy_bus.nodes}
-    with open(os.path.join(instance_path, 'topo.pickle'), 'wb') as f:
-        pickle.dump(legacy_bus, f, protocol=pickle.HIGHEST_PROTOCOL)
-    legacy_bus.teardown()
 
-    mr1 = MachineRoom({'INSTANCE_PATH': instance_path})
+    mr1 = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
+    node_ids = {n.id for n in mr1.bus.nodes}
     mr1.bus.teardown()
 
-    mr2 = MachineRoom({'INSTANCE_PATH': instance_path})
+    mr2 = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
     try:
-        assert {n.id for n in mr2.bus.nodes} == legacy_ids
-        # migration must not run twice (legacy file already renamed to .bak)
-        assert not os.path.exists(os.path.join(instance_path, 'topo.pickle'))
+        assert {n.id for n in mr2.bus.nodes} == node_ids
     finally:
         mr2.bus.teardown()
 

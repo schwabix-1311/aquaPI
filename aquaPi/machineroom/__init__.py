@@ -37,7 +37,12 @@ class MachineRoom:
         self.globals = global_cfg
         instance_path = global_cfg['INSTANCE_PATH']
 
-        # merge customized config from this file
+        # merge customized global config from this file - unlike the
+        # Email/Telegram sub-migration below (which moves out of config.json
+        # once and for all, into the users DB, since that already has a
+        # /settings editor), there's no editor yet for the rest of this
+        # file's keys (DEFAULT_CONFIG, backup settings, ...), so it stays a
+        # live merge, re-read on every start, not a one-time migration.
         cfg_file = 'config.json'
         if 'AQUAPI_CFG' in environ:
             cfg_file = environ['AQUAPI_CFG']
@@ -50,8 +55,7 @@ class MachineRoom:
 
         # AQUAPI_TOPO used to name the pickle file directly (e.g. 'topo.pickle'
         # or, via `run -t nodes`, 'nodes.pickle'). It now names the *base*
-        # topology, whose legacy '.pickle' file (if any) gets migrated once
-        # into an equally named '.sqlite' database.
+        # topology, stored in an equally named '.sqlite' database.
         #
         # This name doubles as the default-config selector: 'topo' (the
         # default, no config.json entry needed) bootstraps the real/
@@ -68,7 +72,6 @@ class MachineRoom:
         topo_base, _ = path.splitext(topo_base)
         self.globals['DEFAULT_CONFIG'] = topo_base
 
-        legacy_topo_file = path.join(instance_path, topo_base + '.pickle')
         topo_file = path.join(instance_path, topo_base + '.sqlite')
 
         self.globals['CUSTOM_CFG'] = cfg_file
@@ -105,10 +108,6 @@ class MachineRoom:
         create_io_registry()
 
         try:
-            if db.migrate_pickle_to_sqlite(legacy_topo_file, self.globals['BUS_TOPO']):
-                log.brief("=== Migrated legacy %s to SQLite %s",
-                          legacy_topo_file, self.globals['BUS_TOPO'])
-
             if not db.topology_exists(self.globals['BUS_TOPO']):
                 self.bus: MsgBus = MsgBus(threaded=False)
 

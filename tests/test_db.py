@@ -7,7 +7,6 @@
 """
 
 import json
-import pickle
 
 import pytest
 
@@ -140,60 +139,3 @@ def test_save_replaces_previous_topology(db_path):
         assert {n.id for n in restored.nodes} == {'only'}
     finally:
         restored.teardown()
-
-
-def test_migrate_pickle_to_sqlite(tmp_path):
-    bus = _build_sample_bus()
-    original_ids = {n.id for n in bus.nodes}
-
-    pickle_path = str(tmp_path / 'topo.pickle')
-    with open(pickle_path, 'wb') as p:
-        pickle.dump(bus, p, protocol=pickle.HIGHEST_PROTOCOL)
-    bus.teardown()
-
-    db_path = str(tmp_path / 'topo.sqlite')
-    migrated = db.migrate_pickle_to_sqlite(pickle_path, db_path)
-    assert migrated is True
-
-    # original file must be kept as backup, never deleted
-    import os
-    assert not os.path.exists(pickle_path)
-    assert os.path.exists(pickle_path + '.bak')
-
-    restored = db.load_topology(db_path)
-    try:
-        assert {n.id for n in restored.nodes} == original_ids
-    finally:
-        restored.teardown()
-
-    # running migration again must be a no-op (topology already exists)
-    with open(pickle_path + '.bak', 'rb') as p:
-        pass
-    migrated_again = db.migrate_pickle_to_sqlite(pickle_path + '.bak', db_path)
-    assert migrated_again is False
-
-
-def test_migrate_pickle_to_sqlite_no_source(tmp_path):
-    db_path = str(tmp_path / 'topo.sqlite')
-    assert db.migrate_pickle_to_sqlite(str(tmp_path / 'does_not_exist.pickle'), db_path) is False
-    assert not db.topology_exists(db_path)
-
-
-def test_migrate_pickle_to_sqlite_damaged_file_does_not_crash(tmp_path):
-    """ a broken/incompatible topo.pickle (e.g. referencing a module that no
-        longer exists after a refactoring) must not crash the app - it is
-        simply left untouched and the caller falls back to a fresh topology
-    """
-    pickle_path = str(tmp_path / 'topo.pickle')
-    with open(pickle_path, 'wb') as p:
-        p.write(b'not a valid pickle stream at all')
-
-    db_path = str(tmp_path / 'topo.sqlite')
-    migrated = db.migrate_pickle_to_sqlite(pickle_path, db_path)
-    assert migrated is False
-
-    # damaged file must be kept untouched, not renamed/deleted
-    import os
-    assert os.path.exists(pickle_path)
-    assert not os.path.exists(pickle_path + '.bak')
-    assert not db.topology_exists(db_path)

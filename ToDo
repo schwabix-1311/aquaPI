@@ -181,11 +181,10 @@ DONE
     history (graph)
     alerts to notify via email, telegram
 - OS Sleep/Resume disturbs scheduler - fixed
-- config persistance - DB or pickle file? overlap of instance/aquaPi.sqlite & aquaPi/db.py?
-  general handling of config data
-  => machineroom config was pickled, user prefs are in browser store; the node topology has since
-  been migrated to SQLite (aquaPi/db.py), since unpickling arbitrary bytes is a security risk (RCE);
-  legacy topo.pickle files are auto-migrated once and kept as *.pickle.bak
+- config persistance: node topology lives in SQLite (aquaPi/db.py) - unpickling arbitrary
+  bytes was a security risk (RCE), so the old pickle-based storage and its one-time
+  topo.pickle -> topo.sqlite migration are gone now that no pickle-format topology remains;
+  user prefs are in browser store
   - might need additional app global config in back end for
     e.g. UI groups, time zone, language, etc.  QuestDB is usable for this
 - DB for history: InfluxDB 1.6.4 loked OK, but irregular time series aren't

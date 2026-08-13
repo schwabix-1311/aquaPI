@@ -131,3 +131,40 @@ def test_timedb_quest_query_seeds_start_row_from_before_the_window():
 
     assert result[0] == [node]
     assert result[start] == [42.0]
+
+
+@pytest.mark.questdb
+def test_timedb_quest_query_keeps_anchor_point_before_a_change():
+    """ integration test against a real, reachable QuestDB instance -
+        the "ramp" bug: TimeDbQuest.query()'s "null out the unchanged
+        values" step used to null every bucket of a flat run except its
+        very first one. A non-stepped (analog/percent) chart line with
+        spanGaps=true then drew a straight ramp from that first point,
+        however long ago it was, all the way to the next real change -
+        instead of staying flat until just before it. Fixed by also
+        restoring (un-nulling) the single bucket immediately before a
+        real change, so the flat run always ends with a
+        "still-old-value, then new-value" pair right at the transition.
+
+        Uses a throwaway, uniquely-named node id, same rationale as
+        test_timedb_quest_query_seeds_start_row_from_before_the_window.
+    """
+    from aquaPi.machineroom.hist_nodes import QUEST_DB, TimeDbQuest
+    if not QUEST_DB:
+        pytest.skip('psycopg not installed')
+
+    db = TimeDbQuest()
+    node = f'_test_anchor_{int(time_module.time() * 1000)}'
+
+    start = int(time_module.time())
+    db.feed(node, 1.0)
+    time_module.sleep(3.2)  # idle span, several 1s buckets filled via FILL(PREV)
+    db.feed(node, 2.0)
+    time_module.sleep(1.2)
+
+    result = db.query([node], start=start, step=1)
+
+    values = {ts: row[0] for ts, row in result.items() if ts != 0}
+    change_ts = max(ts for ts, val in values.items() if val == 2.0)
+
+    assert values.get(change_ts - 1) == 1.0

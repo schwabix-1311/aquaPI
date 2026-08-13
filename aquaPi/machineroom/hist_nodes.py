@@ -401,9 +401,16 @@ if QUEST_DB:
                 idx = names.index(node)
                 self._insert(result, start, ts, idx, val)
 
-            # null out the unchanged values,
-            # this safes processing time for rare events in chart
+            # null out the unchanged values, this safes processing time for
+            # rare events in chart - but keep the bucket right before a real
+            # change too (restoring it if it was already nulled out), so a
+            # long idle run ends with a "flat here, then jumps" pair right
+            # at the transition instead of one point far in the past. Without
+            # this, a non-stepped (analog/percent) line chart with
+            # spanGaps=true draws a straight ramp across the whole idle gap
+            # up to the change, instead of staying flat until just before it.
             prev = result[start].copy()
+            prev_ts = start
             for ts in result.keys():
                 if ts <= start:
                     continue
@@ -413,7 +420,10 @@ if QUEST_DB:
                     elif result[ts][idx] == prev[idx]:
                         result[ts][idx] = None
                     elif result[ts][idx] is not None:
+                        if result[prev_ts][idx] is None:
+                            result[prev_ts][idx] = prev[idx]
                         prev[idx] = result[ts][idx]
+                prev_ts = ts
             result = {ts: result[ts] for ts in result if result[ts] != [None] * len(names)}
 
             log.debug('  done, overall %fs, %d data points', time() - qry_begin, len(result))

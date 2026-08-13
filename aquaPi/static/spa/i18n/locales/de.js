@@ -53,6 +53,7 @@ export default
 				unfairAvg: 'Ungewichteter Mittelwert [0=aus]',
 				inputPort: 'Eingangsport',
 				outputPort: 'Ausgangsport',
+				alertPort: 'Sende an',
 				readInterval: 'Leseintervall',
 				inverted: 'Invertiert',
 				avg: 'Mittelwert [1=direkt]',

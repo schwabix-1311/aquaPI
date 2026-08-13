@@ -53,6 +53,7 @@ export default
 				unfairAvg: 'Unweighted average [0=off]',
 				inputPort: 'Input port',
 				outputPort: 'Output port',
+				alertPort: 'Send to',
 				readInterval: 'Read interval',
 				inverted: 'Inverted',
 				avg: 'Averaging [1=direct]',

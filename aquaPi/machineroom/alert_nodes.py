@@ -332,7 +332,7 @@ class Alert(PortDriverMixin, BusListener):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
+        settings.append(self._port_setting('alertPort'))
         settings.append(Setting('repeat', 'repeat', self.repeat,
                                 type='duration', min=0, max=24*60*60, step=60))
-        settings.append(self._port_setting('outputPort'))
         return settings

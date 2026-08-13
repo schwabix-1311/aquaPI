@@ -421,30 +421,27 @@ def api_delete_user(user_id: int):
 
 
 @bp.route('/api/notifications/prefs', methods=['GET'])
-@login_required
+@roles_required('admin')
 def api_list_notification_prefs():
-    """ list the current user's own preferred channel per alert node. """
+    """ list the current admin's own escalation config per alert node. """
     prefs = db.list_user_notification_prefs(_users_db_path(), current_user.id)
     return jsonify(prefs)
 
 
 @bp.route('/api/notifications/prefs/<alert_node_id>', methods=['PUT'])
-@roles_required('operator', 'admin')
+@roles_required('admin')
 def api_set_notification_pref(alert_node_id: str):
-    """ set the current user's preferred notification channel
-        ('email'/'telegram'/'none') for one specific Alert node, plus an
-        optional 2nd escalation channel that gets additionally notified
+    """ set the current admin's escalation config for one specific Alert
+        node: escalation_channel is an IoRegistry port name (e.g.
+        'Telegram #2'), or 'none' to disable; gets additionally notified
         once the alert has stayed active for 'escalation_after_minutes'
-        (0 or 'none' disables escalation).
+        (0 disables escalation).
     """
     data = request.get_json(silent=True) or {}
-    channel = data.get('channel', '')
     escalation_channel = data.get('escalation_channel', 'none')
     escalation_after_minutes = data.get('escalation_after_minutes', 0)
 
-    if channel not in ('email', 'telegram', 'none'):
-        return jsonify(error=f'Invalid channel: {channel!r}'), HTTPStatus.BAD_REQUEST
-    if escalation_channel not in ('email', 'telegram', 'none'):
+    if not escalation_channel:
         return jsonify(error=f'Invalid escalation channel: {escalation_channel!r}'), HTTPStatus.BAD_REQUEST
     try:
         escalation_after_minutes = int(escalation_after_minutes)
@@ -453,10 +450,10 @@ def api_set_notification_pref(alert_node_id: str):
     except (TypeError, ValueError):
         return jsonify(error='escalation_after_minutes must be a non-negative integer'), HTTPStatus.BAD_REQUEST
 
-    db.set_user_notification_pref(_users_db_path(), current_user.id, alert_node_id, channel,
+    db.set_user_notification_pref(_users_db_path(), current_user.id, alert_node_id,
                                   escalation_channel, escalation_after_minutes)
-    log.info('User %r set notification channel %r (escalation %r after %d min) for alert %r',
-             current_user.username, channel, escalation_channel, escalation_after_minutes, alert_node_id)
-    return jsonify({'alert_node_id': alert_node_id, 'channel': channel,
+    log.info('User %r set escalation channel %r after %d min for alert %r',
+             current_user.username, escalation_channel, escalation_after_minutes, alert_node_id)
+    return jsonify({'alert_node_id': alert_node_id,
                     'escalation_channel': escalation_channel,
                     'escalation_after_minutes': escalation_after_minutes})

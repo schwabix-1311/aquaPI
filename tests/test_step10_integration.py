@@ -187,35 +187,56 @@ def _login(client, username, password):
     return client.post('/login', data={'username': username, 'password': password})
 
 
-def test_two_users_have_separated_dashboards_and_alert_prefs(app, client):
+def test_two_users_have_separated_dashboards(app, client):
     users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
     u1 = db.create_user(users_db, 'alice', 'alicePass1', role='viewer')
     u2 = db.create_user(users_db, 'bob', 'bobPass123', role='operator')
 
     db.set_dashboard(users_db, u1, [{'controller_id': 'heizen', 'group': 'Becken 1'}])
     db.set_dashboard(users_db, u2, [{'controller_id': 'warnung', 'group': 'Becken 1'}])
-    db.set_user_notification_pref(users_db, u1, 'warnung', 'email')
-    db.set_user_notification_pref(users_db, u2, 'warnung', 'telegram')
 
     _login(client, 'alice', 'alicePass1')
     resp = client.get('/api/dashboard/')
     assert resp.get_json() == [{'controller_id': 'heizen', 'group': 'Becken 1'}]
-    resp = client.get('/api/notifications/prefs')
-    assert resp.get_json() == [{'alert_node_id': 'warnung', 'channel': 'email',
-                                'escalation_channel': 'none', 'escalation_after_minutes': 0}]
     client.get('/logout')
 
     _login(client, 'bob', 'bobPass123')
     resp = client.get('/api/dashboard/')
     assert resp.get_json() == [{'controller_id': 'warnung', 'group': 'Becken 1'}]
-    resp = client.get('/api/notifications/prefs')
-    assert resp.get_json() == [{'alert_node_id': 'warnung', 'channel': 'telegram',
-                                'escalation_channel': 'none', 'escalation_after_minutes': 0}]
 
-    # underlying storage is confirmed separated too, not just via API
+
+def test_notification_prefs_api_is_admin_only(app, client):
+    """ escalation config (Alert notification redesign) is restricted to
+        admin accounts - an operator gets 403 on both GET and PUT, an
+        admin can round-trip their own escalation config through the API
+    """
+    users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
+    db.create_user(users_db, 'operator1', 'operatorPass1', role='operator')
+    admin_id = db.create_user(users_db, 'admin1', 'adminPass123', role='admin')
+
+    _login(client, 'operator1', 'operatorPass1')
+    resp = client.get('/api/notifications/prefs')
+    assert resp.status_code == HTTPStatus.FORBIDDEN
+    resp = client.put('/api/notifications/prefs/warnung',
+                      json={'escalation_channel': 'Telegram #1'})
+    assert resp.status_code == HTTPStatus.FORBIDDEN
+    client.get('/logout')
+
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/notifications/prefs/warnung',
+                      json={'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.get_json() == {'alert_node_id': 'warnung', 'escalation_channel': 'Telegram #1',
+                               'escalation_after_minutes': 30}
+
+    resp = client.get('/api/notifications/prefs')
+    assert resp.get_json() == [{'alert_node_id': 'warnung', 'escalation_channel': 'Telegram #1',
+                                'escalation_after_minutes': 30}]
+
+    # underlying storage is confirmed too, not just via API
     prefs = db.get_prefs_for_alert(users_db, 'warnung')
-    channel_by_user = {p['user_id']: p['channel'] for p in prefs}
-    assert channel_by_user == {u1: 'email', u2: 'telegram'}
+    assert prefs == [{'user_id': admin_id, 'username': 'admin1',
+                      'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30}]
 
 
 def test_all_nodes_reachable_via_plain_json_api(app, client):

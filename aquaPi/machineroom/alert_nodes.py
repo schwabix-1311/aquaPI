@@ -169,6 +169,7 @@ class Alert(PortDriverMixin, BusListener):
     """
     ROLE = BusRole.ALERTS
     data_range = DataRange.STRING
+    _port_funcs = [PortFunc.Tout]
     _DRIVER_BASE = OutDriver
     _PORT_CAPABILITY = 'writing alert messages'
 
@@ -215,62 +216,36 @@ class Alert(PortDriverMixin, BusListener):
                 log.info('Alert receiver "%s" will get msg:  "%s"',
                          driver.name, '\n'.join(alert_lst))
 
-        self._notify_user_prefs(text)
-
-    def _notify_one(self, pref: dict, channel: str, text: str, escalated: bool = False) -> None:
-        """ notify a single user via a single channel ('email'/'telegram'),
-            never raising - a missing/misconfigured driver for one user
-            must never break the alert loop for others.
+    def _notify_escalation(self, port_name: str, text: str) -> None:
+        """ send an escalation message to a specific IoRegistry port, never
+            raising - a missing/misconfigured driver must never break the
+            alert loop.
         """
-        port_name = f'{channel.capitalize()} #1'
         try:
             driver = IoRegistry.get().driver_factory(port_name)
         except Exception:
-            log.error('No %s port available to notify user %s for alert %s',
-                      channel, pref.get('username', pref['user_id']), self.id)
+            log.error('No port %r available for escalation of alert %s', port_name, self.id)
             return
 
         try:
             if isinstance(driver, OutDriver) and driver.func == PortFunc.Tout:
-                msg = f'[ESKALATION] {text}' if escalated else text
-                driver.write(msg)
-                log.info('Alert %s notified user %s via %s%s',
-                         self.id, pref.get('username', pref['user_id']), channel,
-                         ' (escalated)' if escalated else '')
+                driver.write(f'[ESKALATION] {text}')
+                log.info('Alert %s escalated via %s', self.id, port_name)
         except Exception:
-            log.exception('Failed to notify user %s via %s for alert %s',
-                          pref.get('username', pref['user_id']), channel, self.id)
+            log.exception('Failed to escalate alert %s via %s', self.id, port_name)
         finally:
             IoRegistry.get().driver_destruct(port_name, driver)
-
-    def _notify_user_prefs(self, text: str) -> None:
-        """ additionally notify every user that configured a preferred
-            channel ('email'/'telegram') for this specific Alert node,
-            regardless of this node's own 'port'. Users without a pref
-            (default 'none') are not notified, and a missing/misconfigured
-            driver for one user must never break the alert loop.
-        """
-        users_db_path = db.get_current_users_db_path()
-        if not users_db_path:
-            return
-
-        try:
-            prefs = db.get_prefs_for_alert(users_db_path, self.id)
-        except Exception:
-            log.exception('Failed to read user notification prefs for alert %s', self.id)
-            return
-
-        for pref in prefs:
-            self._notify_one(pref, pref['channel'], text)
 
     def _check_escalation(self, now: float, text: str) -> None:
         """ Step 28: independently of the repeat/'any_change' throttling
             used for the primary notification, check on every message
-            whether any user's configured escalation channel needs to be
+            whether any admin's configured escalation channel needs to be
             notified because the alert has been continuously active for
             at least their 'escalation_after_minutes'. Fires at most once
-            per continuously-active episode per user (self._escalated_users,
-            reset once the alert clears).
+            per continuously-active episode per admin row
+            (self._escalated_users, reset once the alert clears), and at
+            most once per distinct destination port per check (due_ports) -
+            two admin rows resolving to the same port must not double-send.
         """
         if self._alert_since is None:
             return
@@ -286,15 +261,18 @@ class Alert(PortDriverMixin, BusListener):
             return
 
         active_minutes = (now - self._alert_since) / 60
+        due_ports: set[str] = set()
         for pref in prefs:
             escalation_channel = pref.get('escalation_channel') or 'none'
             escalation_after = pref.get('escalation_after_minutes') or 0
             user_id = pref['user_id']
-            if (escalation_channel not in ('none', pref['channel'])
+            if (escalation_channel not in ('none', self.port)
                 and escalation_after > 0 and active_minutes >= escalation_after
                 and user_id not in self._escalated_users):
-                self._notify_one(pref, escalation_channel, text, escalated=True)
+                due_ports.add(escalation_channel)
                 self._escalated_users.add(user_id)
+        for port_name in due_ports:
+            self._notify_escalation(port_name, text)
 
     @staticmethod
     def _format_entry(cond: AlertCond, cond_change: bool | None) -> str | None:
@@ -356,4 +334,5 @@ class Alert(PortDriverMixin, BusListener):
         settings = super().get_settings()
         settings.append(Setting('repeat', 'repeat', self.repeat,
                                 type='duration', min=0, max=24*60*60, step=60))
+        settings.append(self._port_setting('outputPort'))
         return settings

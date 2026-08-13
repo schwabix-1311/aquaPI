@@ -21,7 +21,7 @@ const EscalationEditor = {
 		<div class="mt-2">
 			<div class="text-overline">{{ $t('pages.settings.escalation.title') }}</div>
 			<v-alert v-if="error" type="error" density="compact" variant="tonal" class="mb-2">{{ error }}</v-alert>
-			<div class="d-flex align-center mb-2" style="gap:8px;">
+			<div class="aquapi-alertcond-content d-flex align-center mb-2" style="gap:8px;">
 				<v-select
 					v-model="escalationChannel"
 					:items="channelItems"
@@ -43,6 +43,7 @@ const EscalationEditor = {
 					:disabled="!canEdit || !dirty"
 					:loading="saving"
 					@click="save"
+					style="margin-left:auto;"
 				>
 					{{ $t('pages.settings.escalation.save') }}
 				</v-btn>

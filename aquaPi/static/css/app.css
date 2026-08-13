@@ -382,3 +382,12 @@ li.aquapi-chain-tree__item--muted:not(:last-child)::after {
     background-color: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.75);
 }
+
+/* shared width cap for AlertCondEditor's condition rows/save button and
+   EscalationEditor's own row, so both "speichern" buttons - and the
+   condition rows' trailing delete icon - line up on the same right edge
+   instead of the condition save button stretching to the full card width
+   while escalation's stays wherever its own short row happens to end. */
+.aquapi-alertcond-content {
+    max-width: 700px;
+}

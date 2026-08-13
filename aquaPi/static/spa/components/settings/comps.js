@@ -553,12 +553,21 @@ function settingWidgetType(item) {
 // Selects/multiselects (long option text, chips) and the schedule field
 // (carries a persistent hint line) get more breathing room than the default
 // 3-per-row grid used by compact fields like sliders/numbers/switches.
-function settingColSpan(item) {
+function settingColSpan(item, node) {
 	// port selects (item.key === 'port', regardless of label - inputPort/
 	// outputPort/alertPort all share this key, see PortDriverMixin) list
 	// short option text (e.g. "GPIO 12 out") - no need for the wider
 	// column reserved for genuinely long content like other selects'
 	// option text or multiselect chips.
+	if (item.key === 'port' && node.role === 'ALERTS') {
+		// alertPort ("Sende an") sits right above EscalationEditor's own
+		// "Eskalieren an" select (escalationEditor.js, fixed 220px) - an
+		// even narrower column than other ports, to line the two up:
+		// "Email #1"/"Telegram #1" are shorter than typical GPIO/PWM/ADC
+		// port names, so the standard port column would just be wasted
+		// space here.
+		return {cols: 12, sm: 6, md: 2}
+	}
 	const wide = item.key !== 'port'
 		&& ['SettingSelect', 'SettingMultiSelect', 'SettingSchedule'].includes(settingWidgetType(item))
 	return wide ? {cols: 12, md: 6} : {cols: 12, sm: 6, md: 4}
@@ -593,7 +602,7 @@ const NodeSettingsFields = {
 					<v-col
 						v-for="(item, idx) in settings"
 						:key="node.id + '.' + (item.key || idx)"
-						v-bind="colSpan(item)"
+						v-bind="colSpan(item, node)"
 						class="mb-2"
 					>
 						<component
@@ -881,7 +890,7 @@ const NodeSettingsCard = {
 			</v-card-title>
 			<v-card-text>
 				<template v-if="anchor.role === 'ALERTS'">
-					<alert-cond-editor :node="anchor"></alert-cond-editor>
+					<alert-cond-editor :node="anchor" class="mb-4"></alert-cond-editor>
 					<node-settings-fields :node="anchor"></node-settings-fields>
 					<escalation-editor :node="anchor"></escalation-editor>
 				</template>

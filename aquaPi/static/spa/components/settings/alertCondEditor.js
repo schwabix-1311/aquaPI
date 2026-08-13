@@ -28,62 +28,64 @@ const AlertCondEditor = {
 			<v-alert v-if="!rows.length" type="info" density="compact" variant="tonal" class="mb-2">
 				{{ $t('pages.settings.alertConds.hintEmpty') }}
 			</v-alert>
-			<div v-for="(row, idx) in rows" :key="row._key" class="d-flex align-center mb-2" style="gap:8px;">
-				<v-select
-					v-model="row.class"
-					:items="condClassItems"
-					:label="$t('pages.settings.alertConds.condition')"
-					:disabled="!canEdit"
-					density="compact" variant="outlined" hide-details
-					style="max-width:115px;"
-				></v-select>
-				<v-select
-					v-model="row.node_id"
-					:items="nodeItems"
-					:label="$t('pages.settings.alertConds.watchedNode')"
-					:disabled="!canEdit"
-					density="compact" variant="outlined" hide-details
-					style="flex:1; max-width:320px;"
-				></v-select>
-				<v-text-field
-					v-model.number="row.limit"
-					type="number"
-					:label="$t('pages.settings.alertConds.limit')"
-					:disabled="!canEdit"
-					density="compact" variant="outlined" hide-details
-					style="max-width:100px;"
-				></v-text-field>
-				<v-text-field
-					v-model.number="row.duration"
-					type="number" min="0"
-					:label="$t('pages.settings.alertConds.duration')"
-					:disabled="!canEdit"
-					density="compact" variant="outlined" hide-details
-					style="max-width:100px;"
-				></v-text-field>
-				<v-btn
-					icon variant="text" color="grey-darken-1" size="small"
-					:disabled="!canEdit"
-					@click="removeRow(idx)"
-					:title="$t('pages.settings.alertConds.remove')"
-				>
-					<v-icon size="small">mdi-delete</v-icon>
-				</v-btn>
-			</div>
-			<div class="d-flex align-center mt-1" style="gap:8px;">
-				<v-btn variant="outlined" size="small" :disabled="!canEdit" @click="addRow">
-					<v-icon start size="small">mdi-plus</v-icon>{{ $t('pages.settings.alertConds.add') }}
-				</v-btn>
-				<v-spacer></v-spacer>
-				<v-btn
-					v-if="!hideSaveButton"
-					color="primary" size="small"
-					:disabled="!canEdit || !dirty || !rowsValid"
-					:loading="saving"
-					@click="save"
-				>
-					{{ $t('pages.settings.alertConds.save') }}
-				</v-btn>
+			<div class="aquapi-alertcond-content">
+				<div v-for="(row, idx) in rows" :key="row._key" class="d-flex align-center mb-2" style="gap:8px;">
+					<v-select
+						v-model="row.class"
+						:items="condClassItems"
+						:label="$t('pages.settings.alertConds.condition')"
+						:disabled="!canEdit"
+						density="compact" variant="outlined" hide-details
+						style="max-width:115px;"
+					></v-select>
+					<v-select
+						v-model="row.node_id"
+						:items="nodeItems"
+						:label="$t('pages.settings.alertConds.watchedNode')"
+						:disabled="!canEdit"
+						density="compact" variant="outlined" hide-details
+						style="flex:1; max-width:320px;"
+					></v-select>
+					<v-text-field
+						v-model.number="row.limit"
+						type="number"
+						:label="$t('pages.settings.alertConds.limit')"
+						:disabled="!canEdit"
+						density="compact" variant="outlined" hide-details
+						style="max-width:100px;"
+					></v-text-field>
+					<v-text-field
+						v-model.number="row.duration"
+						type="number" min="0"
+						:label="$t('pages.settings.alertConds.duration')"
+						:disabled="!canEdit"
+						density="compact" variant="outlined" hide-details
+						style="max-width:100px;"
+					></v-text-field>
+					<v-btn
+						icon variant="text" color="grey-darken-1" size="small"
+						:disabled="!canEdit"
+						@click="removeRow(idx)"
+						:title="$t('pages.settings.alertConds.remove')"
+					>
+						<v-icon size="small">mdi-delete</v-icon>
+					</v-btn>
+				</div>
+				<div class="d-flex align-center mt-1" style="gap:8px;">
+					<v-btn variant="outlined" size="small" :disabled="!canEdit" @click="addRow">
+						<v-icon start size="small">mdi-plus</v-icon>{{ $t('pages.settings.alertConds.add') }}
+					</v-btn>
+					<v-btn
+						v-if="!hideSaveButton"
+						color="primary" size="small"
+						:disabled="!canEdit || !dirty || !rowsValid"
+						:loading="saving"
+						@click="save"
+						style="margin-left:auto;"
+					>
+						{{ $t('pages.settings.alertConds.save') }}
+					</v-btn>
+				</div>
 			</div>
 		</div>
 	`,

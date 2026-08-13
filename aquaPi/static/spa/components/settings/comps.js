@@ -32,8 +32,8 @@ const SettingNumber = {
 			:step="attrs.step || 'any'"
 			:disabled="disabled"
 			:rules="rules"
-			dense
-			outlined
+			density="compact"
+			variant="outlined"
 			hide-details="auto"
 			@change="onChange"
 		></v-text-field>
@@ -318,7 +318,7 @@ const SettingSwitch = {
 			v-model="localValue"
 			:disabled="disabled"
 			color="primary"
-			dense
+			density="compact"
 			hide-details
 			@change="onChange"
 		></v-switch>
@@ -356,8 +356,8 @@ const SettingSchedule = {
 			:label="item.label"
 			v-model="localValue"
 			:disabled="disabled"
-			dense
-			outlined
+			density="compact"
+			variant="outlined"
 			:hint="$t('pages.settings.scheduleHint')"
 			persistent-hint
 			@change="onChange"
@@ -392,8 +392,8 @@ const SettingText = {
 			v-model="localValue"
 			:disabled="disabled"
 			:rules="rules"
-			dense
-			outlined
+			density="compact"
+			variant="outlined"
 			hide-details="auto"
 			@change="onChange"
 		></v-text-field>
@@ -433,8 +433,8 @@ const SettingSelect = {
 			:items="attrs.options || []"
 			:disabled="disabled"
 			:rules="rules"
-			dense
-			outlined
+			density="compact"
+			variant="outlined"
 			hide-details="auto"
 			@update:modelValue="onChange"
 		></v-select>
@@ -478,8 +478,8 @@ const SettingMultiSelect = {
 			:disabled="disabled"
 			:rules="rules"
 			multiple chips
-			dense
-			outlined
+			density="compact"
+			variant="outlined"
 			hide-details="auto"
 			@update:modelValue="onChange"
 		></v-select>
@@ -550,6 +550,14 @@ function settingWidgetType(item) {
 	return 'SettingText'
 }
 
+// Selects/multiselects (long option text, chips) and the schedule field
+// (carries a persistent hint line) get more breathing room than the default
+// 3-per-row grid used by compact fields like sliders/numbers/switches.
+function settingColSpan(item) {
+	const wide = ['SettingSelect', 'SettingMultiSelect', 'SettingSchedule'].includes(settingWidgetType(item))
+	return wide ? {cols: 12, md: 6} : {cols: 12, sm: 6, md: 4}
+}
+
 // The settings-grid renderer for a single node - reusable both for a
 // chain's anchor (depth 0) and for each nested Eingänge/Ausgänge member
 // (depth > 0, with a small sub-heading identifying which node the fields
@@ -579,7 +587,7 @@ const NodeSettingsFields = {
 					<v-col
 						v-for="(item, idx) in settings"
 						:key="node.id + '.' + (item.key || idx)"
-						cols="12" sm="6" md="4"
+						v-bind="colSpan(item)"
 						class="mb-2"
 					>
 						<component
@@ -627,6 +635,7 @@ const NodeSettingsFields = {
 	},
 	methods: {
 		widgetType: settingWidgetType,
+		colSpan: settingColSpan,
 		async onUpdate(item, value) {
 			const ok = await this.settingsStore.updateNodeSetting({
 				nodeId: this.node.id,

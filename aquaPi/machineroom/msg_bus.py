@@ -262,6 +262,12 @@ class BusListener(BusNode, ABC):
         self.pos_y = state.get('pos_y', 0.0)
 
     def get_settings(self) -> list[Setting]:
+        # convention for subclasses adding their own Setting()s on top of
+        # this: connectivity fields first (this base's 'receives', a
+        # subclass's own 'port' if any), then the field(s) defining what
+        # the node fundamentally represents (e.g. 'unit'/'setpoint'/
+        # 'cronspec'/'value'), then tuning/behavior fields, then modifiers
+        # like 'inverted'/'repeat' last.
         settings = super().get_settings()
         settings.append(Setting(None, 'receives',
                          ';'.join(MsgBus.to_names(self.get_receives()))))

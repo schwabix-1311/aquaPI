@@ -200,7 +200,7 @@ class AnalogInput(InputNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('unit', 'unit', self.unit))
+        settings.insert(1, Setting('unit', 'unit', self.unit))
         settings.append(Setting('avg', 'avg', self.avg,
                                 type='number', min=1, max=5, step=1))
         return settings

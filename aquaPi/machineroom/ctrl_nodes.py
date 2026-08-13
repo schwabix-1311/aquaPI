@@ -60,7 +60,7 @@ class ControllerNode(BusListener, ABC):
 
     def get_settings(self) -> list[Setting]:
         self._ensure_rcv_unit()
-        return []  # don't inherit inputs!  Why not????
+        return super().get_settings()
 
 
 class ThresholdCtrl(ControllerNode):

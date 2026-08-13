@@ -125,9 +125,13 @@ def test_get_settings_viewer_can_read(client, users):
     assert 'hysteresis' in by_key
     assert by_key['hysteresis']['value'] == 0.5
 
-    # every returned entry must be marked editable, since ControllerNode
-    # deliberately doesn't inherit the read-only 'Receives' entry
-    assert all(entry['editable'] for entry in settings)
+    # ControllerNode now inherits BusListener.get_settings()'s read-only
+    # 'Receives' entry too (key=None), same as every other listener-family
+    # node - see test_get_settings_readonly_entry_is_marked_non_editable
+    readonly = [entry for entry in settings if entry['key'] is None]
+    assert len(readonly) == 1
+    assert readonly[0]['editable'] is False
+    assert all(entry['editable'] for entry in settings if entry['key'] is not None)
 
 
 def test_get_settings_readonly_entry_is_marked_non_editable(client, users):

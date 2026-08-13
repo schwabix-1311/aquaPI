@@ -3,7 +3,7 @@ import {useSettingsStore} from '../../store/modules/settings.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useConfigStore} from '../../store/modules/config.js'
 import {useUsersStore} from '../../store/modules/users.js'
-import {isHistOrAlert, chainAnchor, ancestors, descendants, flattenEntries} from './chains.js'
+import {isHistOrAlert, cardTitle, ancestorsForward, descendants, dedupeFanIn, branchAnchor, realParents} from './chains.js'
 import './alertCondEditor.js'
 import './escalationEditor.js'
 
@@ -626,14 +626,24 @@ const NodeSettingsFields = {
 		// settingItem computeds), which label it with the node's own
 		// name rather than a generic translated word - the control *is*
 		// the node, there's nothing else to distinguish it by.
+		//
+		// The read-only 'receives' entry (key===null, the only Setting(None,
+		// ...) in the whole backend, msg_bus.py's BusListener.get_settings())
+		// is unconditionally filtered out here: with 1 real parent, tree
+		// position already says it unambiguously; with 0 (a root) it's
+		// trivially uninformative; with 2+ it's covered by NodeSettingsTree's
+		// explicit fan-in note instead of a raw field. So it never needs to
+		// render as its own field anywhere anymore.
 		settings: function() {
 			const ownControlTypes = ['UiSwitchInput', 'UiAnalogInput']
-			return this.settingsStore.settingsForNode(this.node.id).map(item => ({
-				...item,
-				label: (ownControlTypes.includes(this.node.type) && item.key === 'value')
-					? this.node.name
-					: this.$t('pages.settings.fields.' + item.label, item.labelParams || {}),
-			}))
+			return this.settingsStore.settingsForNode(this.node.id)
+				.filter(item => !(item.key === null && item.label === 'receives'))
+				.map(item => ({
+					...item,
+					label: (ownControlTypes.includes(this.node.type) && item.key === 'value')
+						? this.node.name
+						: this.$t('pages.settings.fields.' + item.label, item.labelParams || {}),
+				}))
 		},
 		error: function() {
 			return this.settingsStore.errorForNode(this.node.id)
@@ -744,6 +754,117 @@ const NodeReceivesEditor = {
 }
 registerGlobalComponent('NodeReceivesEditor', NodeReceivesEditor)
 
+// Renders one level of a descendants()/ancestors()-shaped {node,children}
+// tree (after dedupeFanIn() for descendants) as a real nested <ul>/<li>
+// tree with hop-distance indentation and per-item "elbow" connectors (see
+// app.css's .aquapi-chain-tree rules) - recurses into itself for each
+// level, replacing the old flattenEntries()-based flat depth=1 list.
+const NodeSettingsTree = {
+	name: 'NodeSettingsTree',
+	props: {
+		entries: {type: Array, required: true},        // [{node, children, merged?}]
+		depth: {type: Number, default: 1},
+		// true for the outermost <ul> directly under an "Eingänge"/
+		// "Ausgänge" heading - no tree row above it to connect an upward
+		// stub into.
+		flat: {type: Boolean, default: false},
+		// non-null once this recursion is inside a branch that was given
+		// its own local anchor further up (see branchFor()) - null at the
+		// very top and everywhere outside any fan-out point.
+		branchAnchorId: {type: String, default: null},
+		branchIsCtrl: {type: Boolean, default: false},
+	},
+	template: `
+		<ul class="aquapi-chain-tree"
+			:class="{'aquapi-chain-tree--flat': flat, 'aquapi-chain-tree--muted': branchAnchorId && !branchIsCtrl}"
+		>
+			<li v-for="entry in entries" :key="entry.node.id"
+				class="aquapi-chain-tree__item"
+				:class="{'aquapi-chain-tree__item--muted': entry.merged || (branchAnchorId && !branchIsCtrl)}"
+			>
+				<template v-if="entry.merged">
+					<div class="d-flex align-center text-body-2 text-grey">
+						<v-icon size="small" class="mr-1">mdi-call-merge</v-icon>
+						{{ entry.node.name }}
+					</div>
+					<div class="text-caption text-grey">
+						⑂ {{ $t('pages.settings.fields.receives') }}: {{ parentNames(entry.node) }}
+					</div>
+				</template>
+				<template v-else>
+					<div class="aquapi-chain-tree__anchor-badge" :class="badgeClass(entry)">
+						{{ entry.node.name }}
+					</div>
+					<node-settings-fields :node="entry.node"></node-settings-fields>
+					<div v-if="parents(entry.node).length > 1" class="text-caption text-grey">
+						⑂ {{ $t('pages.settings.fields.receives') }}: {{ parentNames(entry.node) }}
+					</div>
+					<div v-if="isBranchHead(entry) && !branchFor(entry).isCtrl" class="text-caption text-grey font-italic">
+						{{ $t('pages.settings.noControllerInBranch') }}
+					</div>
+				</template>
+
+				<node-settings-tree
+					v-if="entry.children.length"
+					:entries="entry.children"
+					:depth="depth + 1"
+					:branch-anchor-id="branchContext(entry).id"
+					:branch-is-ctrl="branchContext(entry).isCtrl"
+				></node-settings-tree>
+			</li>
+		</ul>
+	`,
+	computed: {
+		dashboardStore() {
+			return useDashboardStore()
+		},
+	},
+	methods: {
+		parents(node) {
+			return realParents(node, this.dashboardStore.nodes)
+		},
+		parentNames(node) {
+			return this.parents(node).map(n => n.name).join(', ')
+		},
+		// a fresh fan-out point (2+ real siblings at THIS list) gives every
+		// sibling its own new local anchor; a lone child just inherits
+		// whatever branch context is already in effect from further up.
+		branchFor(entry) {
+			if (this.entries.length > 1) {
+				return branchAnchor(entry)
+			}
+			return this.branchAnchorId ? {node: {id: this.branchAnchorId, name: ''}, isCtrl: this.branchIsCtrl} : null
+		},
+		isBranchHead(entry) {
+			const b = this.branchFor(entry)
+			return !!b && b.node.id === entry.node.id
+		},
+		// every node gets the pill label - strong (filled) at a real Ctrl
+		// branch head, soft (dashed) at a Ctrl-less branch head, plain
+		// (neutral) everywhere else, i.e. any node that's just continuing
+		// a chain rather than itself being a branch's own focal point.
+		badgeClass(entry) {
+			if (this.isBranchHead(entry)) {
+				return this.branchFor(entry).isCtrl
+					? 'aquapi-chain-tree__anchor-badge--ctrl'
+					: 'aquapi-chain-tree__anchor-badge--soft'
+			}
+			return 'aquapi-chain-tree__anchor-badge--plain'
+		},
+		// what to hand down to this entry's own children: a NEW branch
+		// context if this entry is itself one of 2+ siblings, else
+		// whatever's already in effect, unchanged.
+		branchContext(entry) {
+			if (this.entries.length > 1) {
+				const b = branchAnchor(entry)
+				return {id: b.node.id, isCtrl: b.isCtrl}
+			}
+			return {id: this.branchAnchorId, isCtrl: this.branchIsCtrl}
+		},
+	},
+}
+registerGlobalComponent('NodeSettingsTree', NodeSettingsTree)
+
 // Orchestrates one root's whole card: resolves the chain's display anchor
 // (see chains.js), then either the HISTORY/ALERTS receives-combobox, or the
 // anchor's own fields plus nested Eingänge (upstream)/Ausgänge (downstream)
@@ -765,28 +886,17 @@ const NodeSettingsCard = {
 					<escalation-editor :node="anchor"></escalation-editor>
 				</template>
 				<template v-else>
-					<node-settings-fields :node="anchor"></node-settings-fields>
-
-					<node-receives-editor v-if="anchor.role === 'HISTORY'" :node="anchor"></node-receives-editor>
+					<template v-if="anchor.role === 'HISTORY'">
+						<node-settings-fields :node="anchor"></node-settings-fields>
+						<node-receives-editor :node="anchor"></node-receives-editor>
+					</template>
 					<template v-else>
-						<template v-if="inputs.length">
-							<div class="text-overline mt-2">{{ $t('pages.settings.inputs') }}</div>
-							<node-settings-fields
-								v-for="inputNode in inputs"
-								:key="inputNode.id"
-								:node="inputNode"
-								:depth="1"
-							></node-settings-fields>
-						</template>
-						<template v-if="outputs.length">
-							<div class="text-overline mt-2">{{ $t('pages.settings.outputs') }}</div>
-							<node-settings-fields
-								v-for="outputNode in outputs"
-								:key="outputNode.id"
-								:node="outputNode"
-								:depth="1"
-							></node-settings-fields>
-						</template>
+						<node-settings-tree v-if="inputs.length" :entries="inputs" :depth="1" flat></node-settings-tree>
+						<div v-if="anchor.role === 'CTRL'" class="aquapi-chain-tree__anchor-badge aquapi-chain-tree__anchor-badge--ctrl">
+							{{ anchor.name }}
+						</div>
+						<node-settings-fields :node="anchor"></node-settings-fields>
+						<node-settings-tree v-if="outputs.length" :entries="outputs" :depth="1" flat></node-settings-tree>
 					</template>
 				</template>
 			</v-card-text>
@@ -796,34 +906,36 @@ const NodeSettingsCard = {
 		dashboardStore() {
 			return useDashboardStore()
 		},
+		// cardTitle() picks chainAnchor()'s single-CTRL result for a plain,
+		// unbranching chain (same as before), or the root itself for any
+		// chain with a real fan-out anywhere - see chains.js.
 		anchor: function() {
-			return chainAnchor(this.node, this.dashboardStore.nodes)
+			return cardTitle(this.node, this.dashboardStore.nodes)
 		},
-		// flattened (not deeply indented - NodeSettingsFields' own depth=1
-		// sub-heading is enough) since NodeSettingsFields expects a plain
-		// node, not a {node, children} entry
+		// ancestorsForward() walks root(s)-first toward the anchor (see
+		// chains.js) - matches the reading direction used for `outputs`
+		// below (closer-to-anchor = less nested). isPlainChain() only
+		// guarantees no fan-OUT anywhere in this chain, not no fan-IN - two
+		// sensors merging into one AvgAux upstream of a single Ctrl is
+		// still "plain" (one purpose, titled by that Ctrl) but genuinely
+		// has 2 real parents at the merge point, so this still needs
+		// dedupeFanIn() same as outputs.
 		inputs: function() {
-			return flattenEntries(ancestors(this.anchor, this.dashboardStore.nodes))
+			return dedupeFanIn(ancestorsForward(this.anchor, this.dashboardStore.nodes))
 		},
-		// Computed from this.node (the chain's actual root), not this.anchor
-		// - chainAnchor() can re-center the card on a CTRL node found
-		// anywhere downstream (e.g. root A feeding both a CTRL B and a
-		// second real node C: chainAnchor(A) picks B since it's the first
-		// CTRL found walking A's full downstream tree), and descendants(B)
-		// alone would then miss C entirely, since C is a *sibling* of B, not
-		// B's ancestor or descendant - invisible to a walk rooted at B, and
-		// C isn't a root itself either, so it'd have no card anywhere on
-		// the page. Using the root's full descendant tree here means every
-		// real chain member always ends up shown somewhere on this card,
-		// regardless of where in the tree the anchor got picked from.
-		//
-		// Still need to exclude the anchor itself and its own ancestors
-		// (already shown as the headline + `inputs` above) from that full
-		// list, or they'd double up.
+		// Computed from this.anchor, not this.node (the root) as before:
+		// for a plain chain, anchor is chainAnchor()'s downstream pick and
+		// this is just "the rest of the chain past the headline" (same as
+		// today). For a branching component, cardTitle() already forces
+		// anchor === this.node (the root itself) - so this naturally
+		// becomes the whole component's real descendant tree, replacing the
+		// old "walk from root, then subtract anchor+ancestors as the spine"
+		// workaround entirely: that workaround only ever existed to route
+		// around exactly the branching case, which now picks the root as
+		// its own anchor up front instead of re-centering on a downstream
+		// CTRL, so there's no spine left to subtract.
 		outputs: function() {
-			const allDescendants = flattenEntries(descendants(this.node, this.dashboardStore.nodes))
-			const spine = new Set([this.anchor.id, ...this.inputs.map(n => n.id)])
-			return allDescendants.filter(n => !spine.has(n.id))
+			return dedupeFanIn(descendants(this.anchor, this.dashboardStore.nodes))
 		},
 	},
 	methods: {

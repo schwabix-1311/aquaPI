@@ -1,7 +1,7 @@
 import './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
-import {isRoot, chainAnchor, descendants} from './chains.js'
+import {isRoot, cardTitle, descendants} from './chains.js'
 
 const AquapiSettings = {
 	template: `
@@ -91,7 +91,7 @@ const AquapiSettings = {
 			this.sortedRoots.forEach(node => {
 				// the displayed/anchor card's own group decides the panel,
 				// not necessarily the root's group
-				const key = chainAnchor(node, this.nodes).group || ''
+				const key = cardTitle(node, this.nodes).group || ''
 				if (!groups[key]) {
 					groups[key] = []
 				}

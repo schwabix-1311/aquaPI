@@ -34,6 +34,7 @@ export default
 			scheduleHint: 'Minute Hour DayOfMonth Month DayOfWeek',
 			inputs: 'Inputs',
 			outputs: 'Outputs',
+			noControllerInBranch: 'No controller in this branch',
 			alertConds: {
 				heading: 'Alert conditions',
 				condition: 'Condition',

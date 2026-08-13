@@ -271,3 +271,114 @@ html::-webkit-scrollbar {
     right: -5px;
     background-color: #90a4ae;
 }
+
+/* /settings chain tree (NodeSettingsTree in components/settings/comps.js):
+   real nested indentation + "elbow" connectors for a card's Eingänge/
+   Ausgänge, replacing the old flat depth=1 list. Plain <ul>/<li> markup
+   rendered from a JS template string - no Vue SFC <style scoped> exists in
+   this codebase, so this lives here, same as the /config canvas's own
+   .config-connection-* rules above. */
+:root {
+    --aquapi-tree-border: rgba(0, 0, 0, 0.3);
+    --aquapi-tree-border-muted: rgba(0, 0, 0, 0.25);
+}
+.v-theme--dark {
+    --aquapi-tree-border: rgba(255, 255, 255, 0.3);
+    --aquapi-tree-border-muted: rgba(255, 255, 255, 0.2);
+}
+
+ul.aquapi-chain-tree {
+    list-style: none;
+    margin: 0;
+    padding-left: 20px;
+}
+ul.aquapi-chain-tree.aquapi-chain-tree--flat {
+    padding-left: 0;
+}
+ul.aquapi-chain-tree li.aquapi-chain-tree__item {
+    position: relative;
+    padding-left: 20px;
+    margin-top: 6px;
+}
+/* one L-shaped connector per <li>, its foot landing at a fixed height
+   matching this row's own badge - NOT 50% of the <li>, since a <li> with
+   children contains its whole nested subtree, not just its own row; 50%
+   of that combined height would land the foot down inside the child
+   instead of at this row's own badge. Two siblings therefore always draw
+   two separate elbows, never one line spanning past both of them. */
+ul.aquapi-chain-tree li.aquapi-chain-tree__item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -6px;
+    width: 14px;
+    height: 16px;
+    border-left: 1px solid var(--aquapi-tree-border);
+    border-bottom: 1px solid var(--aquapi-tree-border);
+}
+/* the outermost list under an "Eingänge"/"Ausgänge" heading has no row
+   above it to connect an upward stub into - start flush instead, same
+   foot height (10px = 16px - the 6px of ::before's own top offset) so it
+   lands on the same badge-center point as the nested variant above. */
+ul.aquapi-chain-tree.aquapi-chain-tree--flat > li.aquapi-chain-tree__item::before {
+    top: 0;
+    height: 10px;
+}
+/* trunk continuation down to the next sibling's own elbow - starts right
+   where ::before's foot ends (10px from this <li>'s own top), not 50%,
+   for the same reason - and reaches this <li>'s actual bottom edge
+   regardless of how much nested content is in between. Omitted on the
+   last child so the trunk doesn't run on past the final sibling. */
+ul.aquapi-chain-tree li.aquapi-chain-tree__item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: -6px;
+    width: 0;
+    border-left: 1px solid var(--aquapi-tree-border);
+}
+
+/* a Ctrl-less branch and a fan-in merge reference row both get the same
+   dashed/muted treatment, just at different granularities (a whole
+   subtree vs. one row). */
+ul.aquapi-chain-tree.aquapi-chain-tree--muted > li.aquapi-chain-tree__item::before,
+ul.aquapi-chain-tree.aquapi-chain-tree--muted > li.aquapi-chain-tree__item:not(:last-child)::after,
+li.aquapi-chain-tree__item--muted::before,
+li.aquapi-chain-tree__item--muted:not(:last-child)::after {
+    border-color: var(--aquapi-tree-border-muted);
+    border-left-style: dashed;
+    border-bottom-style: dashed;
+}
+
+.aquapi-chain-tree__anchor-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-bottom: 2px;
+}
+.aquapi-chain-tree__anchor-badge--ctrl {
+    background-color: rgba(25, 118, 210, 0.15);
+    color: #1976d2;
+    border: 1px solid rgba(25, 118, 210, 0.4);
+}
+.aquapi-chain-tree__anchor-badge--soft {
+    background-color: transparent;
+    color: rgba(0, 0, 0, 0.6);
+    border: 1px dashed var(--aquapi-tree-border);
+}
+.v-theme--dark .aquapi-chain-tree__anchor-badge--soft {
+    color: rgba(255, 255, 255, 0.7);
+}
+.aquapi-chain-tree__anchor-badge--plain {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: rgba(0, 0, 0, 0.7);
+    border: 1px solid transparent;
+}
+.v-theme--dark .aquapi-chain-tree__anchor-badge--plain {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.75);
+}

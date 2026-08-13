@@ -34,6 +34,7 @@ export default
 			scheduleHint: 'Minute Stunde Tag(Monat) Monat Wochentag',
 			inputs: 'Eingänge',
 			outputs: 'Ausgänge',
+			noControllerInBranch: 'Kein Regler in diesem Zweig',
 			alertConds: {
 				heading: 'Alarm-Bedingungen',
 				condition: 'Bedingung',

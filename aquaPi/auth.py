@@ -421,21 +421,21 @@ def api_delete_user(user_id: int):
 
 
 @bp.route('/api/notifications/prefs', methods=['GET'])
-@roles_required('admin')
+@roles_required('operator', 'admin')
 def api_list_notification_prefs():
-    """ list the current admin's own escalation config per alert node. """
+    """ list the current operator/admin's own escalation config per alert node. """
     prefs = db.list_user_notification_prefs(_users_db_path(), current_user.id)
     return jsonify(prefs)
 
 
 @bp.route('/api/notifications/prefs/<alert_node_id>', methods=['PUT'])
-@roles_required('admin')
+@roles_required('operator', 'admin')
 def api_set_notification_pref(alert_node_id: str):
-    """ set the current admin's escalation config for one specific Alert
-        node: escalation_channel is an IoRegistry port name (e.g.
-        'Telegram #2'), or 'none' to disable; gets additionally notified
-        once the alert has stayed active for 'escalation_after_minutes'
-        (0 disables escalation).
+    """ set the current operator/admin's escalation config for one
+        specific Alert node: escalation_channel is an IoRegistry port
+        name (e.g. 'Telegram #2'), or 'none' to disable; gets
+        additionally notified once the alert has stayed active for
+        'escalation_after_minutes' (0 disables escalation).
     """
     data = request.get_json(silent=True) or {}
     escalation_channel = data.get('escalation_channel', 'none')

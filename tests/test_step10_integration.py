@@ -205,16 +205,18 @@ def test_two_users_have_separated_dashboards(app, client):
     assert resp.get_json() == [{'controller_id': 'warnung', 'group': 'Becken 1'}]
 
 
-def test_notification_prefs_api_is_admin_only(app, client):
-    """ escalation config (Alert notification redesign) is restricted to
-        admin accounts - an operator gets 403 on both GET and PUT, an
-        admin can round-trip their own escalation config through the API
+def test_notification_prefs_api_is_operator_or_admin(app, client):
+    """ escalation config (Alert notification redesign) is editable by
+        operator/admin accounts, same as Alert.port ('sendTo') itself via
+        PUT /api/nodes/<id>/settings - a viewer gets 403 on both GET and
+        PUT, an operator can round-trip their own escalation config
+        through the API
     """
     users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
-    db.create_user(users_db, 'operator1', 'operatorPass1', role='operator')
-    admin_id = db.create_user(users_db, 'admin1', 'adminPass123', role='admin')
+    db.create_user(users_db, 'viewer1', 'viewerPass1', role='viewer')
+    operator_id = db.create_user(users_db, 'operator1', 'operatorPass1', role='operator')
 
-    _login(client, 'operator1', 'operatorPass1')
+    _login(client, 'viewer1', 'viewerPass1')
     resp = client.get('/api/notifications/prefs')
     assert resp.status_code == HTTPStatus.FORBIDDEN
     resp = client.put('/api/notifications/prefs/warnung',
@@ -222,7 +224,7 @@ def test_notification_prefs_api_is_admin_only(app, client):
     assert resp.status_code == HTTPStatus.FORBIDDEN
     client.get('/logout')
 
-    _login(client, 'admin1', 'adminPass123')
+    _login(client, 'operator1', 'operatorPass1')
     resp = client.put('/api/notifications/prefs/warnung',
                       json={'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30})
     assert resp.status_code == HTTPStatus.OK
@@ -235,7 +237,7 @@ def test_notification_prefs_api_is_admin_only(app, client):
 
     # underlying storage is confirmed too, not just via API
     prefs = db.get_prefs_for_alert(users_db, 'warnung')
-    assert prefs == [{'user_id': admin_id, 'username': 'admin1',
+    assert prefs == [{'user_id': operator_id, 'username': 'operator1',
                       'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30}]
 
 

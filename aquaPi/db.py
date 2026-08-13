@@ -1829,8 +1829,8 @@ def migrate_notification_config_from_json(globals_cfg: dict[str, Any],
 def set_user_notification_pref(db_path: str, user_id: int, alert_node_id: str,
                                escalation_channel: str = 'none',
                                escalation_after_minutes: int = 0) -> None:
-    """ set (create or replace) an admin's escalation config for a given
-        Alert node: escalation_channel is an IoRegistry port name (e.g.
+    """ set (create or replace) an operator/admin's escalation config for
+        a given Alert node: escalation_channel is an IoRegistry port name (e.g.
         'Telegram #2'), or 'none' to disable. Gets additionally notified
         once the alert has stayed active for at least
         'escalation_after_minutes' (Step 28), 0 disables escalation.
@@ -1857,7 +1857,7 @@ def set_user_notification_pref(db_path: str, user_id: int, alert_node_id: str,
 
 def list_user_notification_prefs(db_path: str, user_id: int) -> list[dict[str, Any]]:
     """ return all (alert_node_id, escalation_*) prefs configured by one
-        admin
+        operator/admin
     """
     conn = get_users_connection(db_path)
     try:
@@ -1873,8 +1873,8 @@ def list_user_notification_prefs(db_path: str, user_id: int) -> list[dict[str, A
 
 
 def get_prefs_for_alert(db_path: str, alert_node_id: str) -> list[dict[str, Any]]:
-    """ return all admins' escalation config for a given Alert node,
-        excluding those set to 'none'
+    """ return all operators'/admins' escalation config for a given Alert
+        node, excluding those set to 'none'
     """
     conn = get_users_connection(db_path)
     try:

@@ -46,6 +46,13 @@ export default
 				hintEmpty: 'Noch keine Bedingungen - dieser Alarm wird nie auslösen',
 				confirmClearAll: 'Letzte Bedingung entfernen? Dieser Alarm löst dann nicht mehr aus, bis wieder eine Bedingung hinzugefügt wird.',
 			},
+			escalation: {
+				title: 'Eskalation',
+				channel: 'Eskalieren an',
+				afterMinutes: 'Nach (Min)',
+				save: 'Eskalation speichern',
+				none: 'Keine',
+			},
 			fields: {
 				unit: 'Einheit',
 				offset: 'Offset',

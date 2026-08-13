@@ -46,6 +46,13 @@ export default
 				hintEmpty: 'No conditions yet - this alert will never trigger',
 				confirmClearAll: 'Remove the last condition? This alert will no longer trigger until a condition is added again.',
 			},
+			escalation: {
+				title: 'Escalation',
+				channel: 'Escalate to',
+				afterMinutes: 'After (min)',
+				save: 'Save escalation',
+				none: 'None',
+			},
 			fields: {
 				unit: 'Unit',
 				offset: 'Offset',

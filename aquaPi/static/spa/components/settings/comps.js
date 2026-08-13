@@ -5,6 +5,7 @@ import {useConfigStore} from '../../store/modules/config.js'
 import {useUsersStore} from '../../store/modules/users.js'
 import {isHistOrAlert, chainAnchor, ancestors, descendants, flattenEntries} from './chains.js'
 import './alertCondEditor.js'
+import './escalationEditor.js'
 
 // a Setting is required unless attrs.optional is true, and must not be
 // left empty - this is enforced server-side (api.py's _validate_and_cast),
@@ -743,29 +744,34 @@ const NodeSettingsCard = {
 				{{ anchor.name }}<span v-if="isHistOrAlert(anchor)" class="text-body-2 text--secondary"> ({{ $t('misc.nodeTypes.' + anchor.role.toLowerCase()) }})</span>
 			</v-card-title>
 			<v-card-text>
-				<node-settings-fields :node="anchor"></node-settings-fields>
-
-				<node-receives-editor v-if="anchor.role === 'HISTORY'" :node="anchor"></node-receives-editor>
-				<alert-cond-editor v-else-if="anchor.role === 'ALERTS'" :node="anchor"></alert-cond-editor>
-
+				<template v-if="anchor.role === 'ALERTS'">
+					<alert-cond-editor :node="anchor"></alert-cond-editor>
+					<node-settings-fields :node="anchor"></node-settings-fields>
+					<escalation-editor :node="anchor"></escalation-editor>
+				</template>
 				<template v-else>
-					<template v-if="inputs.length">
-						<div class="text-overline mt-2">{{ $t('pages.settings.inputs') }}</div>
-						<node-settings-fields
-							v-for="inputNode in inputs"
-							:key="inputNode.id"
-							:node="inputNode"
-							:depth="1"
-						></node-settings-fields>
-					</template>
-					<template v-if="outputs.length">
-						<div class="text-overline mt-2">{{ $t('pages.settings.outputs') }}</div>
-						<node-settings-fields
-							v-for="outputNode in outputs"
-							:key="outputNode.id"
-							:node="outputNode"
-							:depth="1"
-						></node-settings-fields>
+					<node-settings-fields :node="anchor"></node-settings-fields>
+
+					<node-receives-editor v-if="anchor.role === 'HISTORY'" :node="anchor"></node-receives-editor>
+					<template v-else>
+						<template v-if="inputs.length">
+							<div class="text-overline mt-2">{{ $t('pages.settings.inputs') }}</div>
+							<node-settings-fields
+								v-for="inputNode in inputs"
+								:key="inputNode.id"
+								:node="inputNode"
+								:depth="1"
+							></node-settings-fields>
+						</template>
+						<template v-if="outputs.length">
+							<div class="text-overline mt-2">{{ $t('pages.settings.outputs') }}</div>
+							<node-settings-fields
+								v-for="outputNode in outputs"
+								:key="outputNode.id"
+								:node="outputNode"
+								:depth="1"
+							></node-settings-fields>
+						</template>
 					</template>
 				</template>
 			</v-card-text>

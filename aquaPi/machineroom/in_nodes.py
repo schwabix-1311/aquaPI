@@ -77,7 +77,7 @@ class InputNode(PortDriverMixin, BusNode, ABC):
             try:
                 self.data = self.read()
                 self.alert = None
-                log.brief('%s: read %f', self.id, self.data)
+                log.brief('%s: read %r', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
             except (DriverReadError, Exception):
                 log.exception('Reader exception')
@@ -204,6 +204,39 @@ class AnalogInput(InputNode):
         settings.append(Setting('avg', 'avg', self.avg,
                                 type='number', min=1, max=5, step=1))
         return settings
+
+
+class TextInput(InputNode):
+    """ A text input for anything read from a Tin port driver, e.g. a
+        now-playing/station name reported by a network audio device.
+        Port driver is read in a worker thread.
+
+        Options:
+            name     - unique name of this input node in UI
+            port     - name of a IoRegistry port driver to read input
+            interval - delay of reader loop
+
+        Output:
+            STRING - posts each change of the driver-reported text
+    """
+    data_range = DataRange.STRING
+    _port_funcs = [PortFunc.Tin]
+
+    def __init__(self, name: str, port: str,
+                 interval: float = 10.0, _cont: bool = False):
+        super().__init__(name, port, interval, _cont=_cont)
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.data = state['data']
+        TextInput.__init__(self, state['name'], state['port'],
+                           interval=state['interval'], _cont=True)
+
+    def read(self) -> str:
+        val = self.data if isinstance(self.data, str) else ''
+        if self._driver:
+            val = str(self._driver.read())
+            log.debug('Tin.read %r', val)
+        return val
 
 
 class ScheduleInput(BusNode):

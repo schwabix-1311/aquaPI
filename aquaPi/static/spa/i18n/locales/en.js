@@ -379,6 +379,9 @@ export default
 					off: 'Off'
 				}
 			},
+			string: {
+				label: 'Text'
+			},
 			aux: {
 				label: 'Calculated',
 			}

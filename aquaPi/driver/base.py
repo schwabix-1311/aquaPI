@@ -159,7 +159,7 @@ class InDriver(Driver):
         self.namei: str = '!abstract IN'
         self._interval: int = 0
 
-    def read(self) -> int | float:
+    def read(self) -> int | float | str:
         return 0
 
 

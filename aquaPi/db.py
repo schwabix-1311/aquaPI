@@ -38,7 +38,7 @@ from .machineroom.msg_bus import MsgBus, BusNode, BusRole
 from .machineroom.ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl,
                                      SunCtrl, FadeCtrl)
 from .passphrase import generate_aquatic_passphrase, generate_url_token
-from .machineroom.in_nodes import (AnalogInput, SwitchInput, ScheduleInput,
+from .machineroom.in_nodes import (AnalogInput, SwitchInput, TextInput, ScheduleInput,
                                    UiSwitchInput, UiAnalogInput)
 from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
 from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, UiDisplay)
@@ -74,7 +74,7 @@ LOGIN_LOCKOUT_MINUTES = 15
 NODE_FACTORY: dict[str, type[BusNode]] = {
     cls.__name__: cls for cls in (
         MaximumCtrl, MinimumCtrl, PidCtrl, SunCtrl, FadeCtrl,
-        AnalogInput, SwitchInput, ScheduleInput,
+        AnalogInput, SwitchInput, TextInput, ScheduleInput,
         UiSwitchInput, UiAnalogInput,
         AnalogDevice, SlowPwmDevice, SwitchDevice,
         AvgAux, MaxAux, MinAux, ScaleAux, UiDisplay,
@@ -126,6 +126,14 @@ NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
             {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
              'min': 0.1, 'default': 0.5},
             {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
+        ],
+    },
+    'TextInput': {
+        'receives': 'none',
+        'fields': [
+            {'key': 'port', 'label': 'Input port', 'type': 'select', 'default': ''},
+            {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
+             'min': 1, 'max': 600, 'default': 10.0},
         ],
     },
     'ScheduleInput': {
@@ -307,6 +315,8 @@ def build_node(type_name: str, name: str, receives: list[str],
     if type_name == 'SwitchInput':
         return SwitchInput(name, fields['port'],
                            interval=fields['interval'], inverted=fields['inverted'])
+    if type_name == 'TextInput':
+        return TextInput(name, fields['port'], interval=fields['interval'])
     if type_name == 'ScheduleInput':
         return ScheduleInput(name, fields['cronspec'])
     if type_name == 'UiSwitchInput':

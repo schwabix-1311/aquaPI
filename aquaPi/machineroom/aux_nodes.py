@@ -41,12 +41,15 @@ class MultiInAux(AuxNode, ABC):
         self.data = -1
 
     def __getstate__(self) -> dict[str, Any]:
-        state = super().__getstate__()
         for rcv in self.get_receives():
             self.rcv_unit = rcv.unit
             self.unit = rcv.unit
             self.data_range = rcv.data_range  # depends on inputs
             break
+        # update self.data_range/unit above before calling super(), since
+        # BusNode.__getstate__() snapshots them into the returned state -
+        # doing it after would report last call's stale data_range
+        state = super().__getstate__()
         state["unit"] = self.unit
         # per-sender last-received values, keyed by sender node id - a
         # sender's own .data doesn't necessarily reflect every message

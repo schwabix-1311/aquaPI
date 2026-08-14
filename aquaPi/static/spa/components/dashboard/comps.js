@@ -50,6 +50,7 @@ const AnyNode = {
 				case 'BINARY':
 				case 'PERCENT':
 				case 'CRONSPEC':
+				case 'STRING':
 					return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.label')
 				default:
 					return this.$t('misc.dataRange.default.label')
@@ -351,6 +352,11 @@ const AnalogInput = {
 	extends: BusNode,
 }
 registerGlobalComponent('AnalogInput', AnalogInput)
+
+const TextInput = {
+	extends: BusNode,
+}
+registerGlobalComponent('TextInput', TextInput)
 
 
 const UiSwitchInput = {

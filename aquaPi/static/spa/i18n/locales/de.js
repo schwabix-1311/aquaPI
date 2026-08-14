@@ -379,6 +379,9 @@ export default
 					off: 'Aus'
 				}
 			},
+			string: {
+				label: 'Text'
+			},
 			aux: {
 				label: 'Berechnet',
 			},

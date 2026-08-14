@@ -188,11 +188,11 @@ class DriverShellyRelay(OutDriver):
         DriverWlanAudioPower.find_ports() instead of each declaring
         their own.
     """
+    _BUS = "Shelly"
 
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         if Zeroconf:
-            log.brief('Scanning Shelly devices ...')
             io_ports = _find_real_ports()
             if io_ports:
                 return io_ports

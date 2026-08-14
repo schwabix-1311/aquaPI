@@ -26,6 +26,7 @@ DISCOVER_TIMEOUT = 1.5  # mDNS ServiceBrowser window, see _local/shelly_api.md
 DISCOVER_PASSES = 2     # independent scans, unioned - see _find_ips()
 HTTP_TIMEOUT = 5
 MAX_RELAY_CHANNELS = 8  # probing cap, see _identify()
+MAX_LIGHT_CHANNELS = 4  # probing cap, see _identify()
 
 
 class _Listener(ServiceListener):
@@ -95,16 +96,17 @@ def _identify(ip: str) -> dict | None:
         no auth needed even when enabled), get its custom name (free
         on Gen2+ via /shelly's own 'name' field; Gen1 needs a separate
         /settings call, since Gen1 exposes neither a 'gen' nor a
-        'name' key via /shelly), then count relay channels by probing
-        /relay/0.. until a non-200 reply.
+        'name' key via /shelly), then count relay/light channels by
+        probing /relay/0.. and /light/0.. until a non-200 reply each.
 
         Deliberately does NOT trust /shelly's 'num_outputs' field for
-        the channel count - live-verified misleading for non-relay
-        output devices (e.g. a Shelly Bulb Duo reports num_outputs=1
-        for its light output, but has no /relay/0 at all - only
-        /light/0). Probing /relay/N is self-verifying: a 200 reply
-        only happens where relay control genuinely exists. See
-        _local/shelly_api.md for the live device data this is based on.
+        either channel count - live-verified misleading: a Shelly Bulb
+        Duo reports num_outputs=1 for its light output, but has no
+        /relay/0 at all, only /light/0 (and conversely a relay device
+        has no /light/0). Probing each endpoint is self-verifying: a
+        200 reply only happens where that control surface genuinely
+        exists. See _local/shelly_api.md for the live device data this
+        is based on.
     """
     try:
         info = requests.get(f'http://{ip}/shelly', timeout=HTTP_TIMEOUT).json()
@@ -119,18 +121,23 @@ def _identify(ip: str) -> dict | None:
         except Exception:
             pass
 
-    relays = 0
-    while relays < MAX_RELAY_CHANNELS:
-        try:
-            resp = requests.get(f'http://{ip}/relay/{relays}', timeout=HTTP_TIMEOUT)
-            if resp.status_code != 200:
+    def _count_channels(endpoint: str, cap: int) -> int:
+        count = 0
+        while count < cap:
+            try:
+                resp = requests.get(f'http://{ip}/{endpoint}/{count}', timeout=HTTP_TIMEOUT)
+                if resp.status_code != 200:
+                    break
+            except Exception:
                 break
-        except Exception:
-            break
-        relays += 1
+            count += 1
+        return count
+
+    relays = _count_channels('relay', MAX_RELAY_CHANNELS)
+    lights = _count_channels('light', MAX_LIGHT_CHANNELS)
 
     return {'ip': ip, 'name': name, 'type': info.get('type', info.get('model', 'unknown')),
-           'relays': relays}
+           'relays': relays, 'lights': lights}
 
 
 def _find_real_ports() -> dict[str, IoPort]:
@@ -160,15 +167,72 @@ def _find_real_ports() -> dict[str, IoPort]:
             cfg = {'ip': dev['ip'], 'ch': ch}
             port_name = label if dev['relays'] == 1 else f'{label} relay {ch}'
             io_ports[port_name] = IoPort(PortFunc.Bout, DriverShellyRelay, cfg, [])
+        for ch in range(dev['lights']):
+            cfg = {'ip': dev['ip'], 'ch': ch}
+            port_name = f'{label} dimmer' if dev['lights'] == 1 else f'{label} dimmer {ch}'
+            io_ports[port_name] = IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, [])
     return io_ports
 
 
 def _find_fake_ports() -> dict[str, IoPort]:
     cfg = {'ip': '0.0.0.0', 'ch': 0, 'fake': True}
-    return {'!Shelly #1': IoPort(PortFunc.Bout, DriverShellyRelay, cfg, [])}
+    return {
+        '!Shelly #1': IoPort(PortFunc.Bout, DriverShellyRelay, cfg, []),
+        '!Shelly #1 dimmer': IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, []),
+    }
 
 
-class DriverShellyRelay(OutDriver):
+_discovery_lock = threading.Lock()
+_discovery_cache: dict[str, IoPort] | None = None
+
+
+def _discover_all_ports() -> dict[str, IoPort]:
+    """ the actual mDNS scan + per-device identify/probe, run at most
+        once per process (memoized). DriverShellyRelay and
+        DriverShellyDimmer both call this from their own find_ports()
+        and filter to their own ports - this is the first driver
+        module with more than one class sharing a single discovery
+        pass, and having only one of the classes' find_ports() do the
+        real work meant IoRegistry's startup log misattributed the
+        other class' ports to it (e.g. "Discovering ... for
+        DriverShellyRelay" while the reported ports also included a
+        dimmer, which is really a DriverShellyDimmer port) - see
+        _local/shelly_api.md.
+    """
+    global _discovery_cache
+    with _discovery_lock:
+        if _discovery_cache is None:
+            if Zeroconf:
+                io_ports = _find_real_ports()
+            else:
+                log.error('zeroconf is not installed, Shelly devices cannot be discovered')
+                io_ports = {}
+            if not io_ports:
+                log.brief('Faking Shelly devices ...')
+                io_ports = _find_fake_ports()
+            _discovery_cache = io_ports
+        return _discovery_cache
+
+
+class _ShellyBase:
+    """ shared find_ports() for every Shelly port-driver class in this
+        file. Each subclass gets its own accurate, class-specific
+        find_ports() (correct per-class discovery log line in
+        IoRegistry) while the actual network scan runs at most once
+        per process, memoized in _discover_all_ports() - see that
+        function's docstring for why this exists (the first driver
+        module here with more than one class sharing a single
+        discovery pass).
+    """
+    _BUS = 'Shelly'
+
+    @classmethod
+    def find_ports(cls) -> dict[str, IoPort]:
+        return {name: port for name, port in _discover_all_ports().items()
+               if port.driver is cls}
+
+
+class DriverShellyRelay(_ShellyBase, OutDriver):
     """ Binary relay output on a Shelly smart switch/plug, Gen1 or
         Gen2/Gen3 (SHSW-1, SHSW-25, SHPLG-S, Shelly Plus/Pro relays,
         ...), via the local HTTP API. Gen1's native relay control is
@@ -179,27 +243,12 @@ class DriverShellyRelay(OutDriver):
         generations share this one write path - see
         _local/shelly_api.md.
 
-        Only Bout is implemented so far. Ain/Aout/Bin (temperature
-        add-on inputs, dimmers, digital inputs) are deliberately
-        deferred - _identify()'s device record already carries what a
-        future sibling driver class would need (ip, type, relays),
-        reusable without reshaping this code, mirroring how
-        DriverWlanAudioStation/-StationIn piggyback on
-        DriverWlanAudioPower.find_ports() instead of each declaring
-        their own.
+        Ain/Bin (temperature add-on inputs, digital inputs) are
+        deliberately deferred - _identify()'s device record already
+        carries what a future sibling driver class would need (ip,
+        type, relays, lights), reusable without reshaping this code.
+        DriverShellyDimmer (Aout, below) is the first such sibling.
     """
-    _BUS = "Shelly"
-
-    @staticmethod
-    def find_ports() -> dict[str, IoPort]:
-        if Zeroconf:
-            io_ports = _find_real_ports()
-            if io_ports:
-                return io_ports
-        else:
-            log.error('zeroconf is not installed, Shelly devices cannot be discovered')
-        log.brief('Faking Shelly devices ...')
-        return _find_fake_ports()
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
@@ -236,3 +285,57 @@ class DriverShellyRelay(OutDriver):
                 log.exception('%s failed to read relay state, returning last known', self.name)
         log.info('%s = %d', self.name, self._val)
         return bool(self._val)
+
+
+class DriverShellyDimmer(_ShellyBase, OutDriver):
+    """ Analog (0..100) dimmer output on a Shelly light/bulb (e.g.
+        Shelly Bulb Duo), via GET /light/<N>. 0..100 maps 1:1 onto
+        Shelly's own brightness range (already 0..100, live-confirmed
+        - no scaling needed).
+
+        On this device family, 'on/off' (ison) and 'brightness' are
+        independent fields - live-confirmed setting brightness alone
+        (no turn= param) does NOT change ison, and brightness is
+        retained even while off. To give this Aout channel the usual
+        "0 = off, >0 = on at that level" semantics (matching
+        DriverPWM.write()'s hardware-enable convention elsewhere in
+        this codebase), write() always sends turn= explicitly too,
+        derived from value - live-confirmed a single combined
+        'turn=on&brightness=N' request applies both correctly, no
+        separate requests needed. See _local/shelly_api.md.
+    """
+
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
+        super().__init__(cfg, func)
+        self._ip: str = cfg['ip']
+        self._ch: int = int(cfg['ch'])
+        self._fake: bool = bool(cfg.get('fake', False))
+        self.name: str = 'Shelly(%s ch%d) dimmer' % (self._ip, self._ch)
+        if self._fake:
+            self.name = self._mark_fake(self.name)
+
+    def write(self, value: float) -> None:
+        value = max(0, min(100, round(value)))
+        log.info('%s -> %d', self.name, value)
+        if not self._fake:
+            try:
+                resp = requests.get(
+                    f'http://{self._ip}/light/{self._ch}',
+                    params={'turn': 'on' if value > 0 else 'off', 'brightness': value},
+                    timeout=HTTP_TIMEOUT)
+                resp.raise_for_status()
+            except Exception:
+                log.exception('%s failed to send dimmer command', self.name)
+        self._val = value
+
+    def read(self) -> float:
+        if not self._fake:
+            try:
+                resp = requests.get(f'http://{self._ip}/light/{self._ch}', timeout=HTTP_TIMEOUT)
+                resp.raise_for_status()
+                status = resp.json()
+                self._val = float(status.get('brightness', self._val)) if status.get('ison') else 0
+            except Exception:
+                log.exception('%s failed to read dimmer state, returning last known', self.name)
+        log.info('%s = %d', self.name, self._val)
+        return float(self._val)

@@ -110,6 +110,11 @@ class Driver:
         __getstate__/__setstate__ overloads in derived classes.
     """
 
+    # bus/transport this driver scans for devices on, e.g. 'I2C', 'USB',
+    # 'mDNS' - purely for the "Discovering devices on bus ..." startup
+    # log line in IoRegistry.__init__(), override per driver class
+    _BUS: str = '?'
+
     # TODO this persistance approach could be transferred to MsgNodes!
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         self.name: str = '!abstract'

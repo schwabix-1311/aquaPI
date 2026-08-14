@@ -64,6 +64,7 @@ class DriverADS1115(AInDriver):
     """
 
     ADDRESSES = [0x48, 0x49, 0x4A, 0x4B]
+    _BUS = 'I2C'
 
     @staticmethod
     def is_ads111x(ads: ADS1115) -> bool:
@@ -133,6 +134,7 @@ class DriverADS1115(AInDriver):
     def _simulated_ports():
         global adc_count  # pylint: disable=W0603
 
+        log.brief('Faking I²C - ADS1x13/4/5 ...')
         adc_count += 1
         deps = ['GPIO 2 in', 'GPIO 2 out']
         base = f"ADC #{adc_count} in "

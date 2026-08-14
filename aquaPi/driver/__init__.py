@@ -3,6 +3,7 @@
 import logging
 import importlib.util
 import sys
+import time
 from os import path
 import glob
 
@@ -101,6 +102,27 @@ class IoRegistry(object):
 
         for drv in drv_classes:
             if hasattr(drv, 'find_ports'):
+                # config.json's 'DRIVER_BLACKLIST' (a list of driver class
+                # names, e.g. ["DriverShellyRelay"]), handed down via
+                # driver_config same as Email/Telegram settings - lets a
+                # deployment skip a driver's find_ports() entirely, e.g.
+                # for hardware that isn't present or a discovery that's
+                # slow/unreliable on that network
+                if drv.__name__ in driver_config.get('DRIVER_BLACKLIST', []):
+                    log.brief('Driver %s is blacklisted, skipping port discovery',
+                             drv.__name__)
+                    continue
+
+                # log before calling find_ports(), not just after - some
+                # drivers do real network I/O here (mDNS/broadcast
+                # discovery) that can take several seconds, and a silent
+                # multi-second gap in the startup log is easy to mistake
+                # for a hung/still-starting process instead of a slow
+                # but healthy scan
+                log.brief('Discovering %s devices/ports for %s ...',
+                         getattr(drv, '_BUS', '?'), drv.__name__)
+                t_start = time.time()
+
                 # Step 25: a single driver failing to enumerate its ports
                 # (e.g. Email/Telegram find_ports() raising DriverConfigError
                 # on a misconfigured account, or any other connection issue
@@ -113,7 +135,8 @@ class IoRegistry(object):
                     log.exception('Driver %s failed to report its ports, '
                                   'skipping it', drv.__name__)
                     continue
-                log.info('Driver %s reported ports %r', drv.__name__, [k for k in drv_ports])
+                log.info('Driver %s reported ports %r (%.1fs)',
+                         drv.__name__, [k for k in drv_ports], time.time() - t_start)
 
                 # TODO: reject duplicate ports, same port should in theory not be reported
                 #      by multiple drivers, but better play safe: len(_map.keys() & drv_ports.keys()) > 0

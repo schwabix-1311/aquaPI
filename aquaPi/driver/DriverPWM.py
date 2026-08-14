@@ -35,10 +35,13 @@ class DriverPWM(DriverPWMbase):
     """ one PWM channel, hardware PWM
     """
 
+    _BUS = 'PWM'
+
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
+            log.brief('Scanning PWM ports ...')
             cnt = 0
             for pin in range(28):
                 try:
@@ -57,6 +60,7 @@ class DriverPWM(DriverPWMbase):
                     log.debug('Unknown function on pin %d = %d', pin, gpio_function(pin))
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
         else:
+            log.brief('Faking PWM ports ...')
             io_ports = {
                 'PWM 0': IoPort(PortFunc.Aout, DriverPWM,
                                 {'pin': 18, 'channel': 0, 'fake': True},

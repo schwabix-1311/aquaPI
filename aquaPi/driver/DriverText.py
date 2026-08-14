@@ -42,6 +42,8 @@ class DriverEmail(DriverText):
     """ this driver produces email from a text
     """
 
+    _BUS = 'web API'
+
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
@@ -138,6 +140,8 @@ Note: if you don’t send your Telegram bot a message, your results might be emp
 A bad caveat:
 see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
     """
+
+    _BUS = 'web API'
 
     @staticmethod
     def _bot_request(url: str, api: str, json: str = "") -> str:

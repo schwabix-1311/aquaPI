@@ -96,6 +96,14 @@ class MachineRoom:
         # needing Flask's app context (mirrors driver_config's pattern)
         db.set_current_users_db_path(users_db_path)
 
+        # let a deployment skip specific drivers' find_ports() entirely,
+        # e.g. hardware that isn't present or a discovery that's slow/
+        # unreliable on that network - a list of driver class names in
+        # config.json's "DRIVER_BLACKLIST", live-merged above into
+        # self.globals like the rest of this file's keys (no editor
+        # for it yet, same as DEFAULT_CONFIG/backup settings)
+        driver_config['DRIVER_BLACKLIST'] = self.globals.get('DRIVER_BLACKLIST', [])
+
         # database backups (Step 24): daily rotating backup of both
         # SQLite databases into instance/backups/, in addition to the
         # on-demand GET /api/backup download (aquaPi/api.py)

@@ -15,10 +15,14 @@ log.brief = log.warning  # alias, warning is used as brief info, level info is v
 
 
 class DriverDS1820(AInDriver):
+    _BUS = 'OneWire'
+
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
+            log.brief('Scanning OneWire devices ...')
+
             # TODO: GPIO 4 is the Raspi default, auto-detect alternatives!
             deps = ['GPIO 4 in', 'GPIO 4 out']
 
@@ -31,6 +35,8 @@ class DriverDS1820(AInDriver):
                                             deps)
                 idx += 1
         else:
+            log.brief('Faking OneWire devices ...')
+
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
             io_ports = {
                 'DS1820 #1': IoPort(PortFunc.Ain, DriverDS1820,

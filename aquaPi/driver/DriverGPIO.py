@@ -62,10 +62,13 @@ class DriverGPIO(OutDriver, InDriver):
     """ GPIO in & out driver
     """
 
+    _BUS = 'GPIO'
+
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
+            log.brief('Scanning GPIO ports ...')
             for pin in range(28):
                 port_name = 'GPIO %d ' % pin
                 io_ports[port_name + 'in'] = IoPort(PortFunc.Bin,
@@ -77,6 +80,7 @@ class DriverGPIO(OutDriver, InDriver):
                                                      {'pin': pin},
                                                      [])
         else:
+            log.brief('Faking GPIO ports ...')
             # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
             # need all that are simulated somewhere - devices or dependencies
             io_ports = {

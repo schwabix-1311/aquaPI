@@ -28,6 +28,7 @@ class DriverTC420(OutDriver):
     ports: list[list[int]] = []  # echo entry is a list of 5 channel values of 1 TC420
     _writer_lock: Lock = Lock()
     _writer_timer: Timer | None = None
+    _BUS = 'USB'
 
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
@@ -47,6 +48,8 @@ class DriverTC420(OutDriver):
                                                  [])
                 idx += 1
         except NoDeviceFoundError:
+            log.brief('Faking TC420 ports ...')
+
             # fake when no TC420 found
             if not is_raspi() and idx == 0:
                 io_ports = {

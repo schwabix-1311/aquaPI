@@ -192,11 +192,13 @@ class DriverShellyRelay(OutDriver):
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
         if Zeroconf:
+            log.brief('Scanning Shelly devices ...')
             io_ports = _find_real_ports()
             if io_ports:
                 return io_ports
         else:
             log.error('zeroconf is not installed, Shelly devices cannot be discovered')
+        log.brief('Faking Shelly devices ...')
         return _find_fake_ports()
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):

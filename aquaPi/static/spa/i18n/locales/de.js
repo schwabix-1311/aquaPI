@@ -88,7 +88,7 @@ export default
 			heading: 'Konfiguration',
 			addNode: 'Node hinzufügen',
 			autoArrange: 'Automatisch anordnen',
-			editNode: 'Node bearbeiten',
+			editNode: 'Node „{name}“ bearbeiten',
 			nodeType: 'Node-Typ',
 			nodeName: 'Name',
 			receives: '@:pages.settings.fields.receives',

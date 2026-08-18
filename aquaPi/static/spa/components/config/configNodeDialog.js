@@ -18,7 +18,7 @@ const ConfigNodeDialog = {
 		<v-dialog v-model="show" max-width="700" persistent>
 			<v-card>
 				<v-card-title>
-					{{ editNode ? $t('pages.config.editNode') : $t('pages.config.addNode') }}
+					{{ editNode ? $t('pages.config.editNode', {name: editNode.name}) : $t('pages.config.addNode') }}
 				</v-card-title>
 				<v-card-text>
 					<v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>

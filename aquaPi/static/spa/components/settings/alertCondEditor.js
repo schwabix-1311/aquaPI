@@ -6,8 +6,8 @@ import {useUsersStore} from '../../store/modules/users.js'
 // Shared between /settings (inline in NodeSettingsCard) and /config
 // (inside ConfigNodeDialog) - the only editor for an Alert node's
 // AlertCond watches. Not schema-driven like NodeSettingsFields/
-// ConfigNodeDialog's generic fields: there is no NODE_TYPE_SCHEMA entry
-// for Alert (conditions are a set of objects, not a plain field), and
+// ConfigNodeDialog's generic fields: Alert has no get_settings_schema()
+// entry for its conditions (a set of objects, not a plain field), and
 // with only 2 concrete AlertCond classes, hardcoding them here is
 // simpler than inventing a schema endpoint for two fixed options.
 const ALERT_COND_CLASSES = ['AlertAbove', 'AlertBelow']

@@ -523,7 +523,7 @@ const SettingReadonly = {
 }
 registerGlobalComponent('SettingReadonly', SettingReadonly)
 
-// exported for reuse by ConfigNodeDialog (components/config/comps.js) -
+// exported for reuse by ConfigNodeDialog (components/config/configNodeDialog.js) -
 // /config's create/edit dialog renders the exact same Setting.to_dict()
 // shape (db.py's get_node_type_schema()) and wants the same widgets
 // (sliders, duration pickers, ...) instead of its own plain inputs.
@@ -688,7 +688,7 @@ registerGlobalComponent('NodeSettingsFields', NodeSettingsFields)
 
 // HISTORY/ALERTS nodes don't get a nested Eingänge tree (see chains.js) -
 // instead, a quick multi-select for their `receives` directly, mirroring
-// the /config page's own node-edit dialog (config/comps.js's `receivesKind`/
+// the /config page's own node-edit dialog (configNodeDialog.js's `receivesKind`/
 // `receivesItems` pattern) and reusing its exact save mechanism
 // (configStore.updateNode -> PUT /api/nodes/<id>), not the settings API.
 const NodeReceivesEditor = {

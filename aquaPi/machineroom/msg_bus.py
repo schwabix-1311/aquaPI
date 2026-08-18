@@ -2,7 +2,7 @@
 
 from abc import (ABC, abstractmethod)
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclass_replace
 from queue import Queue
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
@@ -46,13 +46,21 @@ class Setting:
     """
     key: str | None       # None = read-only
     label: str             # i18n key into pages.settings.fields.<label>, not raw text
-    value: Any
+    # None for a schema-only entry (get_settings_schema(), no instance yet) -
+    # if such an entry does carry a value, it's a suggested default for the
+    # /config create form, not a claim about any real node's current state.
+    # get_settings() always overwrites this with the real value.
+    value: Any = None
     type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration'
     min: float | None = None
     max: float | None = None
     step: float | None = None
     options: list[str] | None = None   # choices for 'select' / 'multiselect'
     optional: bool = False             # True = value may be left empty/unset
+    # True = must be supplied on creation, no usable default - only
+    # meaningful on a get_settings_schema() entry, checked by the /config
+    # create flow.
+    required: bool = False
     # for type='duration': value/min/max/step always travel the API as
     # seconds (wire unit) - the /settings widget lets the user display/edit
     # in s, min or h, converting back to seconds before saving. The largest
@@ -73,6 +81,48 @@ class Setting:
     @property
     def editable(self) -> bool:
         return self.key is not None
+
+    def with_value(self, value: Any, **overrides: Any) -> 'Setting':
+        """ copy this (schema) entry, filling in its real current value -
+            and, for the handful of fields whose bounds/label_params also
+            depend on instance state (e.g. ThresholdCtrl.setpoint), any
+            further per-instance overrides.
+        """
+        return dataclass_replace(self, value=value, **overrides)
+
+    def to_dict(self) -> dict[str, Any]:
+        """ JSON-serializable shape shared by both /settings
+            (api.py's GET/PUT /api/nodes/<id>/settings, from an instance's
+            get_settings()) and /config (db.py's get_node_type_schema(),
+            from a class's get_settings_schema()) - the two call sites
+            differ only in whether `value` is a real current value or a
+            schema-only suggested default (None for a required field with
+            no sensible one). `value`/min/max/step here always already
+            travel in the wire unit (seconds, for type='duration') - attrs.
+            factor is included only so a caller holding a *different*,
+            already-in-internal-units number (e.g. /config's ConfigNodeDialog,
+            which pre-fills an edit form straight from a live node's own
+            attribute rather than a fresh get_settings() call) can convert
+            it to match, the same way get_settings()/api_set_node_settings()
+            do server-side.
+        """
+        attrs: dict[str, Any] = {k: v for k, v in {
+            'type': self.type, 'min': self.min, 'max': self.max, 'step': self.step,
+            'options': self.options, 'optional': self.optional or None,
+            'factor': self.factor if self.factor != 1 else None,
+        }.items() if v is not None}
+        result: dict[str, Any] = {
+            'key': self.key,
+            'label': self.label,
+            'value': self.value,
+            'attrs': attrs,
+            'editable': self.editable,
+        }
+        if self.required:
+            result['required'] = True
+        if self.label_params is not None:
+            result['labelParams'] = self.label_params
+        return result
 
 
 class HeartbeatMixin:
@@ -119,6 +169,17 @@ class BusNode(ABC):
     """
     ROLE: BusRole = BusRole.UNDEF
     data_range = DataRange.UNDEF
+
+    @classmethod
+    def get_receives_kind(cls) -> str:
+        """ 'none' | 'single' | 'multi' - how many 'receives' wires this
+            type accepts, derived from the class hierarchy (see
+            BusListener._receives_kind and its overrides) rather than a
+            hand-maintained table - a plain BusNode (not a BusListener at
+            all, e.g. AnalogInput/ScheduleInput) has no _receives_kind and
+            correctly falls back to 'none'.
+        """
+        return getattr(cls, '_receives_kind', 'none')
 
     def __init__(self, name: str, _cont: bool = False):
         self.name = name
@@ -234,6 +295,32 @@ class BusNode(ABC):
     def get_settings(self) -> list[Setting]:
         return []
 
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        """ static counterpart to get_settings() - key/label/type/min/max/
+            step/options/factor/required for every setting this *type*
+            exposes, no value, no instance needed. Used by the /config
+            create form (db.get_node_type_schema()) and as the source
+            get_settings() itself fills values from (_fill_setting()
+            below). May be a superset of what get_settings() returns - some
+            fields only matter at construction time (e.g. UiSwitchInput's
+            initval, consumed once into self.data and never stored back).
+        """
+        return []
+
+    def _fill_setting(self, entry: Setting) -> Setting:
+        """ generic value-fill for the common case: the schema entry's key
+            names a real attribute on self, no further transformation
+            needed beyond the wire-unit conversion 'duration'-type settings
+            already use (see Setting.factor). Fields needing more than that
+            (rcv_unit-dependent bounds, live port options, ...) are filled
+            by hand instead of going through this helper.
+        """
+        value = getattr(self, entry.key)
+        if entry.type == 'duration' and entry.factor != 1:
+            value = value * entry.factor
+        return entry.with_value(value)
+
 
 class BusListener(BusNode, ABC):
     """ BusListener is an extension to BusNode.
@@ -242,6 +329,10 @@ class BusListener(BusNode, ABC):
         A derived class must call super().listen(msg) to keep
         protocol intact! Bus protocol is handled there.
     """
+    # common-case default (a controller/device/aux with exactly one
+    # source) - overridden to 'multi' by the handful of classes whose
+    # __init__ actually takes Iterable[str]: MultiInAux, History, Alert.
+    _receives_kind: str = 'single'
 
     def __init__(self, name: str, receives: str | Iterable[str] = '*',
                  _cont=False):
@@ -269,9 +360,17 @@ class BusListener(BusNode, ABC):
         # 'cronspec'/'value'), then tuning/behavior fields, then modifiers
         # like 'inverted'/'repeat' last.
         settings = super().get_settings()
-        settings.append(Setting(None, 'receives',
-                         ';'.join(MsgBus.to_names(self.get_receives()))))
+        schema = next(s for s in type(self).get_settings_schema()
+                     if s.label == 'receives')
+        settings.append(schema.with_value(
+            ';'.join(MsgBus.to_names(self.get_receives()))))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting(None, 'receives'))
+        return schema
 
 
 #############################

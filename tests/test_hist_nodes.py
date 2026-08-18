@@ -94,7 +94,12 @@ def test_history_setstate_falls_back_to_pre_rename_duration_key(monkeypatch):
 def test_build_node_history_uses_capacity_field(monkeypatch):
     monkeypatch.setattr(hist_nodes, 'QUEST_DB', False)
 
-    node = db_module.build_node('History', 'Verlauf', ['sensor'], {'capacity': 2})
+    # 'capacity' is a type='duration' field - build_node() converts the
+    # wire value (always seconds, see Setting's own docstring) back to
+    # what History's constructor actually expects (hours), the same
+    # conversion api_set_node_settings() already does for the /settings
+    # PUT path. See db.convert_duration_fields().
+    node = db_module.build_node('History', 'Verlauf', ['sensor'], {'capacity': 2 * 60 * 60})
 
     assert node.capacity == 2
 

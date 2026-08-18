@@ -34,6 +34,8 @@ class SingleInAux(AuxNode, ABC):
 class MultiInAux(AuxNode, ABC):
     """ subtype of AuxNode listening to more than 1 input
     """
+    _receives_kind = 'multi'
+
     def __init__(self, name: str, receives: Iterable[str], _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.values: dict[str, float] = {}
@@ -140,15 +142,22 @@ class ScaleAux(SingleInAux):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('unit', 'unit', self.unit))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['unit']))
         # TODO frontend should also offer 2-point calibration, this is most practical for pH
-        settings.append(Setting('offset', 'offset', round(self.offset, 4),
-                                type='number', step=0.0001))
-        settings.append(Setting('factor', 'scaleFactor', round(self.factor, 4),
-                                type='number', step=0.0001))
+        settings.append(schema['offset'].with_value(round(self.offset, 4)))
+        settings.append(schema['factor'].with_value(round(self.factor, 4)))
         # settings.append(Setting('limit', 'Grenzen', self.limit,
         #                         type='combo'))  #  None/0..100/(min,max)
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('unit', 'unit', ''))
+        schema.append(Setting('offset', 'offset', 0.0, type='number', step=0.0001))
+        schema.append(Setting('factor', 'scaleFactor', 1.0, type='number', step=0.0001))
+        return schema
 
 
 class AvgAux(MultiInAux):
@@ -208,9 +217,15 @@ class AvgAux(MultiInAux):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('unfair_avg', 'unfairAvg', self.unfair_avg,
-                                type='number', min=0, step=1))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['unfair_avg']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('unfair_avg', 'unfairAvg', 0, type='number', min=0, step=1))
+        return schema
 
 
 class _MinMaxAux(MultiInAux, ABC):

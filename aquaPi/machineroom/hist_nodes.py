@@ -447,6 +447,7 @@ class History(BusListener):
             - nothing -
     """
     ROLE = BusRole.HISTORY
+    _receives_kind = 'multi'
 
     @property
     def capacity(self) -> int:
@@ -509,9 +510,15 @@ class History(BusListener):
         return self.db.query(self.receives, start, step) if self.db else dict()
 
     def get_settings(self) -> list[Setting]:
-##        return []
         settings = super().get_settings()
-        settings.append(Setting('capacity', 'capacity', self.capacity * 60*60,
-                                type='duration', min=0, max=7*24*60*60, step=60*60,
-                                factor=60*60))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['capacity']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('capacity', 'capacity', 24 * 60*60,
+                              type='duration', min=0, max=7*24*60*60, step=60*60,
+                              factor=60*60))
+        return schema

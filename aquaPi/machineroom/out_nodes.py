@@ -77,6 +77,12 @@ class DeviceNode(PortDriverMixin, BusListener, ABC):
         settings.append(self._port_setting('outputPort'))
         return settings
 
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(cls.get_port_schema('outputPort'))
+        return schema
+
 
 class SwitchDevice(DeviceNode):
     """ A binary output to a GPIO pin or relay.
@@ -145,9 +151,15 @@ class SwitchDevice(DeviceNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('inverted', 'inverted', self.inverted,
-                                type='checkbox'))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['inverted']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('inverted', 'inverted', False, type='checkbox'))
+        return schema
 
 
 class SlowPwmDevice(DeviceNode):
@@ -254,11 +266,17 @@ class SlowPwmDevice(DeviceNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('cycle', 'cycle', self.cycle,
-                                type='duration', min=10, max=300, step=1))
-        settings.append(Setting('inverted', 'inverted', self.inverted,
-                                type='checkbox'))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['cycle']))
+        settings.append(self._fill_setting(schema['inverted']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('cycle', 'cycle', 60.0, type='duration', min=10, max=300, step=1))
+        schema.append(Setting('inverted', 'inverted', False, type='checkbox'))
+        return schema
 
 
 class AnalogDevice(DeviceNode):
@@ -339,10 +357,16 @@ class AnalogDevice(DeviceNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('minimum', 'minimum', self.minimum,
-                                type='number', min=0, max=99))
-        settings.append(Setting('maximum', 'maximum', self.maximum,
-                                type='number', min=1, max=100))
-        settings.append(Setting('percept', 'percept', self.percept,
-                                type='checkbox'))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['minimum']))
+        settings.append(self._fill_setting(schema['maximum']))
+        settings.append(self._fill_setting(schema['percept']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('minimum', 'minimum', 0, type='number', min=0, max=99))
+        schema.append(Setting('maximum', 'maximum', 100, type='number', min=1, max=100))
+        schema.append(Setting('percept', 'percept', False, type='checkbox'))
+        return schema

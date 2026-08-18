@@ -172,6 +172,7 @@ class Alert(PortDriverMixin, BusListener):
     _port_funcs = [PortFunc.Tout]
     _DRIVER_BASE = OutDriver
     _PORT_CAPABILITY = 'writing alert messages'
+    _receives_kind = 'multi'
 
     def __init__(self, name: str, conditions: set[AlertCond] | AlertCond,
                  port: str, repeat: int = 60 * 60, _cont: bool = False):
@@ -333,6 +334,14 @@ class Alert(PortDriverMixin, BusListener):
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
         settings.append(self._port_setting('alertPort'))
-        settings.append(Setting('repeat', 'repeat', self.repeat,
-                                type='duration', min=0, max=24*60*60, step=60))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['repeat']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(cls.get_port_schema('alertPort'))
+        schema.append(Setting('repeat', 'repeat', 60 * 60,
+                              type='duration', min=0, max=24*60*60, step=60))
+        return schema

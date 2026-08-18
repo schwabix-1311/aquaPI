@@ -523,7 +523,11 @@ const SettingReadonly = {
 }
 registerGlobalComponent('SettingReadonly', SettingReadonly)
 
-function settingWidgetType(item) {
+// exported for reuse by ConfigNodeDialog (components/config/comps.js) -
+// /config's create/edit dialog renders the exact same Setting.to_dict()
+// shape (db.py's get_node_type_schema()) and wants the same widgets
+// (sliders, duration pickers, ...) instead of its own plain inputs.
+export function settingWidgetType(item) {
 	if (!item.editable) {
 		return 'SettingReadonly'
 	}

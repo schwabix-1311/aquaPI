@@ -90,9 +90,17 @@ class InputNode(PortDriverMixin, BusNode, ABC):
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
         settings.append(self._port_setting('inputPort'))
-        settings.append(Setting('interval', 'readInterval', self.interval,
-                                type='duration', min=1, max=600, step=1))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['interval']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(cls.get_port_schema('inputPort'))
+        schema.append(Setting('interval', 'readInterval', 10.0,
+                              type='duration', min=1, max=600, step=1))
+        return schema
 
 
 class SwitchInput(InputNode):
@@ -142,9 +150,19 @@ class SwitchInput(InputNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('inverted', 'inverted', self.inverted,
-                                type='checkbox'))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['inverted']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        # SwitchInput's own constructor default (0.5s) differs from
+        # InputNode's shared 'interval' schema entry (10.0s, the majority
+        # case for Analog/TextInput) - override just the suggested default.
+        schema = [s.with_value(0.5) if s.key == 'interval' else s for s in schema]
+        schema.append(Setting('inverted', 'inverted', False, type='checkbox'))
+        return schema
 
 
 class AnalogInput(InputNode):
@@ -200,10 +218,21 @@ class AnalogInput(InputNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.insert(1, Setting('unit', 'unit', self.unit))
-        settings.append(Setting('avg', 'avg', self.avg,
-                                type='number', min=1, max=5, step=1))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.insert(1, self._fill_setting(schema['unit']))
+        settings.append(self._fill_setting(schema['avg']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        # 'initval' is creation-only (seeds a faked/simulated driver, see
+        # AInDriver.read()) - schema-only, get_settings() above doesn't
+        # (and never did) surface it as an editable setting afterward.
+        schema.insert(1, Setting('initval', 'initval', 0.0, type='number'))
+        schema.insert(2, Setting('unit', 'unit', ''))
+        schema.append(Setting('avg', 'avg', 1, type='number', min=1, max=5, step=1))
+        return schema
 
 
 class TextInput(InputNode):
@@ -394,8 +423,15 @@ class ScheduleInput(BusNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('cronspec', 'cronspec', self.cronspec))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['cronspec']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('cronspec', 'cronspec', required=True))
+        return schema
 
 
 # ========== user-driven virtual inputs ==========
@@ -471,9 +507,18 @@ class UiSwitchInput(UiInput):
         # label is a placeholder here - the frontend overrides it with
         # this node's own name for this specific Setting, mirroring the
         # Dashboard widget (see NodeSettingsFields' settings computed)
-        settings.append(Setting('value', 'value', self.value,
-                                type='checkbox'))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['value']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        # 'initval' is creation-only - consumed once into self.data, never
+        # stored back, so it can't be (and never was) part of get_settings().
+        schema.append(Setting('initval', 'initval', False, type='checkbox'))
+        schema.append(Setting('value', 'value', type='checkbox'))
+        return schema
 
 
 class UiAnalogInput(UiInput):
@@ -523,7 +568,28 @@ class UiAnalogInput(UiInput):
         # label is a placeholder here - the frontend overrides it with
         # this node's own name for this specific Setting, mirroring the
         # Dashboard widget (see NodeSettingsFields' settings computed)
-        settings.append(Setting('value', 'value', float(self.value),
-                                type='number', min=self.min, max=self.max,
-                                step=self.step))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(schema['value'].with_value(float(self.value),
+                        min=self.min, max=self.max, step=self.step))
+        settings.append(self._fill_setting(schema['min']))
+        settings.append(self._fill_setting(schema['max']))
+        settings.append(self._fill_setting(schema['step']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        # 'initval'/'unit' are creation-only - like UiSwitchInput's initval,
+        # never exposed as an editable setting afterward (unlike
+        # AnalogInput, this unit is never even read back into get_settings()
+        # today).
+        schema.append(Setting('initval', 'initval', 0.0, type='number'))
+        schema.append(Setting('unit', 'unit', ''))
+        schema.append(Setting('value', 'value', type='number'))
+        # keyed 'min'/'max'/'step' (not the constructor's 'vmin'/'vmax') to
+        # match the real attribute names - the /settings PUT handler does a
+        # plain setattr(node, key, value).
+        schema.append(Setting('min', 'minimum', 0.0, type='number'))
+        schema.append(Setting('max', 'maximum', 100.0, type='number'))
+        schema.append(Setting('step', 'step', 1.0, type='number'))
+        return schema

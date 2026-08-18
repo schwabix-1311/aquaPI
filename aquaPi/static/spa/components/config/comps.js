@@ -7,6 +7,11 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useConfigStore} from '../../store/modules/config.js'
 import '../settings/alertCondEditor.js'
+// side effect: registers SettingNumber/SettingSlider/SettingDuration/... -
+// db.py's get_node_type_schema() now returns the same Setting.to_dict()
+// shape /settings' own node settings API does, so ConfigNodeDialog can
+// reuse those widgets instead of its own plain inputs.
+import {settingWidgetType} from '../settings/comps.js'
 
 const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
@@ -290,44 +295,12 @@ const ConfigNodeDialog = {
 						outlined dense
 					></v-text-field>
 
-					<div v-if="!isAlert" v-for="field in schemaFields" :key="field.key">
-						<v-switch
-							v-if="field.type === 'checkbox'"
-							v-model="form.fields[field.key]"
-							:label="field.label"
-							dense
-						></v-switch>
-						<v-select
-							v-else-if="field.type === 'select'"
-							v-model="form.fields[field.key]"
-							:items="field.options || []"
-							:label="field.label"
-							outlined dense
-							clearable
-						></v-select>
-						<v-select
-							v-else-if="field.type === 'multiselect'"
-							v-model="form.fields[field.key]"
-							:items="field.options || []"
-							:label="field.label"
-							multiple chips
-							outlined dense
-							clearable
-						></v-select>
-						<v-text-field
-							v-else-if="field.type === 'number'"
-							v-model.number="form.fields[field.key]"
-							:label="field.label"
-							type="number"
-							:min="field.min" :max="field.max"
-							outlined dense
-						></v-text-field>
-						<v-text-field
-							v-else
-							v-model="form.fields[field.key]"
-							:label="field.label"
-							outlined dense
-						></v-text-field>
+					<div v-if="!isAlert" v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">
+						<component
+							:is="widgetType(item)"
+							:item="item"
+							@update="form.fields[item.key] = $event"
+						></component>
 					</div>
 
 					<template v-if="isAlert">
@@ -373,10 +346,28 @@ const ConfigNodeDialog = {
 			return this.nodeTypes[typeName] || {receives: 'none', fields: []}
 		},
 		schemaFields: function() {
-			return this.schema.fields || []
+			// field.label is an i18n key (Setting.label convention, see
+			// msg_bus.py) - resolve it the same way NodeSettingsFields
+			// does for /settings, so /config's create/edit dialog shows
+			// localized text instead of raw keys.
+			return (this.schema.fields || []).map(field => ({
+				...field,
+				label: this.$t('pages.settings.fields.' + field.label),
+			}))
 		},
 		receivesKind: function() {
 			return this.schema.receives || 'none'
+		},
+		// the Setting* widgets (SettingNumber/SettingSlider/...) read their
+		// current value from item.value - schemaFields' own value is just
+		// the schema's suggested default, so overlay the live draft state
+		// (form.fields, already seeded correctly for both create and edit
+		// by buildFieldValues()) on top before handing items to the widgets.
+		formFieldItems: function() {
+			return this.schemaFields.map(field => ({
+				...field,
+				value: this.form.fields[field.key],
+			}))
 		},
 		// Alert nodes have no NODE_TYPE_SCHEMA entry (their conditions
 		// aren't a plain field) and are never creatable, so this is only
@@ -404,6 +395,7 @@ const ConfigNodeDialog = {
 		},
 	},
 	methods: {
+		widgetType: settingWidgetType,
 		resetForm: function() {
 			this.error = null
 			this.dialogInstanceKey++
@@ -424,8 +416,18 @@ const ConfigNodeDialog = {
 		buildFieldValues: function(node) {
 			const values = {}
 			this.schemaFields.forEach(field => {
-				values[field.key] = (node && node[field.key] !== undefined) ? node[field.key]
-					: (field.default !== undefined ? field.default : (field.type === 'multiselect' ? [] : ''))
+				if (node && node[field.key] !== undefined) {
+					// node[field.key] is the node's own live attribute, in
+					// whatever internal unit it stores (e.g. History.capacity
+					// in hours) - convert to the wire unit (seconds) the
+					// Setting* widgets expect, the same conversion
+					// get_settings()/api_set_node_settings() do server-side.
+					// See Setting.to_dict()'s attrs.factor.
+					values[field.key] = node[field.key] * (field.attrs.factor || 1)
+				} else {
+					values[field.key] = field.value !== undefined && field.value !== null
+						? field.value : (field.attrs.type === 'multiselect' ? [] : '')
+				}
 			})
 			return values
 		},

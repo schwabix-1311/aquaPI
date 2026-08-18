@@ -62,11 +62,28 @@ class PortDriverMixin:
             driver. No-op by default.
         """
 
+    @classmethod
+    def get_port_schema(cls, label: str) -> Setting:
+        """ static counterpart to _port_setting() below - the free-ports
+            query only needs _port_funcs (a class attribute), so this works
+            without any instance, for the /config create form. Tolerates
+            IoRegistry not being initialized yet (e.g. get_node_type_schema()
+            called outside a running app, such as some test setups) by
+            falling back to an empty options list.
+        """
+        try:
+            free = IoRegistry.get().get_ports_by_function(cls._port_funcs, in_use=False)
+        except Exception:
+            free = []
+        return Setting('port', label, '', type='select', options=sorted(free))
+
     def _port_setting(self, label: str) -> Setting:
         """ the 'port' Setting entry shared by InputNode/DeviceNode's
             get_settings() - offers every currently-free port of this
             node's function(s), plus its own current port if it holds one
         """
-        free = IoRegistry.get().get_ports_by_function(self._port_funcs, in_use=False)
-        options = sorted(free) + ([self.port] if self.port and self.port not in free else [])
-        return Setting('port', label, self.port, type='select', options=options)
+        schema = type(self).get_port_schema(label)
+        options = schema.options
+        if self.port and self.port not in options:
+            options = sorted(options + [self.port])
+        return schema.with_value(self.port, options=options)

@@ -17,7 +17,7 @@ from .auth import roles_required
 from .driver.base import DriverError
 from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
-from .machineroom.msg_bus import (BusRole, Setting)
+from .machineroom.msg_bus import BusRole
 from .machineroom.alert_nodes import Alert
 from .machineroom.aux_nodes import ScaleAux
 from .machineroom.in_nodes import UiInput
@@ -393,28 +393,6 @@ def api_set_dashboard() -> Response:
     return jsonify(layout)
 
 
-def _settings_entry_to_dict(entry: Setting) -> dict:
-    """ convert one get_settings() Setting into a JSON-serializable dict
-        for the /settings page. Entries with key=None are read-only
-        informational fields (e.g. 'Receives') and are included, but
-        marked as not editable.
-    """
-    attrs = {k: v for k, v in {
-        'type': entry.type, 'min': entry.min, 'max': entry.max, 'step': entry.step,
-        'options': entry.options, 'optional': entry.optional or None,
-    }.items() if v is not None}
-    result = {
-        'key': entry.key,
-        'label': entry.label,
-        'value': entry.value,
-        'attrs': attrs,
-        'editable': entry.editable,
-    }
-    if entry.label_params is not None:
-        result['labelParams'] = entry.label_params
-    return result
-
-
 @bp.route('/api/nodes/<node_id>/settings', methods=['GET'])
 @login_required
 def api_get_node_settings(node_id: str) -> Response:
@@ -430,7 +408,7 @@ def api_get_node_settings(node_id: str) -> Response:
     if not node:
         return Response(status=HTTPStatus.NOT_FOUND)
 
-    settings = [_settings_entry_to_dict(entry) for entry in node.get_settings()]
+    settings = [entry.to_dict() for entry in node.get_settings()]
     return jsonify(settings)
 
 
@@ -439,7 +417,7 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
                         voptions: list[str] | None = None, voptional: bool = False):
     """ validate & cast a single value against a type/min/max/options -
         shared by the /settings API (sourced from a node's get_settings())
-        and the /config node-schema API (sourced from NODE_TYPE_SCHEMA);
+        and the /config node-schema API (sourced from get_node_type_schema());
         raises ValueError on an invalid type or an out-of-range/-list value.
         Values are required (non-empty) unless voptional is set.
     """
@@ -542,7 +520,7 @@ def api_set_node_settings(node_id: str) -> Response:
     for field, old_value, new_value in calibration_changes:
         log_calibration_event(node_id, field, old_value, new_value)
 
-    settings = [_settings_entry_to_dict(entry) for entry in node.get_settings()]
+    settings = [entry.to_dict() for entry in node.get_settings()]
     return jsonify(settings)
 
 
@@ -550,12 +528,14 @@ def api_set_node_settings(node_id: str) -> Response:
 
 
 def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool) -> dict:
-    """ validate/cast a {key: value} dict against a NODE_TYPE_SCHEMA
-        field list. On creation (require_all=True), fields without a
-        submitted value fall back to their 'default', or raise if
-        'required' and no default is given. On update
-        (require_all=False), only the submitted keys are validated.
-        Raises ValueError on an unknown key or an invalid value.
+    """ validate/cast a {key: value} dict against a get_node_type_schema()
+        field list (Setting.to_dict() shape - type/min/max/options live
+        under each field's 'attrs'). On creation (require_all=True), fields
+        without a submitted value fall back to their schema 'value' (a
+        suggested default, may be absent), or raise if 'required' and none
+        is given. On update (require_all=False), only the submitted keys
+        are validated. Raises ValueError on an unknown key or an invalid
+        value.
     """
     by_key = {f['key']: f for f in schema_fields}
 
@@ -565,17 +545,19 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
 
     result = {}
     for key, field in by_key.items():
+        attrs = field.get('attrs', {})
         if key in raw_fields:
-            # NODE_TYPE_SCHEMA already has its own required/default handling
-            # (below, for *missing* keys) - always pass voptional=True here
-            # so this shared validator doesn't also reject a submitted blank
-            # value; that's a separate, /settings-only concept (Setting.optional).
-            result[key] = _validate_and_cast(key, raw_fields[key], field['type'],
-                                              field.get('min'), field.get('max'),
+            # get_node_type_schema() already has its own required/default
+            # handling (below, for *missing* keys) - always pass
+            # voptional=True here so this shared validator doesn't also
+            # reject a submitted blank value; that's a separate,
+            # /settings-only concept (Setting.optional).
+            result[key] = _validate_and_cast(key, raw_fields[key], attrs['type'],
+                                              attrs.get('min'), attrs.get('max'),
                                               voptional=True)
         elif require_all:
-            if 'default' in field:
-                result[key] = field['default']
+            if field.get('value') is not None:
+                result[key] = field['value']
             elif field.get('required'):
                 raise ValueError(f'Missing required field: {key}')
     return result
@@ -606,7 +588,7 @@ def api_create_node() -> Response:
         return jsonify(error='Body must be a JSON object'), HTTPStatus.BAD_REQUEST
 
     type_name = body.get('type')
-    schema = db.NODE_TYPE_SCHEMA.get(type_name)
+    schema = db.get_node_type_schema().get(type_name)
     if not schema:
         return jsonify(error=f'Unknown or non-creatable node type: {type_name!r}'), HTTPStatus.BAD_REQUEST
 
@@ -682,7 +664,7 @@ def api_update_node(node_id: str) -> Response:
     if not isinstance(body, dict):
         return jsonify(error='Body must be a JSON object'), HTTPStatus.BAD_REQUEST
 
-    schema = db.NODE_TYPE_SCHEMA.get(type(node).__name__)
+    schema = db.get_node_type_schema().get(type(node).__name__)
 
     if 'receives' in body:
         receives = body['receives']
@@ -711,7 +693,8 @@ def api_update_node(node_id: str) -> Response:
         if not schema:
             return jsonify(error=f'{type(node).__name__} does not support editing fields'), HTTPStatus.BAD_REQUEST
         try:
-            fields = _validate_fields(schema['fields'], raw_fields, require_all=False)
+            fields = db.convert_duration_fields(
+                type(node), _validate_fields(schema['fields'], raw_fields, require_all=False))
         except ValueError as ex:
             return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
         for key, value in fields.items():

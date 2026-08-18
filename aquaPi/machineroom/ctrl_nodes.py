@@ -120,13 +120,23 @@ class ThresholdCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('setpoint', 'setpoint', self.setpoint,
-                                type='number', label_params={'unit': self.rcv_unit},
-                                **get_unit_limits(self.rcv_unit)))
-        settings.append(Setting('hysteresis', 'hysteresis', self.hysteresis,
-                                type='number', min=0, max=5, step=0.01,
-                                label_params={'unit': self.rcv_unit}))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        # min/max/step depend on self.rcv_unit, only known once wired -
+        # can't be part of the static schema, see get_unit_limits() above.
+        settings.append(schema['setpoint'].with_value(self.setpoint,
+                        label_params={'unit': self.rcv_unit},
+                        **get_unit_limits(self.rcv_unit)))
+        settings.append(schema['hysteresis'].with_value(self.hysteresis,
+                        label_params={'unit': self.rcv_unit}))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('setpoint', 'setpoint', type='number', required=True))
+        schema.append(Setting('hysteresis', 'hysteresis', 0.0,
+                              type='number', min=0, max=5, step=0.01))
+        return schema
 
 
 class MinimumCtrl(ThresholdCtrl):
@@ -286,16 +296,22 @@ class PidCtrl(ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('setpoint', 'setpoint', self.setpoint,
-                                type='number', step=0.1,
-                                label_params={'unit': self.rcv_unit}))
-        settings.append(Setting('p_fact', 'pFact', self.p_fact,
-                                type='number', min=-10, max=10, step=0.1))
-        settings.append(Setting('i_fact', 'iFact', self.i_fact,
-                                type='number', min=-10, max=10, step=0.01))
-        settings.append(Setting('d_fact', 'dFact', self.d_fact,
-                                type='number', min=-10, max=10, step=0.1))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(schema['setpoint'].with_value(self.setpoint,
+                        label_params={'unit': self.rcv_unit}))
+        settings.append(self._fill_setting(schema['p_fact']))
+        settings.append(self._fill_setting(schema['i_fact']))
+        settings.append(self._fill_setting(schema['d_fact']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('setpoint', 'setpoint', type='number', step=0.1, required=True))
+        schema.append(Setting('p_fact', 'pFact', 1.0, type='number', min=-10, max=10, step=0.1))
+        schema.append(Setting('i_fact', 'iFact', 0.05, type='number', min=-10, max=10, step=0.01))
+        schema.append(Setting('d_fact', 'dFact', 0.0, type='number', min=-10, max=10, step=0.1))
+        return schema
 
 
 class FadeCtrl(HeartbeatMixin, ControllerNode):
@@ -418,11 +434,17 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('fade_time', 'fadeIn', self.fade_time,
-                                type='duration', min=0))
-        settings.append(Setting('fade_out', 'fadeOut', self.fade_out,
-                                type='duration', min=0))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['fade_time']))
+        settings.append(self._fill_setting(schema['fade_out']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('fade_time', 'fadeIn', 0, type='duration', min=0))
+        schema.append(Setting('fade_out', 'fadeOut', 0, type='duration', min=0))
+        return schema
 
 
 class Cloud(object):
@@ -612,7 +634,13 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
-        settings.append(Setting('xscend', 'ascendDescend', self.xscend * 3600,
-                                type='duration', min=0.1*3600, max=5*3600, step=0.1*3600,
-                                factor=3600))
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['xscend']))
         return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('xscend', 'ascendDescend', 1.0 * 3600, type='duration',
+                              min=0.1*3600, max=5*3600, step=0.1*3600, factor=3600))
+        return schema

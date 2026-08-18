@@ -20,7 +20,6 @@
     'receives' wiring don't need a rigid, per-type schema.
 """
 
-import copy
 import json
 import logging
 import smtplib
@@ -91,198 +90,48 @@ ALERT_COND_FACTORY: dict[str, type] = {
 
 # --- node type metadata for the /config graph editor ---------------------
 #
-# Describes, for every *creatable* node type (a subset of NODE_FACTORY -
-# Alert is excluded here since its 'conditions' are a set of objects, not
-# a simple field, and are out of scope for the generic add/edit dialog),
-# which constructor fields the /config page should render, and how many
-# 'receives' wires (0, 1 or many) the type accepts.
-#
-# 'receives' is one of:
-#   'none'   - the type doesn't listen to other nodes (e.g. AnalogInput)
-#   'single' - exactly one source node id (e.g. a controller output)
-#   'multi'  - zero or more source node ids (e.g. History, AvgAux)
-#
-# Each field entry mirrors the attrs used by get_settings()/the /settings
-# API (type: 'text'|'number'|'checkbox', optional min/max), plus
-# 'required' (no default, must be supplied on creation) or 'default'.
-
-NODE_TYPE_SCHEMA: dict[str, dict[str, Any]] = {
-    'AnalogInput': {
-        'receives': 'none',
-        'fields': [
-            {'key': 'port', 'label': 'Input port', 'type': 'select', 'default': ''},
-            {'key': 'initval', 'label': 'Initial value', 'type': 'number', 'default': 0.0},
-            {'key': 'unit', 'label': 'Unit', 'type': 'text', 'default': ''},
-            {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
-             'min': 1, 'max': 600, 'default': 10.0},
-            {'key': 'avg', 'label': 'Averaging [1=off]', 'type': 'number',
-             'min': 1, 'max': 5, 'default': 1},
-        ],
-    },
-    'SwitchInput': {
-        'receives': 'none',
-        'fields': [
-            {'key': 'port', 'label': 'Input port', 'type': 'select', 'default': ''},
-            {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
-             'min': 0.1, 'default': 0.5},
-            {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
-        ],
-    },
-    'TextInput': {
-        'receives': 'none',
-        'fields': [
-            {'key': 'port', 'label': 'Input port', 'type': 'select', 'default': ''},
-            {'key': 'interval', 'label': 'Read interval [s]', 'type': 'number',
-             'min': 1, 'max': 600, 'default': 10.0},
-        ],
-    },
-    'ScheduleInput': {
-        'receives': 'none',
-        'fields': [
-            {'key': 'cronspec', 'label': 'CRON (m h DoM M DoW)', 'type': 'text', 'required': True},
-        ],
-    },
-    'UiSwitchInput': {
-        'receives': 'none',
-        'fields': [
-            {'key': 'initval', 'label': 'Initial value', 'type': 'checkbox', 'default': False},
-        ],
-    },
-    'UiAnalogInput': {
-        'receives': 'none',
-        'fields': [
-            {'key': 'initval', 'label': 'Initial value', 'type': 'number', 'default': 0.0},
-            {'key': 'unit', 'label': 'Unit', 'type': 'text', 'default': ''},
-            {'key': 'vmin', 'label': 'Minimum', 'type': 'number', 'default': 0.0},
-            {'key': 'vmax', 'label': 'Maximum', 'type': 'number', 'default': 100.0},
-            {'key': 'step', 'label': 'Step', 'type': 'number', 'default': 1.0},
-        ],
-    },
-    'AnalogDevice': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'port', 'label': 'Output port', 'type': 'select', 'default': ''},
-            {'key': 'minimum', 'label': 'Minimum [%]', 'type': 'number',
-             'min': 0, 'max': 99, 'default': 0},
-            {'key': 'maximum', 'label': 'Maximum [%]', 'type': 'number',
-             'min': 1, 'max': 100, 'default': 100},
-            {'key': 'percept', 'label': 'Perceptive', 'type': 'checkbox', 'default': False},
-        ],
-    },
-    'SlowPwmDevice': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'port', 'label': 'Output port', 'type': 'select', 'default': ''},
-            {'key': 'cycle', 'label': 'PWM cycle time [s]', 'type': 'number',
-             'min': 10, 'max': 300, 'default': 60.0},
-            {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
-        ],
-    },
-    'SwitchDevice': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'port', 'label': 'Output port', 'type': 'select', 'default': ''},
-            {'key': 'inverted', 'label': 'Inverted', 'type': 'checkbox', 'default': False},
-        ],
-    },
-    'MaximumCtrl': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'setpoint', 'label': 'Setpoint', 'type': 'number', 'required': True},
-            {'key': 'hysteresis', 'label': 'Hysteresis', 'type': 'number', 'default': 0.0},
-        ],
-    },
-    'MinimumCtrl': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'setpoint', 'label': 'Setpoint', 'type': 'number', 'required': True},
-            {'key': 'hysteresis', 'label': 'Hysteresis', 'type': 'number', 'default': 0.0},
-        ],
-    },
-    'PidCtrl': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'setpoint', 'label': 'Setpoint', 'type': 'number', 'required': True},
-            {'key': 'p_fact', 'label': 'P factor', 'type': 'number',
-             'min': -10, 'max': 10, 'default': 1.0},
-            {'key': 'i_fact', 'label': 'I factor', 'type': 'number',
-             'min': -10, 'max': 10, 'default': 0.05},
-            {'key': 'd_fact', 'label': 'D factor', 'type': 'number',
-             'min': -10, 'max': 10, 'default': 0.0},
-        ],
-    },
-    'SunCtrl': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'xscend', 'label': 'Ascend/descend factor', 'type': 'number',
-             'default': 1.0},
-        ],
-    },
-    'FadeCtrl': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'fade_time', 'label': 'Fade-in time [s]', 'type': 'number', 'default': 0},
-            {'key': 'fade_out', 'label': 'Fade-out time [s]', 'type': 'number', 'default': 0},
-        ],
-    },
-    'AvgAux': {
-        'receives': 'multi',
-        'fields': [
-            {'key': 'unfair_avg', 'label': 'Unweighted average [0=off]', 'type': 'number',
-             'min': 0, 'default': 0},
-        ],
-    },
-    'MaxAux': {
-        'receives': 'multi',
-        'fields': [],
-    },
-    'MinAux': {
-        'receives': 'multi',
-        'fields': [],
-    },
-    'UiDisplay': {
-        'receives': 'multi',
-        'fields': [],
-    },
-    'ScaleAux': {
-        'receives': 'single',
-        'fields': [
-            {'key': 'unit', 'label': 'Unit', 'type': 'text', 'default': ''},
-            {'key': 'offset', 'label': 'Offset', 'type': 'number', 'default': 0.0},
-            {'key': 'factor', 'label': 'Scale factor', 'type': 'number', 'default': 1.0},
-        ],
-    },
-    'History': {
-        'receives': 'multi',
-        'fields': [
-            {'key': 'capacity', 'label': 'Capacity [h]', 'type': 'number',
-             'min': 1, 'default': 24},
-        ],
-    },
-}
-
+# Built from each creatable type's own get_settings_schema() (see
+# BusNode/BusListener in machineroom/msg_bus.py) - Alert is excluded, its
+# 'conditions' are a set of objects, not a simple field, and are out of
+# scope for the generic add/edit dialog. 'receives' cardinality
+# ('none'/'single'/'multi') comes from get_receives_kind(), itself derived
+# from the class hierarchy - see BusListener._receives_kind.
 
 def get_node_type_schema() -> dict[str, dict[str, Any]]:
-    """ Deep-copy NODE_TYPE_SCHEMA and populate live 'options' lists for
-        node types that have a 'port' field, sourced from IoRegistry.
+    """ For every creatable node type: its constructor/settings fields
+        (from get_settings_schema(), including live 'port' options, in the
+        same Setting.to_dict() shape /settings' own GET /api/nodes/<id>/
+        settings uses - so both pages can share the same widget components)
+        and how many 'receives' wires it accepts - used by the /config
+        "add node" form.
     """
-    schema = copy.deepcopy(NODE_TYPE_SCHEMA)
+    schema: dict[str, dict[str, Any]] = {}
     for type_name, cls in NODE_FACTORY.items():
-        if type_name not in schema:
+        if cls.ROLE == BusRole.ALERTS:
             continue
-        port_funcs = getattr(cls, '_port_funcs', None)
-        if not port_funcs:
-            continue
-        try:
-            free = IoRegistry.get().get_ports_by_function(port_funcs, in_use=False)
-            options = sorted(free)
-        except Exception:
-            options = []
-        for field in schema[type_name].get('fields', []):
-            if field.get('key') == 'port':
-                field['type'] = 'select'
-                field['options'] = options
+        schema[type_name] = {
+            'receives': cls.get_receives_kind(),
+            'fields': [s.to_dict() for s in cls.get_settings_schema() if s.key is not None],
+        }
     return schema
+
+
+def convert_duration_fields(cls: type[BusNode], fields: dict[str, Any]) -> dict[str, Any]:
+    """ a type='duration' field always travels the wire in seconds (see
+        Setting's own docstring) - convert back to whatever unit the
+        constructor/instance actually stores (Setting.factor) before
+        passing it on, the same conversion api_set_node_settings() already
+        does for the /settings PUT path. Without this, a value entered via
+        a duration widget (e.g. History's capacity, "24 h" -> 86400) would
+        reach e.g. History(capacity=86400) - 86400 *hours*, not 24.
+    """
+    schema = {s.key: s for s in cls.get_settings_schema()}
+    converted = dict(fields)
+    for key, value in fields.items():
+        entry = schema.get(key)
+        if entry and entry.type == 'duration' and entry.factor != 1 and value is not None:
+            converted[key] = value / entry.factor
+    return converted
 
 
 def _mk_receives_arg(receives_kind: str, receives: list[str]):
@@ -299,15 +148,16 @@ def _mk_receives_arg(receives_kind: str, receives: list[str]):
 def build_node(type_name: str, name: str, receives: list[str],
               fields: dict[str, Any]) -> BusNode:
     """ construct a brand new node of a *creatable* type (see
-        NODE_TYPE_SCHEMA) directly via its real constructor - used by the
-        /config graph editor (aquaPi/api.py) to add nodes at runtime.
+        get_node_type_schema()) directly via its real constructor - used by
+        the /config graph editor (aquaPi/api.py) to add nodes at runtime.
         Raises ValueError/KeyError on unknown type or missing fields.
     """
-    schema = NODE_TYPE_SCHEMA.get(type_name)
-    if not schema:
+    cls = NODE_FACTORY.get(type_name)
+    if not cls or cls.ROLE == BusRole.ALERTS:
         raise ValueError(f'Unknown or non-creatable node type: {type_name!r}')
 
-    rcv = _mk_receives_arg(schema['receives'], receives)
+    rcv = _mk_receives_arg(cls.get_receives_kind(), receives)
+    fields = convert_duration_fields(cls, fields)
 
     if type_name == 'AnalogInput':
         return AnalogInput(name, fields['port'], fields['initval'], fields['unit'],
@@ -323,7 +173,7 @@ def build_node(type_name: str, name: str, receives: list[str],
         return UiSwitchInput(name, initval=fields['initval'])
     if type_name == 'UiAnalogInput':
         return UiAnalogInput(name, fields['unit'], initval=fields['initval'],
-                             vmin=fields['vmin'], vmax=fields['vmax'], step=fields['step'])
+                             vmin=fields['min'], vmax=fields['max'], step=fields['step'])
     if type_name == 'AnalogDevice':
         return AnalogDevice(name, rcv, fields['port'], percept=fields['percept'],
                             minimum=fields['minimum'], maximum=fields['maximum'])
@@ -507,6 +357,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         raise ConfigDiffError("'creates', 'updates' and 'deletes' must each be a list")
 
     live_nodes = {n.id: n for n in bus.get_nodes()}
+    node_type_schema = get_node_type_schema()  # computed once, reused below
 
     deleted_ids: set[str] = set()
     for del_id in deletes:
@@ -539,7 +390,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             raise ConfigDiffError('Each create entry must be an object', entry)
 
         type_name = entry.get('type')
-        schema = NODE_TYPE_SCHEMA.get(type_name)
+        schema = node_type_schema.get(type_name)
         if not schema:
             raise ConfigDiffError(f'Unknown or non-creatable node type: {type_name!r}', entry)
 
@@ -600,7 +451,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
 
     for upd_id, upd in updates_by_id.items():
         node = live_nodes[upd_id]
-        schema = NODE_TYPE_SCHEMA.get(type(node).__name__)
+        schema = node_type_schema.get(type(node).__name__)
 
         if 'receives' in upd:
             raw_receives = upd['receives']
@@ -620,7 +471,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             if not schema:
                 raise ConfigDiffError(f'{type(node).__name__} does not support editing fields', upd)
             try:
-                upd['_fields'] = validate_fields(schema['fields'], raw_fields, require_all=False)
+                upd['_fields'] = convert_duration_fields(
+                    type(node), validate_fields(schema['fields'], raw_fields, require_all=False))
             except ValueError as ex:
                 raise ConfigDiffError(str(ex), upd) from ex
 

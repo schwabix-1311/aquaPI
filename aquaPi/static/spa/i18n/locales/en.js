@@ -240,6 +240,7 @@ export default
 			btnSetup: 'Configure widgets'
 		},
 		widget: {
+			elementNotFound: 'Error: Node not found',
 			inputs: {
 				label: 'Inputs'
 			},

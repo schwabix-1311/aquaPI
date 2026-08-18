@@ -200,7 +200,7 @@ const BusNode = {
 									:level="(level + 1)"
 								></component>
 								<v-card-text v-else class="red--text">
-									Error: Node not found
+									{{ $t('dashboard.widget.elementNotFound') }}
 								</v-card-text>
 							</v-card>
 						</v-expansion-panel-text>
@@ -223,7 +223,7 @@ const BusNode = {
 							:level="(level + 1)"
 						></component>
 						<v-card-text v-else class="red--text">
-							Error: Node not found
+							{{ $t('dashboard.widget.elementNotFound') }}
 						</v-card-text>
 					</v-card>
 				</div>

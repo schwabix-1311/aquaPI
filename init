@@ -79,6 +79,24 @@ then
         sed -i "s/-XX:+UseParallelGC/-XX:+UseParallelGC\\n  -Xms32M\\n  -Xmx128M/" questdb-${QuestRel}/questdb.sh
       fi
     fi
+
+    # aquaPi only ever talks to Quest DB via the Postgres wire protocol
+    # (psycopg) - ILP ingestion and the separate health-check HTTP
+    # server are never used, and a single Flask process doing light,
+    # low-frequency reads/writes doesn't need more than 1 shared worker.
+    # Written once, never overwritten, so a later hand-edit survives.
+    quest_conf="${MyHome}/questdb-${QuestRel}/conf/server.conf"
+    if [ ! -f "${quest_conf}" ]
+    then
+      echo "===== writing memory-conscious QuestDB server.conf"
+      cat > "${quest_conf}" <<'EOF'
+shared.worker.count=1
+line.tcp.enabled=false
+line.udp.enabled=false
+http.min.enabled=false
+EOF
+    fi
+
     export JAVA_HOME=/usr/lib/jvm/java-${JavaRel}-openjdk-arm64
   else
     quest_sh="${MyHome}/questdb-${QuestRel}/bin/questdb.sh"

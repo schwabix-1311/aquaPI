@@ -256,9 +256,17 @@ class PidCtrl(ControllerNode):
             ta = now - self._tm_old
             err = float(msg.data) - self.setpoint
             if self._tm_old >= 1.:
-                self._err_sum += err
+                # time-weighted accumulation (~ integral of err over time,
+                # i.e. Riemann sum err*dt), NOT scaled again by the
+                # current tick's ta afterward - the previous code did
+                # both (unweighted accumulation, then multiplied the
+                # whole sum by only the latest ta), which made i_dev
+                # swing by however much tick timing happened to jitter
+                # (observed live: ~12x between a 25s and a 301s tick),
+                # independent of the actual physical error trend
+                self._err_sum += err * ta
                 p_dev = self.p_fact * err
-                i_dev = self.i_fact * ta * self._err_sum / 100  # ??
+                i_dev = self.i_fact * self._err_sum / 100
                 d_dev = self.d_fact / ta * (err - self._err_old)
                 val = p_dev + i_dev + d_dev
 

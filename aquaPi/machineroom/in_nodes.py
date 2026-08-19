@@ -73,6 +73,7 @@ class InputNode(PortDriverMixin, BusNode, ABC):
 
     def _reader(self) -> None:
         log.debug('InputNode.reader started')
+        next_run = time.time()
         while not self._reader_stop:
             try:
                 self.data = self.read()
@@ -82,7 +83,17 @@ class InputNode(PortDriverMixin, BusNode, ABC):
             except (DriverReadError, Exception):
                 log.exception('Reader exception')
                 self.alert = ('Read error!', 'err')
-            time.sleep(self.interval)
+            # sleep against a fixed wall-clock schedule rather than a flat
+            # post-read delay, so a slow read() (e.g. DS1820's ~1-2s 1-Wire
+            # conversion, blocking inside DriverOneWire.read()) doesn't add
+            # on top of the configured interval every single cycle. If a
+            # read overran by more than a full interval, skip the missed
+            # tick(s) instead of bursting to catch up.
+            next_run += self.interval
+            now = time.time()
+            if next_run < now:
+                next_run = now
+            time.sleep(next_run - now)
 
         self._reader_thread = None
         self._reader_stop = False

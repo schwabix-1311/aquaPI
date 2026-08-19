@@ -6,7 +6,7 @@ const AquapiToast = {
 		<v-snackbar
 			v-model="visible"
 			:color="current ? current.color : 'success'"
-			:timeout="current ? current.timeout : 4000"
+			:timeout="-1"
 			location="bottom"
 			@update:model-value="onModelValueChange"
 		>
@@ -22,6 +22,7 @@ const AquapiToast = {
 			queue: [],
 			current: null,
 			visible: false,
+			dismissTimer: null,
 		}
 	},
 
@@ -31,6 +32,7 @@ const AquapiToast = {
 			if (!this.visible) this.showNext()
 		},
 		showNext() {
+			clearTimeout(this.dismissTimer)
 			if (!this.queue.length) {
 				this.current = null
 				this.visible = false
@@ -38,12 +40,21 @@ const AquapiToast = {
 			}
 			this.current = this.queue.shift()
 			this.visible = true
+			// v-snackbar's own :timeout is disabled (-1) - its internal
+			// auto-dismiss watcher wasn't reliably re-arming itself on
+			// every subsequent toast in this app (confirmed live: no
+			// window.setTimeout call for it at all past the first one),
+			// so this component owns the dismiss timer outright instead.
+			this.dismissTimer = setTimeout(() => this.dismiss(), this.current.timeout || 4000)
 		},
 		dismiss() {
+			clearTimeout(this.dismissTimer)
 			this.visible = false
 		},
 		onModelValueChange(value) {
-			// fires both on manual dismiss and on the snackbar's own timeout
+			// fires on manual dismiss (the OK button); the auto-dismiss
+			// path now goes through dismiss() -> this same setter, not
+			// through v-snackbar's own timeout (disabled above)
 			if (!value) this.showNext()
 		},
 	},
@@ -53,6 +64,7 @@ const AquapiToast = {
 	},
 	unmounted() {
 		EventBus.$off(AQUAPI_EVENTS.TOAST_REQUESTED, this.onRequest)
+		clearTimeout(this.dismissTimer)
 	},
 }
 

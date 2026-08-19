@@ -232,7 +232,7 @@ class PidCtrl(ControllerNode):
     data_range = DataRange.PERCENT
 
     def __init__(self, name: str, receives: str, setpoint: float,
-                 p_fact: float = 1.0, i_fact: float = 0.05, d_fact: float = 0.,
+                 p_fact: float = 100.0, i_fact: float = 0.05, d_fact: float = 0.,
                  _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.setpoint: float = setpoint
@@ -274,8 +274,25 @@ class PidCtrl(ControllerNode):
                 # swing by however much tick timing happened to jitter
                 # (observed live: ~12x between a 25s and a 301s tick),
                 # independent of the actual physical error trend
-                self._err_sum += err * ta
-                p_dev = self.p_fact * err
+                #
+                # conditional integration (clamping anti-windup): while
+                # output is already pinned at a bound AND the current
+                # error still pushes the same direction, don't accumulate
+                # - a plain post-hoc '_err_sum /= 2' once saturated causes
+                # a discontinuous jump in i_dev; freezing accumulation up
+                # front avoids ever winding up in the first place, so
+                # there's nothing to unwind, and no decay constant to tune
+                saturated_high = self.data >= 100. and err < 0
+                saturated_low = self.data <= 0. and err > 0
+                if not (saturated_high or saturated_low):
+                    self._err_sum += err * ta
+                # p_fact is the direct %-output-per-unit-error gain
+                # (p_fact=1 -> 1 percentage point of output per degree
+                # of error), unlike i_fact/d_fact below which keep their
+                # pre-existing (undocumented) *100 scale - dividing here
+                # cancels the val*100 further down, so only p_fact's
+                # units change, not i_dev/d_dev's.
+                p_dev = self.p_fact * err / 100.
                 i_dev = self.i_fact * self._err_sum / 100
                 d_dev = self.d_fact / ta * (err - self._err_old)
                 val = p_dev + i_dev + d_dev
@@ -286,9 +303,6 @@ class PidCtrl(ControllerNode):
                 self.data = min(max(0., 50. - val*100.), 100.)
                 log.brief('PID -> %f (%+.1f)', self.data, -val * 100)
                 self.post(MsgData(self.id, round(self.data, 4)))
-
-                if self.data <= 0. or self.data >= 100.:
-                    self._err_sum /= 2
             self._err_old = err
             self._tm_old = now
 
@@ -299,7 +313,8 @@ class PidCtrl(ControllerNode):
         schema = {s.key: s for s in type(self).get_settings_schema()}
         settings.append(schema['setpoint'].with_value(self.setpoint,
                         label_params={'unit': self.rcv_unit}))
-        settings.append(self._fill_setting(schema['p_fact']))
+        settings.append(self._fill_setting(schema['p_fact']).with_value(
+                        self.p_fact, label_params={'unit': self.rcv_unit}))
         settings.append(self._fill_setting(schema['i_fact']))
         settings.append(self._fill_setting(schema['d_fact']))
         return settings
@@ -308,7 +323,7 @@ class PidCtrl(ControllerNode):
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
         schema.append(Setting('setpoint', 'setpoint', type='number', step=0.1, required=True))
-        schema.append(Setting('p_fact', 'pFact', 1.0, type='number', min=-10, max=10, step=0.1))
+        schema.append(Setting('p_fact', 'pFact', 100.0, type='number', min=-1000, max=1000, step=0.1))
         schema.append(Setting('i_fact', 'iFact', 0.05, type='number', min=-10, max=10, step=0.01))
         schema.append(Setting('d_fact', 'dFact', 0.0, type='number', min=-10, max=10, step=0.1))
         return schema

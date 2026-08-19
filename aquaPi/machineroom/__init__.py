@@ -292,7 +292,7 @@ class MachineRoom:
             wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
                                     interval=300)
             wasser = PidCtrl('Heizleistung', wasser_i1.id, 25.0,
-                             p_fact=1.1, i_fact=0.07, d_fact=0.0)
+                             p_fact=110, i_fact=0.07, d_fact=0.0)
             wasser_o = SlowPwmDevice('Heizstab', wasser.id,
                                      'GPIO 12 out', inverted=False, cycle=10)
             wasser_i1.plugin(self.bus)
@@ -434,7 +434,7 @@ class MachineRoom:
                     wasser_i1 = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C',
                                             avg=1, interval=60)
                     wasser = PidCtrl('Heizleistung (PID)', wasser_i1.id, 25.0,
-                                     p_fact=1.0, i_fact=0.05, d_fact=0.0)
+                                     p_fact=100, i_fact=0.05, d_fact=0.0)
                     wasser_o = SlowPwmDevice('Heizstab', wasser.id,
                                              'GPIO 12 out', inverted=False, cycle=10)
                 wasser_o.plugin(self.bus)

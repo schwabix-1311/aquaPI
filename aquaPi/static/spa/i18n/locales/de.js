@@ -70,7 +70,7 @@ export default
 				receives: 'Empfängt von',
 				setpoint: 'Sollwert [{unit}]',
 				hysteresis: 'Hysterese [{unit}]',
-				pFact: 'P-Faktor',
+				pFact: 'P-Faktor (%/{unit})',
 				iFact: 'I-Faktor',
 				dFact: 'D-Faktor',
 				fadeIn: 'Einblenddauer',

@@ -73,11 +73,6 @@ then
       mv questdb-${QuestRel}-no-jre-bin questdb-${QuestRel}
 
       sudo apt install openjdk-${JavaRel}-jre-headless -y
-
-      if ( ! grep "-Xmx" questdb-${QuestRel}/questdb.sh >/dev/null )
-      then
-        sed -i "s/-XX:+UseParallelGC/-XX:+UseParallelGC\\n  -Xms32M\\n  -Xmx128M/" questdb-${QuestRel}/questdb.sh
-      fi
     fi
 
     # aquaPi only ever talks to Quest DB via the Postgres wire protocol
@@ -95,6 +90,19 @@ line.tcp.enabled=false
 line.udp.enabled=false
 http.min.enabled=false
 EOF
+    fi
+
+    # -Xmx alone only caps the JVM heap - off-heap direct buffers,
+    # metaspace, GC threads and per-thread stacks are all uncapped by
+    # default and can each add well past the heap cap on a box this
+    # small (QuestDB's Cairo storage engine is off-heap-mmap-heavy by
+    # design). Checked/injected independent of the tarball-install
+    # block above (like server.conf), so it also lands on an
+    # already-installed production QuestDB on the next ./init run.
+    if ( ! grep -- "-Xmx" "${quest_sh}" >/dev/null )
+    then
+      echo "===== capping QuestDB JVM heap/off-heap/stack for low-memory Pi"
+      sed -i "s/-XX:+UseParallelGC/-XX:+UseParallelGC\\n  -Xms32M\\n  -Xmx128M\\n  -XX:MaxDirectMemorySize=64M\\n  -XX:MaxMetaspaceSize=64M\\n  -XX:ParallelGCThreads=1\\n  -XX:ConcGCThreads=1\\n  -Xss512k/" "${quest_sh}"
     fi
 
     export JAVA_HOME=/usr/lib/jvm/java-${JavaRel}-openjdk-arm64

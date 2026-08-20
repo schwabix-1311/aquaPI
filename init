@@ -92,6 +92,20 @@ http.min.enabled=false
 EOF
     fi
 
+    # aquaPi only ever talks to Quest DB via the Postgres wire protocol -
+    # nothing in this codebase uses the embedded web console/REST API,
+    # so it's a pure memory cost here. Checked line-by-line rather than
+    # gated on quest_conf's own existence (like the JVM-flags block
+    # below), so it also reaches an already-installed production
+    # QuestDB whose server.conf predates this setting. Trade-off: this
+    # also removes browser access to localhost:9000 for ad-hoc
+    # inspection - deliberately accepted, not a silent side effect.
+    if ( ! grep -q "^http.enabled" "${quest_conf}" 2>/dev/null )
+    then
+      echo "===== disabling QuestDB's unused web console/REST API"
+      echo "http.enabled=false" >> "${quest_conf}"
+    fi
+
     # -Xmx alone only caps the JVM heap - off-heap direct buffers,
     # metaspace, GC threads and per-thread stacks are all uncapped by
     # default and can each add well past the heap cap on a box this
@@ -146,7 +160,12 @@ EOF
   fi
 
   pip3 install 'psycopg[binary]>=3.1.9'
-  echo "You can interact with Quest DB in your browser at localhost:9000"
+  if [ -n "${quest_conf:-}" ] && grep -q "^http.enabled=false" "${quest_conf}" 2>/dev/null
+  then
+    echo "Quest DB's web console is disabled (http.enabled=false) to save memory."
+  else
+    echo "You can interact with Quest DB in your browser at localhost:9000"
+  fi
   echo "====="
 fi
 

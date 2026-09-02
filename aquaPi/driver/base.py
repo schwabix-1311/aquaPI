@@ -82,7 +82,13 @@ class DriverConfigError(DriverError):
 # ========== common types ==========
 
 
-IoPort = namedtuple('IoPort', 'func driver cfg deps used', defaults=([], 0))
+# shareable=True lets a port be claimed by more than one driver_factory()
+# caller at once - for ports with no real exclusive resource behind them
+# (e.g. Email/Telegram, whose drivers open/write/close a connection per
+# call rather than holding one open), reported by the driver itself at
+# find_ports() time rather than inferred from PortFunc
+IoPort = namedtuple('IoPort', 'func driver cfg deps used shareable',
+                    defaults=([], 0, False))
 
 
 class PortFunc(Enum):

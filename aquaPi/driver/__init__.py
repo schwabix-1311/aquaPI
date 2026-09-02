@@ -148,10 +148,13 @@ class IoRegistry(object):
     def get_ports_by_function(self, funcs: list[PortFunc], in_use: bool = False
                               ) -> dict[str, IoPort]:
         """ returns a view of free or used IoPorts filtered by iterable funcs.
+            A shareable port always has room for another claim, so it
+            counts as free regardless of its current claim count.
         """
         mp = IoRegistry._map
         return {key: mp[key] for key in mp
-                if mp[key].func in funcs and bool(mp[key].used) == in_use}
+                if mp[key].func in funcs
+                and (not in_use if mp[key].shareable else bool(mp[key].used) == in_use)}
 
     def driver_factory(self, port: str, drv_options: dict | None = None
                        ) -> Driver | None:
@@ -163,7 +166,7 @@ class IoRegistry(object):
             raise DriverInvalidPortError(port)
 
         io_port = IoRegistry._map[port]
-        if io_port.used:
+        if io_port.used and not io_port.shareable:
             raise DriverPortInuseError(port)
 
         try:
@@ -190,8 +193,11 @@ class IoRegistry(object):
 
         io_port = IoRegistry._map[port]
         driver.close()
-        # same as io_port.used = 0
-        IoRegistry._map[port] = io_port._replace(used=0)
+        # decrement rather than reset to 0: a shareable port can have
+        # more than one concurrent claim, and releasing one must not
+        # drop the others' - for a non-shareable port used is always 1
+        # here, so this is equivalent to the old reset-to-0
+        IoRegistry._map[port] = io_port._replace(used=max(0, io_port.used - 1))
 
         for dep in io_port.deps:
             # same as IoRegistry._map[dep].used -= 1

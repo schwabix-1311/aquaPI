@@ -124,12 +124,16 @@ class _FakeTextDriver(OutDriver):
 def fake_text_ports(monkeypatch):
     """ register fake IoRegistry ports (arbitrary names, exactly like real
         Email/Telegram driver_factory ports) so Alert can send through
-        them without any real network access
+        them without any real network access. shareable=True mirrors the
+        real DriverEmail/DriverTelegram ports (see DriverText.py) - their
+        write() opens/sends/closes per call, so multiple Alert nodes may
+        hold a claim on the same port concurrently.
     """
     names = ('Email #1', 'Telegram #1', 'Telegram #2')
     drivers = {name: _FakeTextDriver() for name in names}
     io_ports = {
-        name: IoPort(PortFunc.Tout, lambda cfg, func, d=driver: d, {}, [])
+        name: IoPort(PortFunc.Tout, lambda cfg, func, d=driver: d, {}, [],
+                     shareable=True)
         for name, driver in drivers.items()
     }
     monkeypatch.setattr(IoRegistry, '_map', io_ports)
@@ -323,6 +327,47 @@ def test_alert_escalation_dedupes_same_destination_across_multiple_admins(
         alert.listen(MsgData(sensor.id, 31.0))
 
         assert len(fake_text_ports['Telegram #1'].written) == 1
+
+        bus.teardown()
+    finally:
+        db.set_current_users_db_path(None)
+
+
+def test_alert_escalation_reaches_port_claimed_as_another_alerts_primary(
+        users_db_path, fake_text_ports, fake_clock):
+    """ Email/Telegram ports are shareable (see fake_text_ports): one
+        Alert node's escalation_channel targeting 'Telegram #1' must
+        still be delivered even while a 2nd, independent Alert node
+        holds 'Telegram #1' as its own permanently-claimed primary
+        port - previously this raised DriverPortInuseError and the
+        escalation was silently dropped, see
+        project_escalation_port_exclusivity memory
+    """
+    user_id = db.create_user(users_db_path, 'sam', 'pwd12345', role='admin')
+    db.set_current_users_db_path(users_db_path)
+    try:
+        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
+                                      escalation_channel='Telegram #1', escalation_after_minutes=5)
+
+        bus = MsgBus(threaded=False)
+        sensor = AnalogInput('Wasser', '', 25.0, '°C')
+        sensor.plugin(bus)
+
+        # 2nd, unrelated Alert node holds 'Telegram #1' as its own
+        # primary port for its whole lifetime (PortDriverMixin)
+        other_alert = Alert('Andere', AlertAbove(sensor.id, 40.0), 'Telegram #1', repeat=3600)
+        other_alert.id = 'andere'
+        other_alert.plugin(bus)
+
+        alert = Alert('Warnungen', AlertAbove(sensor.id, 26.0), 'Email #1', repeat=3600)
+        alert.id = 'warnungen'
+        alert.plugin(bus)
+
+        alert.listen(MsgData(sensor.id, 30.0))
+        fake_clock(6 * 60)
+        alert.listen(MsgData(sensor.id, 31.0))
+
+        assert [w for w in fake_text_ports['Telegram #1'].written if 'ESKALATION' in w]
 
         bus.teardown()
     finally:

@@ -85,7 +85,8 @@ class DriverEmail(DriverText):
                                           'from': cfg['from'],
                                           'to': cfg['to'],
                                           },
-                                         [])
+                                         [],
+                                         shareable=True)
             idx += 1
         return io_ports
 
@@ -221,7 +222,8 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
                                           'chat_name': cfg['chat_name'],
                                           'chat_id': cfg['chat_id']
                                           },
-                                         [])
+                                         [],
+                                         shareable=True)
             idx += 1
         return io_ports
 

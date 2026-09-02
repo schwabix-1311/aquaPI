@@ -338,15 +338,22 @@ const AquapiDashboardWidget = {
 				'SunCtrl': 'sun.svg',
 				'FadeCtrl': 'light.svg',
 
+				// specialized input types
+				'ScheduleInput': 'mdi-calendar-clock',
+
 				// Min/Max, common units
 				'MinimumCtrl.°C': 'thermo_min.svg',
 				'MaximumCtrl.°C': 'thermo_max.svg',
 				'MinimumCtrl.°F': 'thermo_min.svg',
 				'MaximumCtrl.°F': 'thermo_max.svg',
-				'MinimumCtrl.rH': 'faucet.svg',
-				'MaximumCtrl.rH': 'faucet.svg',
 				'MinimumCtrl.pH': 'gas_min.svg',
 				'MaximumCtrl.pH': 'gas_max.svg',
+
+				// rH has no Min/Max-specific icon, so this unit-only entry
+				// must come before the generic Min/Max fallback right
+				// below - it already catches MinimumCtrl.rH/MaximumCtrl.rH
+				// too, since the match is by substring
+				'rH': 'mdi-water-percent',
 
 				// Min/Max, uncommon/undef unit
 				'MinimumCtrl': 'min.svg',
@@ -356,7 +363,6 @@ const AquapiDashboardWidget = {
 				'°C': 'thermo.svg',
 				'°F': 'thermo.svg',
 				'pH': 'gas.svg',
-				'rH': 'faucet.svg',
 				//'V': 'probe.png', -> svg
 
 				// generic by role

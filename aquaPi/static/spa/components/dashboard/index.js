@@ -4,6 +4,18 @@ import {useUiStore} from '../../store/modules/ui.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {EventBus, AQUAPI_EVENTS} from '../app/EventBus.js'
 
+// generic icon per node role, shared by AquapiDashboardConfigurator's own
+// lookup and as the generic tail of AquapiDashboardWidget's more specific
+// type/unit-aware typeIcons below
+const ROLE_ICONS = {
+	AUX: 'mdi-merge',
+	CTRL: 'mdi-speedometer',
+	HISTORY: 'mdi-chart-line',
+	IN_ENDP: 'mdi-location-enter',
+	OUT_ENDP: 'mdi-location-exit',
+	ALERTS: 'mdi-alert',
+}
+
 // Dependency-free replacement for vue-masonry-css (Vue-2-only, removed in
 // the Vue 3 migration): real masonry via native CSS column-count, so the
 // browser packs items into whichever column is shortest so far, instead of
@@ -173,15 +185,7 @@ const AquapiDashboardConfigurator = {
 	data: function() {
 		return {
 			dialogName: 'AquapiDashboardConfigurator',
-			// FIXME: could be shared with DashboardWidgets.typeIcons
-			typeIcons: {
-				AUX: 'mdi-merge',
-				CTRL: 'mdi-speedometer',
-				HISTORY: 'mdi-chart-line',
-				IN_ENDP: 'mdi-location-enter',
-				OUT_ENDP: 'mdi-location-exit',
-				ALERTS: 'mdi-alert',
-			}
+			typeIcons: ROLE_ICONS
 		}
 	},
 
@@ -280,8 +284,7 @@ const AquapiDashboardWidget = {
 					/>
 					<v-icon
 						v-else
-						:color="'blue-grey'"
-						:class="($vuetify.theme.global.current.dark ? 'text--darken-2' : 'text--lighten-4')"
+						:color="(widgetTitleIcon === 'mdi-alert' ? 'red' : 'blue-grey')"
 						left
 					>
 						{{ widgetTitleIcon }}
@@ -357,12 +360,7 @@ const AquapiDashboardWidget = {
 				//'V': 'probe.png', -> svg
 
 				// generic by role
-				AUX: 'mdi-merge',
-				CTRL: 'mdi-speedometer',
-				HISTORY: 'mdi-chart-line',
-				IN_ENDP: 'mdi-location-enter',
-				OUT_ENDP: 'mdi-location-exit',
-				ALERTS: 'mdi-alert',
+				...ROLE_ICONS,
 			},
 			severityMap: {
 				'act': 'success',

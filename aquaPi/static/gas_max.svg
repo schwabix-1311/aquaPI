@@ -1,4 +1,4 @@
-<svg version="1.2" width="80.26mm" height="80.26mm" viewBox="0 0 8026 8026" preserveAspectRatio="xMidYMid" fill-rule="evenodd" stroke-width="28.222" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" xml:space="preserve">
+<svg version="1.2" width="80.26mm" height="80.26mm" viewBox="0 0 8026 8026" preserveAspectRatio="xMidYMid" fill-rule="evenodd" stroke-width="28.222" stroke-linejoin="round" fill="#607D8B" xmlns="http://www.w3.org/2000/svg" xml:space="preserve">
     <defs class="ClipPathGroup">
         <clipPath id="a" clipPathUnits="userSpaceOnUse">
             <path d="M0 0h8026v8026H0z"/>
@@ -9,35 +9,35 @@
             <g class="Page">
                 <g fill="none" class="com.sun.star.drawing.ClosedBezierShape">
                     <path class="BoundingBox" d="M3339 1839h2401v5641H3339z"/>
-                    <path stroke="#000" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M3580 2990c0-502 430-910 958-910h0c530 0 960 408 960 910v4066c0 101-86 182-192 182H3772c-106 0-192-81-192-182V2990Z"/>
+                    <path stroke="#607D8B" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M3580 2990c0-502 430-910 958-910h0c530 0 960 408 960 910v4066c0 101-86 182-192 182H3772c-106 0-192-81-192-182V2990Z"/>
                 </g>
                 <g fill="none" class="com.sun.star.drawing.LineShape">
                     <path class="BoundingBox" d="M3339 3479h2401v482H3339z"/>
-                    <path stroke="#000" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M3580 3720h1918"/>
+                    <path stroke="#607D8B" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M3580 3720h1918"/>
                 </g>
                 <g fill="none" class="com.sun.star.drawing.LineShape">
                     <path class="BoundingBox" d="M4298 599h482v1442h-482z"/>
-                    <path stroke="#000" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M4538 1800V840"/>
+                    <path stroke="#607D8B" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M4538 1800V840"/>
                 </g>
                 <g fill="none" class="com.sun.star.drawing.LineShape">
                     <path class="BoundingBox" d="M3978 599h802v482h-802z"/>
-                    <path stroke="#000" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M4538 840h-320"/>
+                    <path stroke="#607D8B" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M4538 840h-320"/>
                 </g>
                 <g fill="none" class="com.sun.star.drawing.LineShape">
                     <path class="BoundingBox" d="M4298 599h802v482h-802z"/>
-                    <path stroke="#000" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M4538 840h320"/>
+                    <path stroke="#607D8B" stroke-width="480" stroke-linejoin="miter" stroke-linecap="round" d="M4538 840h320"/>
                 </g>
                 <g fill="none" class="com.sun.star.drawing.LineShape">
                     <path class="BoundingBox" d="M634 598h813v888H634z"/>
-                    <path stroke="#000" stroke-width="811" d="M1040 1004v75"/>
+                    <path stroke="#607D8B" stroke-width="811" d="M1040 1004v75"/>
                 </g>
                 <g class="com.sun.star.drawing.PolyPolygonShape">
                     <path class="BoundingBox" fill="none" d="M283 977h1515v3028H283z"/>
-                    <path d="m1797 978-757 3026L284 978h1513Z"/>
+                    <path fill="#2196F3" d="m1797 978-757 3026L284 978h1513Z"/>
                 </g>
                 <g fill="none" class="com.sun.star.drawing.LineShape">
                     <path class="BoundingBox" d="M3815 1380h1975v312H3815z"/>
-                    <path stroke="#000" stroke-width="310" d="M3971 1536h1662"/>
+                    <path stroke="#607D8B" stroke-width="310" d="M3971 1536h1662"/>
                 </g>
             </g>
         </g>

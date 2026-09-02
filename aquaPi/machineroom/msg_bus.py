@@ -3,7 +3,7 @@
 from abc import (ABC, abstractmethod)
 import logging
 from dataclasses import dataclass, replace as dataclass_replace
-from queue import Queue
+from queue import Queue, Empty
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
 from threading import (Event, Lock, Thread)
@@ -567,12 +567,18 @@ class MsgBus:
         for q in subscribers:
             q.put(node_id)
 
-    def wait_for_changes(self, q: Queue) -> set[str]:
+    def wait_for_changes(self, q: Queue, timeout: float | None = None) -> set[str]:
         """ block until at least one node reported a data change on this
             connection's queue, then drain and return whatever else is
-            already pending too (coalesces bursts into one SSE message)
+            already pending too (coalesces bursts into one SSE message).
+            Returns an empty set if `timeout` elapses with no change, so
+            a caller streaming SSE can send a heartbeat and eventually
+            notice a dead connection instead of blocking forever.
         """
-        change = {q.get()}
+        try:
+            change = {q.get(timeout=timeout)}
+        except Empty:
+            return set()
         while not q.empty():
             change.add(q.get_nowait())
         log.info('self.wait_for_changes returns %d: %s', len(change), str(change))

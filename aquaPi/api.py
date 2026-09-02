@@ -349,7 +349,13 @@ def api_sse() -> Response:
     change_queue = bus.subscribe_changes()
 
     def sse_update():
-        changed_ids = bus.wait_for_changes(change_queue)
+        # timeout -> None makes send_sse_events() emit a heartbeat comment,
+        # so an idle connection isn't silent forever (see MEMORY: SSE
+        # timeout needs reload - a client that resumed from sleep/hibernate
+        # can hold a zombie connection that never errors out on its own)
+        changed_ids = bus.wait_for_changes(change_queue, timeout=20)
+        if not changed_ids:
+            return None
         log.debug('API sse reply: %r', changed_ids)
         return json.dumps([id for id in changed_ids])
 

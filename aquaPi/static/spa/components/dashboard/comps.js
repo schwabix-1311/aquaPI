@@ -1171,7 +1171,7 @@ const AlertNode = {
 
 	computed: {
 		descript() {
-			return this.$parent?.conditions ?? ''
+			return (this.node.conditions || []).map((cond) => this.conditionText(cond)).join(', ')
 		}
 	},
 
@@ -1180,6 +1180,17 @@ const AlertNode = {
 		// (see Alert.listen() in alert_nodes.py) - not shown here
 		entryBody(entry) {
 			return entry.split('\n').slice(1).join('\n')
+		},
+		conditionText(cond) {
+			const watched = this.dashboardStore.node(cond.node_id)
+			const name = watched ? watched.name : cond.node_id
+			const unit = (watched && watched.unit) ? ' ' + watched.unit.trim() : ''
+			let text = `${name} ${this.$t('misc.alertConds.' + cond.class)} ${cond.limit}${unit}`
+			// duration is in minutes (see AlertCond in alert_nodes.py), humanPeriod wants ms
+			if (cond.duration) {
+				text += ' (' + this.humanPeriod(cond.duration * 60 * 1000) + ')'
+			}
+			return text
 		}
 	}
 }

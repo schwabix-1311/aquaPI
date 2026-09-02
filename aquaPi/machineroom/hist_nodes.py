@@ -235,9 +235,6 @@ if QUEST_DB:
             # likewise in shell: getconf LONG_BIT
             if '32' in platform.architecture()[0]:
                 raise NotImplementedError()
-            #TODO if not exist QuestDB: raise ModuleNotFoundError
-            #    raise ModuleNotFoundError()
-
             super().__init__()
             try:
                 self.conn_str = 'host=localhost port=8812 ' \

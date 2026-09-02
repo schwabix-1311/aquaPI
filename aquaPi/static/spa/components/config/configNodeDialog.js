@@ -240,6 +240,7 @@ const ConfigNodeDialog = {
 					}
 					this.configStore.draftCreateNode(Object.assign({
 						type: this.form.type,
+						role: this.schema.role,
 						name: this.form.name,
 						receives: this.asReceivesList(),
 						group: this.form.group,

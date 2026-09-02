@@ -138,8 +138,12 @@ class IoRegistry(object):
                 log.info('Driver %s reported ports %r (%.1fs)',
                          drv.__name__, [k for k in drv_ports], time.time() - t_start)
 
-                # TODO: reject duplicate ports, same port should in theory not be reported
-                #      by multiple drivers, but better play safe: len(_map.keys() & drv_ports.keys()) > 0
+                dupes = IoRegistry._map.keys() & drv_ports.keys()
+                if dupes:
+                    log.error('Driver %s reported port(s) %r already claimed '
+                              'by another driver, ignoring the duplicate(s)',
+                              drv.__name__, sorted(dupes))
+                    drv_ports = {k: v for k, v in drv_ports.items() if k not in dupes}
                 IoRegistry._map.update(drv_ports)
 
         log.brief('Port drivers found for:')

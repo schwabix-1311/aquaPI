@@ -110,6 +110,7 @@ def get_node_type_schema() -> dict[str, dict[str, Any]]:
         if cls.ROLE == BusRole.ALERTS:
             continue
         schema[type_name] = {
+            'role': cls.ROLE.name,
             'receives': cls.get_receives_kind(),
             'fields': [s.to_dict() for s in cls.get_settings_schema() if s.key is not None],
         }

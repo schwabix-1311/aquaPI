@@ -4,9 +4,8 @@ from abc import ABC
 import logging
 from typing import Any
 import time
-from datetime import datetime
-from croniter import croniter
-from threading import Thread
+from datetime import date, datetime, time as dt_time, timedelta
+from threading import Event, Thread
 
 from .msg_bus import (MsgBus, BusNode, BusRole, DataRange, HeartbeatMixin, MsgData, Setting)
 from .port_driver import PortDriverMixin
@@ -280,70 +279,147 @@ class TextInput(InputNode):
 
 
 class ScheduleInput(BusNode):
-    """ A scheduler supporting monthly/weekly/daily/hourly(/per minute)
-        trigger output (On=100 / Off=0).
-        Internally working like cron; a spec is 'min hour day month weekday'.
-        In contrast to cron we concatenate events to a long ON state,
-        i,e.  '20-24 9 * * *' outputs 100 at 9:20 and 0 at 9:24,
-        while '20,24 9 * * *' posts 100 at 9:20 & 9:24, and 0 at 9:21 & 9:25.
-        Highres cron is supported, where a sixth field defines seconds, and the
-        internal time base ("tick") changes from 1 minute to 1 second.
-        NOTE: the concatenation makes shortest time between pulses 2min or 2sec
+    """ A scheduler producing a binary (On=100 / Off=0) output on a fixed
+        elapsed-time cycle: On for `duration` seconds, Off for the rest
+        of every `frequency`-second period, with the first On of each
+        cycle pinned to a local time-of-day (`anchor`). Optionally
+        restricted to a subset of weekdays.
+
+        This replaced an earlier cron-based implementation (a raw
+        'min hour day month weekday' cronspec, driven by croniter) -
+        standard cron cannot express a true "every N days" without
+        drift (verified: a day-of-month-step approximation silently
+        loses a day at every month boundary), since a calendar month's
+        length varies but cron's day-of-month field cycles as if it
+        didn't. This implementation instead tracks pure elapsed time
+        since a fixed reference instant, so any period from a couple of
+        seconds up to any number of days is exact, with no calendar
+        edge cases and no dependency on when the node was last
+        (re)started - see _reference()/_phase().
 
         Options:
-            name     - unique name of this input node in UI
-            cronspec - a cron-style definition with 5 or 6 fields
+            name      - unique name of this input node in UI
+            frequency - length of one full On+Off cycle, seconds (>= MIN_FREQUENCY)
+            duration  - length of the On portion of each cycle, seconds;
+                        duration >= frequency means permanently On - a
+                        valid, deliberate configuration, not an error
+            anchor    - local time-of-day ('HH:MM', 24h) at which a
+                        cycle boundary (phase 0) falls, e.g. anchor='14:00'
+                        with frequency=1 day means "On from 14:00 for
+                        `duration` seconds, every day"
+            weekdays  - None/empty = every day; else a set/list of
+                        weekday numbers (Python's own datetime.weekday()
+                        convention, Monday=0..Sunday=6) restricting which
+                        days the independently phase-gated On state may
+                        actually be reported
 
         Output:
             posts a single 100 at start time, a single 0 at end time.
     """
-    # TODO: since cron specs are not always intuitive, and require more than 1 cron line to start or end long events at an odd minute (not yet supported!), this class should get simple start/end/repeat options.
-
     ROLE = BusRole.IN_ENDP
     data_range = DataRange.BINARY
 
-    # time [s] to stop the scheduler thread
+    # max sleep chunk in the scheduler thread, so pullout() and a live
+    # settings change (see _wake) are both noticed promptly
     STOP_DURATION = 2
-    # This limits CPU usage to find rare events with long gaps,
-    # such as '0 4 1 1 fri' = Jan. 1st 4pm and Friday -> very rare!
-    CRON_YEARS_DEPTH = 2
+    # a plain constant now, with no algorithmic meaning attached (unlike
+    # the old cron model's "2 ticks" floor, which was tied to its
+    # tick-concatenation logic) - adjust freely if a different
+    # hardware-safety floor is ever wanted
+    MIN_FREQUENCY = 1.0
 
-    def __init__(self, name: str, cronspec: str, _cont: bool = False):
+    # fixed reference date for phase 0 - see _reference()
+    _REF_DATE = date(2000, 1, 1)
+
+    def __init__(self, name: str, frequency: float, duration: float,
+                 anchor: str = '00:00', weekdays: Any = None,
+                 _cont: bool = False):
         super().__init__(name, _cont=_cont)
         self._scheduler_thread: Thread | None = None
         self._scheduler_stop: bool = False
-        self.cronspec = cronspec
-        self.hires: bool = len(cronspec.split(' ')) > 5
+        # the scheduler thread sleeps by waiting on this instead of a
+        # plain time.sleep(), so both pullout() and a live property
+        # change (setters below) interrupt a long sleep immediately -
+        # deliberately NOT the old cronspec pattern of stop+join+restart
+        # the whole thread on every change: with 4 independent fields, a
+        # single /settings PUT changing several at once would otherwise
+        # block the request for up to STOP_DURATION seconds *per changed
+        # field* while join()ing the old thread each time.
+        self._wake = Event()
+        self.anchor = anchor
+        self.frequency = frequency
+        self.duration = duration
+        self.weekdays = weekdays
         if not _cont:
             self.data: int = 0
         self.unit = '%'
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
-        state["cronspec"] = self.cronspec
+        state["frequency"] = self.frequency
+        state["duration"] = self.duration
+        state["anchor"] = self.anchor
+        state["weekdays"] = sorted(self.weekdays) if self.weekdays else None
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
-        ScheduleInput.__init__(self, state['name'], state['cronspec'], _cont=True)
+        ScheduleInput.__init__(self, state['name'], state['frequency'], state['duration'],
+                               anchor=state['anchor'], weekdays=state['weekdays'], _cont=True)
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}({self.name}/{self.cronspec})'
+        return (f'{type(self).__name__}({self.name}/every {self.frequency}s '
+                f'for {self.duration}s from {self.anchor})')
 
     @property
-    def cronspec(self) -> str:
-        return self._cronspec
+    def anchor(self) -> str:
+        return self._anchor
 
-    @cronspec.setter
-    def cronspec(self, cronspec: str) -> None:
-        # validate it here, since the exception would be raised in our thread.
-        now = datetime.now().astimezone()  # = local tz, this enables DST
-        croniter(cronspec, now, day_or=False,
-                 max_years_between_matches=self.CRON_YEARS_DEPTH)
+    @anchor.setter
+    def anchor(self, value: str) -> None:
+        try:
+            h_str, m_str = str(value).split(':')
+            h, m = int(h_str), int(m_str)
+            if not (0 <= h <= 23 and 0 <= m <= 59):
+                raise ValueError
+        except (ValueError, AttributeError):
+            raise ValueError(f"anchor must be 'HH:MM' (24h), got {value!r}")
+        self._anchor = f'{h:02d}:{m:02d}'
+        self._anchor_hm = (h, m)
+        self._wake.set()
 
-        self._stop_thread()
-        self._cronspec = cronspec
-        self._start_thread()
+    @property
+    def frequency(self) -> float:
+        return self._frequency
+
+    @frequency.setter
+    def frequency(self, value: float) -> None:
+        self._frequency = max(self.MIN_FREQUENCY, float(value))
+        self._wake.set()
+
+    @property
+    def duration(self) -> float:
+        return self._duration
+
+    @duration.setter
+    def duration(self, value: float) -> None:
+        self._duration = max(0.0, float(value))
+        self._wake.set()
+
+    @property
+    def weekdays(self) -> set[int] | None:
+        return self._weekdays
+
+    @weekdays.setter
+    def weekdays(self, value: Any) -> None:
+        if not value:
+            self._weekdays = None
+        else:
+            days = {int(d) for d in value}
+            if not days <= set(range(7)):
+                raise ValueError(f'weekdays must each be 0..6 (Mon..Sun), got {value!r}')
+            self._weekdays = days
+        self._wake.set()
 
     def plugin(self, bus: MsgBus) -> None:
         super().plugin(bus)
@@ -355,79 +431,115 @@ class ScheduleInput(BusNode):
 
     def _start_thread(self) -> None:
         if self._bus:
+            self._scheduler_stop = False
             self._scheduler_thread = Thread(name=self.id, target=self._scheduler, daemon=True)
             self._scheduler_thread.start()
 
     def _stop_thread(self) -> None:
         if self._scheduler_thread:
             self._scheduler_stop = True
+            self._wake.set()
             self._scheduler_thread.join()
             self._scheduler_thread = None
 
+    def _reference(self) -> datetime:
+        """ the NAIVE local instant of `anchor` on the fixed _REF_DATE -
+            phase 0 of the schedule.
+
+            Deliberately naive (no tzinfo), compared below against
+            `now` with its own tzinfo stripped - i.e. phase is computed
+            from plain wall-clock fields, not real elapsed absolute
+            time. This isn't a shortcut - it's the only technique that
+            actually keeps `anchor` meaning the same wall-clock reading
+            every day, indefinitely.
+
+            An earlier version of this method built an aware reference
+            instead (correctly resolving _REF_DATE's own UTC offset via
+            a bare .astimezone() call on the naive value) and computed
+            phase from real elapsed absolute seconds since it. That is
+            NOT equivalent to "same wall-clock time daily": verified
+            directly - with _REF_DATE fixed in winter (CET, UTC+1) and
+            "now" in summer (CEST, UTC+2), the absolute-seconds approach
+            came out exactly one hour off from the stated anchor, e.g.
+            an anchor='14:00' node reporting itself at phase 0 (i.e.
+            "exactly at 14:00") when the real wall clock read 15:00.
+            That's not a rare edge case - it's a permanent, systematic
+            error for as long as "now" and _REF_DATE sit in different
+            DST regimes, which is roughly half of every year.
+
+            The naive/wall-clock approach's own tradeoff is smaller and
+            far more standard: on the one or two calendar days a year
+            the local clock actually jumps, a moment near the jump can
+            read as skipped (spring forward) or repeated (fall back) -
+            a well-understood, once-a-year discontinuity, not a
+            systematic one. This is the same tradeoff every wall-clock
+            scheduler already makes, including the cron/croniter
+            implementation this one replaces (matching cron field
+            values against local time is likewise a wall-clock, not an
+            elapsed-absolute-time, operation).
+        """
+        h, m = self._anchor_hm
+        return datetime.combine(self._REF_DATE, dt_time(h, m))
+
+    def _phase(self, now: datetime) -> float:
+        """ seconds elapsed into the current cycle, 0 <= phase < frequency.
+            A pure function of `now` (and this node's settings) - no
+            thread/sleep involved, so this and _is_on()/
+            _seconds_to_next_wake() below are directly unit-testable
+            with fixed datetimes, and are exact after any restart: the
+            on/off state never depends on when the node itself was
+            created/last (re)started, only on `now`'s own wall-clock
+            reading relative to the fixed _reference().
+        """
+        elapsed = (now.replace(tzinfo=None) - self._reference()).total_seconds()
+        return elapsed % self._frequency
+
+    def _is_on(self, now: datetime) -> bool:
+        """ the on/off state at a given instant, weekday gate included """
+        on = self._phase(now) < self._duration
+        if self._weekdays is not None:
+            on = on and now.weekday() in self._weekdays
+        return on
+
+    def _seconds_to_next_local_midnight(self, now: datetime) -> float:
+        now_naive = now.replace(tzinfo=None)
+        next_midnight = datetime.combine(now_naive.date() + timedelta(days=1), dt_time(0, 0))
+        return (next_midnight - now_naive).total_seconds()
+
+    def _seconds_to_next_wake(self, now: datetime) -> float:
+        """ how long the scheduler thread may sleep before it must
+            re-evaluate _is_on() again: the next phase transition, or -
+            while a weekday filter is active - the next local midnight
+            if that comes sooner. The phase math alone has no reason to
+            transition at every midnight (e.g. frequency=1 day has
+            exactly one transition per day), but the *weekday* gate must
+            also flip there.
+        """
+        phase = self._phase(now)
+        wake = (self._duration - phase) if phase < self._duration else (self._frequency - phase)
+        if self._weekdays is not None:
+            wake = min(wake, self._seconds_to_next_local_midnight(now))
+        return max(0.0, wake)
+
     def _scheduler(self) -> None:
         log.brief('ScheduleInput %s: start', self.id)
-
-        now = datetime.now().astimezone()  # = local tz, this enables DST
-        cron = croniter(self._cronspec, now, ret_type=float, day_or=False,
-                        max_years_between_matches=self.CRON_YEARS_DEPTH)
-        tick = 1 if self.hires else 60
-        log.debug(' now  %s = %f, 1 tick = %d s', now, time.time(), tick)
-
         try:
-            cron.get_next()
-            while True:
-                sec_now: float = time.time()  # reference for each loop to avoid drift
-                sec_prev: float = cron.get_prev()  # look one event back
-                log.debug(' prev %s = %f',
-                          str(cron.get_current(ret_type=datetime)),
-                          sec_prev - sec_now)
-
-                sec_next: float = cron.get_next()  # seconds 'til future cron event
-                log.debug(' next %s = %f',
-                          str(cron.get_current(ret_type=datetime)),
-                          sec_next - sec_now)
-
-                if self._scheduler_stop:
-                    return  # cleanup is done in finally!
-
-                if sec_next - sec_prev > tick:
-                    # as we concatenate events <1 tick apart, must be a pause
-                    self.data = 0
-                    log.info('ScheduleInput %s: output 0 for %f s',
-                             self.id, sec_next - sec_now)
+            while not self._scheduler_stop:
+                self._wake.clear()
+                now = datetime.now().astimezone()  # = local tz, this enables DST
+                new_data = 100 if self._is_on(now) else 0
+                if new_data != self.data:
+                    self.data = new_data
+                    log.info('ScheduleInput %s: output %d', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
 
-                    # while (sec_next > time.time()):
-                    while (sec_next - time.time() > self.STOP_DURATION):
-                        time.sleep(self.STOP_DURATION)
-                        if self._scheduler_stop:
-                            return  # cleanup is done in finally!
-
-                # now look how many ticks to concatenate
-                while True:
-                    candidate = cron.get_next()
-                    log.debug('  ? %s = + %f s',
-                              str(cron.get_current(ret_type=datetime)),
-                              candidate - sec_next)
-                    if candidate - sec_next > tick:
-                        log.debug('  ... busted!')
-                        break
-                    sec_next = candidate
-
-                if self._scheduler_stop:
-                    return  # cleanup is done in finally!
-
-                self.data = 100
-                log.info('ScheduleInput %s: output 100 for %f s',
-                         self.id, sec_next - time.time())
-                self.post(MsgData(self.id, self.data))
-
-                while (sec_next > time.time()):
-                    time.sleep(self.STOP_DURATION)
-                    if self._scheduler_stop:
-                        return  # cleanup is done in finally!
+                remaining = self._seconds_to_next_wake(now)
+                while remaining > 0 and not self._scheduler_stop:
+                    chunk = min(self.STOP_DURATION, remaining)
+                    if self._wake.wait(chunk):
+                        break  # a setting changed (or pullout()) - recompute from the top
+                    remaining -= chunk
         finally:
-            # turn off? Probably not, to avoid flicker when schedule is changed
             self._scheduler_thread = None
             self._scheduler_stop = False
             log.brief('ScheduleInput %s: end', self.id)
@@ -435,13 +547,22 @@ class ScheduleInput(BusNode):
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
         schema = {s.key: s for s in type(self).get_settings_schema()}
-        settings.append(self._fill_setting(schema['cronspec']))
+        settings.append(self._fill_setting(schema['frequency']))
+        settings.append(self._fill_setting(schema['duration']))
+        settings.append(self._fill_setting(schema['anchor']))
+        settings.append(schema['weekdays'].with_value(
+            [str(d) for d in sorted(self.weekdays)] if self.weekdays else []))
         return settings
 
     @classmethod
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
-        schema.append(Setting('cronspec', 'cronspec', required=True))
+        schema.append(Setting('frequency', 'frequency', 86400, type='duration',
+                              min=cls.MIN_FREQUENCY))
+        schema.append(Setting('duration', 'duration', 3600, type='duration', min=0))
+        schema.append(Setting('anchor', 'anchor', '00:00', type='time'))
+        schema.append(Setting('weekdays', 'weekdays', [], type='multiselect',
+                              options=[str(i) for i in range(7)], optional=True))
         return schema
 
 

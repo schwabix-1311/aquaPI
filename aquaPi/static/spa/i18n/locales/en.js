@@ -31,7 +31,6 @@ export default
 			heading: 'Parameters',
 			hintEmpty: 'No nodes found',
 			ungrouped: 'Ungrouped',
-			scheduleHint: 'Minute Hour DayOfMonth Month DayOfWeek',
 			inputs: 'Inputs',
 			outputs: 'Outputs',
 			noControllerInBranch: 'No controller in this branch',
@@ -67,7 +66,10 @@ export default
 				readInterval: 'Read interval',
 				inverted: 'Inverted',
 				avg: 'Averaging [1=direct]',
-				cronspec: 'CRON (m h DoM M DoW)',
+				frequency: 'Repeat every',
+				duration: 'On for',
+				anchor: 'Start time',
+				weekdays: 'Weekdays',
 				repeat: 'Repeat',
 				receives: 'Receives from',
 				setpoint: 'Setpoint [{unit}]',
@@ -282,6 +284,11 @@ export default
 					c7: 'stormy, better stay indoors',
 				},
 			},
+			schedule: {
+				always: 'Always on',
+				daily: 'Daily {start}–{end}',
+				repeat: 'Every {freq} for {dur}, from {anchor}',
+			},
 		}
 	},
 
@@ -352,6 +359,9 @@ export default
 		alertConds: {
 			AlertAbove: 'Above',
 			AlertBelow: 'Below',
+		},
+		weekday: {
+			0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun',
 		},
 		dataRange: {
 			default: {

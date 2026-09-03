@@ -188,6 +188,16 @@ function formatDurationBound(seconds, ceiling, t) {
 	return (seconds / DURATION_FACTORS[u]) + ' ' + t('misc.duration.' + DURATION_I18N_KEY[u])
 }
 
+// exported for reuse by the Dashboard's ScheduleInput widget (dashboard/
+// comps.js), which needs to format frequency/duration seconds as low as
+// ScheduleInput.MIN_FREQUENCY (1s) - AnyNode's own humanPeriod() has no
+// seconds tier at all (it works in milliseconds, smallest unit shown is
+// minutes), which would print nonsense like "0.02 min" for a 1s value.
+export function formatDuration(seconds, t) {
+	const u = bestDurationUnit(seconds, 'day')
+	return (seconds / DURATION_FACTORS[u]) + ' ' + t('misc.duration.' + DURATION_I18N_KEY[u])
+}
+
 const SettingDuration = {
 	props: {
 		item: {type: Object, required: true},
@@ -346,7 +356,7 @@ const SettingSwitch = {
 }
 registerGlobalComponent('SettingSwitch', SettingSwitch)
 
-const SettingSchedule = {
+const SettingTime = {
 	props: {
 		item: {type: Object, required: true},
 		disabled: {type: Boolean, default: false},
@@ -355,11 +365,12 @@ const SettingSchedule = {
 		<v-text-field
 			:label="item.label"
 			v-model="localValue"
+			type="time"
 			:disabled="disabled"
+			:rules="rules"
 			density="compact"
 			variant="outlined"
-			:hint="$t('pages.settings.scheduleHint')"
-			persistent-hint
+			hide-details="auto"
 			@change="onChange"
 		></v-text-field>
 	`,
@@ -367,6 +378,11 @@ const SettingSchedule = {
 		return {
 			localValue: this.item.value
 		}
+	},
+	computed: {
+		rules: function() {
+			return requiredRule(this.item, this.$t)
+		},
 	},
 	watch: {
 		'item.value': function(val) {
@@ -379,7 +395,7 @@ const SettingSchedule = {
 		}
 	}
 }
-registerGlobalComponent('SettingSchedule', SettingSchedule)
+registerGlobalComponent('SettingTime', SettingTime)
 
 const SettingText = {
 	props: {
@@ -474,7 +490,7 @@ const SettingMultiSelect = {
 		<v-select
 			:label="item.label"
 			v-model="localValue"
-			:items="attrs.options || []"
+			:items="items"
 			:disabled="disabled"
 			:rules="rules"
 			multiple chips
@@ -493,6 +509,13 @@ const SettingMultiSelect = {
 		attrs: function() {
 			return this.item.attrs || {}
 		},
+		// overridden by SettingWeekdays below - the base behavior shows
+		// each option value verbatim as both the wire value and the
+		// display label, correct for its original (and only other) user,
+		// 'port' (self-describing driver names)
+		items: function() {
+			return this.attrs.options || []
+		},
 		rules: function() {
 			return requiredRule(this.item, this.$t)
 		},
@@ -509,6 +532,22 @@ const SettingMultiSelect = {
 	}
 }
 registerGlobalComponent('SettingMultiSelect', SettingMultiSelect)
+
+// weekdays need translated day names shown while the wire value stays a
+// stable digit string (Python's datetime.weekday() convention, Monday=0
+// .. Sunday=6) - everything else about SettingMultiSelect is reused as-is
+const SettingWeekdays = {
+	extends: SettingMultiSelect,
+	computed: {
+		items: function() {
+			return (this.attrs.options || []).map(v => ({
+				title: this.$t('misc.weekday.' + v),
+				value: v,
+			}))
+		},
+	},
+}
+registerGlobalComponent('SettingWeekdays', SettingWeekdays)
 
 const SettingReadonly = {
 	props: {
@@ -531,8 +570,8 @@ export function settingWidgetType(item) {
 	if (!item.editable) {
 		return 'SettingReadonly'
 	}
-	if (item.key === 'cronspec') {
-		return 'SettingSchedule'
+	if (item.key === 'weekdays') {
+		return 'SettingWeekdays'
 	}
 
 	const attrs = item.attrs || {}
@@ -545,6 +584,9 @@ export function settingWidgetType(item) {
 	if (attrs.type === 'duration') {
 		return 'SettingDuration'
 	}
+	if (attrs.type === 'time') {
+		return 'SettingTime'
+	}
 	if (attrs.type === 'select') {
 		return 'SettingSelect'
 	}
@@ -554,9 +596,9 @@ export function settingWidgetType(item) {
 	return 'SettingText'
 }
 
-// Selects/multiselects (long option text, chips) and the schedule field
-// (carries a persistent hint line) get more breathing room than the default
-// 3-per-row grid used by compact fields like sliders/numbers/switches.
+// Selects/multiselects (long option text, chips) get more breathing room
+// than the default 3-per-row grid used by compact fields like sliders/
+// numbers/switches.
 function settingColSpan(item, node) {
 	// port selects (item.key === 'port', regardless of label - inputPort/
 	// outputPort/alertPort all share this key, see PortDriverMixin) list
@@ -573,7 +615,7 @@ function settingColSpan(item, node) {
 		return {cols: 12, sm: 6, md: 2}
 	}
 	const wide = item.key !== 'port'
-		&& ['SettingSelect', 'SettingMultiSelect', 'SettingSchedule'].includes(settingWidgetType(item))
+		&& ['SettingSelect', 'SettingMultiSelect', 'SettingWeekdays'].includes(settingWidgetType(item))
 	return wide ? {cols: 12, md: 6} : {cols: 12, sm: 6, md: 4}
 }
 

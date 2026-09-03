@@ -176,7 +176,8 @@ def build_node(type_name: str, name: str, receives: list[str],
     if type_name == 'TextInput':
         return TextInput(name, fields['port'], interval=fields['interval'])
     if type_name == 'ScheduleInput':
-        return ScheduleInput(name, fields['cronspec'])
+        return ScheduleInput(name, fields['frequency'], fields['duration'],
+                             anchor=fields['anchor'], weekdays=fields.get('weekdays'))
     if type_name == 'UiSwitchInput':
         return UiSwitchInput(name, initval=fields['initval'])
     if type_name == 'UiAnalogInput':

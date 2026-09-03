@@ -51,7 +51,7 @@ class Setting:
     # /config create form, not a claim about any real node's current state.
     # get_settings() always overwrites this with the real value.
     value: Any = None
-    type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration'
+    type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration' | 'time'
     min: float | None = None
     max: float | None = None
     step: float | None = None
@@ -376,7 +376,7 @@ class BusListener(BusNode, ABC):
         # this: connectivity fields first (this base's 'receives', a
         # subclass's own 'port' if any), then the field(s) defining what
         # the node fundamentally represents (e.g. 'unit'/'setpoint'/
-        # 'cronspec'/'value'), then tuning/behavior fields, then modifiers
+        # 'frequency'/'value'), then tuning/behavior fields, then modifiers
         # like 'inverted'/'repeat' last.
         settings = super().get_settings()
         schema = next(s for s in type(self).get_settings_schema()

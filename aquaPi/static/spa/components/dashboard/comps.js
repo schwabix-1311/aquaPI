@@ -7,6 +7,7 @@ import {registerGlobalComponent} from '../app/registry.js';
 import {useUiStore} from '../../store/modules/ui.js';
 import {useDashboardStore} from '../../store/modules/dashboard.js';
 import {useSettingsStore} from '../../store/modules/settings.js';
+import {formatDuration} from '../settings/comps.js';
 
 const AnyNode = {
 	props: {
@@ -420,9 +421,49 @@ const ScheduleInput = {
 	extends: BusNode,
 	computed: {
 		descript() {
-			return this.node.cronspec  // beautify!!
+			const node = this.node
+			const weekdays = node.weekdays
+
+			let prefix = ''
+			if (weekdays && weekdays.length && weekdays.length < 7) {
+				prefix = this.weekdayList(weekdays) + ' '
+			}
+
+			if (node.duration >= node.frequency) {
+				return prefix + this.$t('dashboard.widget.schedule.always')
+			}
+			if (node.frequency === 86400) {
+				return prefix + this.$t('dashboard.widget.schedule.daily', {
+					start: node.anchor,
+					end: this.addSeconds(node.anchor, node.duration),
+				})
+			}
+			return prefix + this.$t('dashboard.widget.schedule.repeat', {
+				freq: this.formatDuration(node.frequency),
+				dur: this.formatDuration(node.duration),
+				anchor: node.anchor,
+			})
 		},
-	}
+	},
+	methods: {
+		weekdayList(weekdays) {
+			return weekdays.slice().sort((a, b) => a - b)
+				.map(d => this.$t('misc.weekday.' + d)).join(', ')
+		},
+		// anchor + a duration in seconds, wrapped to a 24h clock face -
+		// only meaningful for the frequency=1-day "daily window" phrase,
+		// where the window is always fully contained within one day
+		addSeconds(anchor, seconds) {
+			const [h, m] = anchor.split(':').map(Number)
+			const total = ((h * 60 + m) * 60 + seconds) % 86400
+			const endH = Math.floor(total / 3600)
+			const endM = Math.floor((total / 60) % 60)
+			return String(endH).padStart(2, '0') + ':' + String(endM).padStart(2, '0')
+		},
+		formatDuration(seconds) {
+			return formatDuration(seconds, this.$t)
+		},
+	},
 }
 registerGlobalComponent('ScheduleInput', ScheduleInput)
 

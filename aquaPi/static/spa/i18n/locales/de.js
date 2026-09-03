@@ -31,7 +31,6 @@ export default
 			heading: 'Parameter',
 			hintEmpty: 'Keine Elemente gefunden',
 			ungrouped: 'Ohne Gruppe',
-			scheduleHint: 'Minute Stunde Tag(Monat) Monat Wochentag',
 			inputs: 'Eingänge',
 			outputs: 'Ausgänge',
 			noControllerInBranch: 'Kein Regler in diesem Zweig',
@@ -67,7 +66,10 @@ export default
 				readInterval: 'Leseintervall',
 				inverted: 'Invertiert',
 				avg: 'Mittelwert [1=direkt]',
-				cronspec: 'CRON (m h DoM M DoW)',
+				frequency: 'Wiederholung alle',
+				duration: 'Dauer',
+				anchor: 'Startzeit',
+				weekdays: 'Wochentage',
 				repeat: 'Wiederholung',
 				receives: 'Empfängt von',
 				setpoint: 'Sollwert [{unit}]',
@@ -282,6 +284,11 @@ export default
 					c7: 'stürmisch, bleib besser zuhause',
 				},
 			},
+			schedule: {
+				always: 'Dauerhaft an',
+				daily: 'Täglich {start}–{end}',
+				repeat: 'Alle {freq} für {dur}, ab {anchor}',
+			},
 		}
 	},
 
@@ -352,6 +359,9 @@ export default
 		alertConds: {
 			AlertAbove: 'Über',
 			AlertBelow: 'Unter',
+		},
+		weekday: {
+			0: 'Mo', 1: 'Di', 2: 'Mi', 3: 'Do', 4: 'Fr', 5: 'Sa', 6: 'So',
 		},
 		dataRange: {
 			default: {

@@ -32,7 +32,7 @@ Beim ersten Aufruf werden zusätzlich Git-Submodule initialisiert (u. a. `aquaPi
 - `-r`: setzt die Topologie zurück (löscht die Pickle-Datei vor dem Start).
 
 Abhängigkeiten stehen in `requirements.txt` (u. a. Flask, Flask-Login, RPi.GPIO, Adafruit-Blinka/ADS1x15
-für den ADC, croniter für Zeitpläne); `requirements-dev.txt` ergänzt `pytest`/`pytest-mock`/`pytest-xdist`
+für den ADC); `requirements-dev.txt` ergänzt `pytest`/`pytest-mock`/`pytest-xdist`
 (parallele Testläufe, `pytest -n auto`) und `psycopg` (für die gemockten QuestDB-Codepfade) für die
 Testsuite und referenziert `requirements.txt` per `-r`.
 

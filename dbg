@@ -28,6 +28,31 @@ if [[ ${reset_wiring} ]]; then
   rm -f "instance/${wiring_file}.pickle" "instance/${wiring_file}.sqlite"
 fi
 
+# --- ONE-TIME MIGRATION (ScheduleInput: cronspec -> frequency/duration/anchor/weekdays) ---
+# --- run once on production, then commit the removal                                    ---
+if [ -f "instance/${wiring_file}.sqlite" ]; then
+  python3 -c "
+import json
+import sqlite3
+conn = sqlite3.connect('instance/${wiring_file}.sqlite')
+conn.row_factory = sqlite3.Row
+row = conn.execute(\"SELECT id, params FROM nodes WHERE id = 'zeitplanlicht' AND type = 'ScheduleInput'\").fetchone()
+if row:
+    params = json.loads(row['params'])
+    if 'cronspec' in params:
+        del params['cronspec']
+        params['frequency'] = 86400
+        params['duration'] = 28800
+        params['anchor'] = '14:00'
+        params['weekdays'] = None
+        conn.execute('UPDATE nodes SET params = ? WHERE id = ?', (json.dumps(params), row['id']))
+        conn.commit()
+        print('One-time migration: zeitplanlicht cronspec -> frequency/duration/anchor/weekdays')
+conn.close()
+"
+fi
+# --- END ONE-TIME MIGRATION ---
+
 export FLASK_APP=aquaPi
 export FLASK_DEBUG=1
 

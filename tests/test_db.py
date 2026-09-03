@@ -37,7 +37,7 @@ def _build_sample_bus() -> MsgBus:
     ctrl = MinimumCtrl('Heizen', sensor1.id, 25.0, hysteresis=0.2)
     out = SwitchDevice('Heizstab', ctrl.id, '', inverted=False)
     avg = AvgAux('Mittel', {sensor1.id, sensor2.id})
-    schedule = ScheduleInput('Zeitplan', '* 10-20 * * *')
+    schedule = ScheduleInput('Zeitplan', 24 * 3600, 11 * 3600, anchor='10:00')
 
     alert = Alert('Warnungen',
                   {AlertAbove(sensor1.id, 26.0),

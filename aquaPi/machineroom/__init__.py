@@ -259,7 +259,7 @@ class MachineRoom:
         if default_config == 'wiring':
             # __Lighting__ #
             # single PWM dimmed LED bar, perceptive correction
-            light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')
+            light_schedule = ScheduleInput('Zeitplan Licht', 24 * 3600, 8 * 3600, anchor='14:00')
 
             # ... with linear dawn & dusk for 15mins
             # light_c = FadeCtrl('Beleuchtung', light_schedule.id,
@@ -336,7 +336,7 @@ class MachineRoom:
                 if PH_BROKEN:
                     # WAR broken CO2 vent:
                     # pulse it, as CO2 only flows when partially opened
-                    ph_ticker = ScheduleInput('pH Blinker', '* * * * * */15')
+                    ph_ticker = ScheduleInput('pH Blinker', 15, 1)
                     ph_ticker_or = MinAux('pH Toggle', {ph.id, ph_ticker.id})
                     ph_ticker.plugin(self.bus)
                     ph_ticker_or.plugin(self.bus)
@@ -401,7 +401,7 @@ class MachineRoom:
             ph_history.plugin(self.bus)
 
         if SIM_LIGHT:
-            light_schedule = ScheduleInput('Zeitplan 1', '* 10/2 * * *')
+            light_schedule = ScheduleInput('Zeitplan 1', 2 * 3600, 3600, anchor='10:00')
             # light_c = FadeCtrl('Beleuchtung', light_schedule.id,
             #                    fade_time=30 * 60)  # 30*60)
             light_c = SunCtrl('Beleuchtung', light_schedule.id, xscend=.2)

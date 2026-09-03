@@ -485,7 +485,7 @@ class History(BusListener):
     def __setstate__(self, state: dict[str, Any]) -> None:
         # TEMPORARY: 'duration' was renamed to 'capacity' 2026-08-12; this
         # fallback only matters for a developer's already-saved local
-        # topo.sqlite from before the rename (no production data exists
+        # wiring.sqlite from before the rename (no production data exists
         # yet) - safe to delete this fallback (keep just state['capacity'])
         # once everyone's local DB has been re-saved at least once.
         capacity = state.get('capacity', state.get('duration', 24))

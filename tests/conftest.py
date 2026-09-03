@@ -37,9 +37,9 @@ def users_db_path(tmp_path):
 
 
 @pytest.fixture
-def topo_db_path(tmp_path):
-    """ a fresh, temporary topo.sqlite path for the current test only """
-    return str(tmp_path / 'topo.sqlite')
+def wiring_db_path(tmp_path):
+    """ a fresh, temporary wiring.sqlite path for the current test only """
+    return str(tmp_path / 'wiring.sqlite')
 
 
 @pytest.fixture

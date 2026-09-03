@@ -198,7 +198,7 @@ def test_create_node_too_many_receives_for_single_returns_400(client, users):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_create_node_persists_topology(client, users, app):
+def test_create_node_persists_wiring(client, users, app):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/nodes/', json={
         'type': 'AnalogInput', 'name': 'Luft', 'fields': {'unit': '°C'},
@@ -312,7 +312,7 @@ def test_delete_node_cleans_up_referencing_alert_condition(client, users, bus):
     assert 'wasser' not in node.receives
 
 
-def test_delete_node_persists_topology(client, users, app):
+def test_delete_node_persists_wiring(client, users, app):
     _login(client, 'admin1', 'adminPass123')
     client.delete('/api/nodes/heizstab')
     assert app.extensions['machineroom'].saved == 1
@@ -396,7 +396,7 @@ def test_set_conditions_rejects_self_reference(client, users):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_set_conditions_persists_topology(client, users, app):
+def test_set_conditions_persists_wiring(client, users, app):
     _login(client, 'admin1', 'adminPass123')
     client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
     assert app.extensions['machineroom'].saved == 1

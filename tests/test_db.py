@@ -52,7 +52,7 @@ def _build_sample_bus() -> MsgBus:
 
 @pytest.fixture
 def db_path(tmp_path):
-    return str(tmp_path / 'topo.sqlite')
+    return str(tmp_path / 'wiring.sqlite')
 
 
 def test_init_db_creates_schema(db_path):
@@ -71,11 +71,11 @@ def test_save_and_load_roundtrip(db_path):
     original_ids = {n.id for n in bus.nodes}
     original_types = {n.id: type(n).__name__ for n in bus.nodes}
 
-    db.save_topology(bus, db_path)
+    db.save_wiring(bus, db_path)
     bus.teardown()
-    assert db.topology_exists(db_path)
+    assert db.wiring_exists(db_path)
 
-    restored = db.load_topology(db_path)
+    restored = db.load_wiring(db_path)
     try:
         restored_ids = {n.id for n in restored.nodes}
         assert restored_ids == original_ids
@@ -88,10 +88,10 @@ def test_save_and_load_roundtrip(db_path):
 
 def test_alert_conditions_are_restored(db_path):
     bus = _build_sample_bus()
-    db.save_topology(bus, db_path)
+    db.save_wiring(bus, db_path)
     bus.teardown()
 
-    restored = db.load_topology(db_path)
+    restored = db.load_wiring(db_path)
     try:
         alert = restored.get_node('warnungen')
         assert isinstance(alert, Alert)
@@ -107,7 +107,7 @@ def test_alert_conditions_are_restored(db_path):
 def test_params_are_plain_json(db_path):
     """ ensure no pickle-specific / non-JSON data ever hits the DB """
     bus = _build_sample_bus()
-    db.save_topology(bus, db_path)
+    db.save_wiring(bus, db_path)
     bus.teardown()
 
     conn = db.get_connection(db_path)
@@ -123,18 +123,18 @@ def test_params_are_plain_json(db_path):
         conn.close()
 
 
-def test_save_replaces_previous_topology(db_path):
+def test_save_replaces_previous_wiring(db_path):
     bus = _build_sample_bus()
-    db.save_topology(bus, db_path)
+    db.save_wiring(bus, db_path)
     bus.teardown()
 
     smaller_bus = MsgBus(threaded=False)
     single = AnalogInput('Only', '', 20.0, '°C')
     single.plugin(smaller_bus)
-    db.save_topology(smaller_bus, db_path)
+    db.save_wiring(smaller_bus, db_path)
     smaller_bus.teardown()
 
-    restored = db.load_topology(db_path)
+    restored = db.load_wiring(db_path)
     try:
         assert {n.id for n in restored.nodes} == {'only'}
     finally:

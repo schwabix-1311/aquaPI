@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-""" SQLite based persistence layer for the node topology.
+""" SQLite based persistence layer for the node wiring.
 
     This replaces the previous pickle based persistence
     (aquaPi/machineroom/__init__.py: save_nodes()/restore_nodes()),
     which was a security risk: unpickling arbitrary bytes can execute
-    arbitrary code (RCE). This module never uses pickle - the topology
+    arbitrary code (RCE). This module never uses pickle - the wiring
     is stored as plain JSON (one row per node) in a SQLite database,
     and nodes are reconstructed by explicitly calling the constructor
     (via each node's existing __setstate__) of a small, fixed set of
@@ -51,7 +51,7 @@ log = logging.getLogger('aquaPi.db')
 log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
-DEFAULT_DB_FILENAME = 'topo.sqlite'
+DEFAULT_DB_FILENAME = 'wiring.sqlite'
 DEFAULT_USERS_DB_FILENAME = 'users.sqlite'
 
 VALID_ROLES = ('viewer', 'operator', 'admin')
@@ -562,7 +562,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             )
         """)
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS topology_snapshots (
+            CREATE TABLE IF NOT EXISTS wiring_snapshots (
                 name       TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 data       TEXT NOT NULL
@@ -570,8 +570,8 @@ def init_db(conn: sqlite3.Connection) -> None:
         """)
 
 
-def topology_exists(db_path: str) -> bool:
-    """ True if a usable topology (with at least 1 node) is stored
+def wiring_exists(db_path: str) -> bool:
+    """ True if a usable wiring (with at least 1 node) is stored
     """
     if not path.exists(db_path):
         return False
@@ -609,7 +609,7 @@ def serialize_node(node: BusNode) -> dict[str, Any]:
     """ build the JSON-able state dict for a single node,
         node-type specific quirks (currently only Alert.conditions)
         are normalized here. Used both for SQLite persistence
-        (save_topology) and for the REST API (aquaPi/api.py), so the
+        (save_wiring) and for the REST API (aquaPi/api.py), so the
         API never needs jsonpickle/object introspection.
     """
     state = dict(node.__getstate__())
@@ -642,9 +642,9 @@ def _deserialize_node(type_name: str, state: dict[str, Any]) -> BusNode:
     return node
 
 
-def save_topology(bus: MsgBus, db_path: str) -> None:
+def save_wiring(bus: MsgBus, db_path: str) -> None:
     """ persist all nodes currently registered on the bus to SQLite,
-        replacing the previously stored topology
+        replacing the previously stored wiring
     """
     conn = get_connection(db_path)
     try:
@@ -657,7 +657,7 @@ def save_topology(bus: MsgBus, db_path: str) -> None:
                     'INSERT INTO nodes (id, type, name, params) VALUES (?, ?, ?, ?)',
                     (node.id, type(node).__name__, node.name, params)
                 )
-        log.info('save_topology: %d nodes written to %s', len(bus.nodes), db_path)
+        log.info('save_wiring: %d nodes written to %s', len(bus.nodes), db_path)
     finally:
         conn.close()
 
@@ -680,7 +680,7 @@ def _notify_startup_failures(failures: list[str]) -> bool:
 
         Returns True if at least one channel actually sent the
         message - callers that need a hard guarantee the user will be
-        reached (see load_topology()) should escalate instead of
+        reached (see load_wiring()) should escalate instead of
         continuing when this comes back False.
     """
     if not failures:
@@ -712,7 +712,7 @@ def _notify_startup_failures(failures: list[str]) -> bool:
     return notified
 
 
-def load_topology(db_path: str) -> MsgBus:
+def load_wiring(db_path: str) -> MsgBus:
     """ (re-)create a MsgBus and all its nodes from SQLite
     """
     conn = get_connection(db_path)
@@ -732,11 +732,11 @@ def load_topology(db_path: str) -> MsgBus:
             # expected/actionable (e.g. an unknown or already-used port) -
             # ex.msg alone says exactly what's wrong, a full traceback
             # would only bury that behind noise
-            log.error('load_topology: failed to restore node %r (type %r), skipping: %s',
+            log.error('load_wiring: failed to restore node %r (type %r), skipping: %s',
                       row['id'], row['type'], ex.msg)
             failures.append(f"{row['id']!r} ({row['type']}): {ex.msg}")
         except (ValueError, KeyError, TypeError) as ex:
-            log.exception('load_topology: failed to restore node %r (type %r), skipping',
+            log.exception('load_wiring: failed to restore node %r (type %r), skipping',
                           row['id'], row['type'])
             failures.append(f"{row['id']!r} ({row['type']}): {ex}")
 
@@ -744,15 +744,15 @@ def load_topology(db_path: str) -> MsgBus:
         try:
             node.plugin(bus)
         except DriverError as ex:
-            log.error('load_topology: failed to plug in node %r, skipping: %s',
+            log.error('load_wiring: failed to plug in node %r, skipping: %s',
                       getattr(node, 'id', '?'), ex.msg)
             failures.append(f"{getattr(node, 'id', '?')!r}: {ex.msg}")
         except (ValueError, KeyError, TypeError) as ex:
-            log.exception('load_topology: failed to plug in node %r, skipping',
+            log.exception('load_wiring: failed to plug in node %r, skipping',
                           getattr(node, 'id', '?'))
             failures.append(f"{getattr(node, 'id', '?')!r}: {ex}")
 
-    log.info('load_topology: %d nodes restored from %s', len(nodes), db_path)
+    log.info('load_wiring: %d nodes restored from %s', len(nodes), db_path)
 
     if failures and not _notify_startup_failures(failures):
         # nobody could be reached remotely either (no Email/Telegram
@@ -763,7 +763,7 @@ def load_topology(db_path: str) -> MsgBus:
         # process is far more likely to notice a hard failure right in
         # front of them than a quietly degraded running system.
         raise RuntimeError(
-            'load_topology: %d node(s) failed to load, and no Email/Telegram '
+            'load_wiring: %d node(s) failed to load, and no Email/Telegram '
             'notification could be sent either (nothing configured, or every '
             'attempt failed) - refusing to start with silently missing '
             'controllers. Fix the underlying issue (often another process, '
@@ -776,7 +776,7 @@ def load_topology(db_path: str) -> MsgBus:
 # --- node-combination templates (/config, Step 13) ----------------------
 #
 # A template is a small, portable sub-graph of nodes (e.g. "pH control
-# with CO2 valve") that can be inserted into the live topology multiple
+# with CO2 valve") that can be inserted into the live wiring multiple
 # times. Alert nodes are intentionally excluded (same reasoning as
 # NODE_TYPE_SCHEMA: their 'receives' is derived from 'conditions', a set
 # of objects, not a plain field - out of scope for this generic editor).
@@ -943,17 +943,17 @@ def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
     return new_nodes
 
 
-# --- topology snapshots (/config, Step 13) -------------------------------
+# --- wiring snapshots (/config, Step 13) -------------------------------
 #
 # A snapshot is a full, named export of the 'nodes' table, used for
-# "save the whole configuration now, try something, restore it later".
+# "save the whole wiring now, try something, restore it later".
 
 def list_snapshots(db_path: str) -> list[dict[str, Any]]:
     """ list all snapshots (name, created_at), newest first """
     conn = get_connection(db_path)
     try:
         rows = conn.execute(
-            'SELECT name, created_at FROM topology_snapshots ORDER BY created_at DESC'
+            'SELECT name, created_at FROM wiring_snapshots ORDER BY created_at DESC'
         ).fetchall()
         return [dict(row) for row in rows]
     finally:
@@ -970,7 +970,7 @@ def create_snapshot(db_path: str, name: str) -> None:
         data = [{**dict(row), 'params': json.loads(row['params'])} for row in rows]
         with conn:
             conn.execute("""
-                INSERT INTO topology_snapshots (name, data) VALUES (?, ?)
+                INSERT INTO wiring_snapshots (name, data) VALUES (?, ?)
                 ON CONFLICT(name) DO UPDATE SET data = excluded.data,
                                                created_at = datetime('now')
             """, (name, json.dumps(data)))
@@ -983,7 +983,7 @@ def get_snapshot(db_path: str, name: str) -> dict[str, Any] | None:
     conn = get_connection(db_path)
     try:
         row = conn.execute(
-            'SELECT name, created_at, data FROM topology_snapshots WHERE name = ?', (name,)
+            'SELECT name, created_at, data FROM wiring_snapshots WHERE name = ?', (name,)
         ).fetchone()
         if not row:
             return None
@@ -997,7 +997,7 @@ def delete_snapshot(db_path: str, name: str) -> bool:
     conn = get_connection(db_path)
     try:
         with conn:
-            cur = conn.execute('DELETE FROM topology_snapshots WHERE name = ?', (name,))
+            cur = conn.execute('DELETE FROM wiring_snapshots WHERE name = ?', (name,))
             return cur.rowcount > 0
     finally:
         conn.close()
@@ -1814,7 +1814,7 @@ def get_current_users_db_path() -> str | None:
 # --- database backup & restore (Step 24) ---------------------------------
 #
 # Creates a consistent, point-in-time backup of both SQLite databases
-# (topology + users) using sqlite3.Connection.backup() - the correct way
+# (wiring + users) using sqlite3.Connection.backup() - the correct way
 # to copy a SQLite database that may be open/in use by the running app,
 # unlike a plain file copy which could grab a half-written page. Both
 # backups are packaged together into a single, downloadable/rotatable
@@ -1843,10 +1843,10 @@ def backup_sqlite_file(src_path: str, dest_path: str) -> None:
         src_conn.close()
 
 
-def create_backup_archive(topo_db_path: str, users_db_path: str,
+def create_backup_archive(wiring_db_path: str, users_db_path: str,
                           dest_dir: str, filename: str | None = None) -> str:
     """ create one .zip archive in 'dest_dir', containing a consistent
-        backup of both the topology and the users SQLite databases
+        backup of both the wiring and the users SQLite databases
         (whichever of the two actually exist), named after their
         original basenames. Returns the full path of the created
         archive.
@@ -1858,7 +1858,7 @@ def create_backup_archive(topo_db_path: str, users_db_path: str,
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         entries = []
-        for src_db_path in (topo_db_path, users_db_path):
+        for src_db_path in (wiring_db_path, users_db_path):
             if src_db_path and path.exists(src_db_path):
                 tmp_copy = path.join(tmp_dir, path.basename(src_db_path))
                 backup_sqlite_file(src_db_path, tmp_copy)
@@ -1890,13 +1890,13 @@ def rotate_backups(backup_dir: str, keep: int = DEFAULT_BACKUP_KEEP) -> None:
             log.exception('Failed to remove old backup %r', old)
 
 
-def create_scheduled_backup(topo_db_path: str, users_db_path: str,
+def create_scheduled_backup(wiring_db_path: str, users_db_path: str,
                             backup_dir: str, keep: int = DEFAULT_BACKUP_KEEP) -> str:
     """ create a new dated backup archive in 'backup_dir' and rotate
         away old generations beyond 'keep'. Returns the path of the
         newly created archive. Used both by the daily scheduler
         (MachineRoom) and can be called manually/from tests.
     """
-    archive_path = create_backup_archive(topo_db_path, users_db_path, backup_dir)
+    archive_path = create_backup_archive(wiring_db_path, users_db_path, backup_dir)
     rotate_backups(backup_dir, keep=keep)
     return archive_path

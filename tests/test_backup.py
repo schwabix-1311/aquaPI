@@ -48,25 +48,25 @@ def bus():
 
 
 class _FakeMachineRoom:
-    def __init__(self, bus: MsgBus, topo_db_path: str, users_db_path: str):
+    def __init__(self, bus: MsgBus, wiring_db_path: str, users_db_path: str):
         self.bus = bus
-        self.globals = {'BUS_TOPO': topo_db_path, 'USERS_DB': users_db_path}
+        self.globals = {'BUS_WIRING': wiring_db_path, 'USERS_DB': users_db_path}
         self.saved = 0
 
     def save_nodes(self, container):
         self.saved += 1
-        db.save_topology(container, self.globals['BUS_TOPO'])
+        db.save_wiring(container, self.globals['BUS_WIRING'])
 
 
 @pytest.fixture
-def topo_db_path(tmp_path, bus):
-    topo_path = str(tmp_path / 'topo.sqlite')
-    db.save_topology(bus, topo_path)
-    return topo_path
+def wiring_db_path(tmp_path, bus):
+    wiring_path = str(tmp_path / 'wiring.sqlite')
+    db.save_wiring(bus, wiring_path)
+    return wiring_path
 
 
 @pytest.fixture
-def app(tmp_path, bus, topo_db_path):
+def app(tmp_path, bus, wiring_db_path):
     app = Flask(__name__, template_folder=_TEMPLATE_FOLDER)
     app.config['INSTANCE_PATH'] = str(tmp_path)
     app.config['TESTING'] = True
@@ -80,7 +80,7 @@ def app(tmp_path, bus, topo_db_path):
     # backup attempt (get_users_connection() creates the schema)
     db.get_users_connection(users_db_path).close()
 
-    app.extensions['machineroom'] = _FakeMachineRoom(bus, topo_db_path, users_db_path)
+    app.extensions['machineroom'] = _FakeMachineRoom(bus, wiring_db_path, users_db_path)
 
     @app.route('/', endpoint='spa.spa')
     def spa_stub():
@@ -121,9 +121,9 @@ def _assert_valid_sqlite(path_: str) -> None:
 
 # --- db.py unit tests ----------------------------------------------------
 
-def test_backup_sqlite_file_creates_loadable_copy(topo_db_path, tmp_path):
+def test_backup_sqlite_file_creates_loadable_copy(wiring_db_path, tmp_path):
     dest = str(tmp_path / 'copy.sqlite')
-    db.backup_sqlite_file(topo_db_path, dest)
+    db.backup_sqlite_file(wiring_db_path, dest)
 
     assert os.path.exists(dest)
     _assert_valid_sqlite(dest)
@@ -137,31 +137,31 @@ def test_backup_sqlite_file_creates_loadable_copy(topo_db_path, tmp_path):
     assert {row['id'] for row in rows} == {'wasser', 'heizen', 'heizstab'}
 
 
-def test_create_backup_archive_contains_both_databases(topo_db_path, users_db_path, tmp_path):
+def test_create_backup_archive_contains_both_databases(wiring_db_path, users_db_path, tmp_path):
     dest_dir = str(tmp_path / 'backups')
-    archive_path = db.create_backup_archive(topo_db_path, users_db_path, dest_dir)
+    archive_path = db.create_backup_archive(wiring_db_path, users_db_path, dest_dir)
 
     assert os.path.exists(archive_path)
     assert archive_path.startswith(dest_dir)
 
     with zipfile.ZipFile(archive_path) as zf:
         names = set(zf.namelist())
-        assert os.path.basename(topo_db_path) in names
+        assert os.path.basename(wiring_db_path) in names
         assert os.path.basename(users_db_path) in names
 
-        with zf.open(os.path.basename(topo_db_path)) as f_in:
+        with zf.open(os.path.basename(wiring_db_path)) as f_in:
             extracted = tmp_path / 'extracted.sqlite'
             extracted.write_bytes(f_in.read())
     _assert_valid_sqlite(str(extracted))
 
 
-def test_create_backup_archive_skips_missing_db(topo_db_path, tmp_path):
+def test_create_backup_archive_skips_missing_db(wiring_db_path, tmp_path):
     dest_dir = str(tmp_path / 'backups')
     archive_path = db.create_backup_archive(
-        topo_db_path, str(tmp_path / 'does-not-exist.sqlite'), dest_dir)
+        wiring_db_path, str(tmp_path / 'does-not-exist.sqlite'), dest_dir)
 
     with zipfile.ZipFile(archive_path) as zf:
-        assert zf.namelist() == [os.path.basename(topo_db_path)]
+        assert zf.namelist() == [os.path.basename(wiring_db_path)]
 
 
 def test_rotate_backups_keeps_only_newest_n(tmp_path):
@@ -201,14 +201,14 @@ def test_rotate_backups_missing_dir_is_noop(tmp_path):
     db.rotate_backups(str(tmp_path / 'nonexistent'), keep=3)
 
 
-def test_create_scheduled_backup_creates_and_rotates(topo_db_path, users_db_path, tmp_path):
+def test_create_scheduled_backup_creates_and_rotates(wiring_db_path, users_db_path, tmp_path):
     backup_dir = str(tmp_path / 'backups')
 
-    first = db.create_scheduled_backup(topo_db_path, users_db_path, backup_dir, keep=2)
+    first = db.create_scheduled_backup(wiring_db_path, users_db_path, backup_dir, keep=2)
     time.sleep(1.05)  # filenames are second-granular, force a distinct name
-    second = db.create_scheduled_backup(topo_db_path, users_db_path, backup_dir, keep=2)
+    second = db.create_scheduled_backup(wiring_db_path, users_db_path, backup_dir, keep=2)
     time.sleep(1.05)
-    third = db.create_scheduled_backup(topo_db_path, users_db_path, backup_dir, keep=2)
+    third = db.create_scheduled_backup(wiring_db_path, users_db_path, backup_dir, keep=2)
 
     assert first != second != third
     remaining = os.listdir(backup_dir)

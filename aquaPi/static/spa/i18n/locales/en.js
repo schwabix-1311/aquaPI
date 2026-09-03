@@ -27,8 +27,8 @@ export default
 			heading: 'aquaPi Dashboard',
 		},
 		settings: {
-			label: 'Settings',
-			heading: 'Settings',
+			label: 'Parameters',
+			heading: 'Parameters',
 			hintEmpty: 'No nodes found',
 			ungrouped: 'Ungrouped',
 			scheduleHint: 'Minute Hour DayOfMonth Month DayOfWeek',
@@ -84,8 +84,8 @@ export default
 			},
 		},
 		config: {
-			label: 'Configuration',
-			heading: 'Configuration',
+			label: 'Wiring',
+			heading: 'Wiring',
 			addNode: 'Add node',
 			autoArrange: 'Auto-arrange',
 			editNode: 'Edit node "{name}"',

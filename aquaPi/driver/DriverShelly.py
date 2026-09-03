@@ -76,7 +76,7 @@ def _find_ips() -> set[str]:
         instance for its own, less frequent internal re-query. A device
         found on any pass counts; a graceful loss of one device on one
         boot must not silently drop its saved node (see db.py's
-        load_topology(), which already isolates a missing-port node's
+        load_wiring(), which already isolates a missing-port node's
         failure to that one node and tries to notify the user rather
         than crash the whole bus - this is about not needlessly
         triggering that path from a UDP fluke, not about that fault-

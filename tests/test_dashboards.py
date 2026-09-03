@@ -4,7 +4,7 @@
     - aquaPi/db.py: dashboards table (get_dashboard/set_dashboard)
     - aquaPi/api.py: GET/PUT /api/dashboard/
     - aquaPi/machineroom/msg_bus.py: BusNode.group persists across
-      __getstate__/__setstate__ (and thus through the SQLite topology)
+      __getstate__/__setstate__ (and thus through the SQLite wiring)
 """
 
 import os
@@ -101,8 +101,8 @@ def test_node_group_roundtrips_through_getstate_setstate():
     assert restored.group == 'Becken 1'
 
 
-def test_node_group_persists_through_sqlite_topology(tmp_path):
-    db_path = str(tmp_path / 'topo.sqlite')
+def test_node_group_persists_through_sqlite_wiring(tmp_path):
+    db_path = str(tmp_path / 'wiring.sqlite')
 
     bus = MsgBus(threaded=False)
     sensor = AnalogInput('Wasser', '', 25.0, '°C')
@@ -113,10 +113,10 @@ def test_node_group_persists_through_sqlite_topology(tmp_path):
     ctrl.group = 'Becken 1'
     ctrl.plugin(bus)
 
-    db.save_topology(bus, db_path)
+    db.save_wiring(bus, db_path)
     bus.teardown()
 
-    bus2 = db.load_topology(db_path)
+    bus2 = db.load_wiring(db_path)
     try:
         groups = {node.name: node.group for node in bus2.nodes}
         assert groups == {'Wasser': 'Becken 1', 'Heizen': 'Becken 1'}
@@ -125,16 +125,16 @@ def test_node_group_persists_through_sqlite_topology(tmp_path):
 
 
 def test_node_group_defaults_to_empty_after_reload_when_unset(tmp_path):
-    db_path = str(tmp_path / 'topo.sqlite')
+    db_path = str(tmp_path / 'wiring.sqlite')
 
     bus = MsgBus(threaded=False)
     sensor = AnalogInput('Wasser', '', 25.0, '°C')
     sensor.plugin(bus)
 
-    db.save_topology(bus, db_path)
+    db.save_wiring(bus, db_path)
     bus.teardown()
 
-    bus2 = db.load_topology(db_path)
+    bus2 = db.load_wiring(db_path)
     try:
         node = bus2.get_node(sensor.id)
         assert node.group == ''

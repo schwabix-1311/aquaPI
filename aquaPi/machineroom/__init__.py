@@ -53,29 +53,30 @@ class MachineRoom:
                 custom_cfg = json.load(f_in)
             self.globals.update(custom_cfg)
 
-        # AQUAPI_TOPO used to name the pickle file directly (e.g. 'topo.pickle'
-        # or, via `run -t nodes`, 'nodes.pickle'). It now names the *base*
-        # topology, stored in an equally named '.sqlite' database.
+        # AQUAPI_WIRING used to name the pickle file directly (e.g.
+        # 'wiring.pickle' or, via `run -w nodes`, 'nodes.pickle'). It now
+        # names the *base* wiring, stored in an equally named '.sqlite'
+        # database.
         #
-        # This name doubles as the default-config selector: 'topo' (the
+        # This name doubles as the default-config selector: 'wiring' (the
         # default, no config.json entry needed) bootstraps the real/
-        # production node set the first time instance/topo.sqlite doesn't
+        # production node set the first time instance/wiring.sqlite doesn't
         # exist yet; any other name (e.g. 'dev', set via config.json's
-        # "DEFAULT_CONFIG" or a one-off '-t NAME') bootstraps the dev/test
+        # "DEFAULT_CONFIG" or a one-off '-w NAME') bootstraps the dev/test
         # node set instead, in its own separate instance/<name>.sqlite -
         # see create_default_nodes(). This replaces the old TEST_BUS/
         # REAL_CONFIG constants that used to live (and had to be kept out
         # of commits) in create_default_nodes() itself.
-        topo_base = self.globals.get('DEFAULT_CONFIG', 'topo')
-        if 'AQUAPI_TOPO' in environ:
-            topo_base = environ['AQUAPI_TOPO']
-        topo_base, _ = path.splitext(topo_base)
-        self.globals['DEFAULT_CONFIG'] = topo_base
+        wiring_base = self.globals.get('DEFAULT_CONFIG', 'wiring')
+        if 'AQUAPI_WIRING' in environ:
+            wiring_base = environ['AQUAPI_WIRING']
+        wiring_base, _ = path.splitext(wiring_base)
+        self.globals['DEFAULT_CONFIG'] = wiring_base
 
-        topo_file = path.join(instance_path, topo_base + '.sqlite')
+        wiring_file = path.join(instance_path, wiring_base + '.sqlite')
 
         self.globals['CUSTOM_CFG'] = cfg_file
-        self.globals['BUS_TOPO'] = topo_file
+        self.globals['BUS_WIRING'] = wiring_file
 
         # Email/Telegram credentials now live in the users SQLite DB
         # (table 'notification_config'), not in config.json anymore.
@@ -116,7 +117,7 @@ class MachineRoom:
         create_io_registry()
 
         try:
-            if not db.topology_exists(self.globals['BUS_TOPO']):
+            if not db.wiring_exists(self.globals['BUS_WIRING']):
                 self.bus: MsgBus = MsgBus(threaded=False)
 
                 log.brief("=== There are no controllers defined, creating default")
@@ -125,10 +126,10 @@ class MachineRoom:
                 self.save_nodes(self.bus)
 
                 log.brief("=== Successfully created Bus and default Nodes")
-                log.brief("  ... and saved to %s", self.globals['BUS_TOPO'])
+                log.brief("  ... and saved to %s", self.globals['BUS_WIRING'])
 
             else:
-                log.brief("=== Loading Bus & Nodes from %s", self.globals['BUS_TOPO'])
+                log.brief("=== Loading Bus & Nodes from %s", self.globals['BUS_WIRING'])
                 self.bus = self.restore_nodes()
 
         except DriverError as ex:
@@ -150,7 +151,7 @@ class MachineRoom:
         """
         try:
             archive = db.create_scheduled_backup(
-                self.globals['BUS_TOPO'], self.globals['USERS_DB'],
+                self.globals['BUS_WIRING'], self.globals['USERS_DB'],
                 self.globals['BACKUP_DIR'], keep=self._backup_keep)
             log.brief('=== Scheduled backup created: %s', archive)
         except Exception:
@@ -202,16 +203,16 @@ class MachineRoom:
         """
         if container:
             if not fname:
-                fname = self.globals['BUS_TOPO']
-            db.save_topology(container, fname)
+                fname = self.globals['BUS_WIRING']
+            db.save_wiring(container, fname)
 
     def restore_nodes(self, fname: str = '') -> MsgBus:
         """ recreate the Bus, Nodes and Drivers from SQLite storage,
             or a controller template in a container from some file
         """
         if not fname:
-            fname = self.globals['BUS_TOPO']
-        return db.load_topology(fname)
+            fname = self.globals['BUS_WIRING']
+        return db.load_wiring(fname)
 
     def create_default_nodes(self) -> None:
         """ "let there be light" and heating of course, what
@@ -220,12 +221,12 @@ class MachineRoom:
               "fish" is plural, "fishes" are several species of fish
         """
         # which default node set to bootstrap is now driven by the
-        # topology name itself (see MachineRoom.__init__'s DEFAULT_CONFIG
-        # resolution) instead of source-level toggles: 'topo' (the
+        # wiring name itself (see MachineRoom.__init__'s DEFAULT_CONFIG
+        # resolution) instead of source-level toggles: 'wiring' (the
         # default) -> the real/production config below; 'test_bus' -> the
         # minimal test bus; anything else (e.g. 'dev') -> the dev/test
         # scenarios further down.
-        default_config = self.globals.get('DEFAULT_CONFIG', 'topo')
+        default_config = self.globals.get('DEFAULT_CONFIG', 'wiring')
 
         TEST_PH = True  # True
         SIM_LIGHT = True  # True
@@ -255,7 +256,7 @@ class MachineRoom:
             telegram_alert.plugin(self.bus)
             return
 
-        if default_config == 'topo':
+        if default_config == 'wiring':
             # __Lighting__ #
             # single PWM dimmed LED bar, perceptive correction
             light_schedule = ScheduleInput('Zeitplan Licht', '* 14-21 * * *')

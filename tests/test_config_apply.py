@@ -202,7 +202,7 @@ def test_apply_temp_id_remap_between_two_new_nodes(client, users, bus, app):
     assert app.extensions['machineroom'].saved == 1
 
 
-def test_apply_persists_topology_once(client, users, bus, app):
+def test_apply_persists_wiring_once(client, users, bus, app):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/config/apply', json={
         'updates': [{'id': 'heizen', 'group': 'Becken 1'}],

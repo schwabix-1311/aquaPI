@@ -52,15 +52,15 @@ def test_legacy_config_json_migration_starts_simulation_cleanly(tmp_path):
     with open(os.path.join(instance_path, 'config.json'), 'w', encoding='utf8') as f:
         json.dump(legacy_cfg, f)
 
-    # DEFAULT_CONFIG must be anything other than 'topo' (the maintainer's own
+    # DEFAULT_CONFIG must be anything other than 'wiring' (the maintainer's own
     # real/production hardware setup) or this would build that instead of a
-    # simulated topology - see test_fresh_start_without_any_legacy_files_
-    # creates_default_topology below for why that matters.
+    # simulated wiring - see test_fresh_start_without_any_legacy_files_
+    # creates_default_wiring below for why that matters.
     mr = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
     try:
-        # no topology to migrate, so a fresh default one is created
+        # no wiring to migrate, so a fresh default one is created
         assert len(mr.bus.nodes) > 0
-        assert db.topology_exists(mr.globals['BUS_TOPO'])
+        assert db.wiring_exists(mr.globals['BUS_WIRING'])
 
         # notification config was migrated into the users DB
         users_db = mr.globals['USERS_DB']
@@ -97,9 +97,9 @@ def test_config_json_global_keys_are_reimported_every_start(tmp_path):
         mr2.bus.teardown()
 
 
-def test_fresh_start_without_any_legacy_files_creates_default_topology(tmp_path):
+def test_fresh_start_without_any_legacy_files_creates_default_wiring(tmp_path):
     instance_path = str(tmp_path)
-    # DEFAULT_CONFIG must be anything other than 'topo' (the maintainer's
+    # DEFAULT_CONFIG must be anything other than 'wiring' (the maintainer's
     # own real/production hardware setup - see MachineRoom.create_default_nodes())
     # or this test would build that instead of the intended simulated
     # dev/test node set: it needs hardware ports and notification channels
@@ -108,16 +108,16 @@ def test_fresh_start_without_any_legacy_files_creates_default_topology(tmp_path)
     # under the same node names as production (see machineroom/__init__.py)
     mr = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
     try:
-        # default simulated topology (TEST_PH/SIM_LIGHT/SIM_TEMP) has 13 nodes
+        # default simulated wiring (TEST_PH/SIM_LIGHT/SIM_TEMP) has 13 nodes
         assert len(mr.bus.nodes) == 13
-        assert db.topology_exists(mr.globals['BUS_TOPO'])
+        assert db.wiring_exists(mr.globals['BUS_WIRING'])
     finally:
         mr.bus.teardown()
 
 
-def test_restart_reloads_existing_sqlite_topology_unchanged(tmp_path):
+def test_restart_reloads_existing_sqlite_wiring_unchanged(tmp_path):
     """ a 2nd MachineRoom instance against the same instance dir must load
-        the already-persisted SQLite topology unchanged, not recreate the
+        the already-persisted SQLite wiring unchanged, not recreate the
         default one
     """
     instance_path = str(tmp_path)

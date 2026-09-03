@@ -3,7 +3,7 @@
 
     Users (username, hashed password, role) are stored in a small
     SQLite database (see aquaPi/db.py: users table), separate from
-    the node topology database. Passwords are never stored in
+    the node wiring database. Passwords are never stored in
     cleartext, only as a werkzeug password hash.
 
     A first, default 'admin' account (with a freshly generated random

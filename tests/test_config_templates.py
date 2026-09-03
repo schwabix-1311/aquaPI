@@ -47,14 +47,14 @@ def bus():
 
 
 class _FakeMachineRoom:
-    def __init__(self, bus: MsgBus, topo_db_path: str):
+    def __init__(self, bus: MsgBus, wiring_db_path: str):
         self.bus = bus
-        self.globals = {'BUS_TOPO': topo_db_path}
+        self.globals = {'BUS_WIRING': wiring_db_path}
         self.saved = 0
 
     def save_nodes(self, container):
         self.saved += 1
-        db.save_topology(container, self.globals['BUS_TOPO'])
+        db.save_wiring(container, self.globals['BUS_WIRING'])
 
 
 @pytest.fixture
@@ -67,9 +67,9 @@ def app(tmp_path, bus):
     app.register_blueprint(auth.bp)
     app.register_blueprint(api.bp)
 
-    topo_db_path = str(tmp_path / 'topo.sqlite')
-    db.save_topology(bus, topo_db_path)  # so the 'nodes' table starts populated
-    app.extensions['machineroom'] = _FakeMachineRoom(bus, topo_db_path)
+    wiring_db_path = str(tmp_path / 'wiring.sqlite')
+    db.save_wiring(bus, wiring_db_path)  # so the 'nodes' table starts populated
+    app.extensions['machineroom'] = _FakeMachineRoom(bus, wiring_db_path)
 
     @app.route('/', endpoint='spa.spa')
     def spa_stub():
@@ -249,9 +249,9 @@ def test_insert_template_with_hw_port_does_not_conflict(tmp_path):
         app.register_blueprint(auth.bp)
         app.register_blueprint(api.bp)
 
-        topo_db_path = str(tmp_path / 'topo.sqlite')
-        db.save_topology(bus, topo_db_path)
-        app.extensions['machineroom'] = _FakeMachineRoom(bus, topo_db_path)
+        wiring_db_path = str(tmp_path / 'wiring.sqlite')
+        db.save_wiring(bus, wiring_db_path)
+        app.extensions['machineroom'] = _FakeMachineRoom(bus, wiring_db_path)
 
         @app.route('/', endpoint='spa.spa')
         def spa_stub():
@@ -313,7 +313,7 @@ def test_insert_template_unknown_returns_404(client, users):
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_insert_template_persists_topology(client, users, app):
+def test_insert_template_persists_wiring(client, users, app):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/templates/', json={'name': 'X', 'node_ids': ['wasser']})
     saved_before = app.extensions['machineroom'].saved
@@ -385,7 +385,7 @@ def test_restore_snapshot_round_trip(client, users, bus):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/config/snapshots', json={'name': 'backup1'})
 
-    # change the live topology: add a node and change a setpoint
+    # change the live wiring: add a node and change a setpoint
     client.post('/api/nodes/', json={
         'type': 'AnalogInput', 'name': 'Luft', 'fields': {'unit': '°C'},
     })
@@ -416,7 +416,7 @@ def test_restore_snapshot_requires_admin(client, users):
     assert resp.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_restore_snapshot_persists_topology(client, users, app):
+def test_restore_snapshot_persists_wiring(client, users, app):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/config/snapshots', json={'name': 'backup1'})
     saved_before = app.extensions['machineroom'].saved
@@ -433,7 +433,7 @@ def test_restore_snapshot_skips_conflicting_port_instead_of_emptying_bus():
         *after* it had already torn down the live bus - leaving it
         permanently empty (GET /api/nodes/ then 500s forever). The
         conflicting node must now be skipped instead, so the rest of
-        the topology (and therefore the live bus) survives the restore.
+        the wiring (and therefore the live bus) survives the restore.
     """
     bus = MsgBus(threaded=False)
     sensor = AnalogInput('Temperatur', 'DS1820 #1', 25.0, '°C')

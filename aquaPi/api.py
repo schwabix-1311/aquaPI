@@ -41,9 +41,9 @@ def the_bus() -> MsgBus | None:
     return mr.bus
 
 
-def _topo_db_path() -> str:
+def _wiring_db_path() -> str:
     mr: MachineRoom = current_app.extensions['machineroom']
-    return mr.globals['BUS_TOPO']
+    return mr.globals['BUS_WIRING']
 
 
 def _collect_api_routes() -> list[dict]:
@@ -169,7 +169,7 @@ def api_nodes() -> Response:
     if bus is None:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    # an empty topology (e.g. right after a fresh start, or if every
+    # an empty wiring (e.g. right after a fresh start, or if every
     # node failed to restore) is a valid state, not a server error -
     # this used to answer with 500 whenever node_ids was empty
     node_ids = [node.id for node in
@@ -469,7 +469,7 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
 def api_set_node_settings(node_id: str) -> Response:
     """ update one or more of a node's operational parameters, validated
         against each parameter's type/min/max, then persist the whole
-        topology. Requires operator/admin, except when the target is a
+        wiring. Requires operator/admin, except when the target is a
         UiInput node (e.g. UiSwitchInput, UiAnalogInput) and the request
         body contains only the 'value' key - that case is allowed for
         any role, including the anonymous viewer.
@@ -583,7 +583,7 @@ def api_node_types() -> Response:
 @roles_required('admin')
 def api_create_node() -> Response:
     """ create a new node of a creatable type, wire it up on the live
-        bus and persist the topology.
+        bus and persist the wiring.
     """
     bus = the_bus()
     if not bus:
@@ -804,7 +804,7 @@ def api_delete_node(node_id: str) -> Response:
     """ remove a node from the live bus, cleanly disconnecting it from
         any other node that still listens to it (except Alert nodes,
         whose 'receives' can't be edited directly), then persist the
-        topology.
+        wiring.
     """
     bus = the_bus()
     if not bus:
@@ -832,7 +832,7 @@ def api_delete_node(node_id: str) -> Response:
 @roles_required('admin')
 def api_config_apply() -> Response:
     """ atomically apply a bulk create/update/delete diff to the
-        topology. Either every part of the diff is applied and
+        wiring. Either every part of the diff is applied and
         persisted, or (on any validation error) nothing is changed
         at all.
     """
@@ -873,7 +873,7 @@ def api_config_apply() -> Response:
 @roles_required('viewer', 'operator', 'admin')
 def api_list_templates() -> Response:
     """ list all node-combination templates (name, description, node count). """
-    return jsonify(db.list_templates(_topo_db_path()))
+    return jsonify(db.list_templates(_wiring_db_path()))
 
 
 @bp.route('/api/templates/', methods=['POST'])
@@ -904,21 +904,21 @@ def api_create_template() -> Response:
     except ValueError as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
 
-    db.save_template(_topo_db_path(), name, body.get('descr', '') or '', data)
+    db.save_template(_wiring_db_path(), name, body.get('descr', '') or '', data)
 
     log.info('User %r saved template %r (%d nodes)',
              current_user.username, name, len(node_ids))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'save_template', name, {'node_count': len(node_ids)})
 
-    return jsonify(db.get_template(_topo_db_path(), name)), HTTPStatus.CREATED
+    return jsonify(db.get_template(_wiring_db_path(), name)), HTTPStatus.CREATED
 
 
 @bp.route('/api/templates/<name>', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_get_template(name: str) -> Response:
     """ fetch one template including its full node data. """
-    template = db.get_template(_topo_db_path(), name)
+    template = db.get_template(_wiring_db_path(), name)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
     return jsonify(template)
@@ -928,7 +928,7 @@ def api_get_template(name: str) -> Response:
 @roles_required('admin')
 def api_delete_template(name: str) -> Response:
     """ remove a template. """
-    if not db.delete_template(_topo_db_path(), name):
+    if not db.delete_template(_wiring_db_path(), name):
         return Response(status=HTTPStatus.NOT_FOUND)
 
     log.info('User %r deleted template %r', current_user.username, name)
@@ -942,13 +942,13 @@ def api_delete_template(name: str) -> Response:
 @roles_required('admin')
 def api_insert_template(name: str) -> Response:
     """ insert a template's nodes into the live bus with fresh,
-        collision-free ids, wire them up and persist the topology.
+        collision-free ids, wire them up and persist the wiring.
     """
     bus = the_bus()
     if not bus:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    template = db.get_template(_topo_db_path(), name)
+    template = db.get_template(_wiring_db_path(), name)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
 
@@ -969,20 +969,20 @@ def api_insert_template(name: str) -> Response:
     return jsonify([_node_to_dict(n) for n in new_nodes]), HTTPStatus.CREATED
 
 
-# --- /config: topology snapshots (Step 13) ------------------------------
+# --- /config: wiring snapshots (Step 13) ------------------------------
 
 
 @bp.route('/api/config/snapshots', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_list_snapshots() -> Response:
     """ list all saved configuration snapshots (name, created_at). """
-    return jsonify(db.list_snapshots(_topo_db_path()))
+    return jsonify(db.list_snapshots(_wiring_db_path()))
 
 
 @bp.route('/api/config/snapshots', methods=['POST'])
 @roles_required('admin')
 def api_create_snapshot() -> Response:
-    """ save the entire current topology as a named snapshot.
+    """ save the entire current wiring as a named snapshot.
         Creating a snapshot with an already-used name overwrites it.
     """
     body = request.get_json(silent=True)
@@ -1000,20 +1000,20 @@ def api_create_snapshot() -> Response:
         mr: MachineRoom = current_app.extensions['machineroom']
         mr.save_nodes(bus)
 
-    db.create_snapshot(_topo_db_path(), name)
+    db.create_snapshot(_wiring_db_path(), name)
 
     log.info('User %r created snapshot %r', current_user.username, name)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'create_snapshot', name)
 
-    return jsonify(db.get_snapshot(_topo_db_path(), name)), HTTPStatus.CREATED
+    return jsonify(db.get_snapshot(_wiring_db_path(), name)), HTTPStatus.CREATED
 
 
 @bp.route('/api/config/snapshots/<name>', methods=['DELETE'])
 @roles_required('admin')
 def api_delete_snapshot(name: str) -> Response:
     """ remove a saved snapshot. """
-    if not db.delete_snapshot(_topo_db_path(), name):
+    if not db.delete_snapshot(_wiring_db_path(), name):
         return Response(status=HTTPStatus.NOT_FOUND)
 
     log.info('User %r deleted snapshot %r', current_user.username, name)
@@ -1026,14 +1026,14 @@ def api_delete_snapshot(name: str) -> Response:
 @bp.route('/api/config/snapshots/<name>/restore', methods=['POST'])
 @roles_required('admin')
 def api_restore_snapshot(name: str) -> Response:
-    """ replace the entire live topology with the one stored in a
-        snapshot, then persist it as the new current topology.
+    """ replace the entire live wiring with the one stored in a
+        snapshot, then persist it as the new current wiring.
     """
     bus = the_bus()
     if not bus:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    snapshot = db.get_snapshot(_topo_db_path(), name)
+    snapshot = db.get_snapshot(_wiring_db_path(), name)
     if not snapshot:
         return Response(status=HTTPStatus.NOT_FOUND)
 
@@ -1078,7 +1078,7 @@ def api_audit_log() -> Response:
 @bp.route('/api/backup', methods=['GET'])
 @roles_required('admin')
 def api_backup() -> Response:
-    """ build a fresh, consistent backup archive (topology + users
+    """ build a fresh, consistent backup archive (wiring + users
         databases) on the fly and offer it as a file download.
     """
     mr: MachineRoom = current_app.extensions['machineroom']
@@ -1090,7 +1090,7 @@ def api_backup() -> Response:
         return response
 
     archive_path = db.create_backup_archive(
-        mr.globals['BUS_TOPO'], mr.globals['USERS_DB'], tmp_dir)
+        mr.globals['BUS_WIRING'], mr.globals['USERS_DB'], tmp_dir)
 
     log.info('User %r downloaded a database backup', current_user.username)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,

@@ -27,8 +27,8 @@ export default
 			heading: 'aquaPi Dashboard',
 		},
 		settings: {
-			label: 'Einstellungen',
-			heading: 'Einstellungen',
+			label: 'Parameter',
+			heading: 'Parameter',
 			hintEmpty: 'Keine Elemente gefunden',
 			ungrouped: 'Ohne Gruppe',
 			scheduleHint: 'Minute Stunde Tag(Monat) Monat Wochentag',
@@ -84,8 +84,8 @@ export default
 			},
 		},
 		config: {
-			label: 'Konfiguration',
-			heading: 'Konfiguration',
+			label: 'Verschaltung',
+			heading: 'Verschaltung',
 			addNode: 'Element hinzufügen',
 			autoArrange: 'Automatisch anordnen',
 			editNode: 'Element „{name}“ bearbeiten',

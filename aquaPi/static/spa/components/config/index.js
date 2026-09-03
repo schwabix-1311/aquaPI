@@ -182,7 +182,7 @@ const AquapiConfig = {
 				this.configStore.fetchNodeTypes(),
 			])
 			this.configStore.initDraft()
-			// nobody has ever positioned anything yet (fresh/default topology) -
+			// nobody has ever positioned anything yet (fresh/default wiring) -
 			// lay it out by chain instead of leaving every node stacked at (0,0)
 			if (this.configStore.draftNodes.length > 0
 				&& this.configStore.draftNodes.every(n => !n.pos_x && !n.pos_y)) {

@@ -176,7 +176,7 @@ def test_put_settings_admin_can_update(client, users, bus):
     assert bus.get_node('heizen').hysteresis == 1.0
 
 
-def test_put_settings_persists_topology(client, users, app):
+def test_put_settings_persists_wiring(client, users, app):
     _login(client, 'operator1', 'operatorPass1')
     client.put('/api/nodes/heizen/settings', json={'setpoint': 26.0})
     assert app.extensions['machineroom'].saved == 1

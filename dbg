@@ -28,49 +28,6 @@ if [[ ${reset_wiring} ]]; then
   rm -f "instance/${wiring_file}.pickle" "instance/${wiring_file}.sqlite"
 fi
 
-# --- ONE-TIME MIGRATION (per-user escalation prefs -> shared config) ---
-# --- run once on production, then commit the removal                 ---
-if [ -f "instance/users.sqlite" ]; then
-  python3 -c "
-import sqlite3
-conn = sqlite3.connect('instance/users.sqlite')
-conn.row_factory = sqlite3.Row
-tables = {r[0] for r in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")}
-if 'user_notification_prefs' in tables:
-    conn.execute('''CREATE TABLE IF NOT EXISTS alert_escalation_config (
-        alert_node_id TEXT PRIMARY KEY,
-        escalation_channel TEXT NOT NULL DEFAULT \'none\',
-        escalation_after_minutes INTEGER NOT NULL DEFAULT 0)''')
-    rows = conn.execute('''SELECT alert_node_id, escalation_channel,
-                                   escalation_after_minutes, user_id
-                            FROM user_notification_prefs
-                            WHERE escalation_channel != \'none\'
-                            ORDER BY alert_node_id, user_id''').fetchall()
-    chosen = {}
-    for row in rows:
-        node = row['alert_node_id']
-        if node not in chosen:
-            chosen[node] = row
-        elif chosen[node]['escalation_channel'] != row['escalation_channel'] \\
-                or chosen[node]['escalation_after_minutes'] != row['escalation_after_minutes']:
-            print(f\"One-time migration: alert {node!r} - keeping user \"
-                  f\"{chosen[node]['user_id']}'s config, dropping user \"
-                  f\"{row['user_id']}'s differing config - verify manually\")
-    migrated = 0
-    for node, row in chosen.items():
-        if not conn.execute('SELECT 1 FROM alert_escalation_config WHERE alert_node_id = ?', (node,)).fetchone():
-            conn.execute('INSERT INTO alert_escalation_config VALUES (?, ?, ?)',
-                         (node, row['escalation_channel'], row['escalation_after_minutes']))
-            migrated += 1
-    if migrated:
-        conn.commit()
-        print(f'One-time migration: copied {migrated} escalation config(s) '
-              f'from user_notification_prefs to alert_escalation_config')
-conn.close()
-"
-fi
-# --- END ONE-TIME MIGRATION ---
-
 export FLASK_APP=aquaPi
 export FLASK_DEBUG=1
 

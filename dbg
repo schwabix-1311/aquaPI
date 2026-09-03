@@ -28,27 +28,6 @@ if [[ ${reset_wiring} ]]; then
   rm -f "instance/${wiring_file}.pickle" "instance/${wiring_file}.sqlite"
 fi
 
-# --- ONE-TIME MIGRATION (topo -> wiring rename) - remove this block once ---
-# --- run once on production, then commit the removal                    ---
-if [ ! -f "instance/${wiring_file}.sqlite" ] && [ -f "instance/topo.sqlite" ]; then
-  echo "One-time migration: copying instance/topo.sqlite -> instance/${wiring_file}.sqlite"
-  cp -a "instance/topo.sqlite" "instance/${wiring_file}.sqlite"
-fi
-if [ -f "instance/config.json" ]; then
-  python3 -c "
-import json
-p = 'instance/config.json'
-with open(p) as f:
-    cfg = json.load(f)
-if cfg.get('DEFAULT_CONFIG') == 'topo':
-    cfg['DEFAULT_CONFIG'] = 'wiring'
-    with open(p, 'w') as f:
-        json.dump(cfg, f, indent=2)
-    print(\"One-time migration: config.json DEFAULT_CONFIG 'topo' -> 'wiring'\")
-"
-fi
-# --- END ONE-TIME MIGRATION ---
-
 export FLASK_APP=aquaPi
 export FLASK_DEBUG=1
 

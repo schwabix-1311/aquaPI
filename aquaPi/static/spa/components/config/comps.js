@@ -11,6 +11,10 @@ import './configTemplatesDialog.js'
 const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
 const CONNECTION_STUB = 30
+// how far back from a port's exact position the connection line's
+// invisible delete-hit-region is trimmed, so it stops overlapping (and
+// stealing clicks from) the port dot itself - see ConfigConnections.edges
+const PORT_CLEARANCE = 14
 
 const ROLE_COLORS = {
 	IN_ENDP: 'blue',
@@ -21,31 +25,74 @@ const ROLE_COLORS = {
 	ALERTS: 'red',
 }
 
+// Which roles may act as a connection's SOURCE (i.e. show a draggable
+// output port, and be a valid drop target when dragging FROM another
+// node's input port). Checked against each role's actual runtime
+// behavior, not just what the live topology happens to use today:
+// - IN_ENDP/CTRL/AUX: their whole purpose is producing new data other
+//   nodes subscribe to - always sourceable.
+// - OUT_ENDP (output devices): SwitchDevice/SlowPwmDevice/AnalogDevice
+//   all genuinely self.post(MsgData(...)) their real, changing actuated
+//   value (out_nodes.py) - real data (e.g. History graphing what a
+//   device actually did, distinct from what its controller commanded)
+//   - sourceable.
+// - HISTORY: posts a hardcoded constant 0 on every message
+//   (hist_nodes.py, "just anything for MsgHello") - a keep-alive, not
+//   real data. Nothing downstream could meaningfully use it - excluded.
+// - ALERTS: does post real content (the joined alert-message string),
+//   but it's STRING-typed and no current consumer handles that safely -
+//   History would crash on it, AlertCond's numeric comparison would
+//   TypeError - this is exactly the still-deferred
+//   config-receives-type-filtering gap, so excluded here too rather
+//   than opening a new instance of the same problem.
+// Enforced at both ends: hasOutput below hides the affordance for a
+// forward (output-port-initiated) drag, and
+// AquapiConfig.isValidConnection (index.js) independently re-checks the
+// SOURCE role too, since a reverse (input-port-initiated) drag can
+// hover any card regardless of whether that card shows its own output
+// dot.
+const SOURCEABLE_ROLES = ['IN_ENDP', 'CTRL', 'AUX', 'OUT_ENDP']
+
+// Shared by ConfigConnections, which owns rendering AND hit-testing for
+// both port kinds (see below - ports live in the SVG overlay, not on
+// the card itself, specifically so they can paint above connection
+// lines; a div nested inside ConfigNodeBox never could, since the card
+// establishes its own stacking context that can't out-rank a sibling
+// one no matter its own z-index).
+function nodeHasInputPort(node, nodeTypes) {
+	const schema = nodeTypes[node.type]
+	return !schema || schema.receives !== 'none'
+}
+function nodeHasOutputPort(node) {
+	return SOURCEABLE_ROLES.includes(node.role)
+}
+
 const ConfigNodeBox = {
 	props: {
 		node: {type: Object, required: true},
 		nodeTypes: {type: Object, default: () => ({})},
 		connecting: {type: Boolean, default: false},
 		selected: {type: Boolean, default: false},
+		dropTarget: {type: String, default: null},
 	},
 	template: `
 		<v-sheet
 			:elevation="dragging ? 8 : 2"
 			outlined
 			class="config-node-box"
-			:class="{'config-node-box--connecting': connecting, 'config-node-box--selected': selected}"
+			:class="{
+				'config-node-box--connecting': connecting,
+				'config-node-box--selected': selected,
+				'config-node-box--drop-valid': dropTarget === 'valid',
+				'config-node-box--drop-invalid': dropTarget === 'invalid',
+			}"
 			:style="style"
 			@mousedown.stop="onDragStart"
 			@click.stop="onClick"
 		>
-			<div v-if="hasInput" class="config-node-port config-node-port--in" :title="$t('pages.config.portIn')"></div>
-			<div v-if="hasOutput" class="config-node-port config-node-port--out" :title="$t('pages.config.portOut')"></div>
 			<div class="d-flex align-center justify-space-between px-2 pt-1">
 				<v-chip x-small label :color="color" text-color="white">{{ node.role }}</v-chip>
 				<div>
-     <v-btn v-if="node.role !== 'ALERTS'" icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('connect', node)" :title="$t('pages.config.connect')">
-						<v-icon size="small">mdi-vector-line</v-icon>
-					</v-btn>
      <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
 						<v-icon size="small">mdi-pencil</v-icon>
 					</v-btn>
@@ -89,15 +136,6 @@ const ConfigNodeBox = {
 				width: NODE_BOX_WIDTH + 'px',
 			}
 		},
-		hasInput: function() {
-			const schema = this.nodeTypes[this.node.type]
-			return !schema || schema.receives !== 'none'
-		},
-		hasOutput: function() {
-			// Every node type can be a pub/sub source; the schema has no
-			// explicit "can be a source" flag, so this is always shown.
-			return true
-		},
 	},
 	methods: {
 		onClick: function() {
@@ -127,8 +165,10 @@ registerGlobalComponent('ConfigNodeBox', ConfigNodeBox)
 const ConfigConnections = {
 	props: {
 		nodes: {type: Array, required: true},
+		nodeTypes: {type: Object, default: () => ({})},
 		width: {type: Number, required: true},
 		height: {type: Number, required: true},
+		preview: {type: Object, default: null},
 	},
 	template: `
 		<svg class="config-connections" :width="width" :height="height">
@@ -169,9 +209,30 @@ const ConfigConnections = {
 					<path d="M-4,-4 L4,4 M4,-4 L-4,4" stroke="white" stroke-width="1.6" stroke-linecap="round"></path>
 				</g>
 			</g>
+			<path
+				v-if="preview"
+				:d="'M' + preview.x1 + ',' + preview.y1 + ' L' + preview.x2 + ',' + preview.y2"
+				fill="none"
+				stroke="#1976d2" stroke-width="2"
+				:marker-end="preview.arrowAtStart ? null : 'url(#config-arrow-preview)'"
+				:marker-start="preview.arrowAtStart ? 'url(#config-arrow-preview)' : null"
+				class="config-connection-preview"
+			></path>
+			<circle
+				v-for="port in ports"
+				:key="port.node.id + '-' + port.kind"
+				:cx="port.x" :cy="port.y" r="8"
+				:class="['config-node-port-svg', 'config-node-port-svg--' + port.kind]"
+				@mousedown.stop="$emit('port-mousedown', {node: port.node, port: port.kind, clientX: $event.clientX, clientY: $event.clientY})"
+			>
+				<title>{{ $t(port.kind === 'input' ? 'pages.config.portIn' : 'pages.config.portOut') }}</title>
+			</circle>
 			<defs>
 				<marker id="config-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
 					<path d="M0,0 L8,4 L0,8 z" fill="#90a4ae"></path>
+				</marker>
+				<marker id="config-arrow-preview" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+					<path d="M0,0 L8,4 L0,8 z" fill="#1976d2"></path>
 				</marker>
 			</defs>
 		</svg>
@@ -186,6 +247,19 @@ const ConfigConnections = {
 			const map = {}
 			this.nodes.forEach(n => { map[n.id] = n })
 			return map
+		},
+		ports: function() {
+			const ports = []
+			this.nodes.forEach(node => {
+				const y = (node.pos_y || 0) + NODE_BOX_HEIGHT / 2
+				if (nodeHasInputPort(node, this.nodeTypes)) {
+					ports.push({node, kind: 'input', x: (node.pos_x || 0), y})
+				}
+				if (nodeHasOutputPort(node)) {
+					ports.push({node, kind: 'output', x: (node.pos_x || 0) + NODE_BOX_WIDTH, y})
+				}
+			})
+			return ports
 		},
 		edges: function() {
 			const edges = []
@@ -214,9 +288,16 @@ const ConfigConnections = {
 					const stubPath = 'M' + x1 + ',' + y1 + ' H' + sourceTrunkX
 						+ ' M' + targetTrunkX + ',' + y2 + ' H' + x2
 					const diagonalPath = 'M' + sourceTrunkX + ',' + y1 + ' L' + targetTrunkX + ',' + y2
-					// combined, for the (invisible, wide) click-to-delete hit-area
-					const hitPath = 'M' + x1 + ',' + y1 + ' H' + sourceTrunkX
-						+ ' L' + targetTrunkX + ',' + y2 + ' H' + x2
+					// combined, for the (invisible, wide) click-to-delete hit-area -
+					// trimmed back by PORT_CLEARANCE at each end so it doesn't sit on
+					// top of the port dot itself (the visible stub still starts exactly
+					// AT the port; only this invisible hit-region is pulled back -
+					// otherwise, being above the port in stacking order, it swallows
+					// clicks meant for the port)
+					const hitStartX = Math.min(x1 + PORT_CLEARANCE, sourceTrunkX)
+					const hitEndX = Math.max(x2 - PORT_CLEARANCE, targetTrunkX)
+					const hitPath = 'M' + hitStartX + ',' + y1 + ' H' + sourceTrunkX
+						+ ' L' + targetTrunkX + ',' + y2 + ' H' + hitEndX
 					edges.push({
 						key: sourceId + '->' + target.id,
 						sourceId, targetId: target.id,
@@ -228,8 +309,9 @@ const ConfigConnections = {
 						midY,
 						// Alert.receives is derived from its conditions, not
 						// directly editable - the generic delete-X (which
-						// stages a plain receives edit) doesn't apply here,
-						// same reasoning as the missing 'connect' icon.
+						// stages a plain receives edit) doesn't apply here;
+						// Alert nodes also never render an input port to
+						// drag a new connection onto in the first place.
 						deletable: target.role !== 'ALERTS',
 					})
 				})
@@ -240,6 +322,6 @@ const ConfigConnections = {
 }
 registerGlobalComponent('ConfigConnections', ConfigConnections)
 
-export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT}
+export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT, SOURCEABLE_ROLES}
 
 // vim: set noet ts=4 sw=4:

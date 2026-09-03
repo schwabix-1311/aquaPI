@@ -158,16 +158,22 @@ export default {
 			]
 			if (this.usersStore.isOperatorOrAdmin) {
 				items.push({
+					// 'name' stays the pages.settings.* i18n key prefix
+					// (a separate concern from the route identifier) -
+					// only 'route' (the actual vue-router target) changed
+					// when the route itself was renamed from 'settings'
 					name: 'settings',
 					icon: 'mdi-tune',
-					route: 'settings'
+					route: 'parameters'
 				})
 			}
 			if (this.usersStore.isAdmin) {
 				items.push({
+					// see the 'settings' item above - 'name' stays the
+					// pages.config.* i18n prefix, only 'route' changed
 					name: 'config',
 					icon: 'mdi-cog-outline',
-					route: 'config'
+					route: 'wiring'
 				})
 				items.push({
 					name: 'users',

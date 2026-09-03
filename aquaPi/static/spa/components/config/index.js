@@ -1,5 +1,5 @@
 import './comps.js'
-import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './comps.js'
+import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT, SOURCEABLE_ROLES} from './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useConfigStore} from '../../store/modules/config.js'
@@ -21,10 +21,7 @@ const AquapiConfig = {
 			<v-card-text>
 				<v-row justify="space-between" class="mb-2">
 					<v-col cols="auto">
-						<v-alert v-if="connectingFrom" dense text type="info" class="mb-0">
-							{{ $t('pages.config.hintConnecting') }}
-						</v-alert>
-						<v-alert v-else-if="selectMode" dense text type="info" class="mb-0">
+						<v-alert v-if="selectMode" dense text type="info" class="mb-0">
 							{{ $t('pages.config.hintSelecting', {count: selectedIds.length}) }}
 						</v-alert>
 					</v-col>
@@ -75,12 +72,15 @@ const AquapiConfig = {
 				</v-alert>
 
 				<div v-else class="config-canvas-wrapper">
-					<div class="config-canvas" :style="canvasStyle">
+					<div class="config-canvas" ref="canvas" :style="canvasStyle">
 						<config-connections
 							:nodes="nodesForConnections"
+							:node-types="nodeTypes"
 							:width="canvasWidth"
 							:height="canvasHeight"
+							:preview="previewEdge"
 							@remove="onRemoveEdge"
+							@port-mousedown="onConnectDragStart"
 						></config-connections>
 
 						<config-node-box
@@ -88,10 +88,10 @@ const AquapiConfig = {
 							:key="node.identifier"
 							:node="node"
 							:node-types="nodeTypes"
-							:connecting="connectingFrom && connectingFrom.id === node.id"
+							:connecting="connectDrag && connectDrag.sourceNode.id === node.id"
+							:drop-target="connectDrag && connectDrag.hoverTargetId === node.id ? (connectDrag.validDrop ? 'valid' : 'invalid') : null"
 							:selected="selectedIds.includes(node.id)"
 							@select="onSelect"
-							@connect="onConnectStart"
 							@edit="openEditDialog"
 							@delete="onDelete"
 							@drag="onDrag"
@@ -123,7 +123,7 @@ const AquapiConfig = {
 			dialogOpen: false,
 			templatesDialogOpen: false,
 			editingNode: null,
-			connectingFrom: null,
+			connectDrag: null,
 			selectMode: false,
 			selectedIds: [],
 			error: null,
@@ -171,6 +171,11 @@ const AquapiConfig = {
 		},
 		canvasStyle: function() {
 			return {width: this.canvasWidth + 'px', height: this.canvasHeight + 'px'}
+		},
+		previewEdge: function() {
+			if (!this.connectDrag) return null
+			const {x1, y1, x2, y2, port} = this.connectDrag
+			return {x1, y1, x2, y2, arrowAtStart: port === 'input'}
 		},
 	},
 
@@ -384,13 +389,13 @@ const AquapiConfig = {
 		},
 
 		openAddDialog: function() {
-			this.connectingFrom = null
+			this.connectDrag = null
 			this.editingNode = null
 			this.dialogOpen = true
 		},
 
 		openEditDialog: function(node) {
-			this.connectingFrom = null
+			this.connectDrag = null
 			this.editingNode = node
 			this.dialogOpen = true
 		},
@@ -405,60 +410,102 @@ const AquapiConfig = {
 		},
 
 		onSelect: function(node) {
-			if (this.selectMode) {
-				const idx = this.selectedIds.indexOf(node.id)
-				if (idx === -1) {
-					this.selectedIds.push(node.id)
-				} else {
-					this.selectedIds.splice(idx, 1)
+			// connecting is now drag-driven (see onConnectDragStart) - a
+			// plain click only ever mattered for select-mode's multi-select
+			if (!this.selectMode) {
+				return
+			}
+			const idx = this.selectedIds.indexOf(node.id)
+			if (idx === -1) {
+				this.selectedIds.push(node.id)
+			} else {
+				this.selectedIds.splice(idx, 1)
+			}
+		},
+
+		// Regardless of which port a drag starts from, it always resolves
+		// to a (source, target) pair where target.receives is what
+		// actually changes: dragging from a node's OUTPUT port means "the
+		// node I drop on receives from me" (source = drag origin, target
+		// = drop node); dragging from a node's INPUT port means "I
+		// receive from the node I drop on" (source = drop node, target =
+		// drag origin).
+		onConnectDragStart(payload) {
+			const {node, port, clientX, clientY} = payload
+			const canvasEl = this.$refs.canvas
+			if (!canvasEl) return
+			const toLocal = (cx, cy) => {
+				const rect = canvasEl.getBoundingClientRect()
+				return {x: cx - rect.left, y: cy - rect.top}
+			}
+			const start = toLocal(clientX, clientY)
+			const portX = port === 'output' ? (node.pos_x || 0) + NODE_BOX_WIDTH : (node.pos_x || 0)
+			const portY = (node.pos_y || 0) + NODE_BOX_HEIGHT / 2
+
+			this.connectDrag = {
+				sourceNode: node, port,
+				x1: portX, y1: portY,
+				x2: start.x, y2: start.y,
+				hoverTargetId: null, validDrop: false,
+			}
+
+			const onMove = (mv) => {
+				const p = toLocal(mv.clientX, mv.clientY)
+				this.connectDrag.x2 = p.x
+				this.connectDrag.y2 = p.y
+				const hover = this.nodes.find(n => n.id !== node.id
+					&& p.x >= (n.pos_x || 0) && p.x <= (n.pos_x || 0) + NODE_BOX_WIDTH
+					&& p.y >= (n.pos_y || 0) && p.y <= (n.pos_y || 0) + NODE_BOX_HEIGHT)
+				this.connectDrag.hoverTargetId = hover ? hover.id : null
+				this.connectDrag.validDrop = hover ? this.isValidConnection(node, port, hover) : false
+			}
+			const onUp = () => {
+				document.removeEventListener('mousemove', onMove)
+				document.removeEventListener('mouseup', onUp)
+				if (this.connectDrag && this.connectDrag.hoverTargetId && this.connectDrag.validDrop) {
+					const hover = this.nodesById[this.connectDrag.hoverTargetId]
+					if (port === 'output') {
+						this.wireConnection(node, hover)
+					} else {
+						this.wireConnection(hover, node)
+					}
 				}
-				return
+				this.connectDrag = null
 			}
-			if (!this.connectingFrom) {
-				return
-			}
-			if (this.connectingFrom.id === node.id) {
-				this.connectingFrom = null
-				return
-			}
-			// Alert nodes have no 'connect' icon of their own (conditions
-			// are wired via the AlertCond editor, not drag-connect) and
-			// aren't valid drop targets either, for the same reason -
-			// silently ignore rather than erroring, since there's no
-			// affordance suggesting this would work in the first place.
-			if (node.role === 'ALERTS') {
-				return
-			}
-			this.connectTo(node)
+			document.addEventListener('mousemove', onMove)
+			document.addEventListener('mouseup', onUp)
 		},
 
-		onConnectStart: function(node) {
-			this.connectingFrom = (this.connectingFrom && this.connectingFrom.id === node.id) ? null : node
+		// validity only depends on the receiving end: for an output-drag
+		// that's whatever's hovered, for an input-drag it's the fixed
+		// drag origin itself (already guaranteed valid - hasInput only
+		// renders that port when receives !== 'none' in the first place)
+		isValidConnection(dragOriginNode, port, hoverNode) {
+			const source = port === 'output' ? dragOriginNode : hoverNode
+			const receiver = port === 'output' ? hoverNode : dragOriginNode
+			if (!SOURCEABLE_ROLES.includes(source.role)) return false
+			const schema = this.nodeTypes[receiver.type]
+			return !!schema && schema.receives !== 'none' && receiver.role !== 'ALERTS'
 		},
 
-		connectTo(target) {
+		wireConnection(source, target) {
 			const schema = this.nodeTypes[target.type]
-			if (!schema || schema.receives === 'none') {
-				this.error = target.name + ': ' + (this.$t('pages.config.errNameType'))
-				this.connectingFrom = null
-				return
-			}
+			if (!schema || schema.receives === 'none') return   // already validated, shouldn't happen
 
 			let receives
 			if (schema.receives === 'multi') {
 				receives = (target.receives || []).slice()
-				if (!receives.includes(this.connectingFrom.id)) {
-					receives.push(this.connectingFrom.id)
+				if (!receives.includes(source.id)) {
+					receives.push(source.id)
 				}
 			} else {
-				receives = [this.connectingFrom.id]
+				receives = [source.id]
 			}
 
 			this.configStore.draftUpdateNode({
 				nodeId: target.id,
 				changes: {receives},
 			})
-			this.connectingFrom = null
 		},
 
 		onRemoveEdge(edge) {

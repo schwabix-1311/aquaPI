@@ -61,6 +61,21 @@ class Setting:
     # meaningful on a get_settings_schema() entry, checked by the /config
     # create flow.
     required: bool = False
+    # True = only meaningful as a constructor argument at node creation,
+    # never re-read afterward (get_settings() never includes it - see
+    # e.g. UiSwitchInput.initval). /config's create dialog should still
+    # collect it, but editing an existing node's copy is a silent no-op,
+    # so the dialog should not offer it there.
+    creation_only: bool = False
+    # True = only ever meant to be edited one field at a time, committed
+    # immediately (the real /settings page's own per-field PUT, or a
+    # Dashboard widget - see e.g. UiSwitchInput.value) - never through
+    # /config's create/edit dialog, which stages a whole node's fields
+    # together and only commits them on a later, unrelated "Save
+    # changes": for a field that's also independently live-editable
+    # elsewhere, that staging can silently revert a change made in the
+    # meantime.
+    live_only: bool = False
     # for type='duration': value/min/max/step always travel the API as
     # seconds (wire unit) - the /settings widget lets the user display/edit
     # in s, min or h, converting back to seconds before saving. The largest
@@ -120,6 +135,10 @@ class Setting:
         }
         if self.required:
             result['required'] = True
+        if self.creation_only:
+            result['creationOnly'] = True
+        if self.live_only:
+            result['liveOnly'] = True
         if self.label_params is not None:
             result['labelParams'] = self.label_params
         return result

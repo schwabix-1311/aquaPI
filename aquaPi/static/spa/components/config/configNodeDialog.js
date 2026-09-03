@@ -114,6 +114,25 @@ const ConfigNodeDialog = {
 		receivesKind: function() {
 			return this.schema.receives || 'none'
 		},
+		// this dialog's generic create/edit form is a batched draft (only
+		// committed to the backend on a later "Save changes"/save()
+		// PUT/POST), unlike /settings' own per-field-immediate-commit
+		// PUT - see Setting.live_only/creation_only in msg_bus.py. A
+		// liveOnly field (e.g. UiSwitchInput.value) must never round-trip
+		// through here at all: submitting it on edit would setattr() the
+		// node's live value property, silently flipping real state as a
+		// side effect of an unrelated field edit. A creationOnly field
+		// (e.g. initval) is consumed once by the constructor and never
+		// re-read afterward, so editing an existing node's copy of it is a
+		// no-op that only looks like it did something - only offer it
+		// while creating.
+		visibleFields: function() {
+			return this.schema.fields.filter(field => {
+				if (field.liveOnly) return false
+				if (field.creationOnly && this.editNode) return false
+				return true
+			})
+		},
 		// what the Setting* widgets (SettingNumber/SettingSlider/...) render:
 		// each schema field's static metadata, plus its label resolved from
 		// an i18n key (Setting.label convention, see msg_bus.py - same
@@ -123,7 +142,7 @@ const ConfigNodeDialog = {
 		// the schema's own 'value' is only ever a suggested default, not
 		// this field's actual current value.
 		formFieldItems: function() {
-			return this.schema.fields.map(field => ({
+			return this.visibleFields.map(field => ({
 				...field,
 				label: this.$t('pages.settings.fields.' + field.label),
 				value: this.form.fields[field.key],
@@ -187,7 +206,7 @@ const ConfigNodeDialog = {
 		},
 		buildFieldValues: function(node) {
 			const values = {}
-			this.schema.fields.forEach(field => {
+			this.visibleFields.forEach(field => {
 				values[field.key] = node ? this.valueFromLiveNode(node, field) : this.valueFromSchemaDefault(field)
 			})
 			return values
@@ -199,11 +218,19 @@ const ConfigNodeDialog = {
 		// server-side. See Setting.to_dict()'s attrs.factor. Falls back to
 		// the schema default if this node doesn't carry the field at all
 		// (e.g. a field added to the type after this node was created).
+		// attrs.factor is only ever set for duration fields (msg_bus.py's
+		// Setting.to_dict() sends null whenever factor == 1, i.e. for
+		// every non-duration field) - `|| 1` used to paper over that with
+		// a multiply-by-1 no-op for plain numbers, but for a non-numeric
+		// field (e.g. a 'select' port value, a string) `"GPIO 13 out" * 1`
+		// is NaN, not a no-op. Skip the multiplication entirely instead of
+		// defaulting the factor to 1.
 		valueFromLiveNode: function(node, field) {
 			if (node[field.key] === undefined) {
 				return this.valueFromSchemaDefault(field)
 			}
-			return node[field.key] * (field.attrs.factor || 1)
+			const value = node[field.key]
+			return field.attrs.factor ? value * field.attrs.factor : value
 		},
 		valueFromSchemaDefault: function(field) {
 			if (field.value !== undefined && field.value !== null) {

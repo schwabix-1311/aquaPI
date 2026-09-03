@@ -240,7 +240,7 @@ class AnalogInput(InputNode):
         # 'initval' is creation-only (seeds a faked/simulated driver, see
         # AInDriver.read()) - schema-only, get_settings() above doesn't
         # (and never did) surface it as an editable setting afterward.
-        schema.insert(1, Setting('initval', 'initval', 0.0, type='number'))
+        schema.insert(1, Setting('initval', 'initval', 0.0, type='number', creation_only=True))
         schema.insert(2, Setting('unit', 'unit', ''))
         schema.append(Setting('avg', 'avg', 1, type='number', min=1, max=5, step=1))
         return schema
@@ -527,8 +527,11 @@ class UiSwitchInput(UiInput):
         schema = super().get_settings_schema()
         # 'initval' is creation-only - consumed once into self.data, never
         # stored back, so it can't be (and never was) part of get_settings().
-        schema.append(Setting('initval', 'initval', False, type='checkbox'))
-        schema.append(Setting('value', 'value', type='checkbox'))
+        # 'value' is the live toggle itself - meant to be flipped one at a
+        # time (Dashboard widget, or /settings' own per-field PUT), never
+        # through /config's batched create/edit dialog, see Setting.live_only.
+        schema.append(Setting('initval', 'initval', False, type='checkbox', creation_only=True))
+        schema.append(Setting('value', 'value', type='checkbox', live_only=True))
         return schema
 
 
@@ -593,10 +596,11 @@ class UiAnalogInput(UiInput):
         # 'initval'/'unit' are creation-only - like UiSwitchInput's initval,
         # never exposed as an editable setting afterward (unlike
         # AnalogInput, this unit is never even read back into get_settings()
-        # today).
-        schema.append(Setting('initval', 'initval', 0.0, type='number'))
-        schema.append(Setting('unit', 'unit', ''))
-        schema.append(Setting('value', 'value', type='number'))
+        # today). 'value' is the live slider itself - see Setting.live_only,
+        # same reasoning as UiSwitchInput's own 'value'.
+        schema.append(Setting('initval', 'initval', 0.0, type='number', creation_only=True))
+        schema.append(Setting('unit', 'unit', '', creation_only=True))
+        schema.append(Setting('value', 'value', type='number', live_only=True))
         # keyed 'min'/'max'/'step' (not the constructor's 'vmin'/'vmax') to
         # match the real attribute names - the /settings PUT handler does a
         # plain setattr(node, key, value).

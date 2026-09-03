@@ -110,7 +110,7 @@ const app = Vue.createApp({
 				// auth.py's before_request hook) - leave any page that
 				// viewer role no longer has access to, same as the
 				// beforeEnter guards would if navigated to fresh
-				if (this.$route.name === 'config' || this.$route.name === 'settings'
+				if (this.$route.name === 'wiring' || this.$route.name === 'parameters'
 					|| this.$route.name === 'users') {
 					this.$router.replace({name: 'home'})
 				}

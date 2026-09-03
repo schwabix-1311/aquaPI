@@ -32,8 +32,8 @@ const routes = [
 				}
 			},
 			{
-				path: 'settings',
-				name: 'settings',
+				path: 'parameters',
+				name: 'parameters',
 				components: {
 					default: () => loadSfc('/static/spa/pages/Settings.vue')
 				},
@@ -50,8 +50,8 @@ const routes = [
 				},
 			},
 			{
-				path: 'config',
-				name: 'config',
+				path: 'wiring',
+				name: 'wiring',
 				components: {
 					default: () => loadSfc('/static/spa/pages/Config.vue')
 				},

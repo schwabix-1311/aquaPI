@@ -246,30 +246,43 @@ html::-webkit-scrollbar {
 .config-node-box--selected {
     outline: 2px solid #43a047;
 }
-/* Small input/output port markers on node cards, so the connector
-   attachment side (left = input, right = output) is visually obvious
-   directly on the card, not just implied by the connector's geometry. */
-.config-node-port {
-    position: absolute;
-    top: 50%;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    transform: translateY(-50%);
-    border: 1px solid rgba(0, 0, 0, 0.3);
-    /* auto (not none), so the title tooltip actually fires on hover;
-       mousedown still bubbles up to the card's own drag handler. */
-    pointer-events: auto;
-    cursor: move;
-    z-index: 1;
+/* drag-to-connect hover feedback: whichever card is currently under the
+   pointer while dragging from a port, styled by whether dropping there
+   right now would actually wire something up - see AquapiConfig's
+   isValidConnection(). Reuses --selected's green / the same red used
+   for the connection delete-X, since neither co-occurs with this. */
+.config-node-box--drop-valid {
+    outline: 2px solid #43a047;
 }
-.config-node-port--in {
-    left: -5px;
-    background-color: #1976d2;
+.config-node-box--drop-invalid {
+    outline: 2px solid #f44336;
 }
-.config-node-port--out {
-    right: -5px;
-    background-color: #90a4ae;
+/* Input/output port markers, so the connector attachment side (left =
+   input, right = output) is visually obvious directly on the card, not
+   just implied by the connector's geometry - and, since this is what a
+   connection is actually dragged from/to, they need their own click
+   target. Rendered as SVG <circle> elements inside ConfigConnections
+   (comps.js), NOT as elements on ConfigNodeBox itself - a div nested in
+   the card could never paint above the connection lines (ConfigNodeBox
+   establishes its own stacking context, which can't out-rank a sibling
+   one like .config-connections no matter its own z-index), while an SVG
+   circle added after the edges in the same overlay naturally paints on
+   top by document order alone. */
+.config-node-port-svg {
+    stroke: rgba(0, 0, 0, 0.3);
+    stroke-width: 1;
+    pointer-events: all;
+    cursor: crosshair;
+    transition: r 0.1s ease-in-out;
+}
+.config-node-port-svg:hover {
+    r: 10;
+}
+.config-node-port-svg--input {
+    fill: #1976d2;
+}
+.config-node-port-svg--output {
+    fill: #90a4ae;
 }
 
 /* /settings chain tree (NodeSettingsTree in components/settings/comps.js):

@@ -84,7 +84,7 @@ const EscalationEditor = {
 		portOptions() {
 			const portSetting = this.settingsStore.settingsForNode(this.node.id)
 				.find((entry) => entry.key === 'port')
-			return (portSetting && portSetting.options) || []
+			return (portSetting && portSetting.attrs && portSetting.attrs.options) || []
 		},
 		channelItems() {
 			const items = [{title: this.$t('pages.settings.escalation.none'), value: 'none'}]

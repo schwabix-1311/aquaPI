@@ -573,8 +573,11 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
 @login_required
 def api_node_types() -> Response:
     """ metadata describing every creatable node type: its fields and
-        how many 'receives' connections it accepts. Alert nodes are
-        not included.
+        how many 'receives' connections it accepts. Alert is included
+        but always reports 'receives': 'none' - its conditions (which
+        node(s) it watches, and under what limits) are a separate
+        resource, added/edited after creation via
+        PUT /api/nodes/<id>/conditions, not through this generic schema.
     """
     return jsonify(db.get_node_type_schema())
 

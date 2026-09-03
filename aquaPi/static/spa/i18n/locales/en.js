@@ -100,6 +100,7 @@ export default
 			cancel: 'Cancel',
 			hintEmpty: 'No nodes yet - use "Add node" to create one',
 			hintConnecting: 'Click the target node to connect, or the palette to cancel',
+			hintAlertNoConditionsYet: 'Add alert conditions after saving, via Edit',
 			hintSelecting: 'Click nodes to select them for a template ({count} selected)',
 			errNameType: 'Please choose a type and enter a name',
 			confirmDelete: 'Delete node "{name}"? Any wiring to it will be removed.',

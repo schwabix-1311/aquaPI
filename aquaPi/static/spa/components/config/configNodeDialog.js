@@ -57,6 +57,10 @@ const ConfigNodeDialog = {
 						outlined dense
 					></v-text-field>
 
+					<v-alert v-if="isCreatingAlert" type="info" dense text class="mb-3">
+						{{ $t('pages.config.hintAlertNoConditionsYet') }}
+					</v-alert>
+
 					<div v-if="!isAlert" v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">
 						<component
 							:is="widgetType(item)"
@@ -125,12 +129,24 @@ const ConfigNodeDialog = {
 				value: this.form.fields[field.key],
 			}))
 		},
-		// Alert nodes have no schema entry (their conditions aren't a plain
-		// field) and are never creatable, so this is only ever true while
-		// editing - conditions are handled entirely by <alert-cond-editor>,
-		// not by the generic receives/fields controls.
+		// Alert's conditions aren't a plain field, so this is only ever
+		// true while editing an existing Alert - conditions are handled
+		// entirely by <alert-cond-editor>, not by the generic
+		// receives/fields controls. Deliberately NOT true while *creating*
+		// an Alert (editNode is null): a brand-new Alert has no id yet for
+		// <alert-cond-editor> to attach to, so creation instead falls
+		// through to the ordinary generic-fields path below (port/repeat,
+		// same as any other type) - see isCreatingAlert for that hint.
 		isAlert: function() {
 			return !!this.editNode && this.editNode.role === 'ALERTS'
+		},
+		// Alert is creatable (via the ordinary generic-fields path,
+		// port+repeat only) but starts with zero conditions - conditions
+		// can only be added after the node is actually saved and has a
+		// real id (see isAlert above), so show a hint instead of a
+		// conditions editor while creating one.
+		isCreatingAlert: function() {
+			return !this.editNode && this.form.type === 'Alert'
 		},
 		// TODO(config-receives-type-filtering): lists every other node
 		// unconditionally - doesn't filter by data_range compatibility

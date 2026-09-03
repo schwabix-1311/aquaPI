@@ -209,3 +209,26 @@ def test_apply_persists_wiring_once(client, users, bus, app):
         'deletes': ['heizstab'],
     })
     assert app.extensions['machineroom'].saved == 1
+
+
+def test_apply_creates_alert_node(client, users, bus, app):
+    # exercises apply_config_diff's own build_node() call (creates path),
+    # not just api_create_node's direct route - Alert must be creatable
+    # here too, with empty conditions/receives
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-alert', 'type': 'Alert', 'name': 'Neuer Alarm',
+            'fields': {'port': '', 'repeat': 3600},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    data = resp.get_json()
+
+    alert_id = data['id_map']['tmp-alert']
+    assert alert_id == 'neueralarm'
+    new_node = bus.get_node(alert_id)
+    assert new_node is not None
+    assert new_node.conditions == set()
+    assert new_node.receives == []

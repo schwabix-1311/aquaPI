@@ -108,8 +108,11 @@ def test_node_types_lists_creatable_types(client, users):
     assert 'AnalogInput' in schema
     assert 'MinimumCtrl' in schema
     assert schema['MinimumCtrl']['receives'] == 'single'
-    # Alert is intentionally excluded (complex 'conditions')
-    assert 'Alert' not in schema
+    # Alert is creatable, but always reports 'none' - its conditions
+    # aren't a plain field, they're added afterward via a dedicated
+    # endpoint (PUT /api/nodes/<id>/conditions)
+    assert 'Alert' in schema
+    assert schema['Alert']['receives'] == 'none'
 
 
 # --- POST /api/nodes/ ---------------------------------------------------
@@ -155,10 +158,34 @@ def test_create_node_unknown_type_returns_400(client, users):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_create_node_rejects_alert_type(client, users):
-    # Alert isn't in NODE_TYPE_SCHEMA (excluded on purpose)
+def test_create_alert_node(client, users, bus):
+    # Alert is creatable with its two real constructor fields (port,
+    # repeat) and starts with zero conditions - those are added
+    # afterward via PUT /api/nodes/<id>/conditions (AlertCondEditor)
     _login(client, 'admin1', 'adminPass123')
-    resp = client.post('/api/nodes/', json={'type': 'Alert', 'name': 'X'})
+    resp = client.post('/api/nodes/', json={
+        'type': 'Alert', 'name': 'Neuer Alarm',
+        'fields': {'port': '', 'repeat': 3600},
+    })
+    assert resp.status_code == HTTPStatus.CREATED
+    data = resp.get_json()
+    assert data['type'] == 'Alert'
+    assert data['role'] == 'ALERTS'
+
+    new_node = bus.get_node('neueralarm')
+    assert new_node is not None
+    assert new_node.conditions == set()
+    assert new_node.receives == []
+
+
+def test_create_alert_node_rejects_receives(client, users):
+    # Alert's schema reports 'receives': 'none' - conditions, not a
+    # plain receives list, are how an Alert watches other nodes
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.post('/api/nodes/', json={
+        'type': 'Alert', 'name': 'Neuer Alarm', 'receives': ['wasser'],
+        'fields': {'port': '', 'repeat': 3600},
+    })
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
@@ -259,11 +286,16 @@ def test_update_node_rejects_unknown_field(client, users):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_update_node_alert_fields_rejected(client, users):
-    # Alert has no NODE_TYPE_SCHEMA entry, so field/receives edits are refused,
-    # but group/position must still work
+def test_update_node_alert_fields_allowed_receives_still_rejected(client, users):
+    # Alert now has a NODE_TYPE_SCHEMA entry, so its real constructor
+    # fields (port/repeat) can be edited via this generic route too, same
+    # as any other type - but 'receives' stays rejected, since Alert's
+    # receives are derived from conditions, never a plain settable list
     _login(client, 'admin1', 'adminPass123')
     resp = client.put('/api/nodes/warnungen', json={'fields': {'repeat': 10}})
+    assert resp.status_code == HTTPStatus.OK
+
+    resp = client.put('/api/nodes/warnungen', json={'receives': ['wasser']})
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
     resp = client.put('/api/nodes/warnungen', json={'group': 'Alerts'})

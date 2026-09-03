@@ -100,6 +100,7 @@ export default
 			cancel: 'Abbrechen',
 			hintEmpty: 'Noch keine Elemente - über "Element hinzufügen" anlegen',
 			hintConnecting: 'Zielelement anklicken zum Verbinden, oder Palette zum Abbrechen',
+			hintAlertNoConditionsYet: 'Bedingungen nach dem Speichern über Bearbeiten hinzufügen',
 			hintSelecting: 'Elemente anklicken, um sie für eine Vorlage auszuwählen ({count} ausgewählt)',
 			errNameType: 'Bitte Typ wählen und Namen eingeben',
 			confirmDelete: 'Element "{name}" löschen? Bestehende Verbindungen werden entfernt.',

@@ -91,11 +91,15 @@ ALERT_COND_FACTORY: dict[str, type] = {
 # --- node type metadata for the /config graph editor ---------------------
 #
 # Built from each creatable type's own get_settings_schema() (see
-# BusNode/BusListener in machineroom/msg_bus.py) - Alert is excluded, its
-# 'conditions' are a set of objects, not a simple field, and are out of
-# scope for the generic add/edit dialog. 'receives' cardinality
+# BusNode/BusListener in machineroom/msg_bus.py). 'receives' cardinality
 # ('none'/'single'/'multi') comes from get_receives_kind(), itself derived
-# from the class hierarchy - see BusListener._receives_kind.
+# from the class hierarchy - see BusListener._receives_kind - except for
+# Alert, whose 'conditions' (a set of objects: class name/node_id/limit/
+# duration, not a plain list of ids) can't be collected through the
+# generic receives picker at all: report 'none' for it instead of its
+# real runtime cardinality ('multi'), so the create/edit dialog hides the
+# receives picker and conditions are added afterward via the existing
+# PUT /api/nodes/<id>/conditions (AlertCondEditor on /settings).
 
 def get_node_type_schema() -> dict[str, dict[str, Any]]:
     """ For every creatable node type: its constructor/settings fields
@@ -107,11 +111,9 @@ def get_node_type_schema() -> dict[str, dict[str, Any]]:
     """
     schema: dict[str, dict[str, Any]] = {}
     for type_name, cls in NODE_FACTORY.items():
-        if cls.ROLE == BusRole.ALERTS:
-            continue
         schema[type_name] = {
             'role': cls.ROLE.name,
-            'receives': cls.get_receives_kind(),
+            'receives': 'none' if cls.ROLE == BusRole.ALERTS else cls.get_receives_kind(),
             'fields': [s.to_dict() for s in cls.get_settings_schema() if s.key is not None],
         }
     return schema
@@ -154,12 +156,17 @@ def build_node(type_name: str, name: str, receives: list[str],
         Raises ValueError/KeyError on unknown type or missing fields.
     """
     cls = NODE_FACTORY.get(type_name)
-    if not cls or cls.ROLE == BusRole.ALERTS:
+    if not cls:
         raise ValueError(f'Unknown or non-creatable node type: {type_name!r}')
 
     rcv = _mk_receives_arg(cls.get_receives_kind(), receives)
     fields = convert_duration_fields(cls, fields)
 
+    if type_name == 'Alert':
+        if receives:
+            raise ValueError('Alert does not accept receives at creation - '
+                             'add conditions afterward via Edit')
+        return Alert(name, set(), fields['port'], repeat=int(fields['repeat']))
     if type_name == 'AnalogInput':
         return AnalogInput(name, fields['port'], fields['initval'], fields['unit'],
                            interval=fields['interval'], avg=int(fields['avg']))
@@ -254,11 +261,12 @@ def prune_dangling_references(bus: MsgBus, deleted_id: str) -> None:
     """ remove every reference to 'deleted_id' from every other live
         node's wiring, right before it is actually deleted. Plain nodes:
         drop it from their 'receives' list directly. Alert nodes: their
-        'receives' is derived from 'conditions' (never directly editable -
-        see NODE_TYPE_SCHEMA's Alert exclusion), so instead drop every
-        AlertCond that watches 'deleted_id' and recompute 'receives' from
-        what's left, or a deleted node would leave an orphaned/dangling
-        AlertCond and a stale 'receives' entry behind forever.
+        'receives' is derived from 'conditions' (never directly settable -
+        NODE_TYPE_SCHEMA reports 'none' for Alert's receives precisely
+        because of this), so instead drop every AlertCond that watches
+        'deleted_id' and recompute 'receives' from what's left, or a
+        deleted node would leave an orphaned/dangling AlertCond and a
+        stale 'receives' entry behind forever.
     """
     for other in bus.get_nodes():
         if other.id == deleted_id:

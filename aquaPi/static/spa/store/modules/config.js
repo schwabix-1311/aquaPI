@@ -483,15 +483,17 @@ export const useConfigStore = Pinia.defineStore('config', {
 						pos_y: node.pos_y || 0,
 					}
 
-					// Node types without a NODE_TYPE_SCHEMA entry (Alert,
-					// History) reject *any* update payload that even mentions
-					// 'receives'/'fields', regardless of value - their receives
-					// are edited through a dedicated endpoint instead (see
-					// NodeReceivesEditor). Since this node may be dirty for an
-					// unrelated reason (e.g. only pos_x/pos_y changed, as the
-					// /config auto-layout does for every node including these),
-					// only include receives/fields when they actually changed
-					// from the last-known server state, not unconditionally.
+					// Alert's schema entry reports 'receives': 'none' (its
+					// receives are derived from 'conditions', never a plain
+					// list - edited through a dedicated endpoint instead,
+					// see NodeReceivesEditor/alertCondEditor.js), so any
+					// non-empty 'receives' in an update payload is rejected
+					// regardless of this node's actual current value. Since
+					// this node may be dirty for an unrelated reason (e.g.
+					// only pos_x/pos_y changed, as the /config auto-layout
+					// does for every node including these), only include
+					// receives/fields when they actually changed from the
+					// last-known server state, not unconditionally.
 					const original = dashboardNodes[node.id]
 					const receives = node.receives || []
 					if (!original || JSON.stringify(receives) !== JSON.stringify(original.receives || [])) {

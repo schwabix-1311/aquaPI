@@ -205,16 +205,19 @@ def test_two_users_have_separated_dashboards(app, client):
     assert resp.get_json() == [{'controller_id': 'warnung', 'group': 'Becken 1'}]
 
 
-def test_notification_prefs_api_is_operator_or_admin(app, client):
-    """ escalation config (Alert notification redesign) is editable by
-        operator/admin accounts, same as Alert.port ('sendTo') itself via
-        PUT /api/nodes/<id>/settings - a viewer gets 403 on both GET and
-        PUT, an operator can round-trip their own escalation config
-        through the API
+def test_notification_prefs_api_get_open_put_admin_only(app, client):
+    """ escalation config is a single, shared config per Alert node (not
+        per-user - aquaPi's "users" are shared roles, not individual
+        people): GET is read-only for operator+admin, PUT is admin-only.
+        A viewer gets 403 on both. Two different admins must see the
+        exact same shared config - that's the concrete proof the
+        per-user dimension is gone.
     """
     users_db = db.get_users_db_path(app.config['INSTANCE_PATH'])
     db.create_user(users_db, 'viewer1', 'viewerPass1', role='viewer')
-    operator_id = db.create_user(users_db, 'operator1', 'operatorPass1', role='operator')
+    db.create_user(users_db, 'operator1', 'operatorPass1', role='operator')
+    db.create_user(users_db, 'admin1', 'adminPass123', role='admin')
+    db.create_user(users_db, 'admin2', 'adminPass456', role='admin')
 
     _login(client, 'viewer1', 'viewerPass1')
     resp = client.get('/api/notifications/prefs')
@@ -225,6 +228,14 @@ def test_notification_prefs_api_is_operator_or_admin(app, client):
     client.get('/logout')
 
     _login(client, 'operator1', 'operatorPass1')
+    resp = client.get('/api/notifications/prefs')
+    assert resp.status_code == HTTPStatus.OK
+    resp = client.put('/api/notifications/prefs/warnung',
+                      json={'escalation_channel': 'Telegram #1'})
+    assert resp.status_code == HTTPStatus.FORBIDDEN
+    client.get('/logout')
+
+    _login(client, 'admin1', 'adminPass123')
     resp = client.put('/api/notifications/prefs/warnung',
                       json={'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30})
     assert resp.status_code == HTTPStatus.OK
@@ -234,11 +245,18 @@ def test_notification_prefs_api_is_operator_or_admin(app, client):
     resp = client.get('/api/notifications/prefs')
     assert resp.get_json() == [{'alert_node_id': 'warnung', 'escalation_channel': 'Telegram #1',
                                 'escalation_after_minutes': 30}]
+    client.get('/logout')
+
+    # a 2nd, different admin must see the exact same shared config
+    _login(client, 'admin2', 'adminPass456')
+    resp = client.get('/api/notifications/prefs')
+    assert resp.get_json() == [{'alert_node_id': 'warnung', 'escalation_channel': 'Telegram #1',
+                                'escalation_after_minutes': 30}]
 
     # underlying storage is confirmed too, not just via API
-    prefs = db.get_prefs_for_alert(users_db, 'warnung')
-    assert prefs == [{'user_id': operator_id, 'username': 'operator1',
-                      'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30}]
+    config = db.get_escalation_config(users_db, 'warnung')
+    assert config == {'alert_node_id': 'warnung', 'escalation_channel': 'Telegram #1',
+                      'escalation_after_minutes': 30}
 
 
 def test_all_nodes_reachable_via_plain_json_api(app, client):

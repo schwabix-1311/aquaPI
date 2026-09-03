@@ -1080,22 +1080,19 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 params  TEXT NOT NULL
             )
         """)
+        # a single, admin-configured escalation config per Alert node -
+        # NOT per-user (aquaPi's "users" are shared roles, not individual
+        # people; see commit 16a0f3f, which made this same call for the
+        # primary notification channel). Replaces the old per-user table
+        # 'user_notification_prefs' (kept in the DB, unused, for the
+        # one-time ./dbg migration to read from - see its delimited block)
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_notification_prefs (
-                user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                alert_node_id TEXT NOT NULL,
-                PRIMARY KEY (user_id, alert_node_id)
+            CREATE TABLE IF NOT EXISTS alert_escalation_config (
+                alert_node_id            TEXT PRIMARY KEY,
+                escalation_channel       TEXT NOT NULL DEFAULT 'none',
+                escalation_after_minutes INTEGER NOT NULL DEFAULT 0
             )
         """)
-        # 'escalation_channel'/'escalation_after_minutes' were added in
-        # Step 28 (alarm escalation) - migrate existing DBs
-        pref_cols = {row['name'] for row in conn.execute('PRAGMA table_info(user_notification_prefs)')}
-        if 'escalation_channel' not in pref_cols:
-            conn.execute("ALTER TABLE user_notification_prefs "
-                        "ADD COLUMN escalation_channel TEXT NOT NULL DEFAULT 'none'")
-        if 'escalation_after_minutes' not in pref_cols:
-            conn.execute('ALTER TABLE user_notification_prefs '
-                        'ADD COLUMN escalation_after_minutes INTEGER NOT NULL DEFAULT 0')
         conn.execute("""
             CREATE TABLE IF NOT EXISTS dashboards (
                 user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -1687,16 +1684,23 @@ def migrate_notification_config_from_json(globals_cfg: dict[str, Any],
     return migrated
 
 
-# --- per-user, per-alert notification preferences -----------------------
+# --- shared, admin-configured per-alert escalation config ---------------
+#
+# One row per Alert node, not per user - aquaPi's "users" are shared roles
+# (admin/operator/viewer), not individual people, so a personal escalation
+# preference has no real audience. Admins configure this once per Alert
+# node; operators may view it read-only. Replaced the old per-user table
+# 'user_notification_prefs' (see the one-time ./dbg migration block that
+# copies any real per-user rows into here).
 
-def set_user_notification_pref(db_path: str, user_id: int, alert_node_id: str,
-                               escalation_channel: str = 'none',
-                               escalation_after_minutes: int = 0) -> None:
-    """ set (create or replace) an operator/admin's escalation config for
-        a given Alert node: escalation_channel is an IoRegistry port name (e.g.
-        'Telegram #2'), or 'none' to disable. Gets additionally notified
-        once the alert has stayed active for at least
-        'escalation_after_minutes' (Step 28), 0 disables escalation.
+def set_escalation_config(db_path: str, alert_node_id: str,
+                          escalation_channel: str = 'none',
+                          escalation_after_minutes: int = 0) -> None:
+    """ set (create or replace) the shared escalation config for a given
+        Alert node: escalation_channel is an IoRegistry port name (e.g.
+        'Telegram #2'), or 'none' to disable. Additionally notified once
+        the alert has stayed active for at least 'escalation_after_minutes'
+        (Step 28), 0 disables escalation.
     """
     if not escalation_channel:
         raise ValueError(f'Invalid escalation channel: {escalation_channel!r}')
@@ -1707,49 +1711,44 @@ def set_user_notification_pref(db_path: str, user_id: int, alert_node_id: str,
     try:
         with conn:
             conn.execute("""
-                INSERT INTO user_notification_prefs
-                    (user_id, alert_node_id, escalation_channel, escalation_after_minutes)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(user_id, alert_node_id) DO UPDATE SET
+                INSERT INTO alert_escalation_config
+                    (alert_node_id, escalation_channel, escalation_after_minutes)
+                VALUES (?, ?, ?)
+                ON CONFLICT(alert_node_id) DO UPDATE SET
                     escalation_channel = excluded.escalation_channel,
                     escalation_after_minutes = excluded.escalation_after_minutes
-            """, (user_id, alert_node_id, escalation_channel, escalation_after_minutes))
+            """, (alert_node_id, escalation_channel, escalation_after_minutes))
     finally:
         conn.close()
 
 
-def list_user_notification_prefs(db_path: str, user_id: int) -> list[dict[str, Any]]:
-    """ return all (alert_node_id, escalation_*) prefs configured by one
-        operator/admin
+def list_escalation_configs(db_path: str) -> list[dict[str, Any]]:
+    """ return the shared escalation config for every Alert node that has
+        one configured
     """
     conn = get_users_connection(db_path)
     try:
         rows = conn.execute(
             'SELECT alert_node_id, escalation_channel, escalation_after_minutes '
-            'FROM user_notification_prefs '
-            'WHERE user_id = ? ORDER BY alert_node_id',
-            (user_id,)
+            'FROM alert_escalation_config ORDER BY alert_node_id'
         ).fetchall()
         return [dict(row) for row in rows]
     finally:
         conn.close()
 
 
-def get_prefs_for_alert(db_path: str, alert_node_id: str) -> list[dict[str, Any]]:
-    """ return all operators'/admins' escalation config for a given Alert
-        node, excluding those set to 'none'
+def get_escalation_config(db_path: str, alert_node_id: str) -> dict[str, Any] | None:
+    """ return the shared escalation config for one Alert node, or None if
+        never configured
     """
     conn = get_users_connection(db_path)
     try:
-        rows = conn.execute("""
-            SELECT u.id AS user_id, u.username AS username,
-                   p.escalation_channel AS escalation_channel,
-                   p.escalation_after_minutes AS escalation_after_minutes
-            FROM user_notification_prefs p
-            JOIN users u ON u.id = p.user_id
-            WHERE p.alert_node_id = ? AND p.escalation_channel != 'none'
-        """, (alert_node_id,)).fetchall()
-        return [dict(row) for row in rows]
+        row = conn.execute(
+            'SELECT alert_node_id, escalation_channel, escalation_after_minutes '
+            'FROM alert_escalation_config WHERE alert_node_id = ?',
+            (alert_node_id,)
+        ).fetchone()
+        return dict(row) if row else None
     finally:
         conn.close()
 

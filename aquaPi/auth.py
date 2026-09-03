@@ -423,19 +423,22 @@ def api_delete_user(user_id: int):
 @bp.route('/api/notifications/prefs', methods=['GET'])
 @roles_required('operator', 'admin')
 def api_list_notification_prefs():
-    """ list the current operator/admin's own escalation config per alert node. """
-    prefs = db.list_user_notification_prefs(_users_db_path(), current_user.id)
-    return jsonify(prefs)
+    """ list the shared escalation config for every Alert node that has
+        one configured. Read-only for operators; only admins may change
+        it (see PUT below).
+    """
+    configs = db.list_escalation_configs(_users_db_path())
+    return jsonify(configs)
 
 
 @bp.route('/api/notifications/prefs/<alert_node_id>', methods=['PUT'])
-@roles_required('operator', 'admin')
+@roles_required('admin')
 def api_set_notification_pref(alert_node_id: str):
-    """ set the current operator/admin's escalation config for one
-        specific Alert node: escalation_channel is an IoRegistry port
-        name (e.g. 'Telegram #2'), or 'none' to disable; gets
-        additionally notified once the alert has stayed active for
-        'escalation_after_minutes' (0 disables escalation).
+    """ set the shared escalation config for one specific Alert node:
+        escalation_channel is an IoRegistry port name (e.g. 'Telegram
+        #2'), or 'none' to disable; additionally notifies once the alert
+        has stayed active for 'escalation_after_minutes' (0 disables
+        escalation).
     """
     data = request.get_json(silent=True) or {}
     escalation_channel = data.get('escalation_channel', 'none')
@@ -450,9 +453,9 @@ def api_set_notification_pref(alert_node_id: str):
     except (TypeError, ValueError):
         return jsonify(error='escalation_after_minutes must be a non-negative integer'), HTTPStatus.BAD_REQUEST
 
-    db.set_user_notification_pref(_users_db_path(), current_user.id, alert_node_id,
-                                  escalation_channel, escalation_after_minutes)
-    log.info('User %r set escalation channel %r after %d min for alert %r',
+    db.set_escalation_config(_users_db_path(), alert_node_id,
+                             escalation_channel, escalation_after_minutes)
+    log.info('Admin %r set shared escalation channel %r after %d min for alert %r',
              current_user.username, escalation_channel, escalation_after_minutes, alert_node_id)
     return jsonify({'alert_node_id': alert_node_id,
                     'escalation_channel': escalation_channel,

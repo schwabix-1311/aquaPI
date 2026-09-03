@@ -3,16 +3,16 @@ import {useSettingsStore} from '../../store/modules/settings.js'
 import {useNotificationsStore} from '../../store/modules/notifications.js'
 import {useUsersStore} from '../../store/modules/users.js'
 
-// A 2nd, operator/admin-configured notification for an Alert node: once
+// A 2nd, admin-configured, shared notification for an Alert node: once
 // the alert has stayed continuously active for 'escalation_after_minutes',
 // also notify 'escalation_channel' - a specific IoRegistry port name, same
 // kind of value as the node's own primary 'port' ('sendTo') Setting, not
 // tied to any particular channel type (Email/Telegram/...). Not
 // schema-driven like NodeSettingsFields (this isn't part of the node's
-// own get_settings() - it's a separate, per-(account, alert node) REST
-// resource, GET/PUT /api/notifications/prefs...), so it follows
-// AlertCondEditor's shape instead: own local dirty-tracking, own Save
-// button, own store.
+// own get_settings() - it's a separate, per-Alert-node REST resource,
+// GET/PUT /api/notifications/prefs..., GET open to operator+admin as
+// read-only, PUT admin-only), so it follows AlertCondEditor's shape
+// instead: own local dirty-tracking, own Save button, own store.
 const EscalationEditor = {
 	props: {
 		node: {type: Object, required: true},
@@ -69,12 +69,13 @@ const EscalationEditor = {
 		usersStore() {
 			return useUsersStore()
 		},
-		// same permission level as the node's own 'sendTo' (port) field
-		// and AlertCondEditor's conditions - see alertCondEditor.js's
-		// canEdit for why this differs from NodeReceivesEditor's
-		// admin-only raw receives edit
 		canEdit() {
-			return this.usersStore.isOperatorOrAdmin
+			// PUT /api/notifications/prefs/<alert_node_id> is admin-only
+			// (escalation is a single, shared config per Alert node, not a
+			// per-user preference) - unlike AlertCondEditor's conditions
+			// and NodeSettingsFields' sendTo/repeat on this same page
+			// (operator+admin), matching NodeReceivesEditor's admin-only edit
+			return this.usersStore.isAdmin
 		},
 		// reuse the same free-port list the node's own 'sendTo' select
 		// already offers (populated by NodeSettingsFields' fetchNodeSettings,

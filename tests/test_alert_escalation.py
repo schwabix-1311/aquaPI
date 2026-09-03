@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """ Tests for Step 28 (alarm escalation), reworked for the port-driven
-    notification redesign: user_notification_prefs has
-    'escalation_channel'/'escalation_after_minutes'; escalation_channel is
-    a literal IoRegistry port name (e.g. 'Telegram #2'), not an
-    'email'/'telegram' enum, and Alert notifies that channel once an
-    alert has stayed continuously active for at least that long - deduped
-    if multiple admin rows resolve to the same destination port, and
+    notification redesign: alert_escalation_config has one shared row per
+    Alert node (not per-user - aquaPi's "users" are shared roles, not
+    individual people) with 'escalation_channel'/'escalation_after_minutes';
+    escalation_channel is a literal IoRegistry port name (e.g. 'Telegram
+    #2'), not an 'email'/'telegram' enum, and Alert notifies that channel
+    once an alert has stayed continuously active for at least that long -
     suppressed if it's the same port the alert's own primary 'port'
     already used.
 """
@@ -31,79 +31,67 @@ def users_db_path(tmp_path):
     return str(tmp_path / 'users.sqlite')
 
 
-# --- db.py: escalation prefs ----------------------------------------------
+# --- db.py: shared escalation config ---------------------------------------
 
 
-def test_set_user_notification_pref_default_no_escalation(users_db_path):
-    user_id = db.create_user(users_db_path, 'alice', 'pwd12345', role='admin')
-    db.set_user_notification_pref(users_db_path, user_id, 'warnungen')
+def test_set_escalation_config_default_no_escalation(users_db_path):
+    db.set_escalation_config(users_db_path, 'warnungen')
 
-    prefs = db.list_user_notification_prefs(users_db_path, user_id)
-    assert prefs == [{'alert_node_id': 'warnungen',
-                      'escalation_channel': 'none', 'escalation_after_minutes': 0}]
-
-
-def test_set_user_notification_pref_with_escalation(users_db_path):
-    user_id = db.create_user(users_db_path, 'bob', 'pwd12345', role='admin')
-    db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                  escalation_channel='Telegram #1', escalation_after_minutes=30)
-
-    prefs = db.list_user_notification_prefs(users_db_path, user_id)
-    assert prefs == [{'alert_node_id': 'warnungen',
-                      'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30}]
+    configs = db.list_escalation_configs(users_db_path)
+    assert configs == [{'alert_node_id': 'warnungen',
+                        'escalation_channel': 'none', 'escalation_after_minutes': 0}]
 
 
-def test_set_user_notification_pref_invalid_escalation_channel_raises(users_db_path):
+def test_set_escalation_config_with_escalation(users_db_path):
+    db.set_escalation_config(users_db_path, 'warnungen',
+                             escalation_channel='Telegram #1', escalation_after_minutes=30)
+
+    configs = db.list_escalation_configs(users_db_path)
+    assert configs == [{'alert_node_id': 'warnungen',
+                        'escalation_channel': 'Telegram #1', 'escalation_after_minutes': 30}]
+
+
+def test_set_escalation_config_invalid_escalation_channel_raises(users_db_path):
     """ escalation_channel is a free-form IoRegistry port name now (not an
         enum), so the only remaining validation is "non-empty"
     """
-    user_id = db.create_user(users_db_path, 'carol', 'pwd12345', role='admin')
     with pytest.raises(ValueError):
-        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                      escalation_channel='')
+        db.set_escalation_config(users_db_path, 'warnungen', escalation_channel='')
 
 
-def test_set_user_notification_pref_negative_escalation_minutes_raises(users_db_path):
-    user_id = db.create_user(users_db_path, 'dave', 'pwd12345', role='admin')
+def test_set_escalation_config_negative_escalation_minutes_raises(users_db_path):
     with pytest.raises(ValueError):
-        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                      escalation_channel='Telegram #1',
-                                      escalation_after_minutes=-1)
+        db.set_escalation_config(users_db_path, 'warnungen',
+                                 escalation_channel='Telegram #1',
+                                 escalation_after_minutes=-1)
 
 
-def test_get_prefs_for_alert_includes_escalation_fields(users_db_path):
-    user_id = db.create_user(users_db_path, 'eve', 'pwd12345', role='admin')
-    db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                  escalation_channel='Telegram #1', escalation_after_minutes=15)
+def test_get_escalation_config_includes_escalation_fields(users_db_path):
+    db.set_escalation_config(users_db_path, 'warnungen',
+                             escalation_channel='Telegram #1', escalation_after_minutes=15)
 
-    prefs = db.get_prefs_for_alert(users_db_path, 'warnungen')
-    assert len(prefs) == 1
-    assert prefs[0]['escalation_channel'] == 'Telegram #1'
-    assert prefs[0]['escalation_after_minutes'] == 15
+    config = db.get_escalation_config(users_db_path, 'warnungen')
+    assert config['escalation_channel'] == 'Telegram #1'
+    assert config['escalation_after_minutes'] == 15
 
 
-def test_migrate_adds_escalation_columns_to_existing_prefs_table(users_db_path):
-    """ a DB created before Step 28 only had 'channel', not the two new
-        columns - get_users_connection() must migrate it transparently
+def test_set_escalation_config_upserts_not_duplicates(users_db_path):
+    """ setting the same alert node's config twice must update the single
+        shared row, not add a 2nd one - this is the DB-layer guarantee
+        that used to require deduping across multiple per-user rows
     """
-    conn = db.get_users_connection(users_db_path)
-    conn.execute('DROP TABLE user_notification_prefs')
-    conn.execute("""
-        CREATE TABLE user_notification_prefs (
-            user_id       INTEGER NOT NULL,
-            alert_node_id TEXT NOT NULL,
-            channel       TEXT NOT NULL DEFAULT 'none',
-            PRIMARY KEY (user_id, alert_node_id)
-        )
-    """)
-    conn.close()
+    db.set_escalation_config(users_db_path, 'warnungen',
+                             escalation_channel='Telegram #1', escalation_after_minutes=5)
+    db.set_escalation_config(users_db_path, 'warnungen',
+                             escalation_channel='Email #1', escalation_after_minutes=20)
 
-    # re-opening (as any db.* call does) must transparently add the columns
-    user_id = db.create_user(users_db_path, 'frank', 'pwd12345', role='admin')
-    db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                  escalation_channel='Telegram #1', escalation_after_minutes=5)
-    prefs = db.list_user_notification_prefs(users_db_path, user_id)
-    assert prefs[0]['escalation_after_minutes'] == 5
+    configs = db.list_escalation_configs(users_db_path)
+    assert configs == [{'alert_node_id': 'warnungen',
+                        'escalation_channel': 'Email #1', 'escalation_after_minutes': 20}]
+
+
+def test_get_escalation_config_returns_none_when_unconfigured(users_db_path):
+    assert db.get_escalation_config(users_db_path, 'nonexistent') is None
 
 
 # --- Alert escalation dispatch --------------------------------------------
@@ -160,11 +148,10 @@ def fake_clock(monkeypatch):
 
 
 def test_alert_escalates_after_configured_duration(users_db_path, fake_text_ports, fake_clock):
-    user_id = db.create_user(users_db_path, 'mia', 'pwd12345', role='admin')
     db.set_current_users_db_path(users_db_path)
     try:
-        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                      escalation_channel='Telegram #1', escalation_after_minutes=10)
+        db.set_escalation_config(users_db_path, 'warnungen',
+                                 escalation_channel='Telegram #1', escalation_after_minutes=10)
 
         bus = MsgBus(threaded=False)
         sensor = AnalogInput('Wasser', '', 25.0, '°C')
@@ -203,11 +190,10 @@ def test_alert_escalates_after_configured_duration(users_db_path, fake_text_port
 
 
 def test_alert_escalation_resets_after_alert_clears(users_db_path, fake_text_ports, fake_clock):
-    user_id = db.create_user(users_db_path, 'noah', 'pwd12345', role='admin')
     db.set_current_users_db_path(users_db_path)
     try:
-        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                      escalation_channel='Telegram #1', escalation_after_minutes=5)
+        db.set_escalation_config(users_db_path, 'warnungen',
+                                 escalation_channel='Telegram #1', escalation_after_minutes=5)
 
         bus = MsgBus(threaded=False)
         sensor = AnalogInput('Wasser', '', 25.0, '°C')
@@ -225,7 +211,7 @@ def test_alert_escalation_resets_after_alert_clears(users_db_path, fake_text_por
         # alert clears
         alert.listen(MsgData(sensor.id, 10.0))
         assert alert._alert_since is None
-        assert alert._escalated_users == set()
+        assert alert._escalated is False
 
         fake_text_ports['Telegram #1'].written.clear()
 
@@ -248,11 +234,10 @@ def test_alert_no_escalation_when_escalation_channel_equals_alert_port(
     """ escalation_channel identical to the firing Alert node's own
         primary port must not cause a duplicate send to that port
     """
-    user_id = db.create_user(users_db_path, 'olga', 'pwd12345', role='admin')
     db.set_current_users_db_path(users_db_path)
     try:
-        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                      escalation_channel='Email #1', escalation_after_minutes=1)
+        db.set_escalation_config(users_db_path, 'warnungen',
+                                 escalation_channel='Email #1', escalation_after_minutes=1)
 
         bus = MsgBus(threaded=False)
         sensor = AnalogInput('Wasser', '', 25.0, '°C')
@@ -274,12 +259,11 @@ def test_alert_no_escalation_when_escalation_channel_equals_alert_port(
 
 
 def test_alert_no_escalation_when_disabled(users_db_path, fake_text_ports, fake_clock):
-    user_id = db.create_user(users_db_path, 'pia', 'pwd12345', role='admin')
     db.set_current_users_db_path(users_db_path)
     try:
         # escalation_after_minutes defaults to 0 -> disabled
-        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                      escalation_channel='Telegram #1')
+        db.set_escalation_config(users_db_path, 'warnungen',
+                                 escalation_channel='Telegram #1')
 
         bus = MsgBus(threaded=False)
         sensor = AnalogInput('Wasser', '', 25.0, '°C')
@@ -300,39 +284,6 @@ def test_alert_no_escalation_when_disabled(users_db_path, fake_text_ports, fake_
         db.set_current_users_db_path(None)
 
 
-def test_alert_escalation_dedupes_same_destination_across_multiple_admins(
-        users_db_path, fake_text_ports, fake_clock):
-    """ two admin rows for the same Alert node, both escalating to the
-        same physical port, must only trigger one send - not one per row
-    """
-    u1 = db.create_user(users_db_path, 'quinn', 'pwd12345', role='admin')
-    u2 = db.create_user(users_db_path, 'rex', 'pwd12345', role='admin')
-    db.set_current_users_db_path(users_db_path)
-    try:
-        db.set_user_notification_pref(users_db_path, u1, 'warnungen',
-                                      escalation_channel='Telegram #1', escalation_after_minutes=5)
-        db.set_user_notification_pref(users_db_path, u2, 'warnungen',
-                                      escalation_channel='Telegram #1', escalation_after_minutes=5)
-
-        bus = MsgBus(threaded=False)
-        sensor = AnalogInput('Wasser', '', 25.0, '°C')
-        sensor.plugin(bus)
-
-        alert = Alert('Warnungen', AlertAbove(sensor.id, 26.0), 'Email #1', repeat=3600)
-        alert.id = 'warnungen'
-        alert.plugin(bus)
-
-        alert.listen(MsgData(sensor.id, 30.0))
-        fake_clock(6 * 60)
-        alert.listen(MsgData(sensor.id, 31.0))
-
-        assert len(fake_text_ports['Telegram #1'].written) == 1
-
-        bus.teardown()
-    finally:
-        db.set_current_users_db_path(None)
-
-
 def test_alert_escalation_reaches_port_claimed_as_another_alerts_primary(
         users_db_path, fake_text_ports, fake_clock):
     """ Email/Telegram ports are shareable (see fake_text_ports): one
@@ -343,11 +294,10 @@ def test_alert_escalation_reaches_port_claimed_as_another_alerts_primary(
         escalation was silently dropped, see
         project_escalation_port_exclusivity memory
     """
-    user_id = db.create_user(users_db_path, 'sam', 'pwd12345', role='admin')
     db.set_current_users_db_path(users_db_path)
     try:
-        db.set_user_notification_pref(users_db_path, user_id, 'warnungen',
-                                      escalation_channel='Telegram #1', escalation_after_minutes=5)
+        db.set_escalation_config(users_db_path, 'warnungen',
+                                 escalation_channel='Telegram #1', escalation_after_minutes=5)
 
         bus = MsgBus(threaded=False)
         sensor = AnalogInput('Wasser', '', 25.0, '°C')

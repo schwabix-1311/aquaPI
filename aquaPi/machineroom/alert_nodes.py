@@ -189,9 +189,9 @@ class Alert(PortDriverMixin, BusListener):
         self.receives: list[str] = [c.node_id for c in self.conditions]
         # Step 28: track how long an alert has been continuously active,
         # to notify a 2nd, escalation channel once it stays unresolved
-        # longer than a user's configured 'escalation_after_minutes'
+        # longer than the admin-configured 'escalation_after_minutes'
         self._alert_since: float | None = None
-        self._escalated_users: set[int] = set()
+        self._escalated: bool = False
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -240,15 +240,13 @@ class Alert(PortDriverMixin, BusListener):
     def _check_escalation(self, now: float, text: str) -> None:
         """ Step 28: independently of the repeat/'any_change' throttling
             used for the primary notification, check on every message
-            whether any admin's configured escalation channel needs to be
-            notified because the alert has been continuously active for
-            at least their 'escalation_after_minutes'. Fires at most once
-            per continuously-active episode per admin row
-            (self._escalated_users, reset once the alert clears), and at
-            most once per distinct destination port per check (due_ports) -
-            two admin rows resolving to the same port must not double-send.
+            whether the shared, admin-configured escalation channel needs
+            to be notified because the alert has been continuously active
+            for at least its 'escalation_after_minutes'. Fires at most
+            once per continuously-active episode (self._escalated, reset
+            once the alert clears).
         """
-        if self._alert_since is None:
+        if self._alert_since is None or self._escalated:
             return
 
         users_db_path = db.get_current_users_db_path()
@@ -256,24 +254,20 @@ class Alert(PortDriverMixin, BusListener):
             return
 
         try:
-            prefs = db.get_prefs_for_alert(users_db_path, self.id)
+            config = db.get_escalation_config(users_db_path, self.id)
         except Exception:
-            log.exception('Failed to read user notification prefs for alert %s', self.id)
+            log.exception('Failed to read escalation config for alert %s', self.id)
+            return
+        if not config:
             return
 
+        escalation_channel = config.get('escalation_channel') or 'none'
+        escalation_after = config.get('escalation_after_minutes') or 0
         active_minutes = (now - self._alert_since) / 60
-        due_ports: set[str] = set()
-        for pref in prefs:
-            escalation_channel = pref.get('escalation_channel') or 'none'
-            escalation_after = pref.get('escalation_after_minutes') or 0
-            user_id = pref['user_id']
-            if (escalation_channel not in ('none', self.port)
-                and escalation_after > 0 and active_minutes >= escalation_after
-                and user_id not in self._escalated_users):
-                due_ports.add(escalation_channel)
-                self._escalated_users.add(user_id)
-        for port_name in due_ports:
-            self._notify_escalation(port_name, text)
+        if (escalation_channel not in ('none', self.port)
+                and escalation_after > 0 and active_minutes >= escalation_after):
+            self._notify_escalation(escalation_channel, text)
+            self._escalated = True
 
     @staticmethod
     def _format_entry(cond: AlertCond, cond_change: bool | None) -> str | None:
@@ -320,7 +314,7 @@ class Alert(PortDriverMixin, BusListener):
                 self._check_escalation(now, '\n'.join(self.data))
             else:
                 self._alert_since = None
-                self._escalated_users.clear()
+                self._escalated = False
 
             if any_change \
             or (self._repeat_time and (now > self._repeat_time)):

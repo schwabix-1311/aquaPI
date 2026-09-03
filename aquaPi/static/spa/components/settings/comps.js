@@ -356,47 +356,6 @@ const SettingSwitch = {
 }
 registerGlobalComponent('SettingSwitch', SettingSwitch)
 
-const SettingTime = {
-	props: {
-		item: {type: Object, required: true},
-		disabled: {type: Boolean, default: false},
-	},
-	template: `
-		<v-text-field
-			:label="item.label"
-			v-model="localValue"
-			type="time"
-			:disabled="disabled"
-			:rules="rules"
-			density="compact"
-			variant="outlined"
-			hide-details="auto"
-			@change="onChange"
-		></v-text-field>
-	`,
-	data: function() {
-		return {
-			localValue: this.item.value
-		}
-	},
-	computed: {
-		rules: function() {
-			return requiredRule(this.item, this.$t)
-		},
-	},
-	watch: {
-		'item.value': function(val) {
-			this.localValue = val
-		}
-	},
-	methods: {
-		onChange: function() {
-			this.$emit('update', this.localValue)
-		}
-	}
-}
-registerGlobalComponent('SettingTime', SettingTime)
-
 const SettingText = {
 	props: {
 		item: {type: Object, required: true},
@@ -436,6 +395,26 @@ const SettingText = {
 	}
 }
 registerGlobalComponent('SettingText', SettingText)
+
+// only the input's own type differs from SettingText - everything else
+// (localValue/rules/watch/onChange) is identical, so reuse it as-is
+const SettingTime = {
+	extends: SettingText,
+	template: `
+		<v-text-field
+			:label="item.label"
+			v-model="localValue"
+			type="time"
+			:disabled="disabled"
+			:rules="rules"
+			density="compact"
+			variant="outlined"
+			hide-details="auto"
+			@change="onChange"
+		></v-text-field>
+	`,
+}
+registerGlobalComponent('SettingTime', SettingTime)
 
 const SettingSelect = {
 	props: {

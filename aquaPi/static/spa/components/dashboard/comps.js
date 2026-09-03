@@ -439,8 +439,8 @@ const ScheduleInput = {
 				})
 			}
 			return prefix + this.$t('dashboard.widget.schedule.repeat', {
-				freq: this.formatDuration(node.frequency),
-				dur: this.formatDuration(node.duration),
+				freq: formatDuration(node.frequency, this.$t),
+				dur: formatDuration(node.duration, this.$t),
 				anchor: node.anchor,
 			})
 		},
@@ -459,9 +459,6 @@ const ScheduleInput = {
 			const endH = Math.floor(total / 3600)
 			const endM = Math.floor((total / 60) % 60)
 			return String(endH).padStart(2, '0') + ':' + String(endM).padStart(2, '0')
-		},
-		formatDuration(seconds) {
-			return formatDuration(seconds, this.$t)
 		},
 	},
 }

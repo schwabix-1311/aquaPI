@@ -384,13 +384,6 @@ export default
 					off: 'Aus'
 				}
 			},
-			cronspec: {
-				label: 'Schaltzustand',
-				value: {
-					on: 'An',
-					off: 'Aus'
-				}
-			},
 			string: {
 				label: 'Text'
 			},

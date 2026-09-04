@@ -384,13 +384,6 @@ export default
 					off: 'Off'
 				}
 			},
-			cronspec: {
-				label: 'Switching status',
-				value: {
-					on: 'On',
-					off: 'Off'
-				}
-			},
 			string: {
 				label: 'Text'
 			},

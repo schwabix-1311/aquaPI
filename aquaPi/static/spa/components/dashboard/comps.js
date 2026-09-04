@@ -50,7 +50,6 @@ const AnyNode = {
 				case 'ANALOG':
 				case 'BINARY':
 				case 'PERCENT':
-				case 'CRONSPEC':
 				case 'STRING':
 					return this.$t('misc.dataRange.' + node.data_range.toLowerCase() + '.label')
 				default:

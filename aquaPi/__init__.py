@@ -102,7 +102,8 @@ def create_app() -> Flask:
 
     app.config.from_mapping(
         SECRET_KEY='ToDo during installation',   # TODO !!
-        INSTANCE_PATH=app.instance_path
+        INSTANCE_PATH=app.instance_path,
+        APP_NAME='aquaPi',
     )
 
     # in debug mode, app starts a 2nd instance and thus we

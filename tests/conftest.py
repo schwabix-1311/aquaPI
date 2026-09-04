@@ -53,6 +53,7 @@ def minimal_app(tmp_path):
     app = Flask(__name__, template_folder=_TEMPLATE_FOLDER)
     app.config['INSTANCE_PATH'] = str(tmp_path)
     app.config['TESTING'] = True
+    app.config['APP_NAME'] = 'aquaPi'
 
     auth.init_app(app)
     app.register_blueprint(auth.bp)

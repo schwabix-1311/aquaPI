@@ -119,11 +119,12 @@ def _render_api_routes_html(routes: list[dict]) -> str:
                 escape(route['description']),
             )
         )
+    app_name = current_app.config['APP_NAME']
     return f'''<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>aquaPi API</title>
+<title>{app_name} API</title>
 <style>
   body {{ font-family: sans-serif; margin: 2em; color: #222; }}
   table {{ border-collapse: collapse; width: 100%; }}
@@ -134,7 +135,7 @@ def _render_api_routes_html(routes: list[dict]) -> str:
 </style>
 </head>
 <body>
-<h1>aquaPi API</h1>
+<h1>{app_name} API</h1>
 <p>Machine-readable version: send an <code>Accept: application/json</code>
    header to this same URL.</p>
 <table>

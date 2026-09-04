@@ -1399,7 +1399,8 @@ def consume_password_reset_token(db_path: str, token: str, new_password: str) ->
         conn.close()
 
 
-def send_password_reset_email(db_path: str, to_email: str, reset_url: str) -> bool:
+def send_password_reset_email(db_path: str, to_email: str, reset_url: str,
+                              app_name: str) -> bool:
     """ send a password reset link by email, reusing the Email
         credentials already configured for alert notifications
         (aquaPi/db.py: notification_config table, channel 'Email').
@@ -1408,6 +1409,10 @@ def send_password_reset_email(db_path: str, to_email: str, reset_url: str) -> bo
         (both are logged, never raised - the caller always shows the
         same generic "check your email" message to avoid leaking
         account existence, see auth.py).
+
+        app_name is passed in explicitly (not read from current_app
+        here) so this function stays callable without a Flask app
+        context, e.g. in isolated unit tests.
     """
     configs = get_notification_config(db_path, 'Email')
     if not configs:
@@ -1416,11 +1421,11 @@ def send_password_reset_email(db_path: str, to_email: str, reset_url: str) -> bo
 
     cfg = configs[0]
     msg = EmailMessage()
-    msg['Subject'] = 'aquaPi Passwort zurücksetzen'
+    msg['Subject'] = f'{app_name} Passwort zurücksetzen'
     msg['From'] = cfg['from']
     msg['To'] = to_email
     msg.set_content(
-        'Für dein aquaPi-Konto wurde ein Zurücksetzen des Passworts angefordert.\n'
+        f'Für dein {app_name}-Konto wurde ein Zurücksetzen des Passworts angefordert.\n'
         f'Klicke auf folgenden Link, um ein neues Passwort zu setzen:\n\n{reset_url}\n\n'
         f'Dieser Link ist {PASSWORD_RESET_TOKEN_TTL_MINUTES} Minuten gültig.\n'
         'Falls du das nicht angefordert hast, kannst du diese Email ignorieren.'
@@ -1438,10 +1443,13 @@ def send_password_reset_email(db_path: str, to_email: str, reset_url: str) -> bo
 
 
 def send_user_password_email(db_path: str, to_email: str, username: str,
-                             password: str) -> bool:
+                             password: str, app_name: str) -> bool:
     """ email a newly generated/reset account password to a user,
         reusing the same Email channel as send_password_reset_email().
         Returns True/False like send_password_reset_email(), never raises.
+
+        app_name is passed in explicitly - see send_password_reset_email()'s
+        own docstring for why.
     """
     configs = get_notification_config(db_path, 'Email')
     if not configs:
@@ -1450,11 +1458,11 @@ def send_user_password_email(db_path: str, to_email: str, username: str,
 
     cfg = configs[0]
     msg = EmailMessage()
-    msg['Subject'] = 'aquaPi Zugangsdaten'
+    msg['Subject'] = f'{app_name} Zugangsdaten'
     msg['From'] = cfg['from']
     msg['To'] = to_email
     msg.set_content(
-        f'Für dich wurde ein aquaPi-Konto angelegt/aktualisiert.\n\n'
+        f'Für dich wurde ein {app_name}-Konto angelegt/aktualisiert.\n\n'
         f'Benutzername: {username}\nPasswort: {password}\n\n'
         'Bei Bedarf kannst du es über den Link "Forgot your password?" '
         'auf der Login-Seite ändern.'

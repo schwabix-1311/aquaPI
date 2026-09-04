@@ -252,7 +252,7 @@ def test_clear_login_attempts(users_db_path):
 
 def test_send_password_reset_email_without_config_returns_false(users_db_path):
     assert db.send_password_reset_email(users_db_path, 'someone@example.com',
-                                        'http://example.com/reset/abc') is False
+                                        'http://example.com/reset/abc', 'aquaPi') is False
 
 
 # --- account password delivery (generated/reset password emails) ----------
@@ -293,7 +293,7 @@ def _configure_email_channel(users_db_path):
 
 def test_send_user_password_email_without_config_returns_false(users_db_path):
     assert db.send_user_password_email(users_db_path, 'someone@example.com',
-                                       'alice', 'geheim123') is False
+                                       'alice', 'geheim123', 'aquaPi') is False
 
 
 def test_send_user_password_email_success(users_db_path, monkeypatch):
@@ -302,7 +302,7 @@ def test_send_user_password_email_success(users_db_path, monkeypatch):
     monkeypatch.setattr(db.smtplib, 'SMTP', _FakeSMTP)
 
     result = db.send_user_password_email(users_db_path, 'someone@example.com',
-                                         'alice', 'geheim123')
+                                         'alice', 'geheim123', 'aquaPi')
     assert result is True
     assert len(_FakeSMTP.sent) == 1
     sent = _FakeSMTP.sent[0]
@@ -316,7 +316,7 @@ def test_send_user_password_email_smtp_failure_returns_false(users_db_path, monk
     monkeypatch.setattr(db.smtplib, 'SMTP', _RaisingSMTP)
 
     result = db.send_user_password_email(users_db_path, 'someone@example.com',
-                                         'alice', 'geheim123')
+                                         'alice', 'geheim123', 'aquaPi')
     assert result is False
 
 

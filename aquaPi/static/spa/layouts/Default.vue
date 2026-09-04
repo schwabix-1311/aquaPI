@@ -22,7 +22,7 @@
 		>
 			<v-app-bar-nav-icon class="white--text" @click="$root.toggleNavDrawer"></v-app-bar-nav-icon>
 			<v-toolbar-title class="white--text" style="cursor: pointer" @click="$root.navigate({route: 'home'})">
-				<h1 class="text-h4 font-weight-normal">{{ $t('app.name') }}</h1>
+				<h1 class="aquapi-brand-title">{{ $t('app.name') }}</h1>
 			</v-toolbar-title>
 			<v-spacer></v-spacer>
 

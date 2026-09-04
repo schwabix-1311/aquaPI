@@ -56,7 +56,7 @@ div.app-splash-content {
 */
 
 div.v-theme--light.v-application {
-    background-color: #e4e4e4;
+    background-color: #d0d0d0;
 }
 
 /* Vuetify 3's v-main no longer renders a `.v-main__wrap` child div (that
@@ -152,14 +152,47 @@ div.aquapi-settings div.v-expansion-panel + div.v-expansion-panel {
     border-top: none;
 }
 
-/* AquapiPageHeading (page titles like "Einstellungen"/"Konfiguration"):
-   Vuetify 3's v-toolbar-title__placeholder is single-line by default
-   (overflow: hidden + text-overflow: ellipsis), which cuts off longer
-   German headings on narrow/mobile viewports. Let it wrap instead. */
-h1.v-toolbar-title .v-toolbar-title__placeholder {
+/* Vuetify 3's v-toolbar-title__placeholder is single-line by default
+   (overflow: hidden + text-overflow: ellipsis) - cuts off longer
+   headings on narrow/mobile viewports (AquapiPageHeading, e.g.
+   "Einstellungen"/"Konfiguration") and, separately, clips the main
+   app-bar's enlarged "aquaPi" title well before the bar's own edge
+   (confirmed live: this placeholder's own bottom sits ~4px above the
+   toolbar's true bottom, cutting the title off there regardless of
+   the .v-toolbar__content fix below). Unscoped (not just h1.v-toolbar-title
+   as before) since the two toolbars render this placeholder inside a
+   different DOM shape - AquapiPageHeading's h1 IS .v-toolbar-title
+   itself, while the main app-bar nests a plain h1 two levels inside a
+   sibling div.v-toolbar-title, so a selector requiring that ancestor
+   never matched the app-bar's title at all. */
+.v-toolbar-title__placeholder {
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
+}
+
+/* Let toolbar content spill past the bar's own edge instead of being
+   clipped - applies to both toolbars in the app (the main app-bar and
+   AquapiPageHeading), needed so the enlarged "aquaPi" brand title's
+   descender (see .aquapi-brand-title below) can bleed into the page
+   content beneath it. */
+.v-toolbar__content {
+    overflow: visible;
+}
+
+/* The "aquaPi" brand title in the main app-bar (Default.vue) - sized
+   and tilted so the "q"'s descender pokes past the bar's bottom edge
+   into the page below (see .v-toolbar__content override above, which
+   is what stops it from being clipped). */
+.aquapi-brand-title {
+    display: inline-block;
+    font-size: 3.5rem;
+    font-weight: bold;
+    line-height: 1;
+    position: relative;
+    top: 12px;
+    transform: rotate(-6deg);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 div::-webkit-scrollbar-track {

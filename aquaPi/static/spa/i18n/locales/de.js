@@ -24,7 +24,7 @@ export default
 		dashboard: {
 			label: 'Dashboard',
 			title: 'Dashboard',
-			heading: 'aquaPi Dashboard',
+			heading: '@:app.name Dashboard',
 		},
 		settings: {
 			label: 'Parameter',
@@ -134,8 +134,8 @@ export default
 			portOut: 'Ausgang (zum Verbinden ziehen)',
 		},
 		about: {
-			label: 'Über aquaPi',
-			heading: 'Über aquaPi',
+			label: 'Über @:app.name',
+			heading: 'Über @:app.name',
 			copyright: 'Copyright',
 			donateMessage: 'Lob bitte an tkuhn, Bugs darfst du behalten.',
 			hintPlaceholder: 'Diese Seite wird irgendwann Version, Copyright, Systemstatus etc. anzeigen.<br>... und einen Link zur REST-API-Dokumentation.',

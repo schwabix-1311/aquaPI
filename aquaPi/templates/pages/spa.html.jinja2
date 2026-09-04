@@ -2,7 +2,7 @@
 <html lang="de">
 	<head>
 		<meta charset="UTF-8">
-		<title>aquaPi</title>
+		<title>{{ config.APP_NAME }}</title>
 		<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
 		{#-
@@ -27,7 +27,7 @@
 	<body>
 		<noscript>
 			<div id="hint-javascript">
-				We're sorry but aquaPi doesn't work without JavaScript enabled.<br>Please enable it to continue.
+				We're sorry but {{ config.APP_NAME }} doesn't work without JavaScript enabled.<br>Please enable it to continue.
 			</div>
 		</noscript>
 
@@ -64,6 +64,7 @@
 		{# <script src="//cdn.jsdelivr.net/npm/sortablejs@1.8.4/Sortable.min.js"></script> #}
 		<script src="{{ url_for('static', filename='libs/sortablejs.1.8.4.js') }}"></script>
 
+		<script>window.__APP_NAME__ = {{ config.APP_NAME | tojson }};</script>
 		<script type="module" src="{{ url_for('static', filename='spa/main.js') }}"></script>
 	</body>
 </html>

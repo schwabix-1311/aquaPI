@@ -224,7 +224,8 @@ def request_password_reset():
     if row and row.get('email'):
         token = db.create_password_reset_token(_users_db_path(), row['id'])
         reset_url = url_for('auth.confirm_password_reset', token=token, _external=True)
-        db.send_password_reset_email(_users_db_path(), row['email'], reset_url)
+        db.send_password_reset_email(_users_db_path(), row['email'], reset_url,
+                                      current_app.config['APP_NAME'])
         log.info('Password reset requested for user %r, email sent', row['username'])
     else:
         log.info('Password reset requested for unknown/emailless user %r', username)
@@ -311,7 +312,8 @@ def _deliver_user_password(email: str | None, username: str, password: str) -> s
         pattern as the default-admin bootstrap, see init_app() below).
         Returns 'email' or 'log' to let the caller inform the admin.
     """
-    if email and db.send_user_password_email(_users_db_path(), email, username, password):
+    if email and db.send_user_password_email(_users_db_path(), email, username, password,
+                                              current_app.config['APP_NAME']):
         return 'email'
     log.brief('=== Set password for user %r: %s', username, password)
     return 'log'

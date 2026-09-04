@@ -116,8 +116,6 @@ overlap/repeat each other - that's fine, sort/dedupe later.
 - Use `node.group` to allow multiple dashboards - might need
   `node.group` to change from a single string to a set of group names,
   since a node could then belong to more than one dashboard.
-- Move the app name ("aquaPi") into a global config value, to allow
-  installations under a different name (working title "poolPi").
 - More `AlertCond` descendants: warn for hyper/sleepy activity (a
   controller cycling too fast, or stuck on/off too long) - already has
   commented-out stubs in `alert_nodes.py` (`AlertLongActive`/

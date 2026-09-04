@@ -24,7 +24,7 @@ export default
 		dashboard: {
 			label: 'Dashboard',
 			title: 'Dashboard',
-			heading: 'aquaPi Dashboard',
+			heading: '@:app.name Dashboard',
 		},
 		settings: {
 			label: 'Parameters',

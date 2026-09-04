@@ -131,5 +131,7 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   aren't really "alerts".
 - Remove hash-based (`/#/`) routing, now that Jinja removal is done and
   no longer blocks it.
+- Explore how sub-data could be allowed, i.e. nodes posting more than
+  one datum on the bus, and listeners to listen to specific sub-data.
 
 <!-- add items below as they come up -->

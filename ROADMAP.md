@@ -132,6 +132,17 @@ overlap/repeat each other - that's fine, sort/dedupe later.
 - Remove hash-based (`/#/`) routing, now that Jinja removal is done and
   no longer blocks it.
 - Explore how sub-data could be allowed, i.e. nodes posting more than
-  one datum on the bus, and listeners to listen to specific sub-data.
+  one datum on the bus, and listeners to listen to specific sub-data -
+  RGB light support (below) is a concrete motivating case for this.
+- RGB light support (e.g. `DriverShellyDimmer`'s sibling for
+  Shelly devices' `/color/N` endpoint, not just brightness-only
+  `/light/N`) - would need a new TUPLE-like MsgData range for an
+  (r, g, b) triple, plus a TBD color-space controller node to emit
+  it (HSV cycling, presets, etc.). Two ways to get from that tuple to
+  actual hardware, both riding on the sub-data idea above: either a
+  controller emits one RGB tuple and 3 separate AnalogDevice dimmer
+  nodes each listen to just their own R/G/B sub-datum, or a single new
+  DeviceNode receives the whole tuple and internally combines 3
+  dimmer drivers (channels) into one node.
 
 <!-- add items below as they come up -->

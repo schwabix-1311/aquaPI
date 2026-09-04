@@ -27,7 +27,6 @@ from .passphrase import generate_aquatic_passphrase
 
 
 log = logging.getLogger('aquaPi.auth')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 bp = Blueprint('auth', __name__)
@@ -78,7 +77,7 @@ def roles_required(*roles: str):
         @login_required
         def wrapped(*args, **kwargs):
             if current_user.role not in roles:
-                log.info('User %r (role %r) denied access to %s (requires %s)',
+                log.verbose('User %r (role %r) denied access to %s (requires %s)',
                          current_user.username, current_user.role,
                          request.path, roles)
                 if request.path.startswith('/api/'):
@@ -120,10 +119,10 @@ def init_app(app) -> None:
     created = db.ensure_default_admin(users_db)
     if created:
         username, password = created
-        log.brief('=== No users found, created default admin account:')
-        log.brief('===   username: %s', username)
-        log.brief('===   password: %s', password)
-        log.brief('=== Please log in and change this password as soon as possible!')
+        log.info('=== No users found, created default admin account:')
+        log.info('===   username: %s', username)
+        log.info('===   password: %s', password)
+        log.info('=== Please log in and change this password as soon as possible!')
     db.ensure_anonymous_user(users_db)
 
     app.before_request(_auto_login_anonymous)
@@ -187,7 +186,7 @@ def login():
 
     locked, retry_seconds = db.is_login_locked_out(_users_db_path(), lockout_key)
     if locked:
-        log.info('Login blocked for %r: locked out for %d more second(s)',
+        log.verbose('Login blocked for %r: locked out for %d more second(s)',
                  username, retry_seconds)
         message = (f'Too many failed login attempts. Please try again in '
                    f'{retry_seconds // 60 + 1} minute(s).')
@@ -197,14 +196,14 @@ def login():
     if row and check_password_hash(row['password_hash'], password):
         db.clear_login_attempts(_users_db_path(), lockout_key)
         login_user(User.from_row(row))
-        log.info('User %r logged in', username)
+        log.verbose('User %r logged in', username)
         return jsonify(result='SUCCESS')
 
     db.register_failed_login(_users_db_path(), lockout_key,
                              max_attempts=db.LOGIN_MAX_ATTEMPTS,
                              window_minutes=db.LOGIN_ATTEMPT_WINDOW_MINUTES,
                              lockout_minutes=db.LOGIN_LOCKOUT_MINUTES)
-    log.info('Failed login attempt for %r', username)
+    log.verbose('Failed login attempt for %r', username)
     return jsonify(result='ERROR', message='Invalid username or password'), HTTPStatus.UNAUTHORIZED
 
 
@@ -226,9 +225,9 @@ def request_password_reset():
         reset_url = url_for('auth.confirm_password_reset', token=token, _external=True)
         db.send_password_reset_email(_users_db_path(), row['email'], reset_url,
                                       current_app.config['APP_NAME'])
-        log.info('Password reset requested for user %r, email sent', row['username'])
+        log.verbose('Password reset requested for user %r, email sent', row['username'])
     else:
-        log.info('Password reset requested for unknown/emailless user %r', username)
+        log.verbose('Password reset requested for unknown/emailless user %r', username)
 
     return jsonify(result='SUCCESS')
 
@@ -258,14 +257,14 @@ def confirm_password_reset(token: str):
     except ValueError as ex:
         return jsonify(result='ERROR', message=str(ex)), HTTPStatus.BAD_REQUEST
 
-    log.info('Password reset completed via token')
+    log.verbose('Password reset completed via token')
     return jsonify(result='SUCCESS')
 
 
 @bp.route('/logout')
 @login_required
 def logout():
-    log.info('User %r logged out', current_user.username)
+    log.verbose('User %r logged out', current_user.username)
     logout_user()
     if _wants_json():
         return jsonify(result='SUCCESS')
@@ -315,7 +314,7 @@ def _deliver_user_password(email: str | None, username: str, password: str) -> s
     if email and db.send_user_password_email(_users_db_path(), email, username, password,
                                               current_app.config['APP_NAME']):
         return 'email'
-    log.brief('=== Set password for user %r: %s', username, password)
+    log.info('=== Set password for user %r: %s', username, password)
     return 'log'
 
 
@@ -339,7 +338,7 @@ def api_create_user():
     except ValueError as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
 
-    log.info('User %r created new user %r with role %r', current_user.username, username, role)
+    log.verbose('User %r created new user %r with role %r', current_user.username, username, role)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'create_user', username, {'role': role})
     password_delivery = _deliver_user_password(email, username, password)
@@ -369,7 +368,7 @@ def api_update_user(user_id: int):
         if row['role'] == 'admin' and role != 'admin' and db.count_admins(_users_db_path()) <= 1:
             return jsonify(error='Cannot remove the last remaining admin'), HTTPStatus.BAD_REQUEST
         db.update_user_role(_users_db_path(), user_id, role)
-        log.info('User %r changed role of user %r to %r',
+        log.verbose('User %r changed role of user %r to %r',
                  current_user.username, row['username'], role)
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                                'update_user_role', row['username'], {'role': role})
@@ -379,13 +378,13 @@ def api_update_user(user_id: int):
         if not password:
             return jsonify(error='password must not be empty'), HTTPStatus.BAD_REQUEST
         db.set_user_password(_users_db_path(), user_id, password)
-        log.info('User %r reset password of user %r', current_user.username, row['username'])
+        log.verbose('User %r reset password of user %r', current_user.username, row['username'])
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                                'reset_user_password', row['username'])
 
     if email is not None:
         db.set_user_email(_users_db_path(), user_id, email)
-        log.info('User %r set email of user %r', current_user.username, row['username'])
+        log.verbose('User %r set email of user %r', current_user.username, row['username'])
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                                'set_user_email', row['username'])
 
@@ -416,7 +415,7 @@ def api_delete_user(user_id: int):
         db.delete_user(_users_db_path(), user_id)
     except ValueError as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
-    log.info('User %r deleted user %r', current_user.username, row['username'])
+    log.verbose('User %r deleted user %r', current_user.username, row['username'])
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'delete_user', row['username'])
     return '', HTTPStatus.NO_CONTENT
@@ -457,7 +456,7 @@ def api_set_notification_pref(alert_node_id: str):
 
     db.set_escalation_config(_users_db_path(), alert_node_id,
                              escalation_channel, escalation_after_minutes)
-    log.info('Admin %r set shared escalation channel %r after %d min for alert %r',
+    log.verbose('Admin %r set shared escalation channel %r after %d min for alert %r',
              current_user.username, escalation_channel, escalation_after_minutes, alert_node_id)
     return jsonify({'alert_node_id': alert_node_id,
                     'escalation_channel': escalation_channel,

@@ -9,7 +9,6 @@ from .msg_bus import (BusListener, BusRole, DataRange, Setting)
 
 
 log = logging.getLogger('machineroom.aux_nodes')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 # ========== auxiliary bases ==========
@@ -113,7 +112,7 @@ class ScaleAux(SingleInAux):
         except (TypeError, IndexError):
             log.error('ScaleAux %s: limit must be a tupel of floats', self.name)
 
-        log.info('ScaleAux %s: factor %f, offset %f, limiting %s',
+        log.verbose('ScaleAux %s: factor %f, offset %f, limiting %s',
                  name, self.factor, self.offset, str(self.limit))
 
     def __getstate__(self) -> dict[str, Any]:
@@ -135,7 +134,7 @@ class ScaleAux(SingleInAux):
         if isinstance(msg, MsgData):
             self.data = self.factor * float(msg.data) + self.offset
             self.data = min(max(self.limit[0], self.data), self.limit[1])
-            log.info('ScaleAux %s: output %f', self.id, self.data)
+            log.verbose('ScaleAux %s: output %f', self.id, self.data)
             self.post(MsgData(self.id, self.data))
 
         super().listen(msg)
@@ -210,7 +209,7 @@ class AvgAux(MultiInAux):
                     val += self.values[k] / len(self.values)
 
             self.data = round(val, 4)
-            log.info('AvgAux %s: output %f', self.id, self.data)
+            log.verbose('AvgAux %s: output %f', self.id, self.data)
             self.post(MsgData(self.id, self.data))
 
         super().listen(msg)
@@ -239,7 +238,7 @@ class _MinMaxAux(MultiInAux, ABC):
             val = float(msg.data)
             self.values[msg.sender] = val
             self.data = round(self._AGGREGATE(self.values.values()), 4)
-            log.info('%s %s: output %f', type(self).__name__, self.id, self.data)
+            log.verbose('%s %s: output %f', type(self).__name__, self.id, self.data)
             self.post(MsgData(self.id, self.data))
 
         super().listen(msg)

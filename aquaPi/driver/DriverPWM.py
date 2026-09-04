@@ -15,7 +15,6 @@ from .base import (OutDriver, IoPort, PortFunc, PinFunc, is_raspi)
 
 
 log = logging.getLogger('driver.DriverPWM')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== PWM ==========
@@ -41,7 +40,7 @@ class DriverPWM(DriverPWMbase):
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
-            log.brief('Scanning PWM ports ...')
+            log.info('Scanning PWM ports ...')
             cnt = 0
             for pin in range(28):
                 try:
@@ -60,7 +59,7 @@ class DriverPWM(DriverPWMbase):
                     log.debug('Unknown function on pin %d = %d', pin, gpio_function(pin))
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
         else:
-            log.brief('Faking PWM ports ...')
+            log.info('Faking PWM ports ...')
             io_ports = {
                 'PWM 0': IoPort(PortFunc.Aout, DriverPWM,
                                 {'pin': 18, 'channel': 0, 'fake': True},
@@ -105,7 +104,7 @@ class DriverPWM(DriverPWMbase):
             log.debug('Removed sysfs PWM channel %d', self._channel)
 
     def write(self, value: float) -> None:
-        log.info('%s -> %f', self.name, float(value))
+        log.verbose('%s -> %f', self.name, float(value))
         if not self._fake:
             if not path.exists(self._pwmchannel):
                 log.error('sysfs PWM channel %d vanished, skipping write', self._channel)

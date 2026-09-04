@@ -14,7 +14,6 @@ from .. import db
 
 
 log = logging.getLogger('machineroom.alert_nodes')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== alert conditions ==========
@@ -210,11 +209,11 @@ class Alert(PortDriverMixin, BusListener):
             driver = self._driver
             if driver.func == PortFunc.Bout:
                 driver.write(100 if alert_active else 0)
-                log.info('Alert device "%s" set to %d',
+                log.verbose('Alert device "%s" set to %d',
                          driver.name, 100 if alert_active else 0)
             elif driver.func == PortFunc.Tout:
                 driver.write(text)
-                log.info('Alert receiver "%s" will get msg:  "%s"',
+                log.verbose('Alert receiver "%s" will get msg:  "%s"',
                          driver.name, '\n'.join(alert_lst))
 
     def _notify_escalation(self, port_name: str, text: str) -> None:
@@ -231,7 +230,7 @@ class Alert(PortDriverMixin, BusListener):
         try:
             if isinstance(driver, OutDriver) and driver.func == PortFunc.Tout:
                 driver.write(f'[ESKALATION] {text}')
-                log.info('Alert %s escalated via %s', self.id, port_name)
+                log.verbose('Alert %s escalated via %s', self.id, port_name)
         except Exception:
             log.exception('Failed to escalate alert %s via %s', self.id, port_name)
         finally:
@@ -285,7 +284,7 @@ class Alert(PortDriverMixin, BusListener):
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData) and self._bus:
             snd_name = self._bus.get_node(msg.sender).name or msg.sender
-            log.info("## Alert %s check %.4f from %s",
+            log.verbose("## Alert %s check %.4f from %s",
                      self.name, msg.data, snd_name)
             any_alert = False
             any_change = False
@@ -300,7 +299,7 @@ class Alert(PortDriverMixin, BusListener):
                 entry = self._format_entry(cond, cond_change)
                 if entry:
                     self.data.append(entry)
-                log.info(f'## {cond} re-checked: "{cond.alert_text}",\nchange to: {cond_change}')
+                log.verbose(f'## {cond} re-checked: "{cond.alert_text}",\nchange to: {cond_change}')
 
             if any_alert:
                 log.warning('Alerts by %s:\n"%s"', self.name, '\n'.join(self.data))

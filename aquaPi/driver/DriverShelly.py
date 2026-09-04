@@ -16,7 +16,6 @@ from .base import (OutDriver, IoPort, PortFunc)
 
 
 log = logging.getLogger('driver.DriverShelly')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== Shelly relays (Gen1 + Gen2/Gen3, local HTTP API) ==========
@@ -208,7 +207,7 @@ def _discover_all_ports() -> dict[str, IoPort]:
                 log.error('zeroconf is not installed, Shelly devices cannot be discovered')
                 io_ports = {}
             if not io_ports:
-                log.brief('Faking Shelly devices ...')
+                log.info('Faking Shelly devices ...')
                 io_ports = _find_fake_ports()
             _discovery_cache = io_ports
         return _discovery_cache
@@ -262,7 +261,7 @@ class DriverShellyRelay(_ShellyBase, OutDriver):
             self.name = self._mark_fake(self.name)
 
     def write(self, value: bool) -> None:
-        log.info('%s -> %d', self.name, bool(value))
+        log.verbose('%s -> %d', self.name, bool(value))
         if not self._fake:
             turn = 'on' if value else 'off'
             try:
@@ -283,7 +282,7 @@ class DriverShellyRelay(_ShellyBase, OutDriver):
                 self._val = bool(resp.json().get('ison', self._val))
             except Exception:
                 log.exception('%s failed to read relay state, returning last known', self.name)
-        log.info('%s = %d', self.name, self._val)
+        log.verbose('%s = %d', self.name, self._val)
         return bool(self._val)
 
 
@@ -316,7 +315,7 @@ class DriverShellyDimmer(_ShellyBase, OutDriver):
 
     def write(self, value: float) -> None:
         value = max(0, min(100, round(value)))
-        log.info('%s -> %d', self.name, value)
+        log.verbose('%s -> %d', self.name, value)
         if not self._fake:
             try:
                 resp = requests.get(
@@ -337,5 +336,5 @@ class DriverShellyDimmer(_ShellyBase, OutDriver):
                 self._val = float(status.get('brightness', self._val)) if status.get('ison') else 0
             except Exception:
                 log.exception('%s failed to read dimmer state, returning last known', self.name)
-        log.info('%s = %d', self.name, self._val)
+        log.verbose('%s = %d', self.name, self._val)
         return float(self._val)

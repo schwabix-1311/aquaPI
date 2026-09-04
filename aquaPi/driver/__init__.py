@@ -11,7 +11,6 @@ from .base import (IoPort, PortFunc, Driver,
                    DriverPortInuseError, DriverInvalidPortError, DriverParamError)
 
 log = logging.getLogger('driver')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== global config ==========
@@ -109,7 +108,7 @@ class IoRegistry(object):
                 # for hardware that isn't present or a discovery that's
                 # slow/unreliable on that network
                 if drv.__name__ in driver_config.get('DRIVER_BLACKLIST', []):
-                    log.brief('Driver %s is blacklisted, skipping port discovery',
+                    log.info('Driver %s is blacklisted, skipping port discovery',
                              drv.__name__)
                     continue
 
@@ -119,7 +118,7 @@ class IoRegistry(object):
                 # multi-second gap in the startup log is easy to mistake
                 # for a hung/still-starting process instead of a slow
                 # but healthy scan
-                log.brief('Discovering %s devices/ports for %s ...',
+                log.info('Discovering %s devices/ports for %s ...',
                          getattr(drv, '_BUS', '?'), drv.__name__)
                 t_start = time.time()
 
@@ -135,7 +134,7 @@ class IoRegistry(object):
                     log.exception('Driver %s failed to report its ports, '
                                   'skipping it', drv.__name__)
                     continue
-                log.info('Driver %s reported ports %r (%.1fs)',
+                log.verbose('Driver %s reported ports %r (%.1fs)',
                          drv.__name__, [k for k in drv_ports], time.time() - t_start)
 
                 dupes = IoRegistry._map.keys() & drv_ports.keys()
@@ -146,8 +145,8 @@ class IoRegistry(object):
                     drv_ports = {k: v for k, v in drv_ports.items() if k not in dupes}
                 IoRegistry._map.update(drv_ports)
 
-        log.brief('Port drivers found for:')
-        log.brief('%r', [k for k in sorted(IoRegistry._map)])
+        log.info('Port drivers found for:')
+        log.info('%r', [k for k in sorted(IoRegistry._map)])
 
     def get_ports_by_function(self, funcs: list[PortFunc], in_use: bool = False
                               ) -> dict[str, IoPort]:
@@ -233,7 +232,7 @@ def create_io_registry():
 
     for drv_path in __path__:
         for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
-            log.info('Found driver file %s', drv_file)
+            log.verbose('Found driver file %s', drv_file)
 
             drv_name = path.basename(drv_file)
             if drv_name.startswith(DRIVER_FILE_PREFIX):

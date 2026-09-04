@@ -13,7 +13,6 @@ from ..driver import (DriverReadError, InDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.in_nodes')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== inputs AKA sensors ==========
@@ -77,7 +76,7 @@ class InputNode(PortDriverMixin, BusNode, ABC):
             try:
                 self.data = self.read()
                 self.alert = None
-                log.brief('%s: read %r', self.id, self.data)
+                log.info('%s: read %r', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
             except (DriverReadError, Exception):
                 log.exception('Reader exception')
@@ -522,7 +521,7 @@ class ScheduleInput(BusNode):
         return max(0.0, wake)
 
     def _scheduler(self) -> None:
-        log.brief('ScheduleInput %s: start', self.id)
+        log.info('ScheduleInput %s: start', self.id)
         try:
             while not self._scheduler_stop:
                 self._wake.clear()
@@ -530,7 +529,7 @@ class ScheduleInput(BusNode):
                 new_data = 100 if self._is_on(now) else 0
                 if new_data != self.data:
                     self.data = new_data
-                    log.info('ScheduleInput %s: output %d', self.id, self.data)
+                    log.verbose('ScheduleInput %s: output %d', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
 
                 remaining = self._seconds_to_next_wake(now)
@@ -542,7 +541,7 @@ class ScheduleInput(BusNode):
         finally:
             self._scheduler_thread = None
             self._scheduler_stop = False
-            log.brief('ScheduleInput %s: end', self.id)
+            log.info('ScheduleInput %s: end', self.id)
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()

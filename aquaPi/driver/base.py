@@ -9,7 +9,6 @@ import math
 import random
 
 log = logging.getLogger('driver.base')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 # ========== common functions ==========
@@ -191,7 +190,7 @@ class AInDriver(InDriver):
         elif rnd > .7:
             self._val += 0.05 * self._dir
         self._val = round(min(max(self.initval - 1, self._val), self.initval + 1), 2)
-        log.info('%s = %f', self.name, self._val)
+        log.verbose('%s = %f', self.name, self._val)
         return float(self._val)
 
 

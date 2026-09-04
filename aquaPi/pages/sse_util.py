@@ -6,7 +6,6 @@ from flask import Response
 
 
 log = logging.getLogger('pages.sse_util')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 def format_msg(data: str, event=None) -> str:

@@ -5,6 +5,7 @@ from os import path
 import sys
 from flask import Flask
 
+import functools
 import json
 import logging.config
 import logging.handlers
@@ -14,16 +15,13 @@ import logging.handlers
 log = logging.getLogger('aquaPi')
 
 
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
-logging.addLevelName(logging.WARN, 'LOG')  # this makes log.warn kind of useless
-# better:
-#  logging.BRIEF = logging.INFO + 1
-#  logging.addLevelName(logging.BRIEF, 'LOG')
-#  log.brief = log.log( ...  need to implant a methods into logging for this
-# or:
-#  logging.VERBOSE = logging.INFO - 1
-#  logging.addLevelName(logging.VERBOSE, 'LOG')
-#  log.verbose = log.log( ...  need to implant a methods into logging for this
+# VERBOSE sits one step below INFO - hidden by default (root level is
+# INFO, see log_default below), used for per-cycle/chatty diagnostic
+# detail. INFO itself is the "brief status" tier and needs no alias:
+# every module just calls log.info() directly.
+logging.VERBOSE = logging.INFO - 1
+logging.addLevelName(logging.VERBOSE, 'VERBOSE')
+logging.Logger.verbose = functools.partialmethod(logging.Logger.log, logging.VERBOSE)
 
 # this is a json string to make it a template for log_config.json
 log_default = {
@@ -53,7 +51,7 @@ log_default = {
   },
   "loggers": {
     "root": {
-      "level": "WARNING",
+      "level": "INFO",
       "handlers": ["stdout", "file"]
     },
 
@@ -131,7 +129,7 @@ def create_app() -> Flask:
         log_config = log_default
     logging.config.dictConfig(log_config)
 
-    logging.warning("Press CTRL+C to quit")
+    log.info("Press CTRL+C to quit")
 
     from . import auth
     auth.init_app(app)

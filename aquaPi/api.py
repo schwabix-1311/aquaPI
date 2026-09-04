@@ -28,7 +28,6 @@ from .system_info import get_system_stats
 
 
 log = logging.getLogger('aquaPi.api')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 bp = Blueprint('api', __name__)
@@ -396,7 +395,7 @@ def api_set_dashboard() -> Response:
         return jsonify(error='Body must be a JSON array'), HTTPStatus.BAD_REQUEST
 
     db.set_dashboard(_users_db_path(), current_user.id, layout)
-    log.info('User %r saved dashboard layout (%d items)', current_user.username, len(layout))
+    log.verbose('User %r saved dashboard layout (%d items)', current_user.username, len(layout))
     return jsonify(layout)
 
 
@@ -519,7 +518,7 @@ def api_set_node_settings(node_id: str) -> Response:
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)
 
-    log.info('User %r updated settings of node %r: %s',
+    log.verbose('User %r updated settings of node %r: %s',
              current_user.username, node_id, list(body.keys()))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_settings', node_id, {'fields': list(body.keys())})
@@ -648,7 +647,7 @@ def api_create_node() -> Response:
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)
 
-    log.info('User %r created node %r (type %s)', current_user.username, node.id, type_name)
+    log.verbose('User %r created node %r (type %s)', current_user.username, node.id, type_name)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'create_node', node.id, {'type': type_name})
 
@@ -728,7 +727,7 @@ def api_update_node(node_id: str) -> Response:
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)
 
-    log.info('User %r updated node %r: %s', current_user.username, node_id, list(body.keys()))
+    log.verbose('User %r updated node %r: %s', current_user.username, node_id, list(body.keys()))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_node', node_id, {'fields': list(body.keys())})
 
@@ -794,7 +793,7 @@ def api_set_alert_conditions(node_id: str) -> Response:
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)
 
-    log.info('User %r replaced conditions of alert %r: %d condition(s)',
+    log.verbose('User %r replaced conditions of alert %r: %d condition(s)',
              current_user.username, node_id, len(conditions))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_alert_conditions', node_id, {'count': len(conditions)})
@@ -825,7 +824,7 @@ def api_delete_node(node_id: str) -> Response:
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)
 
-    log.info('User %r deleted node %r', current_user.username, node_id)
+    log.verbose('User %r deleted node %r', current_user.username, node_id)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'delete_node', node_id)
 
@@ -856,7 +855,7 @@ def api_config_apply() -> Response:
     if result['id_map'] or diff.get('creates') or diff.get('updates') or diff.get('deletes'):
         mr: MachineRoom = current_app.extensions['machineroom']
         mr.save_nodes(bus)
-        log.info('User %r applied config diff: %d create(s), %d update(s), %d delete(s)',
+        log.verbose('User %r applied config diff: %d create(s), %d update(s), %d delete(s)',
                  current_user.username, len(diff.get('creates') or []),
                  len(diff.get('updates') or []), len(diff.get('deletes') or []))
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
@@ -910,7 +909,7 @@ def api_create_template() -> Response:
 
     db.save_template(_wiring_db_path(), name, body.get('descr', '') or '', data)
 
-    log.info('User %r saved template %r (%d nodes)',
+    log.verbose('User %r saved template %r (%d nodes)',
              current_user.username, name, len(node_ids))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'save_template', name, {'node_count': len(node_ids)})
@@ -935,7 +934,7 @@ def api_delete_template(name: str) -> Response:
     if not db.delete_template(_wiring_db_path(), name):
         return Response(status=HTTPStatus.NOT_FOUND)
 
-    log.info('User %r deleted template %r', current_user.username, name)
+    log.verbose('User %r deleted template %r', current_user.username, name)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'delete_template', name)
 
@@ -965,7 +964,7 @@ def api_insert_template(name: str) -> Response:
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)
 
-    log.info('User %r inserted template %r (%d new nodes)',
+    log.verbose('User %r inserted template %r (%d new nodes)',
              current_user.username, name, len(new_nodes))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'insert_template', name, {'node_count': len(new_nodes)})
@@ -1006,7 +1005,7 @@ def api_create_snapshot() -> Response:
 
     db.create_snapshot(_wiring_db_path(), name)
 
-    log.info('User %r created snapshot %r', current_user.username, name)
+    log.verbose('User %r created snapshot %r', current_user.username, name)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'create_snapshot', name)
 
@@ -1020,7 +1019,7 @@ def api_delete_snapshot(name: str) -> Response:
     if not db.delete_snapshot(_wiring_db_path(), name):
         return Response(status=HTTPStatus.NOT_FOUND)
 
-    log.info('User %r deleted snapshot %r', current_user.username, name)
+    log.verbose('User %r deleted snapshot %r', current_user.username, name)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'delete_snapshot', name)
 
@@ -1046,7 +1045,7 @@ def api_restore_snapshot(name: str) -> Response:
     mr: MachineRoom = current_app.extensions['machineroom']
     mr.save_nodes(bus)
 
-    log.info('User %r restored snapshot %r (%d nodes)',
+    log.verbose('User %r restored snapshot %r (%d nodes)',
              current_user.username, name, len(bus.nodes))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'restore_snapshot', name, {'node_count': len(bus.nodes)})
@@ -1096,7 +1095,7 @@ def api_backup() -> Response:
     archive_path = db.create_backup_archive(
         mr.globals['BUS_WIRING'], mr.globals['USERS_DB'], tmp_dir)
 
-    log.info('User %r downloaded a database backup', current_user.username)
+    log.verbose('User %r downloaded a database backup', current_user.username)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'download_backup')
 

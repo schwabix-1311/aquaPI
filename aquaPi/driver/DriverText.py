@@ -11,7 +11,6 @@ from .base import (OutDriver, IoPort, PortFunc, DriverConfigError)
 
 
 log = logging.getLogger('driver.DriverText')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== text (Email/Telegram) ==========
@@ -110,7 +109,7 @@ class DriverEmail(DriverText):
         msg['From'] = self.cfg["from"]
         msg['To'] = self.cfg["to"]
 
-        log.info('%s -> %r', self.name, subj_text)
+        log.verbose('%s -> %r', self.name, subj_text)
         try:
             with smtplib.SMTP(self.cfg['server']) as smtp:
                 # smtp.set_debuglevel(1)
@@ -158,7 +157,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
             res = DriverTelegram._bot_request(url, 'getUpdates')
 # res = [{...},{"update_id":23832555,"message": {"message_id":39,"from":{"id":126177523, "is_bot":false, "first_name":"Markus", "username":"schwabix", "language_code":"de"},"chat":{"id":-1002400534091,"title":"aquaBroadcast","type":"supergroup"},"date":1741614412,"text":"setup aquaPi"}}]
             if res:
-                log.warning("auto-detect %s", res)
+                log.verbose("auto-detect %s", res)
                 for upd in res:
                     try:
                         if upd['message']:
@@ -205,7 +204,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
             # user must send the word "aquaPi" to a chat or group chat where his bot has membership
             if 'chat_id' not in cfg:
                 if _auto_detect_chat(url, cfg):
-                    log.warning("Found chat name %s", cfg['chat_name'])
+                    log.info("Found chat name %s", cfg['chat_name'])
 
             req = {'bot_token', 'chat_name', 'chat_id'}
             if not req <= cfg.keys():
@@ -238,7 +237,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
         try:
             payload = {"chat_id": self.cfg['chat_id'], 'text': subj_text}
             res = DriverTelegram._bot_request(self.cfg['url'], 'sendMessage', json=payload)
-            log.info('%s -> %r : %r', self.name, subj_text, res)
+            log.verbose('%s -> %r : %r', self.name, subj_text, res)
         except Exception:
             log.exception('%s failed to send Telegram message with error: ', self.name)
 

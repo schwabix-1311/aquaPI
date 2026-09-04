@@ -47,7 +47,6 @@ except (RuntimeError, ModuleNotFoundError):
 from .base import (InDriver, OutDriver, IoPort, PortFunc, is_raspi, DriverWriteError)
 
 log = logging.getLogger('driver.DriverGPIO')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 if is_raspi():
@@ -68,7 +67,7 @@ class DriverGPIO(OutDriver, InDriver):
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
-            log.brief('Scanning GPIO ports ...')
+            log.info('Scanning GPIO ports ...')
             for pin in range(28):
                 port_name = 'GPIO %d ' % pin
                 io_ports[port_name + 'in'] = IoPort(PortFunc.Bin,
@@ -80,7 +79,7 @@ class DriverGPIO(OutDriver, InDriver):
                                                      {'pin': pin},
                                                      [])
         else:
-            log.brief('Faking GPIO ports ...')
+            log.info('Faking GPIO ports ...')
             # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
             # need all that are simulated somewhere - devices or dependencies
             io_ports = {
@@ -126,7 +125,7 @@ class DriverGPIO(OutDriver, InDriver):
         if self._is_input_driver():
             raise DriverWriteError()
 
-        log.info('%s -> %d', self.name, bool(value))
+        log.verbose('%s -> %d', self.name, bool(value))
         if not self._fake:
             GPIO.output(self._pin, bool(value))
         self._val = bool(value)
@@ -138,5 +137,5 @@ class DriverGPIO(OutDriver, InDriver):
             if self._is_input_driver():
                 self._val = False if random.random() <= 0.5 else True
 
-        log.info('%s = %d', self.name, self._val)
+        log.verbose('%s = %d', self.name, self._val)
         return bool(self._val)

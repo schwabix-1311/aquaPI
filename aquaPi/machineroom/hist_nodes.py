@@ -23,7 +23,6 @@ from .msg_bus import (BusListener, BusRole, MsgData, Setting)
 
 
 log = logging.getLogger('machineroom.hist_nodes')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== interface to time series DB ==========
@@ -82,7 +81,7 @@ def log_calibration_event(node_id: str, field: str,
             qry = SQL("INSERT INTO {} VALUES (now(), %s, %s, %s, %s)"
                       ).format(Identifier('calibration_log'))
             conn.execute(qry, [node_id, field, old_value, new_value])
-        log.brief('Calibration event recorded: %s.%s %s -> %s', node_id, field, old_value, new_value)
+        log.info('Calibration event recorded: %s.%s %s -> %s', node_id, field, old_value, new_value)
         return True
     except Exception:
         log.exception('Failed to record calibration event for %s.%s', node_id, field)
@@ -467,12 +466,12 @@ class History(BusListener):
         if QUEST_DB:
             try:
                 self.db = TimeDbQuest()
-                log.brief('Recording history %s in QuestDB', name)
+                log.info('Recording history %s in QuestDB', name)
             except (NotImplementedError, ModuleNotFoundError, ImportError):
                 log.error('QuestDB failed, will keep history in memory')
         if not self.db:
             self.db = TimeDbMemory(self.capacity)
-            log.brief('Recording history %s in main memory with limited depth of %dh!', name, self.capacity)
+            log.info('Recording history %s in main memory with limited depth of %dh!', name, self.capacity)
         for rcv in self.receives:
             self.db.add_field(rcv)
 

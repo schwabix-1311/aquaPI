@@ -13,7 +13,6 @@ from ..driver import (OutDriver, PortFunc)
 
 
 log = logging.getLogger('machineroom.out_nodes')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== outputs AKA Device ==========
@@ -104,7 +103,7 @@ class SwitchDevice(DeviceNode):
         super().__init__(name, receives, port, _cont=_cont)
         self._inverted = inverted
         self.switch(self.data if _cont else False)
-        log.info('%s init to %f|%r', self.name, self.data, inverted)
+        log.verbose('%s init to %f|%r', self.name, self.data, inverted)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -141,7 +140,7 @@ class SwitchDevice(DeviceNode):
     def switch(self, state: bool) -> None:
         self.data: bool = state
 
-        log.info('SwitchDevice %s: turns %s', self.id, 'ON' if self.data else 'OFF')
+        log.verbose('SwitchDevice %s: turns %s', self.id, 'ON' if self.data else 'OFF')
         if self._driver:
             if not self.inverted:
                 self._driver.write(self.data)
@@ -194,7 +193,7 @@ class SlowPwmDevice(DeviceNode):
         # in .join() (found 2026-08-09 via a py-spy stack dump)
         self._set_lock = Lock()
         self.set(self.data)
-        log.info('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
+        log.verbose('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -252,7 +251,7 @@ class SlowPwmDevice(DeviceNode):
                     return
 
     def set(self, perc: float) -> None:
-        log.info('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
+        log.verbose('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
                  self.id, perc, self.cycle * perc/100, self.cycle)
         with self._set_lock:
             if self._thread:
@@ -305,7 +304,7 @@ class AnalogDevice(DeviceNode):
         self.minimum = min(max(0., minimum), 90.)
         self.maximum = min(max(minimum + 1., maximum), 100.)
         self.set_percent(self.data if _cont else 0)
-        log.info('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
+        log.verbose('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()

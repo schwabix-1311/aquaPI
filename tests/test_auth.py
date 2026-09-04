@@ -334,7 +334,7 @@ def _configure_email_channel(users_db):
 
 def test_create_user_without_email_delivers_via_log(client, app, default_admin_password, caplog):
     _login(client, 'admin1', 'adminPass1')
-    with caplog.at_level('WARNING', logger='aquaPi.auth'):
+    with caplog.at_level('INFO', logger='aquaPi.auth'):
         resp = client.post('/api/users/', json={
             'username': 'newop', 'password': 'newopPass1', 'role': 'operator'
         })
@@ -368,7 +368,7 @@ def test_create_user_with_email_but_broken_smtp_falls_back_to_log(
     monkeypatch.setattr(db.smtplib, 'SMTP', _RaisingSMTP)
 
     _login(client, 'admin1', 'adminPass1')
-    with caplog.at_level('WARNING', logger='aquaPi.auth'):
+    with caplog.at_level('INFO', logger='aquaPi.auth'):
         resp = client.post('/api/users/', json={
             'username': 'newop3', 'password': 'newopPass3', 'role': 'operator',
             'email': 'newop3@example.com',

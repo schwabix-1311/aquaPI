@@ -12,7 +12,6 @@ from .msg_types import (Msg, MsgInfra, MsgHello, MsgData, MsgBye)
 
 
 log = logging.getLogger('machineroom.msg_bus')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 class BusRole(Flag):
@@ -259,7 +258,7 @@ class BusNode(ABC):
         bus.register(self)
         self._bus = bus
         self.post(MsgHello(self.id))
-        log.info('%s plugged in, role %s', str(self), str(self.ROLE))
+        log.verbose('%s plugged in, role %s', str(self), str(self.ROLE))
 
     def pullout(self) -> bool:
         if not self._bus:
@@ -267,7 +266,7 @@ class BusNode(ABC):
         self.post(MsgBye(self.id))
         self._bus.unregister(self)
         self._bus = None
-        log.info('%s pulled', str(self))
+        log.verbose('%s pulled', str(self))
         return True
 
     def post(self, msg: Msg) -> None:
@@ -484,7 +483,7 @@ class MsgBus:
         """ Dispatch one message to all listeners in a blocking loop.
         """
         # dispatch the message
-        log.info('%s =>', str(msg))
+        log.verbose('%s =>', str(msg))
         rcv_nodes: set[BusNode] = set()
 
         # broadcast message: all but sender
@@ -497,7 +496,7 @@ class MsgBus:
         log.debug('===== %s to be received by: %s', str(msg), str(rcv_nodes))
 
         for n in rcv_nodes:
-            log.info('  %s -> %s', str(msg), str(n))
+            log.verbose('  %s -> %s', str(msg), str(n))
             n.listen(msg)
 
         if isinstance(msg, MsgData):
@@ -600,5 +599,5 @@ class MsgBus:
             return set()
         while not q.empty():
             change.add(q.get_nowait())
-        log.info('self.wait_for_changes returns %d: %s', len(change), str(change))
+        log.verbose('self.wait_for_changes returns %d: %s', len(change), str(change))
         return change

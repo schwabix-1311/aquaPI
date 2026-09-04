@@ -48,7 +48,6 @@ from .driver.base import DriverError
 
 
 log = logging.getLogger('aquaPi.db')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 DEFAULT_DB_FILENAME = 'wiring.sqlite'
@@ -666,7 +665,7 @@ def save_wiring(bus: MsgBus, db_path: str) -> None:
                     'INSERT INTO nodes (id, type, name, params) VALUES (?, ?, ?, ?)',
                     (node.id, type(node).__name__, node.name, params)
                 )
-        log.info('save_wiring: %d nodes written to %s', len(bus.nodes), db_path)
+        log.verbose('save_wiring: %d nodes written to %s', len(bus.nodes), db_path)
     finally:
         conn.close()
 
@@ -711,7 +710,7 @@ def _notify_startup_failures(failures: list[str]) -> bool:
                 driver = IoRegistry.get().driver_factory(port_name)
                 if isinstance(driver, OutDriver) and driver.func == PortFunc.Tout:
                     driver.write(text)
-                    log.info('Notified startup node-load failures via %s', port_name)
+                    log.verbose('Notified startup node-load failures via %s', port_name)
                     notified = True
             except Exception:
                 log.exception('Failed to notify startup node-load failures via %s', port_name)
@@ -761,7 +760,7 @@ def load_wiring(db_path: str) -> MsgBus:
                           getattr(node, 'id', '?'))
             failures.append(f"{getattr(node, 'id', '?')!r}: {ex}")
 
-    log.info('load_wiring: %d nodes restored from %s', len(nodes), db_path)
+    log.verbose('load_wiring: %d nodes restored from %s', len(nodes), db_path)
 
     if failures and not _notify_startup_failures(failures):
         # nobody could be reached remotely either (no Email/Telegram
@@ -1695,7 +1694,7 @@ def migrate_notification_config_from_json(globals_cfg: dict[str, Any],
         if not isinstance(configs, list):
             configs = [configs]
         set_notification_config(db_path, channel, configs)
-        log.brief('Migrated %s notification config from config.json to %s',
+        log.info('Migrated %s notification config from config.json to %s',
                   channel, db_path)
         migrated = True
     return migrated

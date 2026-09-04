@@ -18,7 +18,6 @@ from ..driver import (driver_config, create_io_registry, DriverError)
 
 
 log = logging.getLogger('machineroom')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 class MachineRoom:
@@ -85,7 +84,7 @@ class MachineRoom:
         self.globals['USERS_DB'] = users_db_path
 
         if db.migrate_notification_config_from_json(self.globals, users_db_path):
-            log.brief("=== Migrated notification config (Email/Telegram) from "
+            log.info("=== Migrated notification config (Email/Telegram) from "
                       "%s to %s", cfg_file, users_db_path)
 
         for channel in db.NOTIFICATION_CHANNELS:
@@ -120,16 +119,16 @@ class MachineRoom:
             if not db.wiring_exists(self.globals['BUS_WIRING']):
                 self.bus: MsgBus = MsgBus(threaded=False)
 
-                log.brief("=== There are no controllers defined, creating default")
+                log.info("=== There are no controllers defined, creating default")
 
                 self.create_default_nodes()
                 self.save_nodes(self.bus)
 
-                log.brief("=== Successfully created Bus and default Nodes")
-                log.brief("  ... and saved to %s", self.globals['BUS_WIRING'])
+                log.info("=== Successfully created Bus and default Nodes")
+                log.info("  ... and saved to %s", self.globals['BUS_WIRING'])
 
             else:
-                log.brief("=== Loading Bus & Nodes from %s", self.globals['BUS_WIRING'])
+                log.info("=== Loading Bus & Nodes from %s", self.globals['BUS_WIRING'])
                 self.bus = self.restore_nodes()
 
         except DriverError as ex:
@@ -141,9 +140,9 @@ class MachineRoom:
 
         self._schedule_backup()
 
-        log.brief("%s", str(self.bus))
+        log.info("%s", str(self.bus))
         if self.bus:
-            log.info(self.bus.get_nodes())
+            log.verbose(self.bus.get_nodes())
 
     def _run_backup(self) -> None:
         """ create one scheduled, rotating backup generation, then
@@ -153,7 +152,7 @@ class MachineRoom:
             archive = db.create_scheduled_backup(
                 self.globals['BUS_WIRING'], self.globals['USERS_DB'],
                 self.globals['BACKUP_DIR'], keep=self._backup_keep)
-            log.brief('=== Scheduled backup created: %s', archive)
+            log.info('=== Scheduled backup created: %s', archive)
         except Exception:
             log.exception('Scheduled backup failed')
         finally:
@@ -170,7 +169,7 @@ class MachineRoom:
     def shutdown(self) -> None:
         """ Prepare for shutdown, save bus state etc.
         """
-        log.brief('Preparing shutdown ...')
+        log.info('Preparing shutdown ...')
 
         if self._backup_timer:
             self._backup_timer.cancel()
@@ -194,7 +193,7 @@ class MachineRoom:
             self.save_nodes(self.bus)
             self.bus.teardown()
             # self.bus = None
-            log.brief('... shutdown completed')
+            log.info('... shutdown completed')
 
     def save_nodes(self, container: MsgBus, fname: str = '') -> None:
         """ save the Bus, Nodes and Drivers to SQLite storage

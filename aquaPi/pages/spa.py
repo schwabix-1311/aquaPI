@@ -5,7 +5,6 @@ from flask import (Blueprint, render_template)
 
 
 log = logging.getLogger('pages.spa')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 bp = Blueprint('spa', __name__)

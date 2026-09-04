@@ -15,7 +15,6 @@ from .msg_bus import (BusListener, BusRole, DataRange, HeartbeatMixin, MsgBus, S
 
 
 log = logging.getLogger('machineroom.ctrl_nodes')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 def get_unit_limits(unit: str) -> dict:
@@ -107,11 +106,11 @@ class ThresholdCtrl(ControllerNode):
 
             if self._cmp_on(val, self._threshold_on() * 0.95):
                 self.alert = (self._dir, 'err')
-                log.brief('%s %s: output %f - alert %r',
+                log.info('%s %s: output %f - alert %r',
                           type(self).__name__, self.id, self.data, self.alert)
             else:
                 self.alert = ('*', 'act')  if self.data else None
-                log.brief('%s %s: output %f',
+                log.info('%s %s: output %f',
                           type(self).__name__, self.id, self.data)
 
             self.post(MsgData(self.id, self.data))
@@ -297,11 +296,11 @@ class PidCtrl(ControllerNode):
                 d_dev = self.d_fact / ta * (err - self._err_old)
                 val = p_dev + i_dev + d_dev
 
-                log.warning('PID err %f, e-sum %f | P %+.1f%% / I %+.1f%% / D %+.1f %%, ',
+                log.verbose('PID err %f, e-sum %f | P %+.1f%% / I %+.1f%% / D %+.1f %%, ',
                             err, self._err_sum,
                             100 * p_dev, 100 * i_dev, 100 * d_dev)
                 self.data = min(max(0., 50. - val*100.), 100.)
-                log.brief('PID -> %f (%+.1f)', self.data, -val * 100)
+                log.info('PID -> %f (%+.1f)', self.data, -val * 100)
                 self.post(MsgData(self.id, round(self.data, 4)))
             self._err_old = err
             self._tm_old = now
@@ -393,7 +392,7 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
-            log.info('FadeCtrl: got %f', msg.data)
+            log.verbose('FadeCtrl: got %f', msg.data)
             self.target = float(msg.data)
             if self.data != self.target:
                 if self._fader_thread:
@@ -405,7 +404,7 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
                 if (self.data < self.target and not self.fade_time) \
                  or (self.data > self.target and not self.fade_out):
                     self.data = self.target
-                    log.brief('FadeCtrl %s: output %f', self.id, self.data)
+                    log.info('FadeCtrl %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
                 else:
                     log.debug('_fader %f -> %f', self.data, self.target)
@@ -422,7 +421,7 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
         delta_t = abs(delta_d) / 100 * f_time  # total time for this change
         step_t = max(delta_t / 1000, 0.1)      # try 1000 steps, at most 10 steps per sec
         step_d = delta_d * step_t / delta_t
-        log.brief('FadeCtrl %s: fading in %f s from %f -> %f, change by %f every %f s',
+        log.info('FadeCtrl %s: fading in %f s from %f -> %f, change by %f every %f s',
                   self.id, delta_t, self.data, self.target, step_d, step_t)
 
         next_t = time() + step_t
@@ -435,14 +434,14 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
             sleep(max(0, next_t - time()))
             next_t += step_t
             if self._fader_stop:
-                log.brief('FadeCtrl %s: fader stopped', self.id)
+                log.info('FadeCtrl %s: fader stopped', self.id)
                 break
         else:
             if self.data != self.target:
                 self.data = self.target
                 self.post(MsgData(self.id, self.data))  # end of ramp
             self.alert = None
-            log.brief('FadeCtrl %s: fader DONE', self.id)
+            log.info('FadeCtrl %s: fader DONE', self.id)
 
         self._fader_thread = None
         self._fader_stop = False
@@ -567,7 +566,7 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
-            log.info('SunCtrl: got %f', msg.data)
+            log.verbose('SunCtrl: got %f', msg.data)
             if self._fader_thread:
                 self._fader_stop = True
                 self._fader_thread.join()
@@ -575,7 +574,7 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
             if self.target:
                 self._high = self.target
                 self.cloudiness = int(random.random() * 7.5)
-                log.brief('SunCtrl: cloudiness %d', self.cloudiness)
+                log.info('SunCtrl: cloudiness %d', self.cloudiness)
 
             if self.target != self.data:
                 log.debug('_fader %f -> %f', self.data, self.target)
@@ -587,7 +586,7 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
     def _make_next_step(self, phase: str, new_data: float) -> None:
         if abs(new_data - self.data) >= 0.1:
             self.data = new_data
-            log.info('SunCtrl %s: %s %f%%', self.id, phase, self.data)
+            log.verbose('SunCtrl %s: %s %f%%', self.id, phase, self.data)
             self.post(MsgData(self.id, self.data))
         sleep(max(1, new_data/30))  # shorten steps for low values
 
@@ -595,7 +594,7 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
         if random.random() < 0.002 and len(self.clouds) < self.cloudiness:
             cloud = Cloud(self.cloudiness)
             self.clouds.append(cloud)
-            log.brief('SunCtrl %s: new cloud (%dmin | %d%%)', self.id, cloud.duration/60, cloud.darkness)
+            log.info('SunCtrl %s: new cloud (%dmin | %d%%)', self.id, cloud.duration/60, cloud.darkness)
 
         shadow = 0.0
         for i, cloud in enumerate(self.clouds.copy()):
@@ -641,7 +640,7 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
                 now = time()
             self.data = 0  # end of descend
 
-        log.brief('SunCtrl %s: fader %s', self.id, 'DONE' if not self._fader_stop else 'stopped')
+        log.info('SunCtrl %s: fader %s', self.id, 'DONE' if not self._fader_stop else 'stopped')
         self.post(MsgData(self.id, self.data))
         self.alert = None
         self._fader_thread = None

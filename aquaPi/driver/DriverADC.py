@@ -21,7 +21,6 @@ from .base import (AInDriver, IoPort, PortFunc)
 
 
 log = logging.getLogger('driver.DriverADC')
-log.brief = log.warning  # alias, warning used as brief info, info is verbose
 
 
 # ========== ADC inputs ==========
@@ -109,7 +108,7 @@ class DriverADS1115(AInDriver):
         i2c = busio.I2C(board.SCL, board.SDA)
         ports = {}
 
-        log.brief('Scanning I²C bus for ADS1x13/4/5 ...')
+        log.info('Scanning I²C bus for ADS1x13/4/5 ...')
         # autodetect of I²C is undefined and risky, as some chips may react on
         # read as if it was a write! We're on a pretty well defined HW though.
         for adr, ads in _scan_i2c(i2c, DriverADS1115.ADDRESSES):
@@ -120,10 +119,10 @@ class DriverADS1115(AInDriver):
                         name = f"ADC #{adc_count} in {ch}"
                         ports[name] = _create_port(adr, adc_count, ch)
                 else:
-                    log.brief('I²C device at 0x%02X seems not to be an ADS1x15,'
+                    log.info('I²C device at 0x%02X seems not to be an ADS1x15,'
                               'probably a different device, or already in use.', adr)
             except ValueError as ex:
-                log.info(ex)
+                log.verbose(ex)
             except Exception as ex:
                 # pass  # whatever it is, ignore this device
                 log.debug('%r', ex)
@@ -134,7 +133,7 @@ class DriverADS1115(AInDriver):
     def _simulated_ports():
         global adc_count  # pylint: disable=W0603
 
-        log.brief('Faking I²C - ADS1x13/4/5 ...')
+        log.info('Faking I²C - ADS1x13/4/5 ...')
         adc_count += 1
         deps = ['GPIO 2 in', 'GPIO 2 out']
         base = f"ADC #{adc_count} in "
@@ -182,7 +181,7 @@ class DriverADS1115(AInDriver):
             log.debug('median %f %f %f', median[0], median[1], median[2])
             self._val = statistics.median(median)
 
-        log.info('%s = %f', self.name, self._val)
+        log.verbose('%s = %f', self.name, self._val)
         return self._val
 
     def _increase_gain(self):

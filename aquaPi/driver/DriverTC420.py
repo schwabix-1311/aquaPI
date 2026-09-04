@@ -14,7 +14,6 @@ from .base import (OutDriver, IoPort, PortFunc, is_raspi)
 
 
 log = logging.getLogger('driver.DriverTC420')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== PWM ==========
@@ -48,7 +47,7 @@ class DriverTC420(OutDriver):
                                                  [])
                 idx += 1
         except NoDeviceFoundError:
-            log.brief('Faking TC420 ports ...')
+            log.info('Faking TC420 ports ...')
 
             # fake when no TC420 found
             if not is_raspi() and idx == 0:
@@ -87,7 +86,7 @@ class DriverTC420(OutDriver):
             tc.send(ModeStopPacket())
 
     def write(self, value: float):
-        log.info('%s -> %r', self.name, value)
+        log.verbose('%s -> %r', self.name, value)
         value = int(value + .9999)  if value else 0  # lowest dim value -> 1%
         if not self._fake:
             with self._writer_lock:

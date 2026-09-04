@@ -8,7 +8,6 @@ from .base import (AInDriver, IoPort, PortFunc, is_raspi,
                    DriverInvalidAddrError, DriverReadError)
 
 log = logging.getLogger('driver.DriverOneWire')
-log.brief = log.warning  # alias, warning is used as brief info, level info is verbose
 
 
 # ========== 1-wire ==========
@@ -21,7 +20,7 @@ class DriverDS1820(AInDriver):
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if is_raspi():
-            log.brief('Scanning OneWire devices ...')
+            log.info('Scanning OneWire devices ...')
 
             # TODO: GPIO 4 is the Raspi default, auto-detect alternatives!
             deps = ['GPIO 4 in', 'GPIO 4 out']
@@ -35,7 +34,7 @@ class DriverDS1820(AInDriver):
                                             deps)
                 idx += 1
         else:
-            log.brief('Faking OneWire devices ...')
+            log.info('Faking OneWire devices ...')
 
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
             io_ports = {
@@ -96,5 +95,5 @@ class DriverDS1820(AInDriver):
             else:
                 raise DriverReadError()
 
-        log.info('%s = %s', self.name, self._val)
+        log.verbose('%s = %s', self.name, self._val)
         return float(self._val)

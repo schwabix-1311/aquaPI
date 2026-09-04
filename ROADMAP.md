@@ -27,8 +27,9 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   "Read error!" alert text still not localized. (Old ToDo note: use
   Python's `gettext` package for this - frontend i18n is already in
   place, this is backend-only.)
-- `/wiring`'s "receives" dropdown doesn't filter by data-type
-  compatibility (e.g. History could be offered a STRING source).
+- Review data-type compatibility between every node's output and every
+  node's input (e.g. `/wiring`'s "receives" dropdown currently offers
+  History a STRING source) - filter by type/property, not a whitelist.
 - Alert "reverse chip" idea - show the causing node on a triggered
   AlertCond widget; blocked on no directed bus messaging today.
 - Remote Shelly + temperature add-on - paused mid-implementation,
@@ -42,12 +43,6 @@ overlap/repeat each other - that's fine, sort/dedupe later.
 
 ## Moved from the legacy ToDo file (still unfinished)
 
-- Real `log.brief`/`log.verbose` logging methods, instead of today's
-  `log.brief = log.warning` hack (`logging.WARNING` reused as a
-  `BRIEF` level, present in `msg_bus.py`, `alert_nodes.py`,
-  `aux_nodes.py`) - `log.verbose()` as a
-  `functools.partialmethod(log.log, loglevel.INFO-1, ...)` was one
-  proposed real fix.
 - Raspberry Pi Zero 2 W loses WLAN after some days - a known upstream
   issue (https://forums.raspberrypi.com/viewtopic.php?t=357703),
   `sudo iw wlan0 set power_save off` was tried as a workaround.

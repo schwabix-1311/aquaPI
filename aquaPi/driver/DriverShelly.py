@@ -136,7 +136,7 @@ def _identify(ip: str) -> dict | None:
     lights = _count_channels('light', MAX_LIGHT_CHANNELS)
 
     return {'ip': ip, 'name': name, 'type': info.get('type', info.get('model', 'unknown')),
-           'relays': relays, 'lights': lights}
+            'relays': relays, 'lights': lights}
 
 
 def _find_real_ports() -> dict[str, IoPort]:
@@ -228,7 +228,7 @@ class _ShellyBase:
     @classmethod
     def find_ports(cls) -> dict[str, IoPort]:
         return {name: port for name, port in _discover_all_ports().items()
-               if port.driver is cls}
+                if port.driver is cls}
 
 
 class DriverShellyRelay(_ShellyBase, OutDriver):

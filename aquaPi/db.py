@@ -148,7 +148,7 @@ def _mk_receives_arg(receives_kind: str, receives: list[str]):
 
 
 def build_node(type_name: str, name: str, receives: list[str],
-              fields: dict[str, Any]) -> BusNode:
+               fields: dict[str, Any]) -> BusNode:
     """ construct a brand new node of a *creatable* type (see
         get_node_type_schema()) directly via its real constructor - used by
         the /config graph editor (aquaPi/api.py) to add nodes at runtime.
@@ -464,10 +464,12 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
 
         if 'receives' in upd:
             raw_receives = upd['receives']
-            if not isinstance(raw_receives, list) or not all(isinstance(r, str) for r in raw_receives):
+            if not isinstance(raw_receives, list) \
+               or not all(isinstance(r, str) for r in raw_receives):
                 raise ConfigDiffError('receives must be a list of node ids', upd)
             if not schema:
-                raise ConfigDiffError(f'{type(node).__name__} does not support changing receives', upd)
+                raise ConfigDiffError(f'{type(node).__name__} does not support changing receives',
+                                      upd)
             resolved = [resolve_ref(r, upd) for r in raw_receives]
             _check_receives_cardinality(schema, resolved, upd)
             upd['_resolved_receives'] = resolved
@@ -920,8 +922,8 @@ def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
     offset_x = offset_y = 0.0
     for _ in range(50):
         collision = any(
-            abs(float(entry['state'].get('pos_x', 0.0) or 0.0) + offset_x - ux) < NODE_BOX_WIDTH
-            and abs(float(entry['state'].get('pos_y', 0.0) or 0.0) + offset_y - uy) < NODE_BOX_HEIGHT
+            abs(float(entry['state'].get('pos_x', 0.0) or 0.0) + offset_x - ux) < NODE_BOX_WIDTH and
+            abs(float(entry['state'].get('pos_y', 0.0) or 0.0) + offset_y - uy) < NODE_BOX_HEIGHT
             for entry in entries
             for (ux, uy) in existing_positions
         )
@@ -995,7 +997,8 @@ def get_snapshot(db_path: str, name: str) -> dict[str, Any] | None:
         ).fetchone()
         if not row:
             return None
-        return {'name': row['name'], 'created_at': row['created_at'], 'data': json.loads(row['data'])}
+        return {'name': row['name'], 'created_at': row['created_at'],
+                'data': json.loads(row['data'])}
     finally:
         conn.close()
 
@@ -1029,12 +1032,14 @@ def restore_snapshot_into_bus(bus: MsgBus, snapshot_rows: list[dict[str, Any]]) 
         try:
             nodes.append(_deserialize_node(row['type'], row['params']))
         except DriverError as ex:
-            log.error('restore_snapshot_into_bus: failed to restore node %r (type %r), skipping: %s',
-                      row.get('id'), row.get('type'), ex.msg)
+            log.error(
+                'restore_snapshot_into_bus: failed to restore node %r (type %r), skipping: %s',
+                row.get('id'), row.get('type'), ex.msg)
             failures.append(f"{row.get('id')!r} ({row.get('type')}): {ex.msg}")
         except (ValueError, KeyError, TypeError) as ex:
-            log.exception('restore_snapshot_into_bus: failed to restore node %r (type %r), skipping',
-                          row.get('id'), row.get('type'))
+            log.exception(
+                'restore_snapshot_into_bus: failed to restore node %r (type %r), skipping',
+                row.get('id'), row.get('type'))
             failures.append(f"{row.get('id')!r} ({row.get('type')}): {ex}")
     for node in nodes:
         try:
@@ -1392,7 +1397,7 @@ def consume_password_reset_token(db_path: str, token: str, new_password: str) ->
     try:
         with conn:
             conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                        (password_hash, row['user_id']))
+                         (password_hash, row['user_id']))
             conn.execute('UPDATE password_reset_tokens SET used = 1 WHERE token = ?', (token,))
     finally:
         conn.close()
@@ -1527,7 +1532,8 @@ def register_failed_login(db_path: str, key: str,
                 'SELECT count, window_start FROM login_attempts WHERE key = ?', (key,)
             ).fetchone()
 
-            if row and now - datetime.fromisoformat(row['window_start']) <= timedelta(minutes=window_minutes):
+            if row and now - datetime.fromisoformat(row['window_start']) <= \
+               timedelta(minutes=window_minutes):
                 count = row['count'] + 1
                 window_start = datetime.fromisoformat(row['window_start'])
             else:
@@ -1695,7 +1701,7 @@ def migrate_notification_config_from_json(globals_cfg: dict[str, Any],
             configs = [configs]
         set_notification_config(db_path, channel, configs)
         log.info('Migrated %s notification config from config.json to %s',
-                  channel, db_path)
+                 channel, db_path)
         migrated = True
     return migrated
 

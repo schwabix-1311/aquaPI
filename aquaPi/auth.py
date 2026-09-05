@@ -78,8 +78,8 @@ def roles_required(*roles: str):
         def wrapped(*args, **kwargs):
             if current_user.role not in roles:
                 log.verbose('User %r (role %r) denied access to %s (requires %s)',
-                         current_user.username, current_user.role,
-                         request.path, roles)
+                            current_user.username, current_user.role,
+                            request.path, roles)
                 if request.path.startswith('/api/'):
                     return jsonify(error='Forbidden'), HTTPStatus.FORBIDDEN
                 abort(HTTPStatus.FORBIDDEN)
@@ -187,7 +187,7 @@ def login():
     locked, retry_seconds = db.is_login_locked_out(_users_db_path(), lockout_key)
     if locked:
         log.verbose('Login blocked for %r: locked out for %d more second(s)',
-                 username, retry_seconds)
+                    username, retry_seconds)
         message = (f'Too many failed login attempts. Please try again in '
                    f'{retry_seconds // 60 + 1} minute(s).')
         return jsonify(result='ERROR', message=message), HTTPStatus.TOO_MANY_REQUESTS
@@ -224,7 +224,7 @@ def request_password_reset():
         token = db.create_password_reset_token(_users_db_path(), row['id'])
         reset_url = url_for('auth.confirm_password_reset', token=token, _external=True)
         db.send_password_reset_email(_users_db_path(), row['email'], reset_url,
-                                      current_app.config['APP_NAME'])
+                                     current_app.config['APP_NAME'])
         log.verbose('Password reset requested for user %r, email sent', row['username'])
     else:
         log.verbose('Password reset requested for unknown/emailless user %r', username)
@@ -312,7 +312,7 @@ def _deliver_user_password(email: str | None, username: str, password: str) -> s
         Returns 'email' or 'log' to let the caller inform the admin.
     """
     if email and db.send_user_password_email(_users_db_path(), email, username, password,
-                                              current_app.config['APP_NAME']):
+                                             current_app.config['APP_NAME']):
         return 'email'
     log.info('=== Set password for user %r: %s', username, password)
     return 'log'
@@ -369,7 +369,7 @@ def api_update_user(user_id: int):
             return jsonify(error='Cannot remove the last remaining admin'), HTTPStatus.BAD_REQUEST
         db.update_user_role(_users_db_path(), user_id, role)
         log.verbose('User %r changed role of user %r to %r',
-                 current_user.username, row['username'], role)
+                    current_user.username, row['username'], role)
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                                'update_user_role', row['username'], {'role': role})
 
@@ -446,18 +446,20 @@ def api_set_notification_pref(alert_node_id: str):
     escalation_after_minutes = data.get('escalation_after_minutes', 0)
 
     if not escalation_channel:
-        return jsonify(error=f'Invalid escalation channel: {escalation_channel!r}'), HTTPStatus.BAD_REQUEST
+        return jsonify(error=f'Invalid escalation channel: {escalation_channel!r}'), \
+            HTTPStatus.BAD_REQUEST
     try:
         escalation_after_minutes = int(escalation_after_minutes)
         if escalation_after_minutes < 0:
             raise ValueError()
     except (TypeError, ValueError):
-        return jsonify(error='escalation_after_minutes must be a non-negative integer'), HTTPStatus.BAD_REQUEST
+        return jsonify(error='escalation_after_minutes must be a non-negative integer'), \
+            HTTPStatus.BAD_REQUEST
 
     db.set_escalation_config(_users_db_path(), alert_node_id,
                              escalation_channel, escalation_after_minutes)
     log.verbose('Admin %r set shared escalation channel %r after %d min for alert %r',
-             current_user.username, escalation_channel, escalation_after_minutes, alert_node_id)
+                current_user.username, escalation_channel, escalation_after_minutes, alert_node_id)
     return jsonify({'alert_node_id': alert_node_id,
                     'escalation_channel': escalation_channel,
                     'escalation_after_minutes': escalation_after_minutes})

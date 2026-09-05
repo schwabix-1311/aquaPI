@@ -126,14 +126,16 @@ class DriverTelegram(DriverText):
 === for DriverTelegram ===
 Extract from medium.com "using-python-to-send-telegram-messages-in-3-simple-steps"
 2. Getting your chat ID  -  TODO: automate this??
-In Telegram, every chat has a chat ID, and we need this chat ID to send Telegram messages using Python.
+In Telegram, every chat has a chat ID, and we need this chat ID to send
+Telegram messages using Python.
 Send your Telegram bot a message (any random message)
 Run this Python script to find your chat ID
   import requests
   TOKEN = "YOUR TELEGRAM BOT TOKEN"
   url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
   print(requests.get(url).json())
-This script calls the getUpdates function, which kinda checks for new messages. We can find our chat ID from the returned JSON (the one in red)
+This script calls the getUpdates function, which kinda checks for new messages.
+We can find our chat ID from the returned JSON (the one in red)
 Note: if you don’t send your Telegram bot a message, your results might be empty.
 3. Copy and paste the chat ID into our next step
 
@@ -155,7 +157,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
 
         def _auto_detect_chat(url: str, cfg: dict[str, str]) -> bool:
             res = DriverTelegram._bot_request(url, 'getUpdates')
-# res = [{...},{"update_id":23832555,"message": {"message_id":39,"from":{"id":126177523, "is_bot":false, "first_name":"Markus", "username":"schwabix", "language_code":"de"},"chat":{"id":-1002400534091,"title":"aquaBroadcast","type":"supergroup"},"date":1741614412,"text":"setup aquaPi"}}]
+# res = [{...},{"update_id":23832555,"message": {"message_id":39,"from":{"id":126177523, "is_bot":false, "first_name":"Markus", "username":"schwabix", "language_code":"de"},"chat":{"id":-1002400534091,"title":"aquaBroadcast","type":"supergroup"},"date":1741614412,"text":"setup aquaPi"}}]  # noqa: E501
             if res:
                 log.verbose("auto-detect %s", res)
                 for upd in res:
@@ -185,7 +187,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
             url = f"https://api.telegram.org/bot{cfg['bot_token']}/"
             try:
                 res = DriverTelegram._bot_request(url, 'getMe')
-# res = {"id":813504918,"is_bot":true,"first_name":"zuHause","username":"Schwabix_bot","can_join_groups":true,"can_read_all_group_messages":false,"supports_inline_queries":false,"can_connect_to_business":false,"has_main_web_app":false}
+# res = {"id":813504918,"is_bot":true,"first_name":"zuHause","username":"Schwabix_bot","can_join_groups":true,"can_read_all_group_messages":false,"supports_inline_queries":false,"can_connect_to_business":false,"has_main_web_app":false}  # noqa: E501
 
             except requests.exceptions.ConnectionError:
                 log.error("There's no connection to the internet, thus no Telegram")

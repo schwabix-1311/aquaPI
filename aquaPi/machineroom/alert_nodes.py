@@ -210,11 +210,11 @@ class Alert(PortDriverMixin, BusListener):
             if driver.func == PortFunc.Bout:
                 driver.write(100 if alert_active else 0)
                 log.verbose('Alert device "%s" set to %d',
-                         driver.name, 100 if alert_active else 0)
+                            driver.name, 100 if alert_active else 0)
             elif driver.func == PortFunc.Tout:
                 driver.write(text)
                 log.verbose('Alert receiver "%s" will get msg:  "%s"',
-                         driver.name, '\n'.join(alert_lst))
+                            driver.name, '\n'.join(alert_lst))
 
     def _notify_escalation(self, port_name: str, text: str) -> None:
         """ send an escalation message to a specific IoRegistry port, never
@@ -285,7 +285,7 @@ class Alert(PortDriverMixin, BusListener):
         if isinstance(msg, MsgData) and self._bus:
             snd_name = self._bus.get_node(msg.sender).name or msg.sender
             log.verbose("## Alert %s check %.4f from %s",
-                     self.name, msg.data, snd_name)
+                        self.name, msg.data, snd_name)
             any_alert = False
             any_change = False
             self.data = []
@@ -316,7 +316,7 @@ class Alert(PortDriverMixin, BusListener):
                 self._escalated = False
 
             if any_change \
-            or (self._repeat_time and (now > self._repeat_time)):
+                    or (self._repeat_time and (now > self._repeat_time)):
                 self._send_alert(any_alert, self.data)
                 self._repeat_time = now + self.repeat
             elif not any_alert:

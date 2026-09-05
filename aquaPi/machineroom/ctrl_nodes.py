@@ -107,11 +107,11 @@ class ThresholdCtrl(ControllerNode):
             if self._cmp_on(val, self._threshold_on() * 0.95):
                 self.alert = (self._dir, 'err')
                 log.info('%s %s: output %f - alert %r',
-                          type(self).__name__, self.id, self.data, self.alert)
+                         type(self).__name__, self.id, self.data, self.alert)
             else:
                 self.alert = ('*', 'act')  if self.data else None
                 log.info('%s %s: output %f',
-                          type(self).__name__, self.id, self.data)
+                         type(self).__name__, self.id, self.data)
 
             self.post(MsgData(self.id, self.data))
 
@@ -322,7 +322,8 @@ class PidCtrl(ControllerNode):
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
         schema.append(Setting('setpoint', 'setpoint', type='number', step=0.1, required=True))
-        schema.append(Setting('p_fact', 'pFact', 100.0, type='number', min=-1000, max=1000, step=0.1))
+        schema.append(Setting('p_fact', 'pFact', 100.0, type='number',
+                              min=-1000, max=1000, step=0.1))
         schema.append(Setting('i_fact', 'iFact', 0.05, type='number', min=-10, max=10, step=0.01))
         schema.append(Setting('d_fact', 'dFact', 0.0, type='number', min=-10, max=10, step=0.1))
         return schema
@@ -402,7 +403,7 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
 
                 # fade_time or fade_out can be 0 -> switch to target
                 if (self.data < self.target and not self.fade_time) \
-                 or (self.data > self.target and not self.fade_out):
+                        or (self.data > self.target and not self.fade_out):
                     self.data = self.target
                     log.info('FadeCtrl %s: output %f', self.id, self.data)
                     self.post(MsgData(self.id, self.data))
@@ -422,7 +423,7 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
         step_t = max(delta_t / 1000, 0.1)      # try 1000 steps, at most 10 steps per sec
         step_d = delta_d * step_t / delta_t
         log.info('FadeCtrl %s: fading in %f s from %f -> %f, change by %f every %f s',
-                  self.id, delta_t, self.data, self.target, step_d, step_t)
+                 self.id, delta_t, self.data, self.target, step_d, step_t)
 
         next_t = time() + step_t
         while abs(self.target - self.data) > abs(step_d):
@@ -594,7 +595,8 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
         if random.random() < 0.002 and len(self.clouds) < self.cloudiness:
             cloud = Cloud(self.cloudiness)
             self.clouds.append(cloud)
-            log.info('SunCtrl %s: new cloud (%dmin | %d%%)', self.id, cloud.duration/60, cloud.darkness)
+            log.info('SunCtrl %s: new cloud (%dmin | %d%%)',
+                     self.id, cloud.duration/60, cloud.darkness)
 
         shadow = 0.0
         for i, cloud in enumerate(self.clouds.copy()):

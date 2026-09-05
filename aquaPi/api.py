@@ -288,7 +288,8 @@ def api_history_export(node_id: str) -> Response:
     step = int(request.args.get('step', 0))
     fmt = request.args.get('format', 'json').lower()
     if fmt not in ('csv', 'json'):
-        return jsonify(error=f'Invalid format: {fmt!r}, expected csv or json'), HTTPStatus.BAD_REQUEST
+        return jsonify(error=f'Invalid format: {fmt!r}, expected csv or json'), \
+            HTTPStatus.BAD_REQUEST
 
     hist = node.get_history(start, step)
     names = list(hist.get(0, []))
@@ -419,8 +420,8 @@ def api_get_node_settings(node_id: str) -> Response:
 
 
 def _validate_and_cast(key: str, raw_value, vtype: str,
-                        vmin: float | None = None, vmax: float | None = None,
-                        voptions: list[str] | None = None, voptional: bool = False):
+                       vmin: float | None = None, vmax: float | None = None,
+                       voptions: list[str] | None = None, voptional: bool = False):
     """ validate & cast a single value against a type/min/max/options -
         shared by the /settings API (sourced from a node's get_settings())
         and the /config node-schema API (sourced from get_node_type_schema());
@@ -519,7 +520,7 @@ def api_set_node_settings(node_id: str) -> Response:
     mr.save_nodes(bus)
 
     log.verbose('User %r updated settings of node %r: %s',
-             current_user.username, node_id, list(body.keys()))
+                current_user.username, node_id, list(body.keys()))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_settings', node_id, {'fields': list(body.keys())})
 
@@ -559,8 +560,8 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
             # reject a submitted blank value; that's a separate,
             # /settings-only concept (Setting.optional).
             result[key] = _validate_and_cast(key, raw_fields[key], attrs['type'],
-                                              attrs.get('min'), attrs.get('max'),
-                                              voptional=True)
+                                             attrs.get('min'), attrs.get('max'),
+                                             voptional=True)
         elif require_all:
             if field.get('value') is not None:
                 result[key] = field['value']
@@ -599,7 +600,8 @@ def api_create_node() -> Response:
     type_name = body.get('type')
     schema = db.get_node_type_schema().get(type_name)
     if not schema:
-        return jsonify(error=f'Unknown or non-creatable node type: {type_name!r}'), HTTPStatus.BAD_REQUEST
+        return jsonify(error=f'Unknown or non-creatable node type: {type_name!r}'), \
+            HTTPStatus.BAD_REQUEST
 
     name = (body.get('name') or '').strip()
     if not name:
@@ -616,7 +618,8 @@ def api_create_node() -> Response:
     if schema['receives'] == 'none' and receives:
         return jsonify(error=f'{type_name} does not accept any receives'), HTTPStatus.BAD_REQUEST
     if schema['receives'] == 'single' and len(receives) > 1:
-        return jsonify(error=f'{type_name} accepts at most 1 receives entry'), HTTPStatus.BAD_REQUEST
+        return jsonify(error=f'{type_name} accepts at most 1 receives entry'), \
+            HTTPStatus.BAD_REQUEST
 
     # TODO(config-receives-type-filtering): existence-only - doesn't check
     # the referenced node's data_range compatibility. See
@@ -680,11 +683,14 @@ def api_update_node(node_id: str) -> Response:
         if not isinstance(receives, list) or not all(isinstance(r, str) for r in receives):
             return jsonify(error='receives must be a list of node ids'), HTTPStatus.BAD_REQUEST
         if not schema:
-            return jsonify(error=f'{type(node).__name__} does not support changing receives'), HTTPStatus.BAD_REQUEST
+            return jsonify(error=f'{type(node).__name__} does not support changing receives'), \
+                HTTPStatus.BAD_REQUEST
         if schema['receives'] == 'none' and receives:
-            return jsonify(error=f'{type(node).__name__} does not accept any receives'), HTTPStatus.BAD_REQUEST
+            return jsonify(error=f'{type(node).__name__} does not accept any receives'), \
+                HTTPStatus.BAD_REQUEST
         if schema['receives'] == 'single' and len(receives) > 1:
-            return jsonify(error=f'{type(node).__name__} accepts at most 1 receives entry'), HTTPStatus.BAD_REQUEST
+            return jsonify(error=f'{type(node).__name__} accepts at most 1 receives entry'), \
+                HTTPStatus.BAD_REQUEST
         # TODO(config-receives-type-filtering): existence-only - doesn't
         # check the referenced node's data_range compatibility. See
         # .junie/plans/config-receives-type-filtering.md
@@ -700,7 +706,8 @@ def api_update_node(node_id: str) -> Response:
         if not isinstance(raw_fields, dict):
             return jsonify(error='fields must be a JSON object'), HTTPStatus.BAD_REQUEST
         if not schema:
-            return jsonify(error=f'{type(node).__name__} does not support editing fields'), HTTPStatus.BAD_REQUEST
+            return jsonify(error=f'{type(node).__name__} does not support editing fields'), \
+                HTTPStatus.BAD_REQUEST
         try:
             fields = db.convert_duration_fields(
                 type(node), _validate_fields(schema['fields'], raw_fields, require_all=False))
@@ -755,11 +762,13 @@ def api_set_alert_conditions(node_id: str) -> Response:
     if not node:
         return Response(status=HTTPStatus.NOT_FOUND)
     if not isinstance(node, Alert):
-        return jsonify(error=f'{type(node).__name__} does not have alert conditions'), HTTPStatus.BAD_REQUEST
+        return jsonify(error=f'{type(node).__name__} does not have alert conditions'), \
+            HTTPStatus.BAD_REQUEST
 
     body = request.get_json(silent=True)
     if not isinstance(body, dict) or not isinstance(body.get('conditions'), list):
-        return jsonify(error="Body must be a JSON object with a 'conditions' list"), HTTPStatus.BAD_REQUEST
+        return jsonify(error="Body must be a JSON object with a 'conditions' list"), \
+            HTTPStatus.BAD_REQUEST
 
     conditions = set()
     for i, raw in enumerate(body['conditions']):
@@ -768,11 +777,13 @@ def api_set_alert_conditions(node_id: str) -> Response:
 
         cls = db.ALERT_COND_FACTORY.get(raw.get('class'))
         if not cls:
-            return jsonify(error=f"conditions[{i}]: unknown class {raw.get('class')!r}"), HTTPStatus.BAD_REQUEST
+            return jsonify(error=f"conditions[{i}]: unknown class {raw.get('class')!r}"), \
+                HTTPStatus.BAD_REQUEST
 
         cond_node_id = raw.get('node_id')
         if not isinstance(cond_node_id, str) or not bus.get_node(cond_node_id):
-            return jsonify(error=f'conditions[{i}]: unknown node_id {cond_node_id!r}'), HTTPStatus.BAD_REQUEST
+            return jsonify(error=f'conditions[{i}]: unknown node_id {cond_node_id!r}'), \
+                HTTPStatus.BAD_REQUEST
 
         try:
             limit = _validate_and_cast(f'conditions[{i}].limit', raw.get('limit'), 'number')
@@ -794,7 +805,7 @@ def api_set_alert_conditions(node_id: str) -> Response:
     mr.save_nodes(bus)
 
     log.verbose('User %r replaced conditions of alert %r: %d condition(s)',
-             current_user.username, node_id, len(conditions))
+                current_user.username, node_id, len(conditions))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_alert_conditions', node_id, {'count': len(conditions)})
 
@@ -856,8 +867,8 @@ def api_config_apply() -> Response:
         mr: MachineRoom = current_app.extensions['machineroom']
         mr.save_nodes(bus)
         log.verbose('User %r applied config diff: %d create(s), %d update(s), %d delete(s)',
-                 current_user.username, len(diff.get('creates') or []),
-                 len(diff.get('updates') or []), len(diff.get('deletes') or []))
+                    current_user.username, len(diff.get('creates') or []),
+                    len(diff.get('updates') or []), len(diff.get('deletes') or []))
         db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                                'apply_config_diff', '', {
                                    'creates': len(diff.get('creates') or []),
@@ -900,7 +911,8 @@ def api_create_template() -> Response:
     node_ids = body.get('node_ids', [])
     if not isinstance(node_ids, list) or not node_ids \
        or not all(isinstance(i, str) for i in node_ids):
-        return jsonify(error='node_ids must be a non-empty list of node ids'), HTTPStatus.BAD_REQUEST
+        return jsonify(error='node_ids must be a non-empty list of node ids'), \
+            HTTPStatus.BAD_REQUEST
 
     try:
         data = db.capture_node_template(bus, node_ids)
@@ -910,7 +922,7 @@ def api_create_template() -> Response:
     db.save_template(_wiring_db_path(), name, body.get('descr', '') or '', data)
 
     log.verbose('User %r saved template %r (%d nodes)',
-             current_user.username, name, len(node_ids))
+                current_user.username, name, len(node_ids))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'save_template', name, {'node_count': len(node_ids)})
 
@@ -965,7 +977,7 @@ def api_insert_template(name: str) -> Response:
     mr.save_nodes(bus)
 
     log.verbose('User %r inserted template %r (%d new nodes)',
-             current_user.username, name, len(new_nodes))
+                current_user.username, name, len(new_nodes))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'insert_template', name, {'node_count': len(new_nodes)})
 
@@ -1046,7 +1058,7 @@ def api_restore_snapshot(name: str) -> Response:
     mr.save_nodes(bus)
 
     log.verbose('User %r restored snapshot %r (%d nodes)',
-             current_user.username, name, len(bus.nodes))
+                current_user.username, name, len(bus.nodes))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'restore_snapshot', name, {'node_count': len(bus.nodes)})
 

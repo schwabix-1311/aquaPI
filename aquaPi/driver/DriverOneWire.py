@@ -39,9 +39,11 @@ class DriverDS1820(AInDriver):
             # name: IoPort('function', 'driver', 'cfg', 'dependants')
             io_ports = {
                 'DS1820 #1': IoPort(PortFunc.Ain, DriverDS1820,
-                                    {'adr': '28-01193867a71e', 'name': 'DS1820 x7A71E', 'fake': True}, []),
+                                    {'adr': '28-01193867a71e', 'name': 'DS1820 x7A71E',
+                                     'fake': True}, []),
                 'DS1820 #2': IoPort(PortFunc.Ain, DriverDS1820,
-                                    {'adr': '28-0119383a2e9c', 'name': 'DS1820 xA2E9C', 'fake': True}, [])
+                                    {'adr': '28-0119383a2e9c', 'name': 'DS1820 xA2E9C',
+                                     'fake': True}, [])
             }
         return io_ports
 

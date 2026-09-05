@@ -113,7 +113,7 @@ class ScaleAux(SingleInAux):
             log.error('ScaleAux %s: limit must be a tupel of floats', self.name)
 
         log.verbose('ScaleAux %s: factor %f, offset %f, limiting %s',
-                 name, self.factor, self.offset, str(self.limit))
+                    name, self.factor, self.offset, str(self.limit))
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()

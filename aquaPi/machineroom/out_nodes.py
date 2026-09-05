@@ -252,7 +252,7 @@ class SlowPwmDevice(DeviceNode):
 
     def set(self, perc: float) -> None:
         log.verbose('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
-                 self.id, perc, self.cycle * perc/100, self.cycle)
+                    self.id, perc, self.cycle * perc/100, self.cycle)
         with self._set_lock:
             if self._thread:
                 self._thread_stop = True
@@ -304,7 +304,8 @@ class AnalogDevice(DeviceNode):
         self.minimum = min(max(0., minimum), 90.)
         self.maximum = min(max(minimum + 1., maximum), 100.)
         self.set_percent(self.data if _cont else 0)
-        log.verbose('%s init to %r | pe %r | min %f | max %f', self.name, self.data, percept, minimum, maximum)
+        log.verbose('%s init to %r | pe %r | min %f | max %f',
+                    self.name, self.data, percept, minimum, maximum)
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()

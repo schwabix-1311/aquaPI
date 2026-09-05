@@ -148,7 +148,8 @@ class SwitchInput(InputNode):
                              _cont=True)
 
     def read(self) -> int:
-        # TODO: reduce load & improve response time by using interrupt-driven IO, either here or in DriverGPIO
+        # TODO: reduce load & improve response time by using interrupt-driven
+        # IO, either here or in DriverGPIO
         val = self.data > 0
         if self._driver:
             val = bool(self._driver.read())

@@ -80,7 +80,8 @@ class DriverADS1115(AInDriver):
                     bytearray([2]), buf, in_start=4, in_end=6)
                 device.write_then_readinto(
                     bytearray([3]), buf, in_start=6, in_end=8)
-                # default is: in 0-1 differential, gain 2, 1 shot, 128SPS, comp low, no latch, disable comp
+                # default is: in 0-1 differential, gain 2, 1 shot, 128SPS,
+                # comp low, no latch, disable comp
                 if buf[2:8] == bytearray.fromhex('8583 8000 7FFF'):
                     return True
                 # TODO: DBG REMOVE_ME!  this ignores OS|MUX|PGA|MODE
@@ -120,7 +121,7 @@ class DriverADS1115(AInDriver):
                         ports[name] = _create_port(adr, adc_count, ch)
                 else:
                     log.info('I²C device at 0x%02X seems not to be an ADS1x15,'
-                              'probably a different device, or already in use.', adr)
+                             'probably a different device, or already in use.', adr)
             except ValueError as ex:
                 log.verbose(ex)
             except Exception as ex:

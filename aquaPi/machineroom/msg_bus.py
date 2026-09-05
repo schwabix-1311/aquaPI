@@ -50,7 +50,8 @@ class Setting:
     # /config create form, not a claim about any real node's current state.
     # get_settings() always overwrites this with the real value.
     value: Any = None
-    type: str = 'text'    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration' | 'time'
+    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration' | 'time'
+    type: str = 'text'
     min: float | None = None
     max: float | None = None
     step: float | None = None
@@ -379,7 +380,7 @@ class BusListener(BusNode, ABC):
         # like 'inverted'/'repeat' last.
         settings = super().get_settings()
         schema = next(s for s in type(self).get_settings_schema()
-                     if s.label == 'receives')
+                      if s.label == 'receives')
         settings.append(schema.with_value(
             ';'.join(MsgBus.to_names(self.get_receives()))))
         return settings

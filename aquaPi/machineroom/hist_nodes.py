@@ -104,7 +104,7 @@ def get_calibration_log(node_id: str, limit: int = 100) -> list[dict[str, Any]]:
                 rows = curs.fetchall()
                 return [{'ts': ts.isoformat(), 'field': field,
                         'old_value': old_value, 'new_value': new_value}
-                       for (ts, field, old_value, new_value) in rows]
+                        for (ts, field, old_value, new_value) in rows]
     except Exception:
         log.exception('Failed to read calibration log for %s', node_id)
         return []
@@ -261,7 +261,8 @@ if QUEST_DB:
         @staticmethod
         def _get_local_tz() -> str:
             # time is a bad concept, troublesome everywhere!
-            #FIXME: this sets QuestDB to host's local timezone. Ok for debugging and logs. Conversion to and from user's TZ must be done in frontend!
+            # FIXME: this sets QuestDB to host's local timezone. Ok for debugging
+            # and logs. Conversion to and from user's TZ must be done in frontend!
             # To make things interesting, there's no simple way to get the
             # 'Olson TZ name' (e.g. 'Europe/Belin'), most systems prefer the
             # 3-4 letter names, e.g. CEST. Reading link /etc/localtime has
@@ -471,7 +472,8 @@ class History(BusListener):
                 log.error('QuestDB failed, will keep history in memory')
         if not self.db:
             self.db = TimeDbMemory(self.capacity)
-            log.info('Recording history %s in main memory with limited depth of %dh!', name, self.capacity)
+            log.info('Recording history %s in main memory with limited depth of %dh!',
+                     name, self.capacity)
         for rcv in self.receives:
             self.db.add_field(rcv)
 

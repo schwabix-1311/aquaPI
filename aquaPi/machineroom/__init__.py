@@ -85,7 +85,7 @@ class MachineRoom:
 
         if db.migrate_notification_config_from_json(self.globals, users_db_path):
             log.info("=== Migrated notification config (Email/Telegram) from "
-                      "%s to %s", cfg_file, users_db_path)
+                     "%s to %s", cfg_file, users_db_path)
 
         for channel in db.NOTIFICATION_CHANNELS:
             cfg_list = db.get_notification_config(users_db_path, channel)

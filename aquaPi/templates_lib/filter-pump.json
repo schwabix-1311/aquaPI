@@ -32,7 +32,7 @@
      "unit": "",
      "rcv_unit": "",
      "data_range": "BINARY",
-     "group": "Filter",
+     "group": "",
      "pos_x": 0.0,
      "pos_y": 504.0
     }
@@ -51,7 +51,7 @@
      "unit": "%",
      "rcv_unit": "",
      "data_range": "BINARY",
-     "group": "Filter",
+     "group": "",
      "pos_x": 310.0,
      "pos_y": 504.0,
      "port": "",

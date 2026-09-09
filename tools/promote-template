@@ -85,6 +85,11 @@ en_nodes = {}
 for p in pairs:
 	k, _, v = p.partition("=")
 	en_nodes[k] = v
+# a shipped template must not carry the author's personal dashboard
+# group names - blank them (ports were already blanked at capture time)
+for n in t.get("data", {}).get("nodes", []):
+	if n.get("state", {}).get("group"):
+		n["state"]["group"] = ""
 out = {
 	"id": tid,
 	"i18n": {

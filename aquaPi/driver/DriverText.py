@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-from socket import gaierror
+from socket import gaierror, gethostname
 import smtplib
 from email.message import EmailMessage
 import requests
@@ -11,6 +11,14 @@ from .base import (OutDriver, IoPort, PortFunc, DriverConfigError)
 
 
 log = logging.getLogger('driver.DriverText')
+
+
+def _host_label() -> str:
+    """ short hostname for tagging outgoing messages, e.g. 'aquapi2' -
+        lets recipients tell which aquaPi a mail/message came from when
+        several share an inbox or Telegram chat
+    """
+    return gethostname().split('.')[0]
 
 
 # ========== text (Email/Telegram) ==========
@@ -24,6 +32,13 @@ class DriverText(OutDriver):
         super().__init__(cfg, func)
         self.name: str = '!abstract TEXT'
         self._val = ''
+
+    @staticmethod
+    def _host_tag(line: str) -> str:
+        """ fold the sending host into a single line (email subject or the
+            message's 1st line), no extra line - see _host_label()
+        """
+        return f'[{_host_label()}] {line}'
 
     # pylint: disable-next=arguments-renamed
     def write(self, subj_text: str) -> None:
@@ -101,10 +116,10 @@ class DriverEmail(DriverText):
         msg = EmailMessage()
         lines = subj_text.split('\n')
         if len(lines) > 1:
-            msg['Subject'] = lines[0]
+            msg['Subject'] = self._host_tag(lines[0])
             msg.set_content('\n'.join(lines[1:]))
         else:
-            msg['Subject'] = lines[0]
+            msg['Subject'] = self._host_tag(lines[0])
             msg.set_content(lines[0])
         msg['From'] = self.cfg["from"]
         msg['To'] = self.cfg["to"]
@@ -237,7 +252,8 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
         """ all lines are sent as one message
         """
         try:
-            payload = {"chat_id": self.cfg['chat_id'], 'text': subj_text}
+            payload = {"chat_id": self.cfg['chat_id'],
+                       'text': self._host_tag(subj_text)}
             res = DriverTelegram._bot_request(self.cfg['url'], 'sendMessage', json=payload)
             log.verbose('%s -> %r : %r', self.name, subj_text, res)
         except Exception:

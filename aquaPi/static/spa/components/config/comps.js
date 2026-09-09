@@ -91,7 +91,10 @@ const ConfigNodeBox = {
 			@click.stop="onClick"
 		>
 			<div class="d-flex align-center justify-space-between px-2 pt-1">
-				<v-chip x-small label :color="color" text-color="white">{{ node.role }}</v-chip>
+				<div class="d-flex align-center" style="flex: 1 1 0; min-width: 0; overflow: hidden">
+					<v-chip x-small label :color="color" text-color="white" class="flex-shrink-0">{{ node.role }}</v-chip>
+					<span v-if="node.group" class="text-caption grey--text text-truncate ml-1" :title="node.group">{{ node.group }}</span>
+				</div>
 				<div>
      <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
 						<v-icon size="small">mdi-pencil</v-icon>

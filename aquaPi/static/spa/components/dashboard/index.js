@@ -467,21 +467,34 @@ const AquapiDashboard = {
 				</v-row>
 
 				<masonry
+					v-if="widgets.length"
 					:cols="{default: 3, 1264: 3, 960: 2, 600: 1}"
 					:gutter="24"
 				>
-					<div
-						v-for="(item, index) in widgets"
-						:key="item.identifier"
-						class="mb-6"
-						style="break-inside: avoid;"
+					<template
+						v-for="bucket in displayBuckets"
+						:key="bucket.group"
 					>
-						<aquapi-dashboard-widget
-							:item="item"
-							:addTitle="true"
+						<div
+							v-if="hasNamedGroups"
+							class="text-subtitle-1 text-grey-darken-1 mt-2 mb-3"
+							style="column-span: all; break-inside: avoid;"
 						>
-						</aquapi-dashboard-widget>
-					</div>
+							{{ bucket.group || $t('pages.dashboard.ungrouped') }}
+						</div>
+						<div
+							v-for="(item, index) in bucket.items"
+							:key="item.identifier"
+							class="mb-6"
+							style="break-inside: avoid;"
+						>
+							<aquapi-dashboard-widget
+								:item="item"
+								:addTitle="true"
+							>
+							</aquapi-dashboard-widget>
+						</div>
+					</template>
 				</masonry>
 			</v-card-text>
 		</v-card>
@@ -506,6 +519,41 @@ const AquapiDashboard = {
 			set(items) {
 				this.dashboardStore.setNodes(items)
 			}
+		},
+		// only section the dashboard once at least one visible widget's
+		// node carries a `group` - otherwise render the plain flat masonry,
+		// exactly as before. Mirrors /parameters' hasNamedGroups.
+		hasNamedGroups() {
+			return this.widgets.some(item => this.dashboardStore.node(item.id)?.group)
+		},
+		// bucket the (already visible-filtered, drag-ordered) widgets by
+		// their node's `group`. Named groups keep first-appearance order so
+		// drag order still controls section order; the unnamed bucket is
+		// forced last.
+		groupedWidgets() {
+			const buckets = []
+			const byKey = {}
+			this.widgets.forEach(item => {
+				const key = this.dashboardStore.node(item.id)?.group || ''
+				if (!byKey[key]) {
+					byKey[key] = {group: key, items: []}
+					buckets.push(byKey[key])
+				}
+				byKey[key].items.push(item)
+			})
+			return buckets.sort((a, b) => {
+				if (a.group === b.group) return 0
+				return a.group === '' ? 1 : (b.group === '' ? -1 : 0)
+			})
+		},
+		// what the single masonry actually iterates: the group buckets
+		// when at least one group is named, otherwise one anonymous bucket
+		// holding every widget (headings suppressed via hasNamedGroups) -
+		// so the ungrouped dashboard renders exactly as it did before.
+		displayBuckets() {
+			return this.hasNamedGroups
+				? this.groupedWidgets
+				: [{group: '', items: this.widgets}]
 		},
 	},
 

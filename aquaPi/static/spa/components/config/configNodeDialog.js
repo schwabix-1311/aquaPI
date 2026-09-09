@@ -51,11 +51,13 @@ const ConfigNodeDialog = {
 						clearable
 					></v-select>
 
-					<v-text-field
+					<v-combobox
 						v-model="form.group"
+						:items="groupItems"
 						:label="$t('pages.config.group')"
 						outlined dense
-					></v-text-field>
+						clearable
+					></v-combobox>
 
 					<v-alert v-if="isCreatingAlert" type="info" dense text class="mb-3">
 						{{ $t('pages.config.hintAlertNoConditionsYet') }}
@@ -106,6 +108,19 @@ const ConfigNodeDialog = {
 		},
 		typeItems: function() {
 			return Object.keys(this.nodeTypes).sort()
+		},
+		// existing group names across all nodes, offered as combobox
+		// suggestions so a node can be added to a known group without
+		// retyping (and risking a typo that splits the group); the
+		// combobox still accepts a freely typed new name.
+		groupItems: function() {
+			const seen = new Set()
+			this.nodes.forEach(n => {
+				if (n.group) {
+					seen.add(n.group)
+				}
+			})
+			return Array.from(seen).sort((a, b) => a.localeCompare(b))
 		},
 		schema: function() {
 			const typeName = this.editNode ? this.editNode.type : this.form.type

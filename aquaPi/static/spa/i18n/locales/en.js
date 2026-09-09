@@ -25,6 +25,7 @@ export default
 			label: 'Dashboard',
 			title: 'Dashboard',
 			heading: '@:app.name Dashboard',
+			ungrouped: '@:pages.settings.ungrouped',
 		},
 		settings: {
 			label: 'Parameters',

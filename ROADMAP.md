@@ -171,6 +171,17 @@ UV / skimmer on-off, single PWM fan.
   (a node holding both an in and an out driver) but needs no core change.
   Generalises: EC = same with one received input; DO = two received
   inputs (temp + salinity).
+  Caveat: `PortDriverMixin`/`get_settings` assume one `port` per node, so
+  the two-driver form means two port fields in the Wiring editor and two
+  port-exclusivity/`shareable` entries, and *both must resolve to the
+  same physical device address* - which the UI cannot currently enforce.
+  Cleaner solution: a bidirectional port type - one `IoPort` whose driver
+  exposes both a write (`Aout`-like) and a read (`Ain`-like) face for a
+  single device address (e.g. a new `PortFunc.Aio`; `DriverGPIO` already
+  multiply-inherits `OutDriver, InDriver`, it just still registers pin
+  in/out as two separate ports). The hybrid node then binds *one* port
+  and "write the compensation, read the measurement" happens inside that
+  one driver - no matching constraint for the UI to police.
 - **Inherently multi-channel** - one "port" isn't one scalar. RGB/RGBW/
   multi-emitter LED fixtures (see the RGB light + sub-data entries above -
   this is the flagship case), and DMX/Art-Net lighting (512 channels per

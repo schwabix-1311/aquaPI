@@ -41,6 +41,9 @@ node_lines=("${meta[@]:2}")
 
 def_id=$(printf '%s' "$de_name" | tr '[:upper:] ' '[:lower:]-' \
 	| tr -cd 'a-z0-9._+-' | sed 's/^-*//; s/-*$//')
+echo "Pick a SHORT id - a terse characterization, e.g. 'heater-pid' or"
+echo "'ph-control', not a slug of the whole name. Detail goes in the"
+echo "description further down."
 read -rp "Template id [${def_id}]: " tid
 tid=${tid:-$def_id}
 [ -n "$tid" ] || { echo "empty id" >&2; exit 1; }

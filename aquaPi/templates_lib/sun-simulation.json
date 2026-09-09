@@ -1,9 +1,9 @@
 {
- "id": "sonnensimulation-mit-wolken-pwm-dimmer-per-mosfet",
+ "id": "sun-simulation",
  "i18n": {
   "de": {
-   "name": "Sonnensimulation mit Wolken, PWM Dimmer per MOSFET",
-   "descr": "Sonnensimulation, Wolken, über PWM Dimmer (12/24V)",
+   "name": "Sonnensimulation, PWM-Dimmer",
+   "descr": "Sonnenauf- und -untergang mit Wolken; Ausgabe über PWM-Dimmer am MOSFET (12/24 V).",
    "nodes": {
     "zeitplanlicht": "Zeitplan Licht",
     "licht": "Licht",
@@ -11,8 +11,8 @@
    }
   },
   "en": {
-   "name": "Sun simulation with clouds, PWM dimmer",
-   "descr": "Sunrise/sunset, clouds, PWM dimmer through MOSFET (12/24V)",
+   "name": "Sun simulation, PWM dimmer",
+   "descr": "Sunrise and sunset with clouds; output via a PWM dimmer on a MOSFET (12/24 V).",
    "nodes": {
     "zeitplanlicht": "Light Schedule",
     "licht": "Light",

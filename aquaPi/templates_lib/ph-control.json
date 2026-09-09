@@ -1,22 +1,22 @@
 {
- "id": "ph-regelung-analoge-sonde-magnetventil",
+ "id": "ph-control",
  "i18n": {
   "de": {
-   "name": "pH Regelung, analoge Sonde, Magnetventil",
-   "descr": "pH Regelung mit analogem Sondenverstärker und CO2 Ventil",
+   "name": "pH-Regelung, analoge Sonde",
+   "descr": "pH-Sonde über analogen Verstärker; Zweipunktregelung schaltet ein CO2-Magnetventil (12 V, oder Relais/Triac).",
    "nodes": {
     "phsonde": "pH Sonde",
-    "phwert": "pH Wert",
+    "phwert": "pH Kalibrierung",
     "phsteuerung": "pH Steuerung",
     "co2ventil": "CO2 Ventil"
    }
   },
   "en": {
-   "name": "pH controller, analog probe, solenoid valve",
-   "descr": "Analog probe amplifier, solenoid valve (12V, or relay/triac)",
+   "name": "pH control, analog probe",
+   "descr": "pH probe via an analog amplifier; two-point control switching a CO2 solenoid valve (12 V, or relay/triac).",
    "nodes": {
     "phsonde": "pH probe",
-    "phwert": "pH value",
+    "phwert": "pH calibration",
     "phsteuerung": "pH control",
     "co2ventil": "CO2 valve"
    }

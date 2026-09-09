@@ -22,9 +22,11 @@ in `GET /api/templates/` and cannot be deleted through the API.
 }
 ```
 
-- **`id`** — stable, language-independent. It's the API path segment
-  (`/api/templates/<id>`) and the merge key vs. a user template. Also the
-  file name (any unique `*.json` name works, but matching `id` is tidiest).
+- **`id`** — stable, language-independent, and *short*: a terse
+  characterization (`heater-pid`, `ph-control`), not a full slug of the
+  name. Technical detail belongs in `descr`. It's the API path segment
+  (`/api/templates/<id>`) and the merge key vs. a user template, and the
+  file name should match it (`<id>.json`).
 - **`i18n`** — per-language `name` / `descr` and a `nodes` map from each
   `data.nodes[].id` to that node's localised display name. `list_templates`
   / `get_template` fold in the caller's `?lang=` (fallback: `de` → `en` →

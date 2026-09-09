@@ -1,9 +1,9 @@
 {
- "id": "heizung-mit-pid-sensor-ds1820",
+ "id": "heater-pid",
  "i18n": {
   "de": {
-   "name": "Heizung mit PID, Sensor DS1820",
-   "descr": "Heizungsregelung mit Sensor DS1820 und präziser PID Regelung",
+   "name": "Heizung, PID-Regelung mit DS1820",
+   "descr": "Temperaturregelung mit DS1820-Sensor (1-Wire) und PID-Regler für einen Heizstab.",
    "nodes": {
     "wasser": "Wasser",
     "heizleistung": "Heizleistung",
@@ -11,8 +11,8 @@
    }
   },
   "en": {
-   "name": "Heating with PID, DS1820 sensor",
-   "descr": "Heater control with DS1820 sensor and precise PID",
+   "name": "Heater, PID control with DS1820",
+   "descr": "Temperature control with a DS1820 (1-Wire) sensor and a PID loop driving a heater.",
    "nodes": {
     "wasser": "Water",
     "heizleistung": "Heater power",

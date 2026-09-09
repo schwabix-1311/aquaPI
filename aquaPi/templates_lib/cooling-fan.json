@@ -1,17 +1,17 @@
 {
- "id": "erweiterung-der-heizung-um-kuehlung",
+ "id": "cooling-fan",
  "i18n": {
   "de": {
-   "name": "Erweiterung der Heizung um Kühlungslüfter",
-   "descr": "Zusätzlicher variabler Lüfter als Kühlung",
+   "name": "Kühlung, regelbarer Lüfter",
+   "descr": "Regelbarer Lüfter als Kühlung; ergänzt eine bestehende Heizungsregelung.",
    "nodes": {
     "lueftersteuerung": "Lüftersteuerung",
     "kuehlungsluefter": "Kühlungslüfter"
    }
   },
   "en": {
-   "name": "Heater extension: variable cooling fan",
-   "descr": "Additional variable-speed fan for cooling",
+   "name": "Cooling, variable-speed fan",
+   "descr": "Variable-speed fan for cooling; complements an existing heater loop.",
    "nodes": {
     "lueftersteuerung": "Fan control",
     "kuehlungsluefter": "Cooling fan"

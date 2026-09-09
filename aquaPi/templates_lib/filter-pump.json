@@ -1,17 +1,17 @@
 {
- "id": "filterpumpe-manuell-geschaltet",
+ "id": "filter-pump",
  "i18n": {
   "de": {
    "name": "Filterpumpe, manuell geschaltet",
-   "descr": "Schalter auf dem Dashboard für Relais oder Triac",
+   "descr": "Manuell über einen Schalter auf dem Dashboard; treibt ein Relais oder einen Triac.",
    "nodes": {
     "filterpumpe": "Filterpumpe",
     "filter": "Filter"
    }
   },
   "en": {
-   "name": "Filter pump, manual switch",
-   "descr": "Toggle on dashbord driving a relay or triac",
+   "name": "Filter pump, manually switched",
+   "descr": "Switched by hand from a dashboard toggle; drives a relay or triac.",
    "nodes": {
     "filterpumpe": "Filter pump",
     "filter": "Filter"

@@ -281,6 +281,79 @@ def test_templates_survive_a_wiring_db_deletion(client, users, tmp_path, templat
     assert [t['name'] for t in listing] == ['Keep Me']
 
 
+# --- templates: i18n of predefined ones ------------------------------
+
+
+def _write_i18n_lib_template(folder, bus):
+    """ a 'temp-heater' predefined template built from the real bus nodes
+        'wasser' + 'heizen', wrapped in an i18n block keyed on those ids.
+    """
+    tmpl = {
+        'id': 'temp-heater',
+        'i18n': {
+            'de': {'name': 'Temperatur', 'descr': 'Regelung',
+                   'nodes': {'wasser': 'Wasser DE', 'heizen': 'Heizen DE'}},
+            'en': {'name': 'Temperature', 'descr': 'control',
+                   'nodes': {'wasser': 'Water', 'heizen': 'Heater ctrl'}},
+        },
+        'data': db.capture_node_template(bus, ['wasser', 'heizen']),
+    }
+    with open(os.path.join(folder, 'temp-heater.json'), 'w', encoding='utf-8') as f:
+        json.dump(tmpl, f)
+
+
+def test_predefined_template_name_follows_lang(client, users, bus, template_lib):
+    _write_i18n_lib_template(template_lib, bus)
+    _login(client, 'admin1', 'adminPass123')
+
+    de = client.get('/api/templates/?lang=de').get_json()[0]
+    en = client.get('/api/templates/?lang=en').get_json()[0]
+    assert de['id'] == en['id'] == 'temp-heater'
+    assert (de['name'], en['name']) == ('Temperatur', 'Temperature')
+    assert (de['descr'], en['descr']) == ('Regelung', 'control')
+    assert de['node_count'] == 2
+
+
+def test_get_template_localises_node_names(client, users, bus, template_lib):
+    _write_i18n_lib_template(template_lib, bus)
+    _login(client, 'admin1', 'adminPass123')
+
+    en = client.get('/api/templates/temp-heater?lang=en').get_json()
+    assert sorted(n['state']['name'] for n in en['data']['nodes']) \
+        == ['Heater ctrl', 'Water']
+
+    de = client.get('/api/templates/temp-heater?lang=de').get_json()
+    assert sorted(n['state']['name'] for n in de['data']['nodes']) \
+        == ['Heizen DE', 'Wasser DE']
+
+
+def test_unknown_lang_falls_back_to_de(client, users, bus, template_lib):
+    _write_i18n_lib_template(template_lib, bus)
+    _login(client, 'admin1', 'adminPass123')
+
+    fr = client.get('/api/templates/?lang=fr').get_json()[0]
+    assert fr['name'] == 'Temperatur'   # de fallback
+
+
+def test_user_template_is_unaffected_by_lang(client, users, template_lib):
+    _login(client, 'admin1', 'adminPass123')
+    client.post('/api/templates/', json={'name': 'Meine Vorlage', 'node_ids': ['wasser']})
+
+    for lang in ('de', 'en', 'fr'):
+        entry = client.get(f'/api/templates/?lang={lang}').get_json()[0]
+        assert entry['name'] == 'Meine Vorlage'
+        assert entry['id'] == 'Meine Vorlage'
+
+
+def test_insert_localises_the_new_node_names(client, users, bus, template_lib):
+    _write_i18n_lib_template(template_lib, bus)
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/templates/temp-heater/insert?lang=en')
+    assert resp.status_code == HTTPStatus.CREATED
+    assert sorted(n['name'] for n in resp.get_json()) == ['Heater ctrl', 'Water']
+
+
 # --- templates: insert (id remapping, no collisions) --------------------
 
 

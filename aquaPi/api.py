@@ -886,10 +886,12 @@ def api_config_apply() -> Response:
 @bp.route('/api/templates/', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_list_templates() -> Response:
-    """ list all node-combination templates (name, description, node
-        count, source: 'predefined' | 'user').
+    """ list all node-combination templates (id, name, description, node
+        count, source: 'predefined' | 'user'). ?lang= picks the language
+        for a localised predefined template's name/description.
     """
-    return jsonify(db.list_templates(current_app.config['INSTANCE_PATH']))
+    lang = request.args.get('lang') or 'de'
+    return jsonify(db.list_templates(current_app.config['INSTANCE_PATH'], lang))
 
 
 @bp.route('/api/templates/', methods=['POST'])
@@ -935,8 +937,11 @@ def api_create_template() -> Response:
 @bp.route('/api/templates/<name>', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_get_template(name: str) -> Response:
-    """ fetch one template including its full node data. """
-    template = db.get_template(current_app.config['INSTANCE_PATH'], name)
+    """ fetch one template (by id) including its full node data,
+        localised for ?lang= (default 'de').
+    """
+    lang = request.args.get('lang') or 'de'
+    template = db.get_template(current_app.config['INSTANCE_PATH'], name, lang)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
     return jsonify(template)
@@ -964,14 +969,16 @@ def api_delete_template(name: str) -> Response:
 @bp.route('/api/templates/<name>/insert', methods=['POST'])
 @roles_required('admin')
 def api_insert_template(name: str) -> Response:
-    """ insert a template's nodes into the live bus with fresh,
-        collision-free ids, wire them up and persist the wiring.
+    """ insert a template's nodes (localised for ?lang=, default 'de')
+        into the live bus with fresh, collision-free ids, wire them up
+        and persist the wiring.
     """
     bus = the_bus()
     if not bus:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    template = db.get_template(current_app.config['INSTANCE_PATH'], name)
+    lang = request.args.get('lang') or 'de'
+    template = db.get_template(current_app.config['INSTANCE_PATH'], name, lang)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
 

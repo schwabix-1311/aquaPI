@@ -191,7 +191,8 @@ export const useConfigStore = Pinia.defineStore('config', {
 
 		async fetchTemplates() {
 			try {
-				const response = await fetch('/api/templates/', {
+				const lang = i18n.global.locale.value
+				const response = await fetch('/api/templates/?lang=' + encodeURIComponent(lang), {
 					method: 'get',
 					mode: 'same-origin',
 					cache: 'no-cache',
@@ -239,9 +240,9 @@ export const useConfigStore = Pinia.defineStore('config', {
 		},
 
 		async deleteTemplate(payload) {
-			const {name} = payload
+			const {id} = payload
 			try {
-				const response = await fetch('/api/templates/' + encodeURIComponent(name), {
+				const response = await fetch('/api/templates/' + encodeURIComponent(id), {
 					method: 'delete',
 					mode: 'same-origin',
 					cache: 'no-cache',
@@ -262,9 +263,11 @@ export const useConfigStore = Pinia.defineStore('config', {
 		},
 
 		async insertTemplate(payload) {
-			const {name} = payload
+			const {id} = payload
 			try {
-				const response = await fetch('/api/templates/' + encodeURIComponent(name) + '/insert', {
+				const lang = i18n.global.locale.value
+				const response = await fetch('/api/templates/' + encodeURIComponent(id)
+					+ '/insert?lang=' + encodeURIComponent(lang), {
 					method: 'post',
 					mode: 'same-origin',
 					cache: 'no-cache',

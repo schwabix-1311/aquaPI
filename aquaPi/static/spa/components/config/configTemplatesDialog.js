@@ -46,7 +46,7 @@ const ConfigTemplatesDialog = {
 							</div>
 
 							<v-list dense v-if="templates.length">
-								<v-list-item v-for="tpl in templates" :key="tpl.name">
+								<v-list-item v-for="tpl in templates" :key="tpl.id">
 									<v-list-item-title>
 										{{ tpl.name }}
 										<v-chip v-if="tpl.source === 'predefined'" size="x-small" label class="ml-2">
@@ -165,7 +165,7 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async insertTemplate(tpl) {
-			const result = await this.configStore.insertTemplate({name: tpl.name})
+			const result = await this.configStore.insertTemplate({id: tpl.id})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.saveError'))
@@ -183,7 +183,7 @@ const ConfigTemplatesDialog = {
 			if (!ok) {
 				return
 			}
-			const result = await this.configStore.deleteTemplate({name: tpl.name})
+			const result = await this.configStore.deleteTemplate({id: tpl.id})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))

@@ -820,8 +820,17 @@ def capture_node_template(bus: MsgBus, node_ids: list[str]) -> dict[str, Any]:
 #   aquaPi/templates_lib/  - predefined, shipped, read-only. A maintainer
 #                            promotes a user template with `git mv`.
 #   <instance>/templates/  - the user's own, created via the UI.
-# A user file shadows a predefined one of the same name (local override);
+# Each template has a stable, language-independent `id` (the top-level
+# 'id' field, or, for user templates that only have a 'name', the name).
+# A user file shadows a predefined one with the same id (local override);
 # removing the user file makes the predefined one reappear.
+#
+# Predefined templates may carry an `i18n` block:
+#   "i18n": { "de": {"name": .., "descr": .., "nodes": {<tmpl-node-id>: ..}},
+#             "en": { ... } }
+# list_templates()/get_template() take a `lang` and fold that in - the
+# name/descr shown and the name each instantiated node gets. User
+# templates have no i18n block and pass through verbatim.
 
 _TEMPLATE_LIB_DIR = path.join(path.dirname(__file__), 'templates_lib')
 
@@ -837,6 +846,10 @@ def _template_slug(name: str) -> str:
     return (slug or 'template')[:60]
 
 
+def _template_id(tmpl: dict[str, Any]) -> str:
+    return tmpl.get('id') or tmpl.get('name') or ''
+
+
 def _iter_template_files(folder: str):
     if not path.isdir(folder):
         return
@@ -849,7 +862,7 @@ def _read_template_file(fpath: str) -> dict[str, Any] | None:
     try:
         with open(fpath, encoding='utf-8') as f_in:
             tmpl = json.load(f_in)
-        if isinstance(tmpl, dict) and tmpl.get('name'):
+        if isinstance(tmpl, dict) and _template_id(tmpl):
             return tmpl
     except (OSError, ValueError):
         pass
@@ -857,18 +870,45 @@ def _read_template_file(fpath: str) -> dict[str, Any] | None:
     return None
 
 
-def _find_template_file(folder: str, name: str) -> str | None:
+def _find_template_file(folder: str, tid: str) -> str | None:
     for fpath in _iter_template_files(folder):
         tmpl = _read_template_file(fpath)
-        if tmpl and tmpl['name'] == name:
+        if tmpl and _template_id(tmpl) == tid:
             return fpath
     return None
 
 
-def list_templates(instance_path: str) -> list[dict[str, Any]]:
-    """ all templates (name, description, node count, source), merged from
-        the predefined library and the user's folder - a user entry
-        shadows a predefined one of the same name.
+def _localize_template(tmpl: dict[str, Any], lang: str) -> dict[str, Any]:
+    """ resolve a template's i18n block for `lang` (falling back de -> en
+        -> whatever's there): pick the localised name/descr and rewrite
+        each node's state.name. A template with no i18n block is returned
+        as-is.
+    """
+    i18n = tmpl.get('i18n')
+    if not isinstance(i18n, dict) or not i18n:
+        return tmpl
+    loc = (i18n.get(lang) or i18n.get('de') or i18n.get('en')
+           or next(iter(i18n.values())))
+    out = {k: v for k, v in tmpl.items() if k != 'i18n'}
+    out['name'] = loc.get('name') or tmpl.get('name') or _template_id(tmpl)
+    out['descr'] = loc.get('descr') or tmpl.get('descr', '')
+    node_names = loc.get('nodes') or {}
+    if node_names:
+        nodes = []
+        for node in tmpl.get('data', {}).get('nodes', []):
+            state = dict(node.get('state', {}))
+            if node.get('id') in node_names:
+                state['name'] = node_names[node['id']]
+            nodes.append({**node, 'state': state})
+        out['data'] = {**tmpl.get('data', {}), 'nodes': nodes}
+    return out
+
+
+def list_templates(instance_path: str, lang: str = 'de') -> list[dict[str, Any]]:
+    """ all templates (id, name, description, node count, source), merged
+        from the predefined library and the user's folder - a user entry
+        shadows a predefined one with the same id. name/descr are for
+        `lang` when the template is localised.
     """
     merged: dict[str, dict[str, Any]] = {}
     for source, folder in (('predefined', _TEMPLATE_LIB_DIR),
@@ -877,32 +917,41 @@ def list_templates(instance_path: str) -> list[dict[str, Any]]:
             tmpl = _read_template_file(fpath)
             if not tmpl:
                 continue
-            merged[tmpl['name']] = {
-                'name': tmpl['name'],
-                'descr': tmpl.get('descr', ''),
-                'node_count': len(tmpl.get('data', {}).get('nodes', [])),
+            tid = _template_id(tmpl)
+            loc = _localize_template(tmpl, lang)
+            merged[tid] = {
+                'id': tid,
+                'name': loc.get('name') or tid,
+                'descr': loc.get('descr', ''),
+                'node_count': len(loc.get('data', {}).get('nodes', [])),
                 'source': source,
             }
     return sorted(merged.values(), key=lambda e: e['name'].lower())
 
 
-def get_template(instance_path: str, name: str) -> dict[str, Any] | None:
-    """ fetch one template incl. full node data; the user's folder wins
-        over a predefined template of the same name.
+def get_template(instance_path: str, tid: str,
+                 lang: str = 'de') -> dict[str, Any] | None:
+    """ fetch one template incl. full (localised) node data; the user's
+        folder wins over a predefined template with the same id.
     """
     for folder in (_user_template_dir(instance_path), _TEMPLATE_LIB_DIR):
-        fpath = _find_template_file(folder, name)
+        fpath = _find_template_file(folder, tid)
         if fpath:
             tmpl = _read_template_file(fpath)
             if tmpl:
-                return {'name': tmpl['name'], 'descr': tmpl.get('descr', ''),
-                        'data': tmpl.get('data', {'nodes': []})}
+                loc = _localize_template(tmpl, lang)
+                return {'id': tid, 'name': loc.get('name') or tid,
+                        'descr': loc.get('descr', ''),
+                        'data': loc.get('data', {'nodes': []})}
     return None
 
 
 def save_template(instance_path: str, name: str, descr: str,
                   data: dict[str, Any]) -> None:
-    """ store (create or replace) a named template in the user's folder """
+    """ store (create or replace) a user template in the instance folder.
+        User templates carry only name/descr/data - no id, no i18n (the
+        id is the name).
+    """
     folder = _user_template_dir(instance_path)
     fpath = _find_template_file(folder, name)
     if not fpath:
@@ -918,15 +967,15 @@ def save_template(instance_path: str, name: str, descr: str,
         f_out.write('\n')
 
 
-def delete_template(instance_path: str, name: str) -> str:
-    """ delete a user template. Returns 'deleted', 'predefined' (the name
+def delete_template(instance_path: str, tid: str) -> str:
+    """ delete a user template. Returns 'deleted', 'predefined' (the id
         exists only as a read-only library template) or 'not_found'.
     """
-    fpath = _find_template_file(_user_template_dir(instance_path), name)
+    fpath = _find_template_file(_user_template_dir(instance_path), tid)
     if fpath:
         remove(fpath)
         return 'deleted'
-    if _find_template_file(_TEMPLATE_LIB_DIR, name):
+    if _find_template_file(_TEMPLATE_LIB_DIR, tid):
         return 'predefined'
     return 'not_found'
 

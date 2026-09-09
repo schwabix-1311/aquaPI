@@ -41,6 +41,16 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   needs a live `/status` check to finish `_identify()` parsing.
 - Rare `SunCtrl` fader thread "join before start" flake - confirmed
   environmental, not reproduced in isolation, not investigated further.
+- Template insert / snapshot restore should be *draft* operations. Today
+  they commit to the live bus immediately (`instantiate_template` +
+  `save_nodes`), then `reinitDraft()` rebuilds the draft from the fresh
+  bus - silently dropping unsaved editor changes, and (with a personal
+  default graph present) resurrecting nodes the user deleted in the draft
+  but hadn't saved, ports and all. Interim fix shipped: block both while
+  `draftDirty` (commit 8a9a2db). Proper fix: API returns the new nodes
+  without persisting; `instantiate_template` takes an explicit id-set for
+  its collision check (not `bus.nodes`); the frontend folds the nodes
+  into `state.draft` as `_new`; nothing hits the bus until Save.
 - Macro/scene architecture - a scheduled/triggered sender of messages
   on the bus, possibly needing affected nodes to suspend their own
   listening to avoid conflicts (a "MsgControl" with suspend/overrule/

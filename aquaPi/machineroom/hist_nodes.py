@@ -3,13 +3,11 @@
 from abc import (ABC, abstractmethod)
 import logging
 from typing import (Any, Iterable)
-import os
 import sys
 import platform
-import regex
 from collections import deque
 from time import time
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Lock
 
 try:
@@ -239,10 +237,15 @@ if QUEST_DB:
                 self.conn_str = 'host=localhost port=8812 ' \
                               + 'user=admin password=quest ' \
                               + 'dbname=aquaPi application_name=aquaPi'
-                self.timezone = self._get_local_tz()
 
                 with pg.connect(self.conn_str, autocommit=True) as conn:
-                    conn.execute("SET TIME ZONE %s", [self.timezone])
+                    # Everything here is UTC: feed() stores now() (which
+                    # QuestDB returns in UTC regardless of session tz), and
+                    # query() takes/returns plain Unix epochs. Keep the
+                    # session on UTC so timestamp literals and SAMPLE BY
+                    # ALIGN TO CALENDAR line up with the stored data.
+                    # Localisation for display is the frontend's job.
+                    conn.execute("SET TIME ZONE 'UTC'")
                     conn.execute("""
                       CREATE TABLE IF NOT EXISTS node
                         ( node_id symbol CAPACITY 64 INDEX,
@@ -257,21 +260,6 @@ if QUEST_DB:
                 if log.level == logging.DEBUG:
                     log.exception('FYI: TimeDbQuest failure')
                 raise ModuleNotFoundError() from ex
-
-        @staticmethod
-        def _get_local_tz() -> str:
-            # time is a bad concept, troublesome everywhere!
-            # FIXME: this sets QuestDB to host's local timezone. Ok for debugging
-            # and logs. Conversion to and from user's TZ must be done in frontend!
-            # To make things interesting, there's no simple way to get the
-            # 'Olson TZ name' (e.g. 'Europe/Belin'), most systems prefer the
-            # 3-4 letter names, e.g. CEST. Reading link /etc/localtime has
-            # several chances to break, but workon Raspi (and Manjaro).
-            tzfile = os.readlink('/etc/localtime')
-            match = regex.search('/zoneinfo/(.*)$', tzfile)
-            if not match:
-                return 'UTC'
-            return match[1]
 
         def add_field(self, name: str) -> None:
             super().add_field(name)
@@ -319,26 +307,29 @@ if QUEST_DB:
                         # LATEST ON is QuestDB's own "most recent per
                         # partition" lookup; FILL(PREV) below then carries
                         # this seed forward same as any other row.
+                        # `start` is a Unix epoch (UTC); the stored `ts` is
+                        # UTC too (see __init__), so compare against the raw
+                        # microsecond value directly - no tz conversion.
+                        start_ts = SQL("cast({} as timestamp)").format(Literal(start * 1000000))
                         seeded = SQL("""
-                            SELECT to_utc({start} * 1000000L, {tz}) ts, node_id, value
+                            SELECT {start_ts} ts, node_id, value
                               FROM value
-                              WHERE ts < to_utc({start} * 1000000L, {tz})
+                              WHERE ts < {start_ts}
                                 AND node_id IN ({nodes})
                               LATEST ON ts PARTITION BY node_id
                             UNION ALL
                             SELECT ts, node_id, value
                               FROM value
-                              WHERE ts >= to_utc({start} * 1000000L, {tz})
+                              WHERE ts >= {start_ts}
                                 AND node_id IN ({nodes})
-                            """).format(tz=Literal(self.timezone), start=Literal(start),
-                                        nodes=q_names)
+                            """).format(start_ts=start_ts, nodes=q_names)
                         if step <= 0:
                             # unsampled = raw data
                             qry = SQL("""
-                              SELECT to_timezone(ts,{tz}) ts, node_id, value
+                              SELECT ts, node_id, value
                                 FROM ({seeded}) timestamp(ts)
                                 ORDER BY ts,node_id;
-                              """).format(tz=Literal(self.timezone), seeded=seeded)
+                              """).format(seeded=seeded)
                         else:
                             # NOTE: this used to go through an intermediate
                             # `SAMPLE BY 1s FILL(PREV)` pass before the real
@@ -356,12 +347,11 @@ if QUEST_DB:
                             # two-stage version for both single- and
                             # multi-series queries before making this change.
                             qry = SQL("""
-                              SELECT to_timezone(ts,{tz}) span, node_id id, avg(value)
+                              SELECT ts span, node_id id, avg(value)
                                 FROM ({seeded}) timestamp(ts)
                                 SAMPLE BY {step}s FILL (PREV) ALIGN TO CALENDAR
                                 GROUP BY ts,node_id ORDER BY span,node_id;
-                              """).format(tz=Literal(self.timezone),
-                                          step=Literal(step),
+                              """).format(step=Literal(step),
                                           seeded=seeded)
                         #log.debug(qry.as_string(conn))
                         curs.execute(qry)
@@ -394,7 +384,10 @@ if QUEST_DB:
             result[start] = [None] * len(result[0])
             for row in recs:
                 (dt_tm, node, val) = row
-                ts = int(dt_tm.timestamp())  # max resolution is 1sec
+                # QuestDB returns naive datetimes; the session is UTC, so
+                # stamp them UTC before converting to a Unix epoch (a naive
+                # .timestamp() would wrongly assume host-local time).
+                ts = int(dt_tm.replace(tzinfo=timezone.utc).timestamp())  # 1s resolution
                 idx = names.index(node)
                 self._insert(result, start, ts, idx, val)
 

@@ -12,7 +12,7 @@ except ImportError:
     ServiceBrowser = None
     ServiceListener = object
 
-from .base import (OutDriver, IoPort, PortFunc)
+from .base import (InDriver, OutDriver, IoPort, PortFunc)
 
 
 log = logging.getLogger('driver.DriverShelly')
@@ -26,6 +26,7 @@ DISCOVER_PASSES = 2     # independent scans, unioned - see _find_ips()
 HTTP_TIMEOUT = 5
 MAX_RELAY_CHANNELS = 8  # probing cap, see _identify()
 MAX_LIGHT_CHANNELS = 4  # probing cap, see _identify()
+MAX_INPUT_CHANNELS = 8  # reported count is trusted, this is just a sanity cap
 
 
 class _Listener(ServiceListener):
@@ -112,8 +113,9 @@ def _identify(ip: str) -> dict | None:
     except Exception:
         return None
 
+    gen = int(info.get('gen', 1))
     name = info.get('name')
-    if 'gen' not in info:
+    if gen < 2:
         try:
             settings = requests.get(f'http://{ip}/settings', timeout=HTTP_TIMEOUT).json()
             name = settings.get('name')
@@ -132,11 +134,30 @@ def _identify(ip: str) -> dict | None:
             count += 1
         return count
 
+    def _count_inputs() -> int:
+        # inputs can't be probed the way /relay/N and /light/N can:
+        # Gen1's /input/N exists only on pure-input devices (SHIX3), not
+        # on shelly1/switch25 which still HAVE inputs - so read the count
+        # from /status.inputs[] (Gen1) or /rpc/Shelly.GetStatus's
+        # 'input:N' keys (Gen2+). Live-verified against SHIX3-1, SHSW-1,
+        # SHSW-25 and a Plus i4 - see _local/shelly_api.md.
+        try:
+            if gen >= 2:
+                st = requests.get(f'http://{ip}/rpc/Shelly.GetStatus',
+                                  timeout=HTTP_TIMEOUT).json()
+                return min(sum(1 for k in st if k.startswith('input:')), MAX_INPUT_CHANNELS)
+            st = requests.get(f'http://{ip}/status', timeout=HTTP_TIMEOUT).json()
+            return min(len(st.get('inputs', []) or []), MAX_INPUT_CHANNELS)
+        except Exception:
+            return 0
+
     relays = _count_channels('relay', MAX_RELAY_CHANNELS)
     lights = _count_channels('light', MAX_LIGHT_CHANNELS)
+    inputs = _count_inputs()
 
-    return {'ip': ip, 'name': name, 'type': info.get('type', info.get('model', 'unknown')),
-            'relays': relays, 'lights': lights}
+    return {'ip': ip, 'gen': gen,
+            'type': info.get('type', info.get('model', 'unknown')),
+            'name': name, 'relays': relays, 'lights': lights, 'inputs': inputs}
 
 
 def _find_real_ports() -> dict[str, IoPort]:
@@ -170,6 +191,10 @@ def _find_real_ports() -> dict[str, IoPort]:
             cfg = {'ip': dev['ip'], 'ch': ch}
             port_name = f'{label} dimmer' if dev['lights'] == 1 else f'{label} dimmer {ch}'
             io_ports[port_name] = IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, [])
+        for ch in range(dev.get('inputs', 0)):
+            cfg = {'ip': dev['ip'], 'ch': ch, 'gen': dev['gen']}
+            port_name = f'{label} input' if dev['inputs'] == 1 else f'{label} input {ch}'
+            io_ports[port_name] = IoPort(PortFunc.Bin, DriverShellyInput, cfg, [])
     return io_ports
 
 
@@ -178,6 +203,8 @@ def _find_fake_ports() -> dict[str, IoPort]:
     return {
         '!Shelly #1': IoPort(PortFunc.Bout, DriverShellyRelay, cfg, []),
         '!Shelly #1 dimmer': IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, []),
+        '!Shelly #1 input': IoPort(PortFunc.Bin, DriverShellyInput,
+                                   {**cfg, 'gen': 1}, []),
     }
 
 
@@ -242,11 +269,10 @@ class DriverShellyRelay(_ShellyBase, OutDriver):
         generations share this one write path - see
         _local/shelly_api.md.
 
-        Ain/Bin (temperature add-on inputs, digital inputs) are
-        deliberately deferred - _identify()'s device record already
-        carries what a future sibling driver class would need (ip,
-        type, relays, lights), reusable without reshaping this code.
-        DriverShellyDimmer (Aout, below) is the first such sibling.
+        Siblings sharing _identify()'s device record: DriverShellyDimmer
+        (Aout), DriverShellyInput (Bin, the physical switch/button
+        inputs). A temperature add-on Ain driver is still deferred (see
+        the paused SHELLY_STATIC_IPS work).
     """
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
@@ -338,3 +364,52 @@ class DriverShellyDimmer(_ShellyBase, OutDriver):
                 log.exception('%s failed to read dimmer state, returning last known', self.name)
         log.verbose('%s = %d', self.name, self._val)
         return float(self._val)
+
+
+class DriverShellyInput(_ShellyBase, InDriver):
+    """ Binary input (a physical switch or button wired to a Shelly's SW
+        terminal) on a Shelly switch/plug/dedicated input device, read
+        via the local HTTP API. Read-only - there's nothing to write.
+
+        The read path differs by generation (unlike relay/dimmer, where
+        the Gen1 endpoints work on Gen2/3 too via the compat layer):
+          Gen1  GET /status            -> inputs[<ch>].input   (0 | 1)
+          Gen2+ GET /rpc/Input.GetStatus?id=<ch> -> state      (bool)
+        Gen2 'state' is null while the input is in button/detached mode
+        (no stable on/off) - treated as "keep last known". Channel count
+        comes from _identify() (see _count_inputs there). Live-verified
+        against SHIX3-1, SHSW-1, SHSW-25 and a Shelly Plus i4 - see
+        _local/shelly_api.md.
+    """
+
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
+        super().__init__(cfg, func)
+        self._ip: str = cfg['ip']
+        self._ch: int = int(cfg['ch'])
+        self._gen: int = int(cfg.get('gen', 1))
+        self._fake: bool = bool(cfg.get('fake', False))
+        self._val: bool = False
+        self.name: str = 'Shelly(%s in%d)' % (self._ip, self._ch)
+        if self._fake:
+            self.name = self._mark_fake(self.name)
+
+    def read(self) -> bool:
+        if not self._fake:
+            try:
+                if self._gen >= 2:
+                    resp = requests.get(f'http://{self._ip}/rpc/Input.GetStatus',
+                                        params={'id': self._ch}, timeout=HTTP_TIMEOUT)
+                    resp.raise_for_status()
+                    state = resp.json().get('state')
+                    if state is not None:
+                        self._val = bool(state)
+                else:
+                    resp = requests.get(f'http://{self._ip}/status', timeout=HTTP_TIMEOUT)
+                    resp.raise_for_status()
+                    inputs = resp.json().get('inputs') or []
+                    if self._ch < len(inputs):
+                        self._val = bool(inputs[self._ch].get('input', self._val))
+            except Exception:
+                log.exception('%s failed to read input state, returning last known', self.name)
+        log.verbose('%s = %d', self.name, self._val)
+        return bool(self._val)

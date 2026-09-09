@@ -22,8 +22,8 @@ def fake_host(monkeypatch):
 
 
 class _FakeSMTP:
-    """ context-manager stand-in for smtplib.SMTP; records the last msg """
-    last_msg = None
+    """ context-manager stand-in for smtplib.SMTP; records sent messages """
+    sent = []
 
     def __init__(self, server):
         pass
@@ -41,13 +41,13 @@ class _FakeSMTP:
         pass
 
     def send_message(self, msg):
-        _FakeSMTP.last_msg = msg
+        _FakeSMTP.sent.append(msg)
 
 
 @pytest.fixture
 def email_driver(monkeypatch):
     monkeypatch.setattr(dt_mod.smtplib, 'SMTP', _FakeSMTP)
-    _FakeSMTP.last_msg = None
+    _FakeSMTP.sent = []
     cfg = {'server': 's', 'login': 'l', 'pwd': 'p',
            'from': 'a@x', 'to': 'b@x'}
     return DriverEmail(cfg, PortFunc.Tout)
@@ -56,7 +56,7 @@ def email_driver(monkeypatch):
 def test_email_subject_gets_host_tag_body_unchanged(email_driver):
     email_driver.write('Warnung: AlertAbove(>=7)\nMesswert zu HOCH: 7.30')
 
-    msg = _FakeSMTP.last_msg
+    msg = _FakeSMTP.sent[-1]
     assert msg['Subject'] == '[testhost] Warnung: AlertAbove(>=7)'
     body = msg.get_content()
     assert body.strip() == 'Messwert zu HOCH: 7.30'
@@ -66,7 +66,7 @@ def test_email_subject_gets_host_tag_body_unchanged(email_driver):
 def test_email_single_line_tags_subject_only(email_driver):
     email_driver.write('kurze Meldung')
 
-    msg = _FakeSMTP.last_msg
+    msg = _FakeSMTP.sent[-1]
     assert msg['Subject'] == '[testhost] kurze Meldung'
     assert msg.get_content().strip() == 'kurze Meldung'
 

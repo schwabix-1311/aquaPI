@@ -144,3 +144,6 @@ logs/
 # the installed instance of QuestDB
 questdb-*/
 questdb-*.tar.gz
+
+# local MCP server config (per-machine, not shared)
+.mcp.json

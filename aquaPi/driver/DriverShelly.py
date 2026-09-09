@@ -202,10 +202,15 @@ def _find_real_ports() -> dict[str, IoPort]:
             cfg = {'ip': dev['ip'], 'ch': ch}
             port_name = f'{label} dimmer' if dev['lights'] == 1 else f'{label} dimmer {ch}'
             io_ports[port_name] = IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, [])
-        for ch in range(dev.get('inputs', 0)):
-            cfg = {'ip': dev['ip'], 'ch': ch, 'gen': dev['gen']}
-            port_name = f'{label} input' if dev['inputs'] == 1 else f'{label} input {ch}'
-            io_ports[port_name] = IoPort(PortFunc.Bin, DriverShellyInput, cfg, [])
+        # DriverShellyInput (Bin) is DISABLED for now: a Shelly input in
+        # button/momentary mode carries no stable level (Gen1 needs
+        # event/event_cnt, Gen2 reports state=null), and aquaPi's bus is
+        # level-oriented - see project_shelly_button_modes_bus_fit. Re-add
+        # the port loop here (and the fake port below) once that's decided.
+        #   for ch in range(dev.get('inputs', 0)):
+        #       cfg = {'ip': dev['ip'], 'ch': ch, 'gen': dev['gen']}
+        #       port_name = f'{label} input' if dev['inputs'] == 1 else f'{label} input {ch}'
+        #       io_ports[port_name] = IoPort(PortFunc.Bin, DriverShellyInput, cfg, [])
     return io_ports
 
 
@@ -214,8 +219,8 @@ def _find_fake_ports() -> dict[str, IoPort]:
     return {
         '!Shelly #1': IoPort(PortFunc.Bout, DriverShellyRelay, cfg, []),
         '!Shelly #1 dimmer': IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, []),
-        '!Shelly #1 input': IoPort(PortFunc.Bin, DriverShellyInput,
-                                   {**cfg, 'gen': 1}, []),
+        # '!Shelly #1 input' disabled with the real one above - see
+        # _find_real_ports() / project_shelly_button_modes_bus_fit
     }
 
 

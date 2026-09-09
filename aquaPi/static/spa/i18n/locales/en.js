@@ -107,7 +107,6 @@ export default
 			hintSelecting: 'Click nodes to select them for a template ({count} selected)',
 			errNameType: 'Please choose a type and enter a name',
 			confirmDelete: 'Delete node "{name}"? Any wiring to it will be removed.',
-			selectNodes: 'Select nodes',
 			templatesSnapshots: 'Templates & Snapshots',
 			templates: 'Templates',
 			snapshots: 'Snapshots',

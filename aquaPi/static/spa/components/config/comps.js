@@ -11,6 +11,13 @@ import './configTemplatesDialog.js'
 const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
 const CONNECTION_STUB = 30
+// pointer must travel this far (px) before a press turns into a move-drag
+// rather than a tap; below it, pointerup is treated as a click/tap
+const DRAG_THRESHOLD = 4
+// two taps within this window (ms) = double-tap -> edit; a lone tap after
+// it = select. Same idea for mouse, so no reliance on synthetic dblclick
+// (unreliable/absent on touch).
+const DOUBLE_TAP_MS = 280
 // how far back from a port's exact position the connection line's
 // invisible delete-hit-region is trimmed, so it stops overlapping (and
 // stealing clicks from) the port dot itself - see ConfigConnections.edges
@@ -87,22 +94,16 @@ const ConfigNodeBox = {
 				'config-node-box--drop-invalid': dropTarget === 'invalid',
 			}"
 			:style="style"
-			@mousedown.stop="onDragStart"
-			@click.stop="onClick"
+			@pointerdown.stop="onPointerDown"
 		>
 			<div class="d-flex align-center justify-space-between px-2 pt-1">
 				<div class="d-flex align-center" style="flex: 1 1 0; min-width: 0; overflow: hidden">
 					<v-chip x-small label :color="color" text-color="white" class="flex-shrink-0">{{ node.role }}</v-chip>
 					<span v-if="node.group" class="text-caption grey--text text-truncate ml-1" :title="node.group">{{ node.group }}</span>
 				</div>
-				<div>
-     <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('edit', node)" :title="$t('pages.config.edit')">
-						<v-icon size="small">mdi-pencil</v-icon>
-					</v-btn>
-     <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
-						<v-icon size="small">mdi-delete</v-icon>
-					</v-btn>
-				</div>
+     <v-btn icon size="x-small" variant="text" color="grey-darken-1" class="flex-shrink-0" @pointerdown.stop @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
+					<v-icon size="small">mdi-delete</v-icon>
+				</v-btn>
 			</div>
 			<div class="px-2 pb-1">
 				<div class="font-weight-medium text-truncate">{{ node.name }}</div>
@@ -141,26 +142,64 @@ const ConfigNodeBox = {
 		},
 	},
 	methods: {
-		onClick: function() {
-			this.$emit('select', this.node)
-		},
-		onDragStart: function(ev) {
-			this.dragging = true
-			this.dragOffset = {x: ev.clientX - this.localX, y: ev.clientY - this.localY}
+		// One pointer handler for mouse, touch and pen: a small move turns
+		// the press into a drag (emit drag / drag-end); a press that never
+		// moves is a tap - a lone tap selects, two within DOUBLE_TAP_MS
+		// open the editor. No separate "select mode" and no dependence on
+		// synthetic click/dblclick, so it behaves the same on a touch
+		// screen with no mouse.
+		onPointerDown: function(ev) {
+			if (ev.button && ev.button !== 0) return   // ignore right/middle click
+			const el = ev.currentTarget
+			this._startX = ev.clientX
+			this._startY = ev.clientY
+			this._moved = false
+			try { el.setPointerCapture(ev.pointerId) } catch (e) { /* older engines */ }
 			const onMove = (mv) => {
+				if (!this.dragging) {
+					if (Math.hypot(mv.clientX - this._startX, mv.clientY - this._startY) < DRAG_THRESHOLD) {
+						return
+					}
+					this.dragging = true
+					this._moved = true
+					this.dragOffset = {x: mv.clientX - this.localX, y: mv.clientY - this.localY}
+				}
 				this.localX = Math.max(0, mv.clientX - this.dragOffset.x)
 				this.localY = Math.max(0, mv.clientY - this.dragOffset.y)
 				this.$emit('drag', {node: this.node, x: this.localX, y: this.localY})
 			}
 			const onUp = () => {
-				this.dragging = false
-				document.removeEventListener('mousemove', onMove)
-				document.removeEventListener('mouseup', onUp)
-				this.$emit('drag-end', {node: this.node, x: this.localX, y: this.localY})
+				el.removeEventListener('pointermove', onMove)
+				el.removeEventListener('pointerup', onUp)
+				el.removeEventListener('pointercancel', onUp)
+				if (this.dragging) {
+					this.dragging = false
+					this.$emit('drag-end', {node: this.node, x: this.localX, y: this.localY})
+				} else if (!this._moved) {
+					this.onTap()
+				}
 			}
-			document.addEventListener('mousemove', onMove)
-			document.addEventListener('mouseup', onUp)
+			el.addEventListener('pointermove', onMove)
+			el.addEventListener('pointerup', onUp)
+			el.addEventListener('pointercancel', onUp)
 		},
+		onTap: function() {
+			const now = (typeof performance !== 'undefined' ? performance.now() : Date.now())
+			if (now - (this._lastTap || 0) < DOUBLE_TAP_MS) {
+				clearTimeout(this._tapTimer)
+				this._lastTap = 0
+				this.$emit('edit', this.node)
+			} else {
+				this._lastTap = now
+				this._tapTimer = setTimeout(() => {
+					this._lastTap = 0
+					this.$emit('select', this.node)
+				}, DOUBLE_TAP_MS)
+			}
+		},
+	},
+	beforeUnmount: function() {
+		clearTimeout(this._tapTimer)
 	},
 }
 registerGlobalComponent('ConfigNodeBox', ConfigNodeBox)
@@ -226,7 +265,7 @@ const ConfigConnections = {
 				:key="port.node.id + '-' + port.kind"
 				:cx="port.x" :cy="port.y" r="8"
 				:class="['config-node-port-svg', 'config-node-port-svg--' + port.kind]"
-				@mousedown.stop="$emit('port-mousedown', {node: port.node, port: port.kind, clientX: $event.clientX, clientY: $event.clientY})"
+				@pointerdown.stop="$emit('port-pointerdown', {node: port.node, port: port.kind, clientX: $event.clientX, clientY: $event.clientY})"
 			>
 				<title>{{ $t(port.kind === 'input' ? 'pages.config.portIn' : 'pages.config.portOut') }}</title>
 			</circle>

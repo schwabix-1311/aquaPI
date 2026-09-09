@@ -267,6 +267,9 @@ html::-webkit-scrollbar {
     position: absolute;
     cursor: move;
     user-select: none;
+    /* own the pointer: a press on a card drags it, and the browser must
+       not also pan/scroll the canvas or double-tap-zoom on a touch screen */
+    touch-action: none;
     background-color: rgba(255, 255, 255, 0.95);
     z-index: 1;
 }
@@ -306,6 +309,7 @@ html::-webkit-scrollbar {
     stroke-width: 1;
     pointer-events: all;
     cursor: crosshair;
+    touch-action: none;
     transition: r 0.1s ease-in-out;
 }
 .config-node-port-svg:hover {

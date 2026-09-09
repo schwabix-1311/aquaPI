@@ -5,6 +5,7 @@ const ConfigTemplatesDialog = {
 	props: {
 		modelValue: {type: Boolean, default: false},
 		selectedIds: {type: Array, default: () => []},
+		initialTab: {type: Number, default: 0},
 	},
 	template: `
 		<v-dialog v-model="show" max-width="640" :persistent="restoring">
@@ -137,6 +138,7 @@ const ConfigTemplatesDialog = {
 		modelValue: function(val) {
 			if (val) {
 				this.error = null
+				this.tab = this.initialTab
 				this.configStore.fetchTemplates()
 				this.configStore.fetchSnapshots()
 			}

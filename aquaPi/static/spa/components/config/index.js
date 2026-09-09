@@ -21,26 +21,22 @@ const AquapiConfig = {
 			<v-card-text>
 				<v-row justify="space-between" class="mb-2">
 					<v-col cols="auto">
-						<v-alert v-if="selectMode" dense text type="info" class="mb-0">
+						<v-alert v-if="selectedIds.length" dense text type="info" class="mb-0">
 							{{ $t('pages.config.hintSelecting', {count: selectedIds.length}) }}
 						</v-alert>
 					</v-col>
 					<v-col cols="auto">
-						<v-btn outlined class="mr-2" @click="templatesDialogOpen = true">
-							<v-icon left small>mdi-content-save-outline</v-icon>
-							{{ $t('pages.config.templatesSnapshots') }}
+						<v-btn color="primary" class="mr-2" @click="openTemplates(0)">
+							<v-icon left small>mdi-shape-outline</v-icon>
+							{{ $t('pages.config.templates') }}
 						</v-btn>
-						<v-btn color="primary" class="mr-2" @click="openAddDialog">
+						<v-btn outlined class="mr-2" @click="openTemplates(1)">
+							<v-icon left small>mdi-backup-restore</v-icon>
+							{{ $t('pages.config.snapshots') }}
+						</v-btn>
+						<v-btn outlined class="mr-2" @click="openAddDialog">
 							<v-icon left small>mdi-plus</v-icon>
 							{{ $t('pages.config.addNode') }}
-						</v-btn>
-						<v-btn
-							:color="selectMode ? 'secondary' : undefined"
-							outlined class="mr-2"
-							@click="toggleSelectMode"
-						>
-							<v-icon left small>mdi-checkbox-multiple-marked-outline</v-icon>
-							{{ $t('pages.config.selectNodes') }}
 						</v-btn>
 						<v-btn outlined class="mr-2" @click="applyChainLayout">
 							<v-icon left small>mdi-sitemap</v-icon>
@@ -72,7 +68,8 @@ const AquapiConfig = {
 				</v-alert>
 
 				<div v-else class="config-canvas-wrapper">
-					<div class="config-canvas" ref="canvas" :style="canvasStyle">
+					<div class="config-canvas" ref="canvas" :style="canvasStyle"
+						@pointerdown.self="clearSelection">
 						<config-connections
 							:nodes="nodesForConnections"
 							:node-types="nodeTypes"
@@ -80,7 +77,7 @@ const AquapiConfig = {
 							:height="canvasHeight"
 							:preview="previewEdge"
 							@remove="onRemoveEdge"
-							@port-mousedown="onConnectDragStart"
+							@port-pointerdown="onConnectDragStart"
 						></config-connections>
 
 						<config-node-box
@@ -110,6 +107,7 @@ const AquapiConfig = {
 
 			<config-templates-dialog
 				v-model="templatesDialogOpen"
+				:initial-tab="templatesInitialTab"
 				:selected-ids="selectedIds"
 				@saved="onTemplateSaved"
 			></config-templates-dialog>
@@ -122,9 +120,9 @@ const AquapiConfig = {
 			saving: false,
 			dialogOpen: false,
 			templatesDialogOpen: false,
+			templatesInitialTab: 0,
 			editingNode: null,
 			connectDrag: null,
-			selectMode: false,
 			selectedIds: [],
 			error: null,
 			dragPositions: {},
@@ -377,13 +375,11 @@ const AquapiConfig = {
 				return
 			}
 			this.configStore.initDraft()
-			this.selectMode = false
 			this.selectedIds = []
 			this.$toast.success(this.$t('pages.config.changesDiscarded'))
 		},
 
 		async reinitDraft() {
-			this.selectMode = false
 			this.selectedIds = []
 			this.configStore.initDraft()
 		},
@@ -400,21 +396,22 @@ const AquapiConfig = {
 			this.dialogOpen = true
 		},
 
-		toggleSelectMode: function() {
-			this.selectMode = !this.selectMode
+		clearSelection: function() {
 			this.selectedIds = []
+		},
+
+		openTemplates: function(tab) {
+			this.templatesInitialTab = tab
+			this.templatesDialogOpen = true
 		},
 
 		onTemplateSaved: function() {
 			this.reinitDraft()
 		},
 
+		// a single click / tap on a node toggles it in the selection set
+		// (used by "save selection as template"); no mode, no button
 		onSelect: function(node) {
-			// connecting is now drag-driven (see onConnectDragStart) - a
-			// plain click only ever mattered for select-mode's multi-select
-			if (!this.selectMode) {
-				return
-			}
 			const idx = this.selectedIds.indexOf(node.id)
 			if (idx === -1) {
 				this.selectedIds.push(node.id)
@@ -460,8 +457,9 @@ const AquapiConfig = {
 				this.connectDrag.validDrop = hover ? this.isValidConnection(node, port, hover) : false
 			}
 			const onUp = () => {
-				document.removeEventListener('mousemove', onMove)
-				document.removeEventListener('mouseup', onUp)
+				document.removeEventListener('pointermove', onMove)
+				document.removeEventListener('pointerup', onUp)
+				document.removeEventListener('pointercancel', onUp)
 				if (this.connectDrag && this.connectDrag.hoverTargetId && this.connectDrag.validDrop) {
 					const hover = this.nodesById[this.connectDrag.hoverTargetId]
 					if (port === 'output') {
@@ -472,8 +470,9 @@ const AquapiConfig = {
 				}
 				this.connectDrag = null
 			}
-			document.addEventListener('mousemove', onMove)
-			document.addEventListener('mouseup', onUp)
+			document.addEventListener('pointermove', onMove)
+			document.addEventListener('pointerup', onUp)
+			document.addEventListener('pointercancel', onUp)
 		},
 
 		// validity only depends on the receiving end: for an output-drag
@@ -541,9 +540,7 @@ const AquapiConfig = {
 				return
 			}
 			this.configStore.draftDeleteNode({nodeId: node.id})
-			if (this.selectMode) {
-				this.selectedIds = this.selectedIds.filter(id => id !== node.id)
-			}
+			this.selectedIds = this.selectedIds.filter(id => id !== node.id)
 		},
 	},
 

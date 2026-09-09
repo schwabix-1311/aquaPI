@@ -107,7 +107,6 @@ export default
 			hintSelecting: 'Elemente anklicken, um sie für eine Vorlage auszuwählen ({count} ausgewählt)',
 			errNameType: 'Bitte Typ wählen und Namen eingeben',
 			confirmDelete: 'Element "{name}" löschen? Bestehende Verbindungen werden entfernt.',
-			selectNodes: 'Elemente auswählen',
 			templatesSnapshots: 'Vorlagen & Sicherungen',
 			templates: 'Vorlagen',
 			snapshots: 'Sicherungen',

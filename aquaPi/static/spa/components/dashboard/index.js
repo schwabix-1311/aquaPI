@@ -541,10 +541,9 @@ const AquapiDashboard = {
 			return this.widgets.some(item => this.dashboardStore.node(item.id)?.group)
 		},
 		// bucket the (already visible-filtered, drag-ordered) widgets by
-		// their node's `group`. The unnamed bucket comes first (its
-		// widgets are the always-visible "main" ones); named groups keep
-		// first-appearance order after it, so drag order still controls
-		// their section order.
+		// their node's `group`. Named groups keep first-appearance order
+		// (so drag order controls their section order); the unnamed
+		// bucket is always rendered last.
 		groupedWidgets() {
 			const buckets = []
 			const byKey = {}
@@ -558,7 +557,7 @@ const AquapiDashboard = {
 			})
 			return buckets.sort((a, b) => {
 				if (a.group === b.group) return 0
-				return a.group === '' ? -1 : (b.group === '' ? 1 : 0)
+				return a.group === '' ? 1 : (b.group === '' ? -1 : 0)
 			})
 		},
 		// what the single masonry actually iterates: the group buckets

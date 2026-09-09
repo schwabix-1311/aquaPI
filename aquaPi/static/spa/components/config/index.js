@@ -26,14 +26,6 @@ const AquapiConfig = {
 						</v-alert>
 					</v-col>
 					<v-col cols="auto">
-						<v-btn
-							:color="selectMode ? 'secondary' : undefined"
-							outlined class="mr-2"
-							@click="toggleSelectMode"
-						>
-							<v-icon left small>mdi-checkbox-multiple-marked-outline</v-icon>
-							{{ $t('pages.config.selectNodes') }}
-						</v-btn>
 						<v-btn outlined class="mr-2" @click="templatesDialogOpen = true">
 							<v-icon left small>mdi-content-save-outline</v-icon>
 							{{ $t('pages.config.templatesSnapshots') }}
@@ -41,6 +33,14 @@ const AquapiConfig = {
 						<v-btn color="primary" class="mr-2" @click="openAddDialog">
 							<v-icon left small>mdi-plus</v-icon>
 							{{ $t('pages.config.addNode') }}
+						</v-btn>
+						<v-btn
+							:color="selectMode ? 'secondary' : undefined"
+							outlined class="mr-2"
+							@click="toggleSelectMode"
+						>
+							<v-icon left small>mdi-checkbox-multiple-marked-outline</v-icon>
+							{{ $t('pages.config.selectNodes') }}
 						</v-btn>
 						<v-btn outlined class="mr-2" @click="applyChainLayout">
 							<v-icon left small>mdi-sitemap</v-icon>

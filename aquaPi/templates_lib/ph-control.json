@@ -8,7 +8,8 @@
     "phsonde": "pH Sonde",
     "phwert": "pH Kalibrierung",
     "phsteuerung": "pH Steuerung",
-    "co2ventil": "CO2 Ventil"
+    "co2ventil": "CO2 Ventil",
+    "verlauf": "pH-Verlauf"
    }
   },
   "en": {
@@ -18,7 +19,8 @@
     "phsonde": "pH probe",
     "phwert": "pH calibration",
     "phsteuerung": "pH control",
-    "co2ventil": "CO2 valve"
+    "co2ventil": "CO2 valve",
+    "verlauf": "pH history"
    }
   }
  },
@@ -114,6 +116,28 @@
      "pos_y": 252.0,
      "port": "",
      "inverted": false
+    }
+   },
+   {
+    "id": "verlauf",
+    "type": "History",
+    "state": {
+     "name": "Verlauf",
+     "id": "verlauf",
+     "identifier": "History.verlauf",
+     "data": 0,
+     "receives": [
+      "phwert",
+      "phsteuerung"
+     ],
+     "unit": "",
+     "rcv_unit": "",
+     "data_range": "UNDEF",
+     "group": "pH Regelung",
+     "pos_x": 0.0,
+     "pos_y": 382.0,
+     "capacity": 24,
+     "memory_only": false
     }
    }
   ]

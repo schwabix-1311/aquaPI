@@ -7,7 +7,8 @@
    "nodes": {
     "wasser": "Wasser",
     "heizleistung": "Heizleistung",
-    "heizstab": "Heizstab"
+    "heizstab": "Heizstab",
+    "verlauf": "Temperaturverlauf"
    }
   },
   "en": {
@@ -16,7 +17,8 @@
    "nodes": {
     "wasser": "Water",
     "heizleistung": "Heater power",
-    "heizstab": "Heater driver"
+    "heizstab": "Heater driver",
+    "verlauf": "Temperature history"
    }
   }
  },
@@ -86,6 +88,28 @@
      "port": "",
      "cycle": 10.0,
      "inverted": false
+    }
+   },
+   {
+    "id": "verlauf",
+    "type": "History",
+    "state": {
+     "name": "Verlauf",
+     "id": "verlauf",
+     "identifier": "History.verlauf",
+     "data": 0,
+     "receives": [
+      "wasser",
+      "heizleistung"
+     ],
+     "unit": "",
+     "rcv_unit": "",
+     "data_range": "UNDEF",
+     "group": "Temperaturen",
+     "pos_x": 0.0,
+     "pos_y": 130.0,
+     "capacity": 24,
+     "memory_only": false
     }
    }
   ]

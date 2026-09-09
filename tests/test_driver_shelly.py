@@ -88,7 +88,7 @@ def test_fake_input_does_no_network(monkeypatch):
 
 def test_identify_counts_gen1_inputs_from_status(monkeypatch):
     monkeypatch.setattr(ds.requests, 'get', _router({
-        '/shelly': {'type': 'SHSW-1', 'num_outputs': 1},
+        '/shelly': {'type': 'SHSW-1', 'mac': '8CAAB54306A0', 'num_outputs': 1},
         '/settings': {'name': 'kitchen'},
         '/status': {'inputs': [{'input': 0}]},
         '/relay/0': {'ison': False},
@@ -97,13 +97,15 @@ def test_identify_counts_gen1_inputs_from_status(monkeypatch):
     dev = ds._identify('1.2.3.4')
     assert dev['gen'] == 1
     assert dev['name'] == 'kitchen'
+    assert dev['label'] == 'kitchen'
     assert dev['relays'] == 1
     assert dev['inputs'] == 1
 
 
 def test_identify_counts_gen2_inputs_from_rpc(monkeypatch):
     monkeypatch.setattr(ds.requests, 'get', _router({
-        '/shelly': {'gen': 2, 'model': 'SNSN-0024X', 'name': None},
+        '/shelly': {'gen': 2, 'model': 'SNSN-0024X', 'name': None,
+                    'id': 'shellyplusi4-c4d8d5546e54', 'mac': 'C4D8D5546E54'},
         '/rpc/Shelly.GetStatus': {'input:0': {}, 'input:1': {}, 'input:2': {}, 'input:3': {}},
         '/relay/0': _Resp('', status=404),
         '/light/0': _Resp('', status=404),
@@ -112,3 +114,21 @@ def test_identify_counts_gen2_inputs_from_rpc(monkeypatch):
     assert dev['gen'] == 2
     assert dev['relays'] == 0
     assert dev['inputs'] == 4
+    # unnamed -> fall back to the device id, not the meaningless model code
+    assert dev['label'] == 'shellyplusi4-c4d8d5546e54'
+
+
+def test_identify_label_falls_back_to_mac_and_ip(monkeypatch):
+    # unnamed Gen1 device with no id: label is "<mac> (<ip>)", the two
+    # things an installer actually saw
+    monkeypatch.setattr(ds.requests, 'get', _router({
+        '/shelly': {'type': 'SHIX3-1', 'mac': '8CAAB54306A0', 'num_inputs': 3},
+        '/settings': {'name': None},
+        '/status': {'inputs': [{'input': 0}, {'input': 0}, {'input': 0}]},
+        '/relay/0': _Resp('', status=404),
+        '/light/0': _Resp('', status=404),
+    }))
+    dev = ds._identify('192.168.1.60')
+    assert dev['name'] is None
+    assert dev['label'] == '8CAAB54306A0 (192.168.1.60)'
+    assert dev['inputs'] == 3

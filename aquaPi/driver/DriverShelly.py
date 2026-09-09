@@ -155,9 +155,20 @@ def _identify(ip: str) -> dict | None:
     lights = _count_channels('light', MAX_LIGHT_CHANNELS)
     inputs = _count_inputs()
 
+    # label priority: the user-set name, else the device's own id
+    # ('<app>-<mac>', Gen2 - matches the mDNS name and the app's default
+    # label), else a "<mac> (<ip>)" built from what an installer actually
+    # sees on the box and in the router. `type`/`model` alone (e.g.
+    # 'SNSN-0024X') means nothing to a human, so it's not used for the
+    # label - only kept as `type` for reference.
+    mac = info.get('mac')
+    label = name or info.get('id') \
+        or ('%s (%s)' % (mac, ip) if mac else 'Shelly (%s)' % ip)
+
     return {'ip': ip, 'gen': gen,
             'type': info.get('type', info.get('model', 'unknown')),
-            'name': name, 'relays': relays, 'lights': lights, 'inputs': inputs}
+            'name': name, 'label': label,
+            'relays': relays, 'lights': lights, 'inputs': inputs}
 
 
 def _find_real_ports() -> dict[str, IoPort]:
@@ -182,7 +193,7 @@ def _find_real_ports() -> dict[str, IoPort]:
         t.join(timeout=HTTP_TIMEOUT * (MAX_RELAY_CHANNELS + 2))
 
     for dev in devices:
-        label = dev['name'] or '%s (%s)' % (dev['type'], dev['ip'])
+        label = dev['label']
         for ch in range(dev['relays']):
             cfg = {'ip': dev['ip'], 'ch': ch}
             port_name = label if dev['relays'] == 1 else f'{label} relay {ch}'

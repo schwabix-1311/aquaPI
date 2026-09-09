@@ -49,10 +49,11 @@ times, sensor calibration. That's usually all you need to touch.
 Arrange the tiles you care about, grouped and collapsible, with live values
 and history charts.
 
-**Snapshots & Templates** (Wiring page → Templates & Snapshots): save your
-whole configuration as a *Snapshot* before you experiment, and restore it
-in one click if something goes wrong. Save any group of blocks you built as
-your own reusable *Template*.
+**Templates and Snapshots** are two separate buttons on the Wiring page.
+A *Snapshot* saves your whole configuration before you experiment, to
+restore in one click if something goes wrong. A *Template* saves any group
+of blocks you built as a reusable unit — the same kind the predefined
+templates are.
 
 ## How it works (the advanced view)
 

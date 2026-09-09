@@ -1,9 +1,9 @@
 {
- "id": "heater-pid-ds1820",
+ "id": "heater-pid-triac",
  "i18n": {
   "de": {
-   "name": "Heizung, PID-Regelung mit DS1820",
-   "descr": "Temperaturregelung mit DS1820-Sensor (1-Wire) und PID-Regler für einen Heizstab.",
+   "name": "Heizung, PID-Regelung mit Triac",
+   "descr": "PID-geregelter Heizstab über Slow-PWM an einem Triac (nicht für ein Relais – zu viele Schaltzyklen). Temperatur von einem DS1820 (1-Wire) oder einem analogen Sensor, je nach Portwahl.",
    "nodes": {
     "wasser": "Wasser",
     "heizleistung": "Heizleistung",
@@ -11,8 +11,8 @@
    }
   },
   "en": {
-   "name": "Heater, PID control with DS1820",
-   "descr": "Temperature control with a DS1820 (1-Wire) sensor and a PID loop driving a heater.",
+   "name": "Heater, PID control via triac",
+   "descr": "PID-controlled heater via slow PWM on a triac (not a relay — too many switching cycles). Temperature from a DS1820 (1-Wire) or an analog sensor, whichever you assign at the port.",
    "nodes": {
     "wasser": "Water",
     "heizleistung": "Heater power",

@@ -22,24 +22,37 @@ headless; you open the interface in a browser on your phone, tablet or PC.
 ## Getting started (the beginner's way)
 
 There is no fixed built-in wiring — you assemble your tank from ready-made
-building blocks. The easy path uses **predefined templates**: pick a
-*temperature controller*, a *sun/light controller*, a *pH/CO2 controller*
-and so on, and each one drops a complete, pre-connected group of blocks
-into your configuration. Then:
+building blocks, and the whole flow is three pages.
 
-- **Parameters page** — set your values: target temperature, pH setpoint
-  and hysteresis, light schedule and fade times, sensor calibration.
-  That's usually all you need to touch.
-- **Wiring page → Templates & Snapshots** — save your whole configuration
-  as a *Snapshot* before you experiment, and restore it in one click if
-  something goes wrong. Save any group of blocks you built as your own
-  reusable *Template*.
-- **Dashboard** — arrange the tiles you care about, grouped and
-  collapsible, with live values and history charts.
+### 1. Wiring page — build it, then connect your hardware
 
-When you want to go beyond the templates, the **Wiring page** is a visual
-editor: add a block, drag from one block's output to another's input to
-connect them, delete what you don't need. No source editing, no restart.
+Start from a **predefined template**: pick a *temperature controller*, a
+*sun/light controller*, a *pH/CO2 controller* and so on, and each one drops
+a complete, pre-connected group of blocks into your configuration. Delete
+anything you don't need; add more later by dragging from one block's output
+to another block's input.
+
+Then tell each input and output block which piece of hardware it uses.
+Every sensor and relay block has a **port** setting, and its dropdown lists
+the ports aquaPi discovered on your Pi by itself — GPIO pins, 1-Wire
+temperature sensors, ADS1115 ADC channels, and Shelly WiFi devices found
+over the network. Select the port you wired that sensor or relay to. No
+source editing, no restart.
+
+### 2. Parameters page — set your values
+
+Target temperature, pH setpoint and hysteresis, light schedule and fade
+times, sensor calibration. That's usually all you need to touch.
+
+### 3. Dashboard — watch it run
+
+Arrange the tiles you care about, grouped and collapsible, with live values
+and history charts.
+
+**Snapshots & Templates** (Wiring page → Templates & Snapshots): save your
+whole configuration as a *Snapshot* before you experiment, and restore it
+in one click if something goes wrong. Save any group of blocks you built as
+your own reusable *Template*.
 
 ## How it works (the advanced view)
 

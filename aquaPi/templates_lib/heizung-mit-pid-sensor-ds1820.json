@@ -1,0 +1,93 @@
+{
+ "id": "heizung-mit-pid-sensor-ds1820",
+ "i18n": {
+  "de": {
+   "name": "Heizung mit PID, Sensor DS1820",
+   "descr": "Heizungsregelung mit Sensor DS1820 und präziser PID Regelung",
+   "nodes": {
+    "wasser": "Wasser",
+    "heizleistung": "Heizleistung",
+    "heizstab": "Heizstab"
+   }
+  },
+  "en": {
+   "name": "Heating with PID, DS1820 sensor",
+   "descr": "Heater control with DS1820 sensor and precise PID",
+   "nodes": {
+    "wasser": "Water",
+    "heizleistung": "Heater power",
+    "heizstab": "Heater driver"
+   }
+  }
+ },
+ "data": {
+  "nodes": [
+   {
+    "id": "wasser",
+    "type": "AnalogInput",
+    "state": {
+     "name": "Wasser",
+     "id": "wasser",
+     "identifier": "AnalogInput.wasser",
+     "data": 25.125,
+     "receives": [],
+     "unit": "°C",
+     "rcv_unit": "",
+     "data_range": "ANALOG",
+     "group": "Temperaturen",
+     "pos_x": 0.0,
+     "pos_y": 0.0,
+     "port": "",
+     "interval": 120.0,
+     "initval": 25.0,
+     "avg": 1
+    }
+   },
+   {
+    "id": "heizleistung",
+    "type": "PidCtrl",
+    "state": {
+     "name": "Heizleistung",
+     "id": "heizleistung",
+     "identifier": "PidCtrl.heizleistung",
+     "data": 31.106468656013,
+     "receives": [
+      "wasser"
+     ],
+     "unit": "%",
+     "rcv_unit": "°C",
+     "data_range": "PERCENT",
+     "group": "Temperaturen",
+     "pos_x": 310.0,
+     "pos_y": 0.0,
+     "setpoint": 25.0,
+     "p_fact": 105.0,
+     "i_fact": 0.07,
+     "d_fact": 0.0
+    }
+   },
+   {
+    "id": "heizstab",
+    "type": "SlowPwmDevice",
+    "state": {
+     "name": "Heizstab",
+     "id": "heizstab",
+     "identifier": "SlowPwmDevice.heizstab",
+     "data": 31.1065,
+     "receives": [
+      "heizleistung"
+     ],
+     "unit": "%",
+     "rcv_unit": "",
+     "data_range": "BINARY",
+     "group": "Temperaturen",
+     "pos_x": 620.0,
+     "pos_y": 0.0,
+     "port": "",
+     "cycle": 10.0,
+     "inverted": false
+    }
+   }
+  ]
+ }
+}

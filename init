@@ -119,6 +119,20 @@ EOF
       sed -i "s/-XX:+UseParallelGC/-XX:+UseParallelGC\\n  -Xms32M\\n  -Xmx128M\\n  -XX:MaxDirectMemorySize=64M\\n  -XX:MaxMetaspaceSize=64M\\n  -XX:ParallelGCThreads=1\\n  -XX:ConcGCThreads=1\\n  -Xss512k/" "${quest_sh}"
     fi
 
+    # AlwaysPreTouch (QuestDB's own default) commits and writes every
+    # heap page at startup. On a swap-backed Pi with aquaPi's rare-write
+    # workload that's ~100MB of cold pages the kernel then parks in swap
+    # for good. Turn it off - the last -XX flag on the line wins, so we
+    # append -XX:-AlwaysPreTouch after the + one. Line-checked (not gated
+    # on the -Xmx block above) so it also reaches an already-capped
+    # production install on the next ./init run.
+    if ( grep -- "-XX:+AlwaysPreTouch" "${quest_sh}" >/dev/null \
+         && ! grep -- "-XX:-AlwaysPreTouch" "${quest_sh}" >/dev/null )
+    then
+      echo "===== disabling QuestDB JVM AlwaysPreTouch (swap-friendly)"
+      sed -i "s/-XX:+AlwaysPreTouch/-XX:+AlwaysPreTouch -XX:-AlwaysPreTouch/" "${quest_sh}"
+    fi
+
     export JAVA_HOME=/usr/lib/jvm/java-${JavaRel}-openjdk-arm64
   else
     quest_sh="${MyHome}/questdb-${QuestRel}/bin/questdb.sh"

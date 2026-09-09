@@ -52,12 +52,12 @@ if [ -e "$dst" ]; then
 fi
 
 echo
-echo "German (taken from the user template as-is):"
-echo "  name : $de_name"
-echo "  descr: ${de_descr:-<none>}"
+echo "German name : $de_name"
+read -rp "German descr [${de_descr}]: " in_descr || in_descr=
+de_descr=${in_descr:-$de_descr}
 echo
-read -rp "English name  : " en_name
-read -rp "English descr : " en_descr
+read -rp "English name  : " en_name || en_name=
+read -rp "English descr : " en_descr || en_descr=
 
 en_pairs=()
 if [ ${#node_lines[@]} -gt 0 ]; then

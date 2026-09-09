@@ -12,6 +12,10 @@ DONE
 
 - a heartbeat/repeated MsgData now exists (HeartbeatMixin, msg_bus.py) - improves diagrams
 - group property added to nodes (BusNode.group), with filtering/grouping in the Parameters page
+- dashboard is grouped by node.group too: one masonry sectioned by group, foldable
+  per-viewer headings (localStorage), "Ohne Gruppe" first; /wiring got a group-name
+  combobox and shows the group on each node box (c229c2f, 9273c5a, 0ce520d). The
+  "multiple/separate dashboards" idea was dropped - grouped sections cover the need
 - remaining Jinja templating removed - confirmed no login.html.jinja2/reset_password_*.jinja2
   left, only spa.html.jinja2 (the SPA shell itself) remains
 - Telegram notifications implemented (DriverText.py, used by Alert nodes) - a live

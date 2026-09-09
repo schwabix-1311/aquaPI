@@ -30,6 +30,11 @@ overlap/repeat each other - that's fine, sort/dedupe later.
 - Review data-type compatibility between every node's output and every
   node's input (e.g. `/wiring`'s "receives" dropdown currently offers
   History a STRING source) - filter by type/property, not a whitelist.
+  A written plan exists at `.junie/plans/config-receives-type-filtering.md`;
+  the earlier hold on it is lifted. Backend spots: `db.py:295`,
+  `api.py` (existence/cardinality checks only, marked with
+  `TODO(config-receives-type-filtering)`); frontend: `receivesItems` in
+  `configNodeDialog.js` plus the AlertCondEditor source picker.
 - Alert "reverse chip" idea - show the causing node on a triggered
   AlertCond widget; blocked on no directed bus messaging today.
 - Remote Shelly + temperature add-on - paused mid-implementation,
@@ -108,9 +113,6 @@ overlap/repeat each other - that's fine, sort/dedupe later.
 - Split bus - either a headless sub-bus running on a different
   system/location, coupled through bridge nodes; or two full-blown
   aquaPi systems sharing some or all of their bus traffic.
-- Use `node.group` to allow multiple dashboards - might need
-  `node.group` to change from a single string to a set of group names,
-  since a node could then belong to more than one dashboard.
 - More `AlertCond` descendants: warn for hyper/sleepy activity (a
   controller cycling too fast, or stuck on/off too long) - already has
   commented-out stubs in `alert_nodes.py` (`AlertLongActive`/

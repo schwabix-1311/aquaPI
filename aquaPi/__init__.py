@@ -3,6 +3,7 @@
 import os
 from os import path
 import sys
+import secrets
 from flask import Flask
 
 import functools
@@ -102,7 +103,12 @@ def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
     app.config.from_mapping(
-        SECRET_KEY='ToDo during installation',   # TODO !!
+        # transient placeholder: auth.init_app() replaces this with the
+        # persisted key from instance/secret_key before any request is
+        # served (see _get_or_create_secret_key). Kept random rather than a
+        # constant so a code path that ever reaches serving without
+        # init_app() still isn't on a well-known key.
+        SECRET_KEY=secrets.token_hex(32),
         INSTANCE_PATH=app.instance_path,
         APP_NAME='aquaPi',
     )

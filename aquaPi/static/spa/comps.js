@@ -63,8 +63,12 @@ const AppFooComp = {
 					icon: 'mdi-swap-horizontal',
 					label: this.$t('misc.footer.swapLabel'),
 					text: this.$t('misc.footer.pct', {pct: this.stats.swap_used_pct}),
-					// swap pressure matters much sooner than RAM/disk pressure
-					color: this.severityColor(this.stats.swap_used_pct, 25, 50),
+					// swap pressure matters sooner than RAM/disk (a full swap
+					// + full RAM = OOM-kill, and sustained heavy swapping
+					// slows everything well before that) - but swap merely
+					// *used* for parked cold pages is harmless, so warn at
+					// 50% / alarm at 75%, not the RAM/disk 80/90.
+					color: this.severityColor(this.stats.swap_used_pct, 50, 75),
 					drop: 4,
 				})
 			}

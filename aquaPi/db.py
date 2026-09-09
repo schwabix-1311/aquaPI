@@ -44,7 +44,6 @@ from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
 from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, UiDisplay)
 from .machineroom.hist_nodes import History
 from .machineroom.alert_nodes import (Alert, AlertAbove, AlertBelow)
-from .driver import IoRegistry
 from .driver.base import DriverError
 
 

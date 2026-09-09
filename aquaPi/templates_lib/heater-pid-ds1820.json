@@ -1,5 +1,5 @@
 {
- "id": "heater-pid",
+ "id": "heater-pid-ds1820",
  "i18n": {
   "de": {
    "name": "Heizung, PID-Regelung mit DS1820",

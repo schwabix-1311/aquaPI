@@ -23,8 +23,9 @@ in `GET /api/templates/` and cannot be deleted through the API.
 ```
 
 - **`id`** — stable, language-independent, and *short*: a terse
-  characterization (`heater-pid`, `ph-control`), not a full slug of the
-  name. Technical detail belongs in `descr`. It's the API path segment
+  characterization (`heater-pid-ds1820`, `ph-control`), not a full slug of
+  the name. Just enough to tell variants apart (sensor / actuator kind).
+  Technical detail belongs in `descr`. It's the API path segment
   (`/api/templates/<id>`) and the merge key vs. a user template, and the
   file name should match it (`<id>.json`).
 - **`i18n`** — per-language `name` / `descr` and a `nodes` map from each

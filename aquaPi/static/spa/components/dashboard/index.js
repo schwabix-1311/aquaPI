@@ -477,28 +477,42 @@ const AquapiDashboard = {
 					>
 						<div
 							v-if="hasNamedGroups"
-							class="text-subtitle-1 text-grey-darken-1 mt-2 mb-3"
-							style="column-span: all; break-inside: avoid;"
+							class="text-subtitle-1 text-grey-darken-1 mt-2 mb-3 d-flex align-center"
+							style="column-span: all; break-inside: avoid; cursor: pointer; user-select: none;"
+							@click="toggleGroup(bucket.group)"
 						>
+							<v-icon size="small" class="mr-1">{{ isCollapsed(bucket.group) ? 'mdi-chevron-right' : 'mdi-chevron-down' }}</v-icon>
 							{{ bucket.group || $t('pages.dashboard.ungrouped') }}
+							<span v-if="isCollapsed(bucket.group)" class="text-caption text-grey ml-2">({{ bucket.items.length }})</span>
 						</div>
-						<div
-							v-for="(item, index) in bucket.items"
-							:key="item.identifier"
-							class="mb-6"
-							style="break-inside: avoid;"
-						>
-							<aquapi-dashboard-widget
-								:item="item"
-								:addTitle="true"
+						<template v-if="!isCollapsed(bucket.group)">
+							<div
+								v-for="(item, index) in bucket.items"
+								:key="item.identifier"
+								class="mb-6"
+								style="break-inside: avoid;"
 							>
-							</aquapi-dashboard-widget>
-						</div>
+								<aquapi-dashboard-widget
+									:item="item"
+									:addTitle="true"
+								>
+								</aquapi-dashboard-widget>
+							</div>
+						</template>
 					</template>
 				</masonry>
 			</v-card-text>
 		</v-card>
 	`,
+
+	data() {
+		return {
+			// group names the viewer has folded away; per-viewer only,
+			// persisted to localStorage (see loadCollapsed/toggleGroup).
+			// '' is the ungrouped bucket.
+			collapsedGroups: [],
+		}
+	},
 
 	computed: {
 		dashboardStore() {
@@ -558,6 +572,30 @@ const AquapiDashboard = {
 	},
 
 	methods: {
+		isCollapsed(group) {
+			return this.collapsedGroups.includes(group)
+		},
+		toggleGroup(group) {
+			const i = this.collapsedGroups.indexOf(group)
+			if (i === -1) {
+				this.collapsedGroups.push(group)
+			} else {
+				this.collapsedGroups.splice(i, 1)
+			}
+			try {
+				localStorage.setItem('aquapi.dashboard.collapsedGroups',
+					JSON.stringify(this.collapsedGroups))
+			} catch (e) { /* private mode / disabled storage - fold just won't persist */ }
+		},
+		loadCollapsed() {
+			try {
+				const raw = localStorage.getItem('aquapi.dashboard.collapsedGroups')
+				const parsed = raw ? JSON.parse(raw) : []
+				if (Array.isArray(parsed)) {
+					this.collapsedGroups = parsed.filter(g => typeof g === 'string')
+				}
+			} catch (e) { /* ignore, start with nothing folded */ }
+		},
 		showConfigurator() {
 			useUiStore().showDialog('AquapiDashboardConfigurator')
 			this.$nextTick(() => {
@@ -582,6 +620,7 @@ const AquapiDashboard = {
 		},
 	},
 	async mounted() {
+		this.loadCollapsed()
 		await this.loadConfig()
 		// a fresh login doesn't remount this component (the login dialog
 		// is just an overlay on the already-active 'home' route), so the

@@ -24,7 +24,7 @@ export default
 		dashboard: {
 			label: 'Dashboard',
 			title: 'Dashboard',
-			heading: '@:app.name Dashboard',
+			heading: 'Dashboard',
 			ungrouped: '@:pages.settings.ungrouped',
 		},
 		settings: {

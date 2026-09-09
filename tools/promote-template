@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+#
+# promote-template - interactively turn a user template
+# (instance/templates/*.json, shape {name, descr, data}) into a shipped
+# predefined one (aquaPi/templates_lib/<id>.json, shape {id, i18n:{de,en},
+# data}). Fills the German i18n block from the user template as-is and
+# prompts for the English name / description / per-node names.
+#
+# Needs only bash + python3 (no jq). Run from anywhere in the repo.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+SRC_DIR=instance/templates
+DST_DIR=aquaPi/templates_lib
+
+shopt -s nullglob
+files=("$SRC_DIR"/*.json)
+if [ ${#files[@]} -eq 0 ]; then
+	echo "No user templates in $SRC_DIR/ - save one from the Wiring editor first." >&2
+	exit 1
+fi
+
+echo "Pick a user template to promote:"
+select src in "${files[@]}"; do [ -n "${src:-}" ] && break; done
+echo
+
+# pull name, descr and the (id, german-name) of every node out of the source
+mapfile -t meta < <(python3 - "$src" <<'PY'
+import json, sys
+t = json.load(open(sys.argv[1], encoding="utf-8"))
+print(t.get("name", ""))
+print(t.get("descr", ""))
+for n in t.get("data", {}).get("nodes", []):
+	print(n["id"] + "\t" + n.get("state", {}).get("name", ""))
+PY
+)
+de_name=${meta[0]}
+de_descr=${meta[1]}
+node_lines=("${meta[@]:2}")
+
+def_id=$(printf '%s' "$de_name" | tr '[:upper:] ' '[:lower:]-' \
+	| tr -cd 'a-z0-9._+-' | sed 's/^-*//; s/-*$//')
+read -rp "Template id [${def_id}]: " tid
+tid=${tid:-$def_id}
+[ -n "$tid" ] || { echo "empty id" >&2; exit 1; }
+
+dst="$DST_DIR/$tid.json"
+if [ -e "$dst" ]; then
+	read -rp "$dst exists - overwrite? [y/N] " a
+	[ "${a:-}" = y ] || { echo "aborted"; exit 1; }
+fi
+
+echo
+echo "German (taken from the user template as-is):"
+echo "  name : $de_name"
+echo "  descr: ${de_descr:-<none>}"
+echo
+read -rp "English name  : " en_name
+read -rp "English descr : " en_descr
+
+en_pairs=()
+if [ ${#node_lines[@]} -gt 0 ]; then
+	echo
+	echo "English node names (Enter = keep the German one):"
+	for line in "${node_lines[@]}"; do
+		nid=${line%%$'\t'*}
+		dn=${line#*$'\t'}
+		read -rp "  ${nid}  (de: ${dn}) -> " en
+		en_pairs+=("${nid}=${en:-$dn}")
+	done
+fi
+
+python3 - "$src" "$dst" "$tid" "$de_name" "$de_descr" "$en_name" "$en_descr" \
+	"${en_pairs[@]}" <<'PY'
+import json, sys
+src, dst, tid, de_name, de_descr, en_name, en_descr, *pairs = sys.argv[1:]
+t = json.load(open(src, encoding="utf-8"))
+de_nodes = {n["id"]: n.get("state", {}).get("name", "")
+            for n in t.get("data", {}).get("nodes", [])}
+en_nodes = {}
+for p in pairs:
+	k, _, v = p.partition("=")
+	en_nodes[k] = v
+out = {
+	"id": tid,
+	"i18n": {
+		"de": {"name": de_name, "descr": de_descr, "nodes": de_nodes},
+		"en": {"name": en_name or de_name, "descr": en_descr or de_descr,
+		       "nodes": en_nodes},
+	},
+	"data": t["data"],
+}
+with open(dst, "w", encoding="utf-8") as f:
+	json.dump(out, f, indent=1, ensure_ascii=False)
+	f.write("\n")
+print(f"\nwrote {dst}")
+PY
+
+echo
+read -rp "Remove the source user template $src ? [y/N] " r || r=
+if [ "${r:-}" = y ]; then
+	rm "$src"
+	echo "removed $src"
+fi
+echo
+echo "Review $dst, then:  git add $dst && git commit"

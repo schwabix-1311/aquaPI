@@ -42,10 +42,19 @@ language.
 
 Build the block set in the running app, save it as a template (it lands
 in `<instance>/templates/` as `{name, descr, data}`), check it, then
-promote it: add an `id` + an `i18n` block, and
+promote it with the interactive helper:
 
 ```
-git mv instance/templates/<file>.json aquaPi/templates_lib/<id>.json
+tools/promote-template
+```
+
+It picks a user template, asks for the `id` and the English
+name / description / per-node names (German is taken from the template
+as-is), writes `aquaPi/templates_lib/<id>.json`, and offers to drop the
+source. Afterwards:
+
+```
+git add aquaPi/templates_lib/<id>.json
 git commit
 ```
 

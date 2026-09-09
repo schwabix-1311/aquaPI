@@ -142,4 +142,69 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   DeviceNode receives the whole tuple and internally combines 3
   dimmer drivers (channels) into one node.
 
+## Hardware coverage: chains and drivers (analysis 2026-09-10)
+
+The bus carries one scalar per node (bool as 100/0, analog float, or
+text) and a chain is `input(s) -> aux -> controller -> device`. Picking a
+different leaf driver on an existing chain is enough only for a plain
+scalar sensor (`->Ain`/`Bin`) or a plain scalar actuator (`<-Aout`/
+`Bout`). Fine as-is with just a new driver: ORP probe (mV `->Ain`), float/
+leak switch, heater on a relay, single-colour LED, air pump / powerhead /
+UV / skimmer on-off, single PWM fan.
+
+### Devices that need a specialized chain, not just another driver
+
+- **A value has to be fed *into* the driver** - there is no sensor->driver
+  channel today (see the `ph-control-ezo` note in the pre-ship templates
+  work: an EZO-pH needs the water temperature pushed to it per read).
+  Same class: EC/conductivity/TDS probes (temp compensation + cell
+  constant), dissolved-oxygen probes (temp + salinity/pressure), and
+  dose-to-a-target auto-dosing (meter volume until a setpoint is reached,
+  with lockout). Needs an `InputNode`/driver-interface extension for a
+  driver-settable compensation input.
+- **Inherently multi-channel** - one "port" isn't one scalar. RGB/RGBW/
+  multi-emitter LED fixtures (see the RGB light + sub-data entries above -
+  this is the flagship case), and DMX/Art-Net lighting (512 channels per
+  universe, needs channel grouping like an oversized TC420).
+- **Pulse / count / duration semantics instead of a level** - flow meters
+  (pulse output; `PortFunc` has no counter type), dosing pumps / auto-
+  feeders / actuated valves / steppers ("run N ml / N s / N steps" one-
+  shot action node), momentary push buttons (event vs level - see the
+  Shelly-input entry and the parked `project_shelly_button_modes_bus_fit`
+  note; needs a toggle/latch node).
+- **Interlock / state machine / anti-short-cycle** - chiller/compressor
+  (min-on and min-off time; `ThresholdCtrl` is pure hysteresis today),
+  redundant ATO (dual float + fill-timeout + reservoir-low, hard-stop on
+  any fault - overlaps the `AlertLongActive` idea), heater over-temp
+  safety cutoff (independent high-limit overriding the PID in the output
+  path), CO2 with night shutoff (pH control *gated* by the light
+  schedule - needs a boolean-gate aux node, none exists).
+- **A whole protocol rather than a port** - MQTT (Tasmota / Zigbee2MQTT /
+  ESPHome; one bridge exposes many entities), Modbus RTU/TCP (pro
+  chillers, dosers, controllers), Home Assistant / Kasa / Tuya plugs.
+  Network audio already has the experimental eISCP `TextInput`/`Tout`
+  path.
+
+### Missing drivers for common hardware
+
+Existing: GPIO, on-board PWM, DS1820, ADS1115, TC420, Shelly relay/
+dimmer, Email/Telegram, eISCP (experimental).
+
+- Sensors: other I2C ADCs (ADS1015, MCP3421, PCF8591); EZO / I2C smart
+  probes (pH, EC, DO, ORP, RTD - no software calibration needed); air
+  temp/humidity (BME280, SHT31, AHT20, DHT22 - canopy/room); RTD/
+  thermocouple (MAX31865, MAX31855 - heater-element temp); water level
+  (ultrasonic JSN-SR04T, eTape, capacitive, optical IR); pulse flow
+  meter (needs a counter input); light/PAR (BH1750, TSL2591 - overlaps
+  the "lux meter" idea above); current/power (INA219, INA226 - pump/
+  heater failure detection); DS3231 RTC (the Pi has none, and
+  `ScheduleInput`/`SunCtrl` depend on wall-clock time).
+- Actuators: PCA9685 PWM expander (already listed above); GPIO/relay
+  expanders (MCP23017, I2C 8-relay boards); MCP4725 DAC for true 0-10 V/
+  0-5 V control (pro ballasts, chillers, DC return pumps); motor/stepper/
+  servo drivers (A4988, DRV8825, TB6612 - dosers, feeders, valves);
+  DMX/Art-Net; IR blaster (IR-only chillers/AC).
+- Integrations: an MQTT bridge is the highest-leverage single addition;
+  Home Assistant REST / Kasa / Tuya for plugs beyond Shelly; Modbus.
+
 <!-- add items below as they come up -->

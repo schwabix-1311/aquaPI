@@ -22,6 +22,7 @@
 
 import json
 import logging
+import re
 import smtplib
 import sqlite3
 import tempfile
@@ -552,8 +553,9 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
-    """ create the nodes table (and the related templates/snapshots
-        tables) if they do not exist yet
+    """ create the nodes table (and the related snapshots tables) if they
+        do not exist yet. Templates are NOT stored here - see
+        list_templates() / _TEMPLATE_LIB_DIR.
     """
     with conn:
         conn.execute("""
@@ -562,13 +564,6 @@ def init_db(conn: sqlite3.Connection) -> None:
                 type   TEXT NOT NULL,
                 name   TEXT,
                 params TEXT NOT NULL
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS node_templates (
-                name  TEXT PRIMARY KEY,
-                descr TEXT,
-                data  TEXT NOT NULL
             )
         """)
         conn.execute("""
@@ -821,62 +816,120 @@ def capture_node_template(bus: MsgBus, node_ids: list[str]) -> dict[str, Any]:
     return {'nodes': entries}
 
 
-def list_templates(db_path: str) -> list[dict[str, Any]]:
-    """ list all templates (name, description, node count) """
-    conn = get_connection(db_path)
+# Templates are stored as one JSON file per template, in two folders, so
+# they survive a `./run -r` (which deletes wiring.sqlite):
+#   aquaPi/templates_lib/  - predefined, shipped, read-only. A maintainer
+#                            promotes a user template with `git mv`.
+#   <instance>/templates/  - the user's own, created via the UI.
+# A user file shadows a predefined one of the same name (local override);
+# removing the user file makes the predefined one reappear.
+
+_TEMPLATE_LIB_DIR = path.join(path.dirname(__file__), 'templates_lib')
+
+
+def _user_template_dir(instance_path: str) -> str:
+    folder = path.join(instance_path, 'templates')
+    makedirs(folder, exist_ok=True)
+    return folder
+
+
+def _template_slug(name: str) -> str:
+    slug = re.sub(r'[^A-Za-z0-9_.+-]+', '-', name).strip('-')
+    return (slug or 'template')[:60]
+
+
+def _iter_template_files(folder: str):
+    if not path.isdir(folder):
+        return
+    for filename in sorted(listdir(folder)):
+        if filename.endswith('.json'):
+            yield path.join(folder, filename)
+
+
+def _read_template_file(fpath: str) -> dict[str, Any] | None:
     try:
-        rows = conn.execute(
-            'SELECT name, descr, data FROM node_templates ORDER BY name'
-        ).fetchall()
-        result = []
-        for row in rows:
-            data = json.loads(row['data'])
-            result.append({
-                'name': row['name'],
-                'descr': row['descr'],
-                'node_count': len(data.get('nodes', [])),
-            })
-        return result
-    finally:
-        conn.close()
+        with open(fpath, encoding='utf-8') as f_in:
+            tmpl = json.load(f_in)
+        if isinstance(tmpl, dict) and tmpl.get('name'):
+            return tmpl
+    except (OSError, ValueError):
+        pass
+    log.warning('ignoring unreadable template file %s', fpath)
+    return None
 
 
-def get_template(db_path: str, name: str) -> dict[str, Any] | None:
-    """ fetch one template including its full node data """
-    conn = get_connection(db_path)
-    try:
-        row = conn.execute(
-            'SELECT name, descr, data FROM node_templates WHERE name = ?', (name,)
-        ).fetchone()
-        if not row:
-            return None
-        return {'name': row['name'], 'descr': row['descr'], 'data': json.loads(row['data'])}
-    finally:
-        conn.close()
+def _find_template_file(folder: str, name: str) -> str | None:
+    for fpath in _iter_template_files(folder):
+        tmpl = _read_template_file(fpath)
+        if tmpl and tmpl['name'] == name:
+            return fpath
+    return None
 
 
-def save_template(db_path: str, name: str, descr: str, data: dict[str, Any]) -> None:
-    """ store (create or replace) a named template """
-    conn = get_connection(db_path)
-    try:
-        with conn:
-            conn.execute("""
-                INSERT INTO node_templates (name, descr, data) VALUES (?, ?, ?)
-                ON CONFLICT(name) DO UPDATE SET descr = excluded.descr, data = excluded.data
-            """, (name, descr, json.dumps(data)))
-    finally:
-        conn.close()
+def list_templates(instance_path: str) -> list[dict[str, Any]]:
+    """ all templates (name, description, node count, source), merged from
+        the predefined library and the user's folder - a user entry
+        shadows a predefined one of the same name.
+    """
+    merged: dict[str, dict[str, Any]] = {}
+    for source, folder in (('predefined', _TEMPLATE_LIB_DIR),
+                           ('user', _user_template_dir(instance_path))):
+        for fpath in _iter_template_files(folder):
+            tmpl = _read_template_file(fpath)
+            if not tmpl:
+                continue
+            merged[tmpl['name']] = {
+                'name': tmpl['name'],
+                'descr': tmpl.get('descr', ''),
+                'node_count': len(tmpl.get('data', {}).get('nodes', [])),
+                'source': source,
+            }
+    return sorted(merged.values(), key=lambda e: e['name'].lower())
 
 
-def delete_template(db_path: str, name: str) -> bool:
-    """ remove a template, returns True if it existed """
-    conn = get_connection(db_path)
-    try:
-        with conn:
-            cur = conn.execute('DELETE FROM node_templates WHERE name = ?', (name,))
-            return cur.rowcount > 0
-    finally:
-        conn.close()
+def get_template(instance_path: str, name: str) -> dict[str, Any] | None:
+    """ fetch one template incl. full node data; the user's folder wins
+        over a predefined template of the same name.
+    """
+    for folder in (_user_template_dir(instance_path), _TEMPLATE_LIB_DIR):
+        fpath = _find_template_file(folder, name)
+        if fpath:
+            tmpl = _read_template_file(fpath)
+            if tmpl:
+                return {'name': tmpl['name'], 'descr': tmpl.get('descr', ''),
+                        'data': tmpl.get('data', {'nodes': []})}
+    return None
+
+
+def save_template(instance_path: str, name: str, descr: str,
+                  data: dict[str, Any]) -> None:
+    """ store (create or replace) a named template in the user's folder """
+    folder = _user_template_dir(instance_path)
+    fpath = _find_template_file(folder, name)
+    if not fpath:
+        base = _template_slug(name)
+        fpath = path.join(folder, base + '.json')
+        suffix = 2
+        while path.exists(fpath):
+            fpath = path.join(folder, f'{base}-{suffix}.json')
+            suffix += 1
+    with open(fpath, 'w', encoding='utf-8') as f_out:
+        json.dump({'name': name, 'descr': descr or '', 'data': data},
+                  f_out, indent=1, ensure_ascii=False)
+        f_out.write('\n')
+
+
+def delete_template(instance_path: str, name: str) -> str:
+    """ delete a user template. Returns 'deleted', 'predefined' (the name
+        exists only as a read-only library template) or 'not_found'.
+    """
+    fpath = _find_template_file(_user_template_dir(instance_path), name)
+    if fpath:
+        remove(fpath)
+        return 'deleted'
+    if _find_template_file(_TEMPLATE_LIB_DIR, name):
+        return 'predefined'
+    return 'not_found'
 
 
 def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:

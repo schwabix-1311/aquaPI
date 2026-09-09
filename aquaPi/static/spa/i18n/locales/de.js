@@ -112,6 +112,7 @@ export default
 			templates: 'Vorlagen',
 			snapshots: 'Sicherungen',
 			templateName: 'Vorlagenname',
+			templatePredefined: 'vordefiniert',
 			snapshotName: 'Sicherungsname',
 			saveSelection: 'Auswahl als Vorlage speichern',
 			saveSnapshot: 'Aktuelle Konfiguration speichern',

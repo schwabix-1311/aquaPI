@@ -3,6 +3,7 @@
     snapshots on /config (aquaPi/db.py + the new routes in aquaPi/api.py).
 """
 
+import json
 import os
 from http import HTTPStatus
 
@@ -193,6 +194,91 @@ def test_delete_template_unknown_returns_404(client, users):
     _login(client, 'admin1', 'adminPass123')
     resp = client.delete('/api/templates/doesnotexist')
     assert resp.status_code == HTTPStatus.NOT_FOUND
+
+
+# --- templates: predefined library vs user folder ---------------------
+
+
+@pytest.fixture(autouse=True)
+def template_lib(tmp_path, monkeypatch):
+    """ redirect the predefined-template folder to an isolated, empty
+        temp dir for EVERY test in this module, so exact-count/exact-list
+        assertions stay valid no matter what aquaPi/templates_lib/ ships.
+    """
+    lib = tmp_path / 'templates_lib'
+    lib.mkdir()
+    monkeypatch.setattr(db, '_TEMPLATE_LIB_DIR', str(lib))
+    return lib
+
+
+def _write_lib_template(folder, name, descr='', nodes=()):
+    with open(os.path.join(folder, f'{name}.json'), 'w', encoding='utf-8') as f:
+        json.dump({'name': name, 'descr': descr,
+                   'data': {'nodes': list(nodes)}}, f)
+
+
+def test_user_template_is_written_to_the_instance_folder(client, users, tmp_path, template_lib):
+    _login(client, 'admin1', 'adminPass123')
+    client.post('/api/templates/', json={'name': 'My Setup', 'node_ids': ['wasser']})
+
+    files = os.listdir(tmp_path / 'templates')
+    assert len(files) == 1 and files[0].endswith('.json')
+
+    listing = client.get('/api/templates/').get_json()
+    assert listing[0]['name'] == 'My Setup'
+    assert listing[0]['source'] == 'user'
+
+
+def test_predefined_template_is_listed_and_read_only(client, users, template_lib):
+    _write_lib_template(template_lib, 'Temp Control', descr='sensor+ctrl', nodes=[{}, {}])
+
+    _login(client, 'admin1', 'adminPass123')
+
+    listing = client.get('/api/templates/').get_json()
+    entry = next(t for t in listing if t['name'] == 'Temp Control')
+    assert entry['source'] == 'predefined'
+    assert entry['node_count'] == 2
+
+    assert client.get('/api/templates/Temp Control').status_code == HTTPStatus.OK
+
+    resp = client.delete('/api/templates/Temp Control')
+    assert resp.status_code == HTTPStatus.FORBIDDEN
+    # still there
+    assert any(t['name'] == 'Temp Control'
+               for t in client.get('/api/templates/').get_json())
+
+
+def test_user_template_shadows_predefined_of_same_name(client, users, template_lib):
+    _write_lib_template(template_lib, 'pH-Regelung', descr='shipped', nodes=[{}])
+
+    _login(client, 'admin1', 'adminPass123')
+    client.post('/api/templates/', json={
+        'name': 'pH-Regelung', 'descr': 'mine',
+        'node_ids': ['wasser', 'heizen'],
+    })
+
+    listing = client.get('/api/templates/').get_json()
+    entry = next(t for t in listing if t['name'] == 'pH-Regelung')
+    assert entry['source'] == 'user'
+    assert entry['node_count'] == 2          # the user's version
+    assert client.get('/api/templates/pH-Regelung').get_json()['descr'] == 'mine'
+
+    # deleting the user copy brings the predefined one back
+    assert client.delete('/api/templates/pH-Regelung').status_code == HTTPStatus.NO_CONTENT
+    entry = next(t for t in client.get('/api/templates/').get_json()
+                 if t['name'] == 'pH-Regelung')
+    assert entry['source'] == 'predefined'
+    assert entry['node_count'] == 1
+
+
+def test_templates_survive_a_wiring_db_deletion(client, users, tmp_path, template_lib):
+    _login(client, 'admin1', 'adminPass123')
+    client.post('/api/templates/', json={'name': 'Keep Me', 'node_ids': ['wasser']})
+
+    os.remove(tmp_path / 'wiring.sqlite')  # what `./run -r` does
+
+    listing = client.get('/api/templates/').get_json()
+    assert [t['name'] for t in listing] == ['Keep Me']
 
 
 # --- templates: insert (id remapping, no collisions) --------------------

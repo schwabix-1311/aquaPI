@@ -886,8 +886,10 @@ def api_config_apply() -> Response:
 @bp.route('/api/templates/', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_list_templates() -> Response:
-    """ list all node-combination templates (name, description, node count). """
-    return jsonify(db.list_templates(_wiring_db_path()))
+    """ list all node-combination templates (name, description, node
+        count, source: 'predefined' | 'user').
+    """
+    return jsonify(db.list_templates(current_app.config['INSTANCE_PATH']))
 
 
 @bp.route('/api/templates/', methods=['POST'])
@@ -919,21 +921,22 @@ def api_create_template() -> Response:
     except ValueError as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
 
-    db.save_template(_wiring_db_path(), name, body.get('descr', '') or '', data)
+    instance_path = current_app.config['INSTANCE_PATH']
+    db.save_template(instance_path, name, body.get('descr', '') or '', data)
 
     log.verbose('User %r saved template %r (%d nodes)',
                 current_user.username, name, len(node_ids))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'save_template', name, {'node_count': len(node_ids)})
 
-    return jsonify(db.get_template(_wiring_db_path(), name)), HTTPStatus.CREATED
+    return jsonify(db.get_template(instance_path, name)), HTTPStatus.CREATED
 
 
 @bp.route('/api/templates/<name>', methods=['GET'])
 @roles_required('viewer', 'operator', 'admin')
 def api_get_template(name: str) -> Response:
     """ fetch one template including its full node data. """
-    template = db.get_template(_wiring_db_path(), name)
+    template = db.get_template(current_app.config['INSTANCE_PATH'], name)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
     return jsonify(template)
@@ -942,9 +945,14 @@ def api_get_template(name: str) -> Response:
 @bp.route('/api/templates/<name>', methods=['DELETE'])
 @roles_required('admin')
 def api_delete_template(name: str) -> Response:
-    """ remove a template. """
-    if not db.delete_template(_wiring_db_path(), name):
+    """ remove a user template. Predefined (shipped) templates are
+        read-only and cannot be deleted through the API.
+    """
+    result = db.delete_template(current_app.config['INSTANCE_PATH'], name)
+    if result == 'not_found':
         return Response(status=HTTPStatus.NOT_FOUND)
+    if result == 'predefined':
+        return jsonify(error='Predefined templates are read-only'), HTTPStatus.FORBIDDEN
 
     log.verbose('User %r deleted template %r', current_user.username, name)
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
@@ -963,7 +971,7 @@ def api_insert_template(name: str) -> Response:
     if not bus:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-    template = db.get_template(_wiring_db_path(), name)
+    template = db.get_template(current_app.config['INSTANCE_PATH'], name)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
 

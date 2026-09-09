@@ -30,6 +30,7 @@ const ConfigTemplatesDialog = {
 									v-model="newTemplateName"
 									:label="$t('pages.config.templateName')"
 									dense outlined hide-details
+									autocomplete="off"
 									class="mr-2"
 								></v-text-field>
 								<v-btn
@@ -45,14 +46,19 @@ const ConfigTemplatesDialog = {
 
 							<v-list dense v-if="templates.length">
 								<v-list-item v-for="tpl in templates" :key="tpl.name">
-									<v-list-item-title>{{ tpl.name }}</v-list-item-title>
+									<v-list-item-title>
+										{{ tpl.name }}
+										<v-chip v-if="tpl.source === 'predefined'" size="x-small" label class="ml-2">
+											{{ $t('pages.config.templatePredefined') }}
+										</v-chip>
+									</v-list-item-title>
 									<v-list-item-subtitle>{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
 									<template #append>
+        <v-btn v-if="tpl.source !== 'predefined'" icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
+											<v-icon>mdi-delete</v-icon>
+										</v-btn>
         <v-btn icon variant="text" color="grey-darken-1" @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
 											<v-icon>mdi-tray-arrow-down</v-icon>
-										</v-btn>
-        <v-btn icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
-											<v-icon>mdi-delete</v-icon>
 										</v-btn>
 									</template>
 								</v-list-item>
@@ -66,6 +72,7 @@ const ConfigTemplatesDialog = {
 									v-model="newSnapshotName"
 									:label="$t('pages.config.snapshotName')"
 									dense outlined hide-details
+									autocomplete="off"
 									class="mr-2"
 								></v-text-field>
 								<v-btn

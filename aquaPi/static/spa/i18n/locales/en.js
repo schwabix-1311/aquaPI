@@ -112,6 +112,7 @@ export default
 			templates: 'Templates',
 			snapshots: 'Snapshots',
 			templateName: 'Template name',
+			templatePredefined: 'predefined',
 			snapshotName: 'Snapshot name',
 			saveSelection: 'Save selection as template',
 			saveSnapshot: 'Save current configuration',

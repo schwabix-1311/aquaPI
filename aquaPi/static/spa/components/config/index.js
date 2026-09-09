@@ -30,13 +30,13 @@ const AquapiConfig = {
 							<v-icon left small>mdi-shape-outline</v-icon>
 							{{ $t('pages.config.templates') }}
 						</v-btn>
-						<v-btn outlined class="mr-2" @click="openTemplates(1)">
-							<v-icon left small>mdi-backup-restore</v-icon>
-							{{ $t('pages.config.snapshots') }}
-						</v-btn>
 						<v-btn outlined class="mr-2" @click="openAddDialog">
 							<v-icon left small>mdi-plus</v-icon>
 							{{ $t('pages.config.addNode') }}
+						</v-btn>
+						<v-btn outlined class="mr-2" @click="openTemplates(1)">
+							<v-icon left small>mdi-backup-restore</v-icon>
+							{{ $t('pages.config.snapshots') }}
 						</v-btn>
 						<v-btn outlined class="mr-2" @click="applyChainLayout">
 							<v-icon left small>mdi-sitemap</v-icon>

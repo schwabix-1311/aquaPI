@@ -1,0 +1,121 @@
+{
+ "id": "ph-regelung-analoge-sonde-magnetventil",
+ "i18n": {
+  "de": {
+   "name": "pH Regelung, analoge Sonde, Magnetventil",
+   "descr": "pH Regelung mit analogem Sondenverstärker und CO2 Ventil",
+   "nodes": {
+    "phsonde": "pH Sonde",
+    "phwert": "pH Wert",
+    "phsteuerung": "pH Steuerung",
+    "co2ventil": "CO2 Ventil"
+   }
+  },
+  "en": {
+   "name": "pH controller, analog probe, solenoid valve",
+   "descr": "Analog probe amplifier, solenoid valve (12V, or relay/triac)",
+   "nodes": {
+    "phsonde": "pH probe",
+    "phwert": "pH value",
+    "phsteuerung": "pH control",
+    "co2ventil": "CO2 valve"
+   }
+  }
+ },
+ "data": {
+  "nodes": [
+   {
+    "id": "phsonde",
+    "type": "AnalogInput",
+    "state": {
+     "name": "pH Sonde",
+     "id": "phsonde",
+     "identifier": "AnalogInput.phsonde",
+     "data": 2.3653,
+     "receives": [],
+     "unit": "V",
+     "rcv_unit": "",
+     "data_range": "ANALOG",
+     "group": "pH Regelung",
+     "pos_x": 0.0,
+     "pos_y": 252.0,
+     "port": "",
+     "interval": 360.0,
+     "initval": 2.49,
+     "avg": 3
+    }
+   },
+   {
+    "id": "phwert",
+    "type": "ScaleAux",
+    "state": {
+     "name": "pH Wert",
+     "id": "phwert",
+     "identifier": "ScaleAux.phwert",
+     "data": 7.774229166666666,
+     "receives": [
+      "phsonde"
+     ],
+     "unit": "pH",
+     "rcv_unit": "",
+     "data_range": "ANALOG",
+     "group": "pH Regelung",
+     "pos_x": 310.0,
+     "pos_y": 252.0,
+     "offset": 22.06458333333332,
+     "factor": -6.041666666666662,
+     "limit": [
+      4.0,
+      10.0
+     ]
+    }
+   },
+   {
+    "id": "phsteuerung",
+    "type": "MaximumCtrl",
+    "state": {
+     "name": "pH Steuerung",
+     "id": "phsteuerung",
+     "identifier": "MaximumCtrl.phsteuerung",
+     "data": 100.0,
+     "receives": [
+      "phwert"
+     ],
+     "unit": "%",
+     "rcv_unit": "pH",
+     "data_range": "BINARY",
+     "group": "pH Regelung",
+     "pos_x": 620.0,
+     "pos_y": 252.0,
+     "setpoint": 7.0,
+     "hysteresis": 0.0,
+     "alert": [
+      "HIGH",
+      "err"
+     ]
+    }
+   },
+   {
+    "id": "co2ventil",
+    "type": "SwitchDevice",
+    "state": {
+     "name": "CO2 Ventil",
+     "id": "co2ventil",
+     "identifier": "SwitchDevice.co2ventil",
+     "data": true,
+     "receives": [
+      "phsteuerung"
+     ],
+     "unit": "%",
+     "rcv_unit": "",
+     "data_range": "BINARY",
+     "group": "pH Regelung",
+     "pos_x": 930.0,
+     "pos_y": 252.0,
+     "port": "",
+     "inverted": false
+    }
+   }
+  ]
+ }
+}

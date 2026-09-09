@@ -1,0 +1,71 @@
+{
+ "id": "erweiterung-der-heizung-um-kuehlung",
+ "i18n": {
+  "de": {
+   "name": "Erweiterung der Heizung um Kühlungslüfter",
+   "descr": "Zusätzlicher variabler Lüfter als Kühlung",
+   "nodes": {
+    "lueftersteuerung": "Lüftersteuerung",
+    "kuehlungsluefter": "Kühlungslüfter"
+   }
+  },
+  "en": {
+   "name": "Heater extension: variable cooling fan",
+   "descr": "Additional variable-speed fan for cooling",
+   "nodes": {
+    "lueftersteuerung": "Fan control",
+    "kuehlungsluefter": "Cooling fan"
+   }
+  }
+ },
+ "data": {
+  "nodes": [
+   {
+    "id": "lueftersteuerung",
+    "type": "ScaleAux",
+    "state": {
+     "name": "Lüftersteuerung",
+     "id": "lueftersteuerung",
+     "identifier": "ScaleAux.lueftersteuerung",
+     "data": 0.0,
+     "receives": [],
+     "unit": "%",
+     "rcv_unit": "",
+     "data_range": "ANALOG",
+     "group": "Temperaturen",
+     "pos_x": 310.0,
+     "pos_y": 126.0,
+     "offset": -1300.0,
+     "factor": 50.0,
+     "limit": [
+      0.0,
+      100.0
+     ]
+    }
+   },
+   {
+    "id": "kuehlungsluefter",
+    "type": "AnalogDevice",
+    "state": {
+     "name": "Kühlungslüfter",
+     "id": "kuehlungsluefter",
+     "identifier": "AnalogDevice.kuehlungsluefter",
+     "data": 0,
+     "receives": [
+      "lueftersteuerung"
+     ],
+     "unit": "%",
+     "rcv_unit": "",
+     "data_range": "PERCENT",
+     "group": "Temperaturen",
+     "pos_x": 620.0,
+     "pos_y": 126.0,
+     "port": "",
+     "percept": false,
+     "minimum": 10,
+     "maximum": 80
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,92 @@
+{
+ "id": "sonnensimulation-mit-wolken-pwm-dimmer-per-mosfet",
+ "i18n": {
+  "de": {
+   "name": "Sonnensimulation mit Wolken, PWM Dimmer per MOSFET",
+   "descr": "Sonnensimulation, Wolken, über PWM Dimmer (12/24V)",
+   "nodes": {
+    "zeitplanlicht": "Zeitplan Licht",
+    "licht": "Licht",
+    "dimmer": "Dimmer"
+   }
+  },
+  "en": {
+   "name": "Sun simulation with clouds, PWM dimmer",
+   "descr": "Sunrise/sunset, clouds, PWM dimmer through MOSFET (12/24V)",
+   "nodes": {
+    "zeitplanlicht": "Light Schedule",
+    "licht": "Light",
+    "dimmer": "Dimmer"
+   }
+  }
+ },
+ "data": {
+  "nodes": [
+   {
+    "id": "zeitplanlicht",
+    "type": "ScheduleInput",
+    "state": {
+     "name": "Zeitplan Licht",
+     "id": "zeitplanlicht",
+     "identifier": "ScheduleInput.zeitplanlicht",
+     "data": 100,
+     "receives": [],
+     "unit": "%",
+     "rcv_unit": "",
+     "data_range": "BINARY",
+     "group": "Beleuchtung",
+     "pos_x": 0.0,
+     "pos_y": 378.0,
+     "frequency": 86400.0,
+     "duration": 28800.0,
+     "anchor": "14:00",
+     "weekdays": null
+    }
+   },
+   {
+    "id": "licht",
+    "type": "SunCtrl",
+    "state": {
+     "name": "Licht",
+     "id": "licht",
+     "identifier": "SunCtrl.licht",
+     "data": 34.0820083132199,
+     "receives": [
+      "zeitplanlicht"
+     ],
+     "unit": "%",
+     "rcv_unit": "%",
+     "data_range": "PERCENT",
+     "group": "Beleuchtung",
+     "pos_x": 310.0,
+     "pos_y": 378.0,
+     "xscend": 1.0,
+     "cloudiness": 2
+    }
+   },
+   {
+    "id": "dimmer",
+    "type": "AnalogDevice",
+    "state": {
+     "name": "Dimmer",
+     "id": "dimmer",
+     "identifier": "AnalogDevice.dimmer",
+     "data": 8.711874679967929,
+     "receives": [
+      "licht"
+     ],
+     "unit": "%",
+     "rcv_unit": "",
+     "data_range": "PERCENT",
+     "group": "Beleuchtung",
+     "pos_x": 620.0,
+     "pos_y": 378.0,
+     "port": "",
+     "percept": true,
+     "minimum": 0.0,
+     "maximum": 75
+    }
+   }
+  ]
+ }
+}

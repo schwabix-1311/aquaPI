@@ -160,8 +160,17 @@ UV / skimmer on-off, single PWM fan.
   Same class: EC/conductivity/TDS probes (temp compensation + cell
   constant), dissolved-oxygen probes (temp + salinity/pressure), and
   dose-to-a-target auto-dosing (meter volume until a setpoint is reached,
-  with lockout). Needs an `InputNode`/driver-interface extension for a
-  driver-settable compensation input.
+  with lockout).
+  Possible design (Markus, 2026-09-10) that fits the bus without a new
+  message type: one hybrid node with `ROLE = AUX | IN_ENDP` (`BusRole` is
+  a `Flag`, so combinable). It subscribes to a temperature `AnalogInput`
+  the AUX way, and it owns *two* port drivers to the same physical
+  device - an `Aout`-type "calibration"/compensation driver it writes the
+  received temperature through, and an `Ain`-type driver it then reads the
+  compensated pH from - and posts that pH as an IN_ENDP source. Unusual
+  (a node holding both an in and an out driver) but needs no core change.
+  Generalises: EC = same with one received input; DO = two received
+  inputs (temp + salinity).
 - **Inherently multi-channel** - one "port" isn't one scalar. RGB/RGBW/
   multi-emitter LED fixtures (see the RGB light + sub-data entries above -
   this is the flagship case), and DMX/Art-Net lighting (512 channels per

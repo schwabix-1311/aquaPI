@@ -23,6 +23,7 @@ const ConfigTemplatesDialog = {
 				</v-tabs>
 				<v-card-text>
 					<v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>
+					<v-alert v-if="draftDirty" type="warning" dense text class="mb-3">{{ $t('pages.config.draftDirtyBlocksTemplates') }}</v-alert>
 
 					<v-window v-model="tab">
 						<v-window-item>
@@ -58,7 +59,7 @@ const ConfigTemplatesDialog = {
         <v-btn v-if="tpl.source !== 'predefined'" icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
-        <v-btn icon variant="text" color="grey-darken-1" @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
+        <v-btn icon variant="text" color="grey-darken-1" :disabled="draftDirty" @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
 											<v-icon>mdi-tray-arrow-down</v-icon>
 										</v-btn>
 									</template>
@@ -89,7 +90,7 @@ const ConfigTemplatesDialog = {
 									<v-list-item-title>{{ snap.name }}</v-list-item-title>
 									<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
 									<template #append>
-        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
+        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring || draftDirty" @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
 											<v-icon>mdi-restore</v-icon>
 										</v-btn>
         <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
@@ -133,6 +134,9 @@ const ConfigTemplatesDialog = {
 		snapshots: function() {
 			return this.configStore.snapshots
 		},
+		draftDirty: function() {
+			return this.configStore.draftDirty
+		},
 	},
 	watch: {
 		modelValue: function(val) {
@@ -165,6 +169,11 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async insertTemplate(tpl) {
+			if (this.draftDirty) {
+				this.error = this.$t('pages.config.draftDirtyBlocksTemplates')
+				this.$toast.error(this.error)
+				return
+			}
 			const result = await this.configStore.insertTemplate({id: tpl.id})
 			if (!result.ok) {
 				this.error = result.error
@@ -207,6 +216,11 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async restoreSnapshot(snap) {
+			if (this.draftDirty) {
+				this.error = this.$t('pages.config.draftDirtyBlocksTemplates')
+				this.$toast.error(this.error)
+				return
+			}
 			const ok = await this.$confirm(this.$t('pages.config.confirmRestoreSnapshot', {name: snap.name}), {
 				confirmLabel: this.$t('pages.config.restore'),
 				confirmColor: 'error',

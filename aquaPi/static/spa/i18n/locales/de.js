@@ -129,6 +129,7 @@ export default
 			saveChanges: 'Speichern',
 			confirmDiscard: 'Alle ungespeicherten Änderungen verwerfen?',
 			confirmLeaveUnsaved: 'Es gibt ungespeicherte Änderungen an dieser Konfiguration.',
+			draftDirtyBlocksTemplates: 'Bitte zuerst Änderungen speichern oder verwerfen.',
 			deleteConnection: 'Verbindung löschen',
 			changesDiscarded: 'Änderungen verworfen',
 			portIn: 'Eingang (zum Verbinden ziehen)',

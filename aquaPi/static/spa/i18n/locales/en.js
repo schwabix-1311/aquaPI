@@ -129,6 +129,7 @@ export default
 			saveChanges: 'Save',
 			confirmDiscard: 'Discard all unsaved changes?',
 			confirmLeaveUnsaved: 'There are unsaved changes to this configuration.',
+			draftDirtyBlocksTemplates: 'Save or discard your changes first.',
 			deleteConnection: 'Delete connection',
 			changesDiscarded: 'Changes discarded',
 			portIn: 'Input (drag to connect)',

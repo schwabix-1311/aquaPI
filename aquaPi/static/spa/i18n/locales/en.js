@@ -98,7 +98,7 @@ export default
 			nodeName: 'Name',
 			receives: '@:pages.settings.fields.receives',
 			group: 'Group',
-			hintEmpty: 'No nodes yet - use "Add node" to create one',
+			hintEmpty: 'No nodes yet - quickest via "Templates", or add them one by one via "Add node"',
 			hintAlertNoConditionsYet: 'Add alert conditions after saving, via Edit',
 			hintSelecting: 'Click nodes to select them for a template ({count} selected)',
 			errNameType: 'Please choose a type and enter a name',

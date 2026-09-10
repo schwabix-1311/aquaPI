@@ -98,7 +98,7 @@ export default
 			nodeName: 'Name',
 			receives: '@:pages.settings.fields.receives',
 			group: 'Gruppe',
-			hintEmpty: 'Noch keine Elemente - über "Element hinzufügen" anlegen',
+			hintEmpty: 'Noch keine Elemente - am schnellsten über "Vorlagen", oder einzeln über "Element hinzufügen"',
 			hintAlertNoConditionsYet: 'Bedingungen nach dem Speichern über Bearbeiten hinzufügen',
 			hintSelecting: 'Elemente anklicken, um sie für eine Vorlage auszuwählen ({count} ausgewählt)',
 			errNameType: 'Bitte Typ wählen und Namen eingeben',

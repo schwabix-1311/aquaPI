@@ -136,6 +136,14 @@ id). A `questdb` marker tags the (currently one) test that needs a real,
 reachable QuestDB — exclude it with `pytest -m "not questdb"` (as CI does,
 since it has none).
 
+A few of the SPA's pure helper modules (currently the `/wiring` canvas
+layout algorithm) have JavaScript unit tests under `tests/js/`, run with
+Node's built-in test runner — no `npm install`, no build step:
+
+```
+node --test "tests/js/**/*.test.js"
+```
+
 ## Contributing
 
 Contributions of any kind are welcome — please leave a note in Discussions or

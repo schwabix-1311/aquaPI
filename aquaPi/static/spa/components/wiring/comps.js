@@ -5,11 +5,10 @@
 // works fully offline/without a build step like the rest of the SPA.
 
 import {registerGlobalComponent} from '../app/registry.js'
+import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './constants.js'
 import './wiringNodeDialog.js'
 import './wiringTemplatesDialog.js'
 
-const NODE_BOX_WIDTH = 240
-const NODE_BOX_HEIGHT = 76
 const CONNECTION_STUB = 30
 // pointer must travel this far (px) before a press turns into a move-drag
 // rather than a tap; below it, pointerup is treated as a click/tap

@@ -17,7 +17,7 @@ from .auth import roles_required
 from .driver.base import DriverError
 from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
-from .machineroom.msg_bus import BusRole
+from .machineroom.msg_bus import BusRole, DataRange
 from .machineroom.alert_nodes import Alert
 from .machineroom.aux_nodes import ScaleAux
 from .machineroom.in_nodes import UiInput
@@ -621,12 +621,13 @@ def api_create_node() -> Response:
         return jsonify(error=f'{type_name} accepts at most 1 receives entry'), \
             HTTPStatus.BAD_REQUEST
 
-    # TODO(config-receives-type-filtering): existence-only - doesn't check
-    # the referenced node's data_range compatibility. See
-    # .junie/plans/config-receives-type-filtering.md
     for rcv_id in receives:
-        if not bus.get_node(rcv_id):
+        src = bus.get_node(rcv_id)
+        if not src:
             return jsonify(error=f'Unknown receives node id: {rcv_id}'), HTTPStatus.BAD_REQUEST
+        if not db.source_data_range_ok(src.data_range.name):
+            return jsonify(error=f'{rcv_id!r} produces {src.data_range.name} data, '
+                           'which cannot be wired as an input'), HTTPStatus.BAD_REQUEST
 
     raw_fields = body.get('fields', {})
     if not isinstance(raw_fields, dict):
@@ -691,12 +692,13 @@ def api_update_node(node_id: str) -> Response:
         if schema['receives'] == 'single' and len(receives) > 1:
             return jsonify(error=f'{type(node).__name__} accepts at most 1 receives entry'), \
                 HTTPStatus.BAD_REQUEST
-        # TODO(config-receives-type-filtering): existence-only - doesn't
-        # check the referenced node's data_range compatibility. See
-        # .junie/plans/config-receives-type-filtering.md
         for rcv_id in receives:
-            if not bus.get_node(rcv_id):
+            src = bus.get_node(rcv_id)
+            if not src:
                 return jsonify(error=f'Unknown receives node id: {rcv_id}'), HTTPStatus.BAD_REQUEST
+            if not db.source_data_range_ok(src.data_range.name):
+                return jsonify(error=f'{rcv_id!r} produces {src.data_range.name} data, '
+                               'which cannot be wired as an input'), HTTPStatus.BAD_REQUEST
         if db.would_create_cycle(bus, node_id, receives):
             return jsonify(error='This wiring would create a cycle'), HTTPStatus.BAD_REQUEST
         node.receives = receives

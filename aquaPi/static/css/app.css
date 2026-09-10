@@ -222,48 +222,48 @@ html::-webkit-scrollbar {
 }
 
 /* /config graph editor (Step 12) */
-.config-canvas-wrapper {
+.wiring-canvas-wrapper {
     width: 100%;
     overflow: auto;
     border: 1px dashed rgba(128, 128, 128, 0.4);
 }
-.config-canvas {
+.wiring-canvas {
     position: relative;
 }
-.config-connections {
+.wiring-connections {
     position: absolute;
     top: 0;
     left: 0;
     pointer-events: none;
-    /* above .config-node-box, so a connection routed behind an unrelated
+    /* above .wiring-node-box, so a connection routed behind an unrelated
        node still renders visibly instead of disappearing under it */
     z-index: 2;
 }
-.config-connection-hit {
+.wiring-connection-hit {
     stroke: transparent;
     stroke-width: 14;
     pointer-events: stroke;
     fill: none;
     cursor: pointer;
 }
-.config-connection-line {
+.wiring-connection-line {
     pointer-events: none;
 }
-.config-connection-line--hover {
+.wiring-connection-line--hover {
     stroke: #f44336 !important;
     stroke-width: 3;
 }
-.config-connection-delete {
+.wiring-connection-delete {
     pointer-events: all;
     cursor: pointer;
 }
-.config-connection-delete circle {
+.wiring-connection-delete circle {
     transition: r 0.1s ease-in-out;
 }
-.config-connection-delete:hover circle {
+.wiring-connection-delete:hover circle {
     r: 10;
 }
-.config-node-box {
+.wiring-node-box {
     position: absolute;
     cursor: move;
     user-select: none;
@@ -273,13 +273,13 @@ html::-webkit-scrollbar {
     background-color: rgba(255, 255, 255, 0.95);
     z-index: 1;
 }
-.v-theme--dark .config-node-box {
+.v-theme--dark .wiring-node-box {
     background-color: rgba(48, 48, 48, 0.95);
 }
-.config-node-box--connecting {
+.wiring-node-box--connecting {
     outline: 2px solid #1976d2;
 }
-.config-node-box--selected {
+.wiring-node-box--selected {
     outline: 2px solid #43a047;
 }
 /* drag-to-connect hover feedback: whichever card is currently under the
@@ -287,10 +287,10 @@ html::-webkit-scrollbar {
    right now would actually wire something up - see AquapiConfig's
    isValidConnection(). Reuses --selected's green / the same red used
    for the connection delete-X, since neither co-occurs with this. */
-.config-node-box--drop-valid {
+.wiring-node-box--drop-valid {
     outline: 2px solid #43a047;
 }
-.config-node-box--drop-invalid {
+.wiring-node-box--drop-invalid {
     outline: 2px solid #f44336;
 }
 /* Input/output port markers, so the connector attachment side (left =
@@ -301,10 +301,10 @@ html::-webkit-scrollbar {
    (comps.js), NOT as elements on ConfigNodeBox itself - a div nested in
    the card could never paint above the connection lines (ConfigNodeBox
    establishes its own stacking context, which can't out-rank a sibling
-   one like .config-connections no matter its own z-index), while an SVG
+   one like .wiring-connections no matter its own z-index), while an SVG
    circle added after the edges in the same overlay naturally paints on
    top by document order alone. */
-.config-node-port-svg {
+.wiring-node-port-svg {
     stroke: rgba(0, 0, 0, 0.3);
     stroke-width: 1;
     pointer-events: all;
@@ -312,13 +312,13 @@ html::-webkit-scrollbar {
     touch-action: none;
     transition: r 0.1s ease-in-out;
 }
-.config-node-port-svg:hover {
+.wiring-node-port-svg:hover {
     r: 10;
 }
-.config-node-port-svg--input {
+.wiring-node-port-svg--input {
     fill: #1976d2;
 }
-.config-node-port-svg--output {
+.wiring-node-port-svg--output {
     fill: #90a4ae;
 }
 
@@ -327,7 +327,7 @@ html::-webkit-scrollbar {
    Ausgänge, replacing the old flat depth=1 list. Plain <ul>/<li> markup
    rendered from a JS template string - no Vue SFC <style scoped> exists in
    this codebase, so this lives here, same as the /config canvas's own
-   .config-connection-* rules above. */
+   .wiring-connection-* rules above. */
 :root {
     --aquapi-tree-border: rgba(0, 0, 0, 0.3);
     --aquapi-tree-border-muted: rgba(0, 0, 0, 0.25);

@@ -1,12 +1,13 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
-import {useConfigStore} from '../../store/modules/config.js'
+import {useWiringStore} from '../../store/modules/wiring.js'
 import {useUsersStore} from '../../store/modules/users.js'
+import {isNumericSource} from '../wiring/wiringConnect.js'
 
 // Shared between /settings (inline in NodeSettingsCard) and /config
-// (inside ConfigNodeDialog) - the only editor for an Alert node's
+// (inside WiringNodeDialog) - the only editor for an Alert node's
 // AlertCond watches. Not schema-driven like NodeSettingsFields/
-// ConfigNodeDialog's generic fields: Alert has no get_settings_schema()
+// WiringNodeDialog's generic fields: Alert has no get_settings_schema()
 // entry for its conditions (a set of objects, not a plain field), and
 // with only 2 concrete AlertCond classes, hardcoding them here is
 // simpler than inventing a schema endpoint for two fixed options.
@@ -15,7 +16,7 @@ const ALERT_COND_CLASSES = ['AlertAbove', 'AlertBelow']
 const AlertCondEditor = {
 	props: {
 		node: {type: Object, required: true},
-		// set by /config's ConfigNodeDialog, which has its own single
+		// set by /wiring's WiringNodeDialog, which has its own single
 		// Save button for the whole edit dialog - two separate, visually
 		// unrelated Save buttons in one dialog is confusing and error-
 		// prone, so the dialog hides this one and calls save() itself
@@ -93,8 +94,8 @@ const AlertCondEditor = {
 		return {rows: [], savedSnapshot: '[]', saving: false, error: null}
 	},
 	computed: {
-		configStore() {
-			return useConfigStore()
+		wiringStore() {
+			return useWiringStore()
 		},
 		dashboardStore() {
 			return useDashboardStore()
@@ -113,8 +114,12 @@ const AlertCondEditor = {
 			return ALERT_COND_CLASSES.map(cls => ({title: this.$t('misc.alertConds.' + cls), value: cls}))
 		},
 		nodeItems: function() {
+			// AlertAbove/AlertBelow compare the watched value as a float,
+			// so only offer nodes that produce a plain number (see
+			// wiringConnect.js's isNumericSource) - never a STRING source
+			// (Alert, TextInput) or an unresolved one.
 			return Object.values(this.dashboardStore.nodes)
-				.filter(n => n.id !== this.node.id)
+				.filter(n => n.id !== this.node.id && isNumericSource(n, this.wiringStore.nodeTypes))
 				.map(n => ({title: n.name + ' (' + n.type + ')', value: n.id}))
 		},
 		normalizedRows: function() {
@@ -158,7 +163,7 @@ const AlertCondEditor = {
 		removeRow: async function(idx) {
 			if (this.rows.length === 1) {
 				const ok = await this.$confirm(this.$t('pages.settings.alertConds.confirmClearAll'), {
-					confirmLabel: this.$t('pages.config.delete'),
+					confirmLabel: this.$t('misc.actions.delete'),
 					confirmColor: 'error',
 				})
 				if (!ok) {
@@ -167,7 +172,7 @@ const AlertCondEditor = {
 			}
 			this.rows.splice(idx, 1)
 		},
-		// Returns {ok, error} so an embedding parent (ConfigNodeDialog) can
+		// Returns {ok, error} so an embedding parent (WiringNodeDialog) can
 		// await it as part of its own combined save. A no-op (ok:true) if
 		// nothing changed, so a parent's "save everything" flow doesn't
 		// fire a pointless PUT when the user never touched conditions.
@@ -178,7 +183,7 @@ const AlertCondEditor = {
 			this.error = null
 			this.saving = true
 			try {
-				const result = await this.configStore.updateNodeConditions({
+				const result = await this.wiringStore.updateNodeConditions({
 					nodeId: this.node.id,
 					conditions: this.normalizedRows,
 				})

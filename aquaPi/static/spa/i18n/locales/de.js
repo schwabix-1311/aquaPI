@@ -88,7 +88,7 @@ export default
 				capacity: 'Verlaufskapazität (In-Memory)',
 			},
 		},
-		config: {
+		wiring: {
 			label: 'Verschaltung',
 			heading: 'Verschaltung',
 			addNode: 'Element hinzufügen',
@@ -98,11 +98,7 @@ export default
 			nodeName: 'Name',
 			receives: '@:pages.settings.fields.receives',
 			group: 'Gruppe',
-			edit: 'Bearbeiten',
-			delete: 'Löschen',
-			save: 'Speichern',
-			cancel: 'Abbrechen',
-			hintEmpty: 'Noch keine Elemente - über "Element hinzufügen" anlegen',
+			hintEmpty: 'Noch keine Elemente - am schnellsten über "Vorlagen", oder einzeln über "Element hinzufügen"',
 			hintAlertNoConditionsYet: 'Bedingungen nach dem Speichern über Bearbeiten hinzufügen',
 			hintSelecting: 'Elemente anklicken, um sie für eine Vorlage auszuwählen ({count} ausgewählt)',
 			errNameType: 'Bitte Typ wählen und Namen eingeben',
@@ -299,6 +295,12 @@ export default
 		genericLabel: 'Bezeichnung',
 		genericValue: 'Wert',
 		noActiveAlerts: 'Keine aktiven Warnungen',
+		actions: {
+			edit: 'Bearbeiten',
+			delete: 'Löschen',
+			save: 'Speichern',
+			cancel: 'Abbrechen',
+		},
 		footer: {
 			servedBy: 'Server: {os}',
 			platform: ' auf {model}',
@@ -328,8 +330,8 @@ export default
 			what: {
 				nodes: 'Elemente',
 				nodeTypes: 'Elementtypen',
-				templates: '@:pages.config.templates',
-				snapshots: '@:pages.config.snapshots',
+				templates: '@:pages.wiring.templates',
+				snapshots: '@:pages.wiring.snapshots',
 				users: '@:pages.users.label',
 				nodeSettings: 'Elementeinstellungen',
 				history: 'Verlaufsdaten',

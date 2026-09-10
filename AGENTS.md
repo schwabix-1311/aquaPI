@@ -198,6 +198,14 @@ Der Marker `questdb` markiert den (aktuell einen) Test, der eine echte, erreichb
 braucht, um sinnvoll zu laufen - gezielt ausschließbar via `pytest -m "not questdb"` (z. B. in CI,
 wo keine QuestDB läuft).
 
+Einige reine Hilfsmodule des SPA (derzeit der Layout-Algorithmus der `/wiring`-Canvas) haben
+JavaScript-Unit-Tests unter `tests/js/`, ausgeführt mit Nodes eingebautem Test-Runner - ohne
+`npm install`, ohne Build-Schritt:
+
+```bash
+node --test "tests/js/**/*.test.js"
+```
+
 Testkonfiguration: `pytest.ini` (`testpaths = tests`). Gemeinsame Fixtures liegen in
 `tests/conftest.py`. Testdateien folgen dem Schema `tests/test_<bereich>.py`
 (z. B. `test_auth.py`, `test_auth_db.py`, `test_api_nodes.py`, `test_node_crud_api.py`,

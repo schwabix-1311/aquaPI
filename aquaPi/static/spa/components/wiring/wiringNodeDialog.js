@@ -1,5 +1,6 @@
 import {registerGlobalComponent} from '../app/registry.js'
-import {useConfigStore} from '../../store/modules/config.js'
+import {useWiringStore} from '../../store/modules/wiring.js'
+import {connectableSources} from './wiringConnect.js'
 import '../settings/alertCondEditor.js'
 // side effect: registers SettingNumber/SettingSlider/SettingDuration/... -
 // db.py's get_node_type_schema() returns the same Setting.to_dict() shape
@@ -7,7 +8,7 @@ import '../settings/alertCondEditor.js'
 // widgets instead of its own plain inputs.
 import {settingWidgetType} from '../settings/comps.js'
 
-const ConfigNodeDialog = {
+const WiringNodeDialog = {
 	props: {
 		modelValue: {type: Boolean, default: false},
 		nodeTypes: {type: Object, required: true},
@@ -18,7 +19,7 @@ const ConfigNodeDialog = {
 		<v-dialog v-model="show" max-width="700" persistent>
 			<v-card>
 				<v-card-title>
-					{{ editNode ? $t('pages.config.editNode', {name: editNode.name}) : $t('pages.config.addNode') }}
+					{{ editNode ? $t('pages.wiring.editNode', {name: editNode.name}) : $t('pages.wiring.addNode') }}
 				</v-card-title>
 				<v-card-text>
 					<v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>
@@ -27,7 +28,7 @@ const ConfigNodeDialog = {
 						v-if="!editNode"
 						v-model="form.type"
 						:items="typeItems"
-						:label="$t('pages.config.nodeType')"
+						:label="$t('pages.wiring.nodeType')"
 						outlined dense
 						@change="onTypeChange"
 					></v-select>
@@ -35,7 +36,7 @@ const ConfigNodeDialog = {
 					<v-text-field
 						v-if="!editNode"
 						v-model="form.name"
-						:label="$t('pages.config.nodeName')"
+						:label="$t('pages.wiring.nodeName')"
 						outlined dense
 					></v-text-field>
 
@@ -46,7 +47,7 @@ const ConfigNodeDialog = {
 						item-title="title"
 						item-value="value"
 						:multiple="receivesKind === 'multi'"
-						:label="$t('pages.config.receives')"
+						:label="$t('pages.wiring.receives')"
 						outlined dense
 						clearable
 					></v-select>
@@ -54,13 +55,13 @@ const ConfigNodeDialog = {
 					<v-combobox
 						v-model="form.group"
 						:items="groupItems"
-						:label="$t('pages.config.group')"
+						:label="$t('pages.wiring.group')"
 						outlined dense
 						clearable
 					></v-combobox>
 
 					<v-alert v-if="isCreatingAlert" type="info" dense text class="mb-3">
-						{{ $t('pages.config.hintAlertNoConditionsYet') }}
+						{{ $t('pages.wiring.hintAlertNoConditionsYet') }}
 					</v-alert>
 
 					<div v-if="!isAlert" v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">
@@ -84,8 +85,8 @@ const ConfigNodeDialog = {
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
-					<v-btn text @click="cancel">{{ $t('pages.config.cancel') }}</v-btn>
-					<v-btn color="primary" @click="save" :loading="saving">{{ $t('pages.config.save') }}</v-btn>
+					<v-btn text @click="cancel">{{ $t('misc.actions.cancel') }}</v-btn>
+					<v-btn color="primary" @click="save" :loading="saving">{{ $t('misc.actions.save') }}</v-btn>
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
@@ -99,8 +100,8 @@ const ConfigNodeDialog = {
 		}
 	},
 	computed: {
-		configStore() {
-			return useConfigStore()
+		wiringStore() {
+			return useWiringStore()
 		},
 		show: {
 			get: function() { return this.modelValue },
@@ -182,14 +183,14 @@ const ConfigNodeDialog = {
 		isCreatingAlert: function() {
 			return !this.editNode && this.form.type === 'Alert'
 		},
-		// TODO(config-receives-type-filtering): lists every other node
-		// unconditionally - doesn't filter by data_range compatibility
-		// (e.g. History can't handle a STRING source). See
-		// .junie/plans/config-receives-type-filtering.md
+		// only nodes that may actually feed this one (see wiringConnect.js):
+		// a data producer that isn't STRING-typed or a History. The target
+		// is the node being edited, or - while creating - a stand-in with
+		// just the type/role canConnect() needs.
 		receivesItems: function() {
-			const selfId = this.editNode ? this.editNode.id : null
-			return this.nodes
-				.filter(n => n.id !== selfId)
+			const target = this.editNode
+				|| {id: null, type: this.form.type, role: this.schema.role}
+			return connectableSources(target, this.nodes, this.nodeTypes)
 				.map(n => ({title: n.name + ' (' + n.type + ')', value: n.id, text: n.name + ' (' + n.type + ')'}))
 		},
 	},
@@ -274,7 +275,7 @@ const ConfigNodeDialog = {
 					if (this.receivesKind !== 'none') {
 						changes.receives = this.asReceivesList()
 					}
-					this.configStore.draftUpdateNode({
+					this.wiringStore.draftUpdateNode({
 						nodeId: this.editNode.id,
 						changes: changes,
 					})
@@ -293,10 +294,10 @@ const ConfigNodeDialog = {
 					}
 				} else {
 					if (!this.form.type || !this.form.name) {
-						this.error = this.$t('pages.config.errNameType')
+						this.error = this.$t('pages.wiring.errNameType')
 						return
 					}
-					this.configStore.draftCreateNode(Object.assign({
+					this.wiringStore.draftCreateNode(Object.assign({
 						type: this.form.type,
 						role: this.schema.role,
 						name: this.form.name,
@@ -314,6 +315,6 @@ const ConfigNodeDialog = {
 		},
 	},
 }
-registerGlobalComponent('ConfigNodeDialog', ConfigNodeDialog)
+registerGlobalComponent('WiringNodeDialog', WiringNodeDialog)
 
 // vim: set noet ts=4 sw=4:

@@ -1,31 +1,31 @@
 <template>
 	<div>
-		<aquapi-config></aquapi-config>
+		<aquapi-wiring></aquapi-wiring>
 	</div>
 </template>
 
 <script>
-import {useConfigStore} from 'store/config'
+import {useWiringStore} from 'store/wiring'
 
 export default {
-	name: 'Config',
+	name: 'Wiring',
 
 	beforeRouteLeave(to, from, next) {
-		const configStore = useConfigStore()
-		if (!configStore.draftDirty) {
+		const wiringStore = useWiringStore()
+		if (!wiringStore.draftDirty) {
 			next()
 			return
 		}
-		this.$confirm(this.$t('pages.config.confirmLeaveUnsaved'), {
-			confirmLabel: this.$t('pages.config.saveChanges'),
+		this.$confirm(this.$t('pages.wiring.confirmLeaveUnsaved'), {
+			confirmLabel: this.$t('pages.wiring.saveChanges'),
 			extraAction: {
-				label: this.$t('pages.config.discard'),
+				label: this.$t('pages.wiring.discard'),
 				color: 'error',
 				value: 'discard',
 			},
 		}).then(async (result) => {
 			if (result === true) {
-				const saveResult = await configStore.saveDraft()
+				const saveResult = await wiringStore.saveDraft()
 				if (saveResult.ok) {
 					next()
 				} else {
@@ -33,7 +33,7 @@ export default {
 					next(false)
 				}
 			} else if (result === 'discard') {
-				configStore.discardDraft()
+				wiringStore.discardDraft()
 				next()
 			} else {
 				next(false)

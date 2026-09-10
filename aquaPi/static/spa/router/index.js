@@ -1,14 +1,14 @@
 import {loadSfc} from '../sfc/loadSfc.js'
 
-// Home/Config/Settings only wrap their respective `aquapi-dashboard` /
-// `aquapi-config` / `aquapi-settings` tags, whose actual component
+// Home/Wiring/Settings only wrap their respective `aquapi-dashboard` /
+// `aquapi-wiring` / `aquapi-settings` tags, whose actual component
 // definitions still live in these plain, eagerly-loaded `.js` modules
 // (self-registering into the global component registry, see
 // components/app/registry.js) - a `.vue` SFC's `<script>` can't `import`
 // them directly (see the comment in sfc/loadSfc.js).
 import '../components/app/index.js'
 import '../components/dashboard/index.js'
-import '../components/config/index.js'
+import '../components/wiring/index.js'
 import '../components/settings/index.js'
 import '../components/users/index.js'
 import {useUsersStore} from '../store/modules/users.js'
@@ -53,7 +53,7 @@ const routes = [
 				path: 'wiring',
 				name: 'wiring',
 				components: {
-					default: () => loadSfc('/static/spa/pages/Config.vue')
+					default: () => loadSfc('/static/spa/pages/Wiring.vue')
 				},
 				beforeEnter: async (to, from, next) => {
 					const usersStore = useUsersStore()

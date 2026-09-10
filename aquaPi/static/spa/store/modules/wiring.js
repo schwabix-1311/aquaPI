@@ -1,6 +1,18 @@
 import {useDashboardStore} from './dashboard.js';
+import {apiRequest} from '../apiRequest.js';
 import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 import i18n from '../../i18n/index.js';
+
+// shared "couldn't load X" toast for the read-only fetchers below
+// (mutating actions return {ok, error} and let the caller decide instead)
+function emitLoadError(whatKey) {
+	EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+		message: i18n.global.t('misc.toast.loadError',
+			{what: i18n.global.t('misc.toast.what.' + whatKey)}),
+		color: 'error',
+		timeout: 6000,
+	})
+}
 
 export const useWiringStore = Pinia.defineStore('wiring', {
 	state: () => ({
@@ -35,351 +47,134 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 			if (this.nodeTypesLoaded) {
 				return this.nodeTypes
 			}
-
-			try {
-				const response = await fetch('/api/node-types/', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-
-				if (response.status !== 200) {
-					throw new Error('GET /api/node-types/ returned ' + response.status)
-				}
-
-				this.setNodeTypes(await response.json())
-			} catch (e) {
-				console.error('ERROR loading node types: ' + e.message)
-				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
-					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodeTypes')}),
-					color: 'error',
-					timeout: 6000,
-				})
+			const res = await apiRequest('get', '/api/node-types/')
+			if (res.ok) {
+				this.setNodeTypes(res.data)
+			} else {
+				console.error('ERROR loading node types: ' + res.error)
+				emitLoadError('nodeTypes')
 			}
-
 			return this.nodeTypes
-		},
-
-		async createNode(payload) {
-			try {
-				const response = await fetch('/api/nodes/', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(payload),
-				})
-
-				const body = await response.json().catch(() => null)
-
-				if (response.status == 201) {
-					await useDashboardStore().fetchNodes()
-					return {ok: true, node: body}
-				}
-
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
-			}
 		},
 
 		async updateNode(payload) {
 			const {nodeId, changes} = payload
-
-			try {
-				const response = await fetch('/api/nodes/' + nodeId, {
-					method: 'put',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(changes),
-				})
-
-				const body = await response.json().catch(() => null)
-
-				if (response.status == 200) {
-					await useDashboardStore().fetchNodes()
-					return {ok: true, node: body}
-				}
-
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('put', '/api/nodes/' + nodeId, changes)
+			if (res.ok) {
+				await useDashboardStore().fetchNodes()
+				return {ok: true, node: res.data}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async updateNodeConditions(payload) {
 			const {nodeId, conditions} = payload
-
-			try {
-				const response = await fetch('/api/nodes/' + nodeId + '/conditions', {
-					method: 'put',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({conditions}),
-				})
-
-				const body = await response.json().catch(() => null)
-
-				if (response.status == 200) {
-					useDashboardStore().setNode(body)
-					// This bypasses the /wiring draft entirely (Alert has no
-					// NODE_TYPE_SCHEMA entry, so its conditions/receives are
-					// never part of the create/update diff) - if a draft
-					// happens to be active, patch just this one node's stale
-					// copy in place so the canvas/edit dialog reflect the
-					// change immediately, without discarding any of the
-					// draft's OTHER unrelated pending edits the way a full
-					// initDraft() refetch would.
-					if (this.draft && this.draft[nodeId]) {
-						this.setDraftNode(Object.assign({}, this.draft[nodeId], {
-							conditions: body.conditions,
-							receives: body.receives,
-						}))
-					}
-					return {ok: true, node: body}
-				}
-
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('put', '/api/nodes/' + nodeId + '/conditions', {conditions})
+			if (!res.ok) {
+				return {ok: false, error: res.error}
 			}
-		},
-
-		async deleteNode(payload) {
-			const {nodeId} = payload
-
-			try {
-				const response = await fetch('/api/nodes/' + nodeId, {
-					method: 'delete',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-
-				if (response.status == 204) {
-					await useDashboardStore().fetchNodes()
-					return {ok: true}
-				}
-
-				const body = await response.json().catch(() => null)
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const body = res.data
+			useDashboardStore().setNode(body)
+			// This bypasses the /wiring draft entirely (Alert has no
+			// NODE_TYPE_SCHEMA entry, so its conditions/receives are
+			// never part of the create/update diff) - if a draft
+			// happens to be active, patch just this one node's stale
+			// copy in place so the canvas/edit dialog reflect the
+			// change immediately, without discarding any of the
+			// draft's OTHER unrelated pending edits the way a full
+			// initDraft() refetch would.
+			if (this.draft && this.draft[nodeId]) {
+				this.setDraftNode(Object.assign({}, this.draft[nodeId], {
+					conditions: body.conditions,
+					receives: body.receives,
+				}))
 			}
+			return {ok: true, node: body}
 		},
 
 		async fetchTemplates() {
-			try {
-				const lang = i18n.global.locale.value
-				const response = await fetch('/api/templates/?lang=' + encodeURIComponent(lang), {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-				if (response.status !== 200) {
-					throw new Error('GET /api/templates/ returned ' + response.status)
-				}
-				this.setTemplates(await response.json())
-			} catch (e) {
-				console.error('ERROR loading templates: ' + e.message)
-				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
-					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.templates')}),
-					color: 'error',
-					timeout: 6000,
-				})
+			const lang = i18n.global.locale.value
+			const res = await apiRequest('get',
+				'/api/templates/?lang=' + encodeURIComponent(lang))
+			if (res.ok) {
+				this.setTemplates(res.data)
+			} else {
+				console.error('ERROR loading templates: ' + res.error)
+				emitLoadError('templates')
 			}
 		},
 
 		async createTemplate(payload) {
-			try {
-				const response = await fetch('/api/templates/', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(payload),
-				})
-				const body = await response.json().catch(() => null)
-				if (response.status == 201) {
-					await this.fetchTemplates()
-					return {ok: true, template: body}
-				}
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('post', '/api/templates/', payload)
+			if (res.ok) {
+				await this.fetchTemplates()
+				return {ok: true, template: res.data}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async deleteTemplate(payload) {
 			const {id} = payload
-			try {
-				const response = await fetch('/api/templates/' + encodeURIComponent(id), {
-					method: 'delete',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-				if (response.status == 204) {
-					await this.fetchTemplates()
-					return {ok: true}
-				}
-				const body = await response.json().catch(() => null)
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('delete',
+				'/api/templates/' + encodeURIComponent(id))
+			if (res.ok) {
+				await this.fetchTemplates()
+				return {ok: true}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async insertTemplate(payload) {
 			const {id} = payload
-			try {
-				const lang = i18n.global.locale.value
-				const response = await fetch('/api/templates/' + encodeURIComponent(id)
-					+ '/insert?lang=' + encodeURIComponent(lang), {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-				const body = await response.json().catch(() => null)
-				if (response.status == 201) {
-					await useDashboardStore().fetchNodes()
-					return {ok: true, nodes: body}
-				}
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const lang = i18n.global.locale.value
+			const res = await apiRequest('post', '/api/templates/'
+				+ encodeURIComponent(id) + '/insert?lang=' + encodeURIComponent(lang))
+			if (res.ok) {
+				await useDashboardStore().fetchNodes()
+				return {ok: true, nodes: res.data}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async fetchSnapshots() {
-			try {
-				const response = await fetch('/api/config/snapshots', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-				if (response.status !== 200) {
-					throw new Error('GET /api/config/snapshots returned ' + response.status)
-				}
-				this.setSnapshots(await response.json())
-			} catch (e) {
-				console.error('ERROR loading snapshots: ' + e.message)
-				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
-					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.snapshots')}),
-					color: 'error',
-					timeout: 6000,
-				})
+			const res = await apiRequest('get', '/api/config/snapshots')
+			if (res.ok) {
+				this.setSnapshots(res.data)
+			} else {
+				console.error('ERROR loading snapshots: ' + res.error)
+				emitLoadError('snapshots')
 			}
 		},
 
 		async createSnapshot(payload) {
-			try {
-				const response = await fetch('/api/config/snapshots', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(payload),
-				})
-				const body = await response.json().catch(() => null)
-				if (response.status == 201) {
-					await this.fetchSnapshots()
-					return {ok: true, snapshot: body}
-				}
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('post', '/api/config/snapshots', payload)
+			if (res.ok) {
+				await this.fetchSnapshots()
+				return {ok: true, snapshot: res.data}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async deleteSnapshot(payload) {
 			const {name} = payload
-			try {
-				const response = await fetch('/api/config/snapshots/' + encodeURIComponent(name), {
-					method: 'delete',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-				if (response.status == 204) {
-					await this.fetchSnapshots()
-					return {ok: true}
-				}
-				const body = await response.json().catch(() => null)
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('delete',
+				'/api/config/snapshots/' + encodeURIComponent(name))
+			if (res.ok) {
+				await this.fetchSnapshots()
+				return {ok: true}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async restoreSnapshot(payload) {
 			const {name} = payload
-			try {
-				const response = await fetch('/api/config/snapshots/' + encodeURIComponent(name) + '/restore', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-				const body = await response.json().catch(() => null)
-				if (response.status == 200) {
-					await useDashboardStore().fetchNodes()
-					return {ok: true, nodes: body}
-				}
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('post',
+				'/api/config/snapshots/' + encodeURIComponent(name) + '/restore')
+			if (res.ok) {
+				await useDashboardStore().fetchNodes()
+				return {ok: true, nodes: res.data}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		// --- /wiring editor draft mode (Step 16): all node CRUD below is
@@ -539,31 +334,14 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 				return {ok: true}
 			}
 
-			try {
-				const response = await fetch('/api/config/apply', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({creates, updates, deletes}),
-				})
-
-				const body = await response.json().catch(() => null)
-
-				if (response.status == 200) {
-					await useDashboardStore().fetchNodes()
-					this.setDraft(null)
-					return {ok: true, idMap: body.id_map}
-				}
-
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('post', '/api/config/apply',
+				{creates, updates, deletes})
+			if (res.ok) {
+				await useDashboardStore().fetchNodes()
+				this.setDraft(null)
+				return {ok: true, idMap: res.data && res.data.id_map}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		setNodeTypes(payload) {

@@ -31,15 +31,24 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   one `data_range`-keyed rule in `components/wiring/wiringConnect.js`
   (`canConnect`/`connectableSources`/`isNumericSource`), used by the
   canvas port dots, the drop check, WiringNodeDialog, NodeReceivesEditor
-  and AlertCondEditor; enforced server-side in `db.source_data_range_ok`
-  (`apply_config_diff` + `api_create_node`/`api_update_node`). A STRING
-  source (Alert, TextInput) can no longer be wired anywhere. Remaining:
-  the rule is only "not STRING" - widen `source_data_range_ok` /
-  `isNumericSource` if a finer per-consumer contract is ever needed.
-- `ALERT_COND_CLASSES` in `alertCondEditor.js` is still a hand-kept copy
-  of `db.ALERT_COND_FACTORY` keys - derive it (with each class's
-  applicable `data_range`) from a backend-exposed list when a 3rd
-  AlertCond class lands.
+  and the Alert conditions picker; enforced server-side in
+  `db.source_data_range_ok` / `db.check_watched_nodes`
+  (`apply_config_diff` + `api_create_node`/`api_update_node` +
+  `api_set_node_settings`). A STRING source (Alert, TextInput) can no
+  longer be wired anywhere; an AlertCond can only watch a numeric node.
+  Remaining: widen `source_data_range_ok` if a finer per-consumer
+  contract is ever needed.
+- Alert `conditions` as a bespoke concept - DONE (record-list Setting
+  type): `Setting` gained `type='record-list'` (value = list[dict] +
+  nested `record_schema`), Alert.conditions is one instance of it,
+  edited by the generic `SettingRecordList` widget through the normal
+  fields/diff/setattr paths. `alertCondEditor.js`, the
+  `PUT /api/nodes/<id>/conditions` route, the `updateNodeConditions`
+  store action and the WiringNodeDialog Alert forks are gone. A 3rd/4th
+  `AlertCond` class is now a pure backend addition (`ALERT_COND_FACTORY`
+  + the `class` sub-field's `options`); per-class applicable data_range
+  can hang off a future `nodeFilterByClass` schema hint
+  (`recordListRows.nodeFilterFor` already reads it).
 - The SPA's other Pinia stores (`dashboard`, `settings`, `auth`,
   `users`, `notifications`) still hand-roll the fetch boilerplate that
   `store/apiRequest.js` now encapsulates for the wiring store - migrate
@@ -133,10 +142,13 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   system/location, coupled through bridge nodes; or two full-blown
   aquaPi systems sharing some or all of their bus traffic.
 - More `AlertCond` descendants: warn for hyper/sleepy activity (a
-  controller cycling too fast, or stuck on/off too long) - already has
-  commented-out stubs in `alert_nodes.py` (`AlertLongActive`/
-  `AlertLongInactive`, `now - _last_off/_last_on > limit`), never
-  implemented.
+  controller cycling too fast, or stuck on/off too long) - commented-out
+  stubs in `alert_nodes.py` (`AlertLongActive`/`AlertLongInactive`,
+  `now - _last_off/_last_on > limit`). Now a backend-only change: add the
+  class to `ALERT_COND_FACTORY`, add it to the conditions `class`
+  sub-field's `options`, and (if it applies to a different data_range,
+  e.g. BINARY-only) set `node_filter_by_class` on the `node_id`
+  sub-field. The record-list widget + validator pick it up automatically.
 - New `AuxNode` descendant computing a running standard deviation of
   received data, triggering when it leaves a defined range - a
   concrete approach for recommending filter cleaning based on reduced

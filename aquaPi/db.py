@@ -87,18 +87,15 @@ ALERT_COND_FACTORY: dict[str, type] = {
 }
 
 
-# --- node type metadata for the /config graph editor ---------------------
+# --- node type metadata for the /wiring graph editor -------------------
 #
 # Built from each creatable type's own get_settings_schema() (see
 # BusNode/BusListener in machineroom/msg_bus.py). 'receives' cardinality
 # ('none'/'single'/'multi') comes from get_receives_kind(), itself derived
 # from the class hierarchy - see BusListener._receives_kind - except for
-# Alert, whose 'conditions' (a set of objects: class name/node_id/limit/
-# duration, not a plain list of ids) can't be collected through the
-# generic receives picker at all: report 'none' for it instead of its
-# real runtime cardinality ('multi'), so the create/edit dialog hides the
-# receives picker and conditions are added afterward via the existing
-# PUT /api/nodes/<id>/conditions (AlertCondEditor on /settings).
+# Alert: it has no plain 'receives' list (reported 'none'), it watches
+# nodes via its 'conditions' - a 'record-list' settings field of
+# {class, node_id, limit, duration} records, edited like any other field.
 
 def get_node_type_schema() -> dict[str, dict[str, Any]]:
     """ For every creatable node type: its constructor/settings fields

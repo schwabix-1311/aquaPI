@@ -47,10 +47,13 @@ export function canConnect(source, target, nodeTypes) {
 		&& targetAcceptsReceives(target, nodeTypes)
 }
 
-// {id: node} map (or array) -> the nodes that may feed `target`
+// {id: node} map (or array) -> the nodes that may feed `target`,
+// sorted by display name (the pickers show them as "<name> (<type>)")
 export function connectableSources(target, allNodes, nodeTypes) {
 	const list = Array.isArray(allNodes) ? allNodes : Object.values(allNodes || {})
-	return list.filter(n => canConnect(n, target, nodeTypes))
+	return list
+		.filter(n => canConnect(n, target, nodeTypes))
+		.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
 }
 
 // vim: set noet ts=4 sw=4:

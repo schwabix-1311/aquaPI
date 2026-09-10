@@ -170,9 +170,12 @@ def api_nodes() -> Response:
 
     # an empty wiring (e.g. right after a fresh start, or if every
     # node failed to restore) is a valid state, not a server error -
-    # this used to answer with 500 whenever node_ids was empty
+    # this used to answer with 500 whenever node_ids was empty.
+    # Sorted by display name so every consumer (the /wiring & /parameters
+    # 'receives'/conditions pickers especially) gets a sensible order
+    # without each re-sorting.
     node_ids = [node.id for node in
-                sorted(bus.get_nodes(), key=lambda node: node.ROLE.value)]
+                sorted(bus.get_nodes(), key=lambda node: (node.name or node.id).lower())]
     body = json.dumps(node_ids)
     log.debug('API nodes: %s', body)
     return Response(status=HTTPStatus.OK, response=body, mimetype='application/json')

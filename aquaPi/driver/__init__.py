@@ -71,6 +71,13 @@ class IoRegistry(object):
     """
 
     _map: dict[str, IoPort] = {}
+    # names currently held *as a primary port* (name -> claim count). A
+    # dep bumps the target's .used but is NOT recorded here - that is how
+    # a shared bus (several DS1820 on one 1-Wire pin, several ADC channels
+    # on one I2C bus) stays allowed while a dual-use pin ('PWM 1' owns
+    # 'GPIO 19 out') is not: claiming a port is refused when one of its
+    # deps is somebody else's primary.
+    _primary_claims: dict[str, int] = {}
 
     @classmethod
     def get(cls) -> 'IoRegistry':
@@ -155,9 +162,21 @@ class IoRegistry(object):
             counts as free regardless of its current claim count.
         """
         mp = IoRegistry._map
+
+        def _free(key: str) -> bool:
+            io_port = mp[key]
+            if io_port.shareable:
+                return True
+            if io_port.used:
+                return False
+            # a port whose dep is somebody's primary (a dual-use pin) is
+            # not actually claimable even though its own .used is still 0
+            return not any(IoRegistry._primary_claims.get(dep)
+                           for dep in io_port.deps)
+
         return {key: mp[key] for key in mp
                 if mp[key].func in funcs
-                and (not in_use if mp[key].shareable else bool(mp[key].used) == in_use)}
+                and (not _free(key) if in_use else _free(key))}
 
     def driver_factory(self, port: str, drv_options: dict | None = None
                        ) -> Driver | None:
@@ -171,6 +190,16 @@ class IoRegistry(object):
         io_port = IoRegistry._map[port]
         if io_port.used and not io_port.shareable:
             raise DriverPortInuseError(port)
+        # a dep already held as somebody's primary means this port's pin
+        # is really taken (e.g. 'GPIO 19 out' claimed directly, now 'PWM
+        # 1' wants it as a dep) - .used on the primary alone wouldn't
+        # catch that ordering. Two primaries sharing a dep only as a dep
+        # (a bus) is fine and not recorded in _primary_claims.
+        for dep in io_port.deps:
+            dep_port = IoRegistry._map.get(dep)
+            if (IoRegistry._primary_claims.get(dep)
+                    and dep_port is not None and not dep_port.shareable):
+                raise DriverPortInuseError(dep)
 
         try:
             if drv_options:
@@ -178,6 +207,8 @@ class IoRegistry(object):
             driver = io_port.driver(io_port.cfg, io_port.func)
             # same as io_port.used += 1 - on immutable
             IoRegistry._map[port] = io_port._replace(used=io_port.used + 1)
+            IoRegistry._primary_claims[port] = \
+                IoRegistry._primary_claims.get(port, 0) + 1
 
             for dep in io_port.deps:
                 # same as IoRegistry._map[dep].used += 1
@@ -201,6 +232,11 @@ class IoRegistry(object):
         # drop the others' - for a non-shareable port used is always 1
         # here, so this is equivalent to the old reset-to-0
         IoRegistry._map[port] = io_port._replace(used=max(0, io_port.used - 1))
+        left = IoRegistry._primary_claims.get(port, 0) - 1
+        if left > 0:
+            IoRegistry._primary_claims[port] = left
+        else:
+            IoRegistry._primary_claims.pop(port, None)
 
         for dep in io_port.deps:
             # same as IoRegistry._map[dep].used -= 1

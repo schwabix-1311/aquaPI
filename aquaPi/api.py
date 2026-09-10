@@ -848,7 +848,8 @@ def api_config_apply() -> Response:
         # touched; if something still fails mid-apply, surface it with a
         # message instead of a bare 500
         log.exception('config apply failed after validation')
-        return jsonify(error=f'Applying the wiring failed: {ex}'), \
+        detail = ex.msg if isinstance(ex, DriverError) else str(ex)
+        return jsonify(error=f'Applying the wiring failed: {detail}'), \
             HTTPStatus.INTERNAL_SERVER_ERROR
 
     if result['id_map'] or diff.get('creates') or diff.get('updates') or diff.get('deletes'):

@@ -309,7 +309,7 @@ def test_apply_delete_source_keeps_listener_other_receives(client, users, bus, a
     resp = client.post('/api/config/apply', json={
         'creates': [{
             'temp_id': 'tmp-h', 'type': 'History', 'name': 'Verlauf',
-            'receives': ['wasser', 'heizen'], 'fields': {'capacity': 1000},
+            'receives': ['wasser', 'heizen'], 'fields': {'capacity': 24 * 60 * 60},
         }],
     })
     assert resp.status_code == HTTPStatus.OK
@@ -341,7 +341,7 @@ def test_apply_delete_source_frees_its_port_despite_stale_receives(client, users
             'fields': {'unit': '°C', 'port': port},
         }, {
             'temp_id': 'tmp-h', 'type': 'History', 'name': 'Verlauf2',
-            'receives': ['tmp-s'], 'fields': {'capacity': 1000},
+            'receives': ['tmp-s'], 'fields': {'capacity': 24 * 60 * 60},
         }],
     })
     assert resp.status_code == HTTPStatus.OK
@@ -554,7 +554,7 @@ def test_apply_rejects_string_source_wiring(client, users, bus, app):
     resp = client.post('/api/config/apply', json={
         'creates': [{
             'temp_id': 'tmp-h', 'type': 'History', 'name': 'Verlauf',
-            'receives': ['warnungen'], 'fields': {'capacity': 1000},
+            'receives': ['warnungen'], 'fields': {'capacity': 24 * 60 * 60},
         }],
     })
     assert resp.status_code == HTTPStatus.BAD_REQUEST
@@ -564,7 +564,7 @@ def test_apply_rejects_string_source_wiring(client, users, bus, app):
     resp = client.post('/api/config/apply', json={
         'creates': [{
             'temp_id': 'tmp-h2', 'type': 'History', 'name': 'Verlauf2',
-            'receives': ['wasser'], 'fields': {'capacity': 1000},
+            'receives': ['wasser'], 'fields': {'capacity': 24 * 60 * 60},
         }],
     })
     assert resp.status_code == HTTPStatus.OK

@@ -177,8 +177,10 @@ class TimeDbMemory(TimeDb):
                 # multiple values for same second, build average
                 series[-1] = (now, (series[-1][1] + value) / 2)
 
-            # purge expired data
-            while series[0][0] < now - self.capacity * 60 * 60:
+            # purge expired data (a capacity that rounds down to 0 h gives a
+            # deque(maxlen=0) that never actually holds the just-appended
+            # value, so guard the index)
+            while series and series[0][0] < now - self.capacity * 60 * 60:
                 series.popleft()
 
             log.debug('TimeDbMemory: append %s: %r @ %d, %d ent., %d Byte',

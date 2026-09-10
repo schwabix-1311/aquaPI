@@ -246,7 +246,7 @@ def test_create_node_string_source_returns_400(client, users):
     _login(client, 'admin1', 'adminPass123')
     resp = client.post('/api/nodes/', json={
         'type': 'History', 'name': 'Verlauf', 'receives': ['warnungen'],
-        'fields': {'capacity': 1000},
+        'fields': {'capacity': 24 * 60 * 60},
     })
     assert resp.status_code == HTTPStatus.BAD_REQUEST
     assert 'STRING' in resp.get_json()['error']

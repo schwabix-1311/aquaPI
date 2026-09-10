@@ -30,6 +30,21 @@ def io_registry():
     create_io_registry()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_timedb_store():
+    """ TimeDbMemory._store is a class-level dict keyed by node NAME and
+        never cleared - two tests that use the same History name would
+        otherwise share (and poison) each other's deque, e.g. one test's
+        tiny capacity leaves a deque(maxlen=0) that setdefault() then hands
+        to the next test. Wipe it around every test so distribution/order
+        (xdist) can't make the suite flaky.
+    """
+    from aquaPi.machineroom.hist_nodes import TimeDbMemory
+    TimeDbMemory._store.clear()
+    yield
+    TimeDbMemory._store.clear()
+
+
 @pytest.fixture
 def users_db_path(tmp_path):
     """ a fresh, temporary users.sqlite path for the current test only """

@@ -47,8 +47,14 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 	},
 
 	actions: {
-		async fetchNodeTypes() {
-			if (this.nodeTypesLoaded) {
+		// `force` re-fetches even when already cached - needed after any
+		// change that creates/deletes a node, because each type's 'port'
+		// field carries a live "free ports" option list
+		// (get_node_type_schema() -> get_port_schema() ->
+		// IoRegistry.get_ports_by_function(in_use=False)); without the
+		// refresh, a port freed by a delete stays hidden until a reload.
+		async fetchNodeTypes(force = false) {
+			if (this.nodeTypesLoaded && !force) {
 				return this.nodeTypes
 			}
 			const res = await apiRequest('get', '/api/node-types/')
@@ -110,6 +116,7 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 				+ encodeURIComponent(id) + '/insert?lang=' + encodeURIComponent(lang))
 			if (res.ok) {
 				await useDashboardStore().fetchNodes()
+				await this.fetchNodeTypes(true)   // node set changed -> free-port lists moved
 				return {ok: true, nodes: res.data}
 			}
 			return {ok: false, error: res.error}
@@ -151,6 +158,7 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 				'/api/config/snapshots/' + encodeURIComponent(name) + '/restore')
 			if (res.ok) {
 				await useDashboardStore().fetchNodes()
+				await this.fetchNodeTypes(true)   // whole bus replaced -> free-port lists moved
 				return {ok: true, nodes: res.data}
 			}
 			return {ok: false, error: res.error}
@@ -243,6 +251,11 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 			})
 			if (res.ok) {
 				await useDashboardStore().fetchNodes()
+				// a create/delete/port-edit moves hardware ports between
+				// free and in-use - refresh so the next "add node" dialog
+				// offers the right port list (each type's 'port' field
+				// carries it)
+				await this.fetchNodeTypes(true)
 				this.discardDraft()
 				return {ok: true, idMap: res.data && res.data.id_map}
 			}

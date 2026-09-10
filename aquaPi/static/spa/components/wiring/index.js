@@ -181,7 +181,9 @@ const AquapiWiring = {
 			this.loading = true
 			await Promise.all([
 				this.dashboardStore.fetchNodes(),
-				this.wiringStore.fetchNodeTypes(),
+				// force: the 'port' field's free-port list may have changed
+				// since last visit (e.g. a port freed on /parameters)
+				this.wiringStore.fetchNodeTypes(true),
 			])
 			this.wiringStore.initDraft()
 			// nobody has ever positioned anything yet (fresh/default wiring) -

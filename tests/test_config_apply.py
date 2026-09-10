@@ -397,6 +397,109 @@ def test_apply_update_keeps_nodes_own_in_use_port(client, users, bus, app):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
+def test_apply_rejects_two_nodes_claiming_the_same_port(client, users, bus, app):
+    """ each 'port' select only offers *free* ports, so two draft nodes can
+        independently pick the same one. That must be a clean 400 in the
+        validation phase - not a DriverPortInuseError 500 half-way through
+        applying the diff.
+    """
+    _login(client, 'admin1', 'adminPass123')
+    port = 'ADC #1 in 0'
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [
+            {'temp_id': 'a', 'type': 'AnalogInput', 'name': 'SensorA',
+             'fields': {'unit': '°C', 'port': port}},
+            {'temp_id': 'b', 'type': 'AnalogInput', 'name': 'SensorB',
+             'fields': {'unit': '°C', 'port': port}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert port in resp.get_json()['error']
+    assert bus.get_node('sensora') is None and bus.get_node('sensorb') is None
+    assert IoRegistry._map[port].used == 0  # nothing was applied
+
+    # the same collision between an existing node and a new one
+    client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'AnalogInput', 'name': 'SensorA',
+                     'fields': {'unit': '°C', 'port': port}}],
+    })
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'c', 'type': 'AnalogInput', 'name': 'SensorC',
+                     'fields': {'unit': '°C', 'port': port}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_apply_rejects_dual_use_pin_conflict(client, users, bus, app):
+    """ a dual-use pin: 'PWM 1' also reserves 'GPIO 19 in/out' (its deps),
+        so a second node taking 'GPIO 19 out' directly collides - even
+        though the two port *names* differ.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [
+            {'temp_id': 'p', 'type': 'AnalogDevice', 'name': 'Dimmer',
+             'receives': ['heizen'], 'fields': {'port': 'PWM 1'}},
+            {'temp_id': 'g', 'type': 'SwitchDevice', 'name': 'Relais',
+             'receives': ['heizen'], 'fields': {'port': 'GPIO 19 out'}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert 'GPIO 19 out' in resp.get_json()['error']
+    assert bus.get_node('dimmer') is None and bus.get_node('relais') is None
+
+
+def test_apply_allows_shared_bus_deps(client, users, bus, app):
+    """ two 'ADC #1 in N' channels share the same I2C-bus pins as deps -
+        that is NOT a conflict (IoRegistry refcounts shared deps).
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [
+            {'temp_id': 'a', 'type': 'AnalogInput', 'name': 'SensorA',
+             'fields': {'unit': '°C', 'port': 'ADC #1 in 0'}},
+            {'temp_id': 'b', 'type': 'AnalogInput', 'name': 'SensorB',
+             'fields': {'unit': '°C', 'port': 'ADC #1 in 1'}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    assert bus.get_node('sensora').port == 'ADC #1 in 0'
+    assert bus.get_node('sensorb').port == 'ADC #1 in 1'
+
+
+def test_apply_swaps_two_nodes_ports(client, users, bus, app):
+    """ two updates that swap ports A<->B have a valid end state; the apply
+        phase releases both before reclaiming so it doesn't transiently
+        double-claim and 500.
+    """
+    _login(client, 'admin1', 'adminPass123')
+    pa, pb = 'ADC #1 in 0', 'ADC #1 in 1'
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [
+            {'temp_id': 'a', 'type': 'AnalogInput', 'name': 'SensorA',
+             'fields': {'unit': '°C', 'port': pa}},
+            {'temp_id': 'b', 'type': 'AnalogInput', 'name': 'SensorB',
+             'fields': {'unit': '°C', 'port': pb}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    ids = resp.get_json()['id_map']
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [
+            {'id': ids['a'], 'fields': {'unit': '°C', 'port': pb}},
+            {'id': ids['b'], 'fields': {'unit': '°C', 'port': pa}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    assert bus.get_node(ids['a']).port == pb
+    assert bus.get_node(ids['b']).port == pa
+
+
 def test_apply_rejects_string_source_wiring(client, users, bus, app):
     """ a STRING-typed source (the Alert 'warnungen') cannot be wired as
         a 'receives' input - every consumer treats the value numerically

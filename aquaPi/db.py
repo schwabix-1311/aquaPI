@@ -453,6 +453,40 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             raise ConfigDiffError(f'Duplicate update for node id: {upd_id!r}', upd)
         updates_by_id[upd_id] = upd
 
+    # ports this same diff releases - a deleted node's port, or the old
+    # port of an update that reassigns/clears it. A create or another
+    # update may legitimately take one of these even though it still
+    # reads as "in use" in get_node_type_schema()'s free-ports list.
+    freed_ports: set[str] = set()
+    for del_id in deleted_ids:
+        freed_ports.add(getattr(live_nodes[del_id], 'port', '') or '')
+    for upd_id, upd in updates_by_id.items():
+        raw = upd.get('fields')
+        if isinstance(raw, dict) and 'port' in raw:
+            old_port = getattr(live_nodes[upd_id], 'port', '') or ''
+            if old_port and raw['port'] != old_port:
+                freed_ports.add(old_port)
+    freed_ports.discard('')
+
+    def _schema_allowing_ports(schema_fields: list[dict[str, Any]]
+                               ) -> list[dict[str, Any]]:
+        """ add `freed_ports` to the 'port' select's options so a field
+            validated against get_node_type_schema() accepts a port this
+            diff frees elsewhere. No-op when nothing is freed.
+        """
+        if not freed_ports:
+            return schema_fields
+        out = []
+        for field in schema_fields:
+            attrs = field.get('attrs', {})
+            opts = attrs.get('options')
+            if field['key'] == 'port' and isinstance(opts, list):
+                missing = [p for p in freed_ports if p not in opts]
+                if missing:
+                    field = {**field, 'attrs': {**attrs, 'options': sorted(opts + missing)}}
+            out.append(field)
+        return out
+
     # --- creates: type/name/collision/field validation. build_node()
     #     only constructs the node object, it never plugin()s it onto
     #     the bus, so this has no side effect on the live bus yet.
@@ -492,7 +526,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         if not isinstance(raw_fields, dict):
             raise ConfigDiffError('fields must be a JSON object', entry)
         try:
-            fields = validate_fields(schema['fields'], raw_fields, require_all=True)
+            fields = validate_fields(_schema_allowing_ports(schema['fields']),
+                                     raw_fields, require_all=True)
         except (ValueError, KeyError) as ex:
             raise ConfigDiffError(str(ex), entry) from ex
 
@@ -577,7 +612,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             try:
                 upd['_fields'] = convert_duration_fields(
                     type(node), validate_fields(
-                        merge_live_select_options(node, schema['fields']),
+                        merge_live_select_options(
+                            node, _schema_allowing_ports(schema['fields'])),
                         raw_fields, require_all=False))
             except ValueError as ex:
                 raise ConfigDiffError(str(ex), upd) from ex
@@ -615,12 +651,77 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         if _would_create_cycle_virtual(virtual_receives, node_id, receives):
             raise ConfigDiffError('This wiring would create a cycle', {'id': node_id})
 
+    # no two nodes may hold the same exclusive hardware port in the
+    # resulting config. Each 'port' select only offers ports the *live*
+    # IoRegistry reports free (plus, for an update, the node's own, and any
+    # port this diff frees - see merge_live_select_options /
+    # _schema_allowing_ports), so within one unsaved draft two nodes can
+    # still pick the same free port. A dual-use pin counts too: claiming
+    # 'PWM 1' also reserves its .deps ('GPIO 19 in/out'), so a second node
+    # taking 'GPIO 19 out' directly is a conflict - but *only* when one
+    # node's primary port is another's primary-or-dep. Sharing deps alone
+    # is fine (e.g. every 'ADC #1 in N' channel sits on the same I2C bus
+    # pins); IoRegistry refcounts those and driver_factory() never rejects
+    # on a dep. Without this check a collision only surfaces as a
+    # DriverPortInuseError - or a silent double-claim - deep in the apply
+    # phase below.
+    from .driver import IoRegistry
+    try:
+        io_map = IoRegistry.get()._map
+    except Exception:
+        io_map = {}
+
+    def _reserved_by(port: str) -> set[str]:
+        """ the IoRegistry names a claim on `port` occupies: the port plus
+            its direct deps (deps are plain GPIO pins, deps=[] - one level
+            suffices). Empty for a shareable port (Email/Telegram). """
+        io_port = io_map.get(port)
+        if io_port is not None and getattr(io_port, 'shareable', False):
+            return set()
+        return {port, *(getattr(io_port, 'deps', None) or [])}
+
+    # (owner_id, primary_port, reserved_names) for every node this diff
+    # creates or re-ports - an untouched live node's ports are already
+    # reserved in IoRegistry, so the free-ports list the diff validated
+    # against can't have offered anything overlapping them.
+    port_claims: list[tuple[str, str, set[str]]] = []
+    for upd_id, upd in updates_by_id.items():
+        if 'port' in upd.get('_fields', {}) and upd['_fields']['port']:
+            port_claims.append((upd_id, upd['_fields']['port'],
+                                _reserved_by(upd['_fields']['port'])))
+    for prep in prepared_creates:
+        port = prep['fields'].get('port') or ''
+        if port:
+            port_claims.append((prep['node_id'], port, _reserved_by(port)))
+
+    for i, (oid_a, port_a, reserved_a) in enumerate(port_claims):
+        for oid_b, port_b, reserved_b in port_claims[i + 1:]:
+            if oid_a == oid_b:
+                continue
+            if port_a == port_b:
+                raise ConfigDiffError(
+                    f'Port {port_a!r} is assigned to more than one node',
+                    {'id': oid_b})
+            if port_a in reserved_b or port_b in reserved_a:
+                raise ConfigDiffError(
+                    f'Ports {port_a!r} and {port_b!r} share the same pin',
+                    {'id': oid_b})
+
     # --- everything about this diff has been validated: apply it for
     #     real, deletes first, then updates, then creates ---
     for del_id in deleted_ids:
         node = live_nodes[del_id]
         prune_dangling_references(bus, del_id)
         node.pullout()
+
+    # release every port an update reassigns before any update claims a
+    # new one, so a straight A<->B port swap (valid end state) doesn't
+    # transiently double-claim a port and raise DriverPortInuseError
+    for upd_id, upd in updates_by_id.items():
+        node = live_nodes[upd_id]
+        new_port = upd.get('_fields', {}).get('port')
+        if new_port is not None and new_port != (getattr(node, 'port', '') or ''):
+            node.port = ''
 
     for upd_id, upd in updates_by_id.items():
         node = live_nodes[upd_id]

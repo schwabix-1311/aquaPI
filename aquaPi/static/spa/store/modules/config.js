@@ -432,6 +432,29 @@ export const useConfigStore = Pinia.defineStore('config', {
 			if (!existing) {
 				return
 			}
+			// drop the now-dangling wire into this node from every surviving
+			// node, mirroring the backend's prune_dangling_references(): a
+			// receives entry pointing at a deleted node is not an error, it
+			// just goes away with the node. Without this the save diff can
+			// still carry the deleted id in a listener's receives (that
+			// listener being dirty for an unrelated reason, e.g. an
+			// auto-layout pos change), which the backend rejects as an
+			// "Unknown receives node id" - aborting the whole atomic diff
+			// and leaving the deleted node's hardware port held. Alert nodes
+			// are skipped: their receives derive from conditions (edited via
+			// a dedicated endpoint), the backend prunes those itself, and a
+			// plain receives edit for an Alert is rejected outright.
+			Object.values(this.draft).forEach(other => {
+				if (other.id === nodeId || other._deleted || other.role === 'ALERTS') {
+					return
+				}
+				if ((other.receives || []).includes(nodeId)) {
+					this.draftUpdateNode({
+						nodeId: other.id,
+						changes: {receives: other.receives.filter(id => id !== nodeId)},
+					})
+				}
+			})
 			if (existing._new) {
 				this.removeDraftNode(nodeId)
 			} else {

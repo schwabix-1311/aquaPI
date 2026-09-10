@@ -444,16 +444,30 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             return ref
         raise ConfigDiffError(f'Unknown receives node id: {ref!r}', err_entry)
 
+    # a 'receives' entry that names a node being deleted in this same diff
+    # is not an error - it's just a wire that goes away with the node. The
+    # live bus already tolerates dangling receives (get_receives() skips
+    # missing nodes) and the apply phase below unconditionally strips the
+    # deleted id from every surviving node via prune_dangling_references();
+    # the validation phase has to be consistent with that, or a stale
+    # receives id left in an update payload (e.g. the /wiring editor
+    # marking a listener dirty for an unrelated pos change while its
+    # receives list still lists the just-deleted source) would abort the
+    # whole atomic diff - which then also leaves the deleted node's
+    # hardware port held, since node.pullout() never runs.
+    def _drop_deleted(refs: list[str]) -> list[str]:
+        return [r for r in refs if r not in deleted_ids]
+
     # --- resolve receives (temp-id remap) + cardinality checks, and
     #     build the virtual, post-diff {id: receives} wiring graph
     #     used for cycle detection below ---
     virtual_receives: dict[str, list[str]] = {
-        node_id: list(node.receives)
+        node_id: _drop_deleted(list(node.receives))
         for node_id, node in live_nodes.items() if node_id in remaining_ids
     }
 
     for prep in prepared_creates:
-        resolved = [resolve_ref(r, prep['entry']) for r in prep['raw_receives']]
+        resolved = [resolve_ref(r, prep['entry']) for r in _drop_deleted(prep['raw_receives'])]
         _check_receives_cardinality(prep['schema'], resolved, prep['entry'])
         prep['resolved_receives'] = resolved
         virtual_receives[prep['node_id']] = resolved
@@ -470,7 +484,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             if not schema:
                 raise ConfigDiffError(f'{type(node).__name__} does not support changing receives',
                                       upd)
-            resolved = [resolve_ref(r, upd) for r in raw_receives]
+            resolved = [resolve_ref(r, upd) for r in _drop_deleted(raw_receives)]
             _check_receives_cardinality(schema, resolved, upd)
             upd['_resolved_receives'] = resolved
             virtual_receives[upd_id] = resolved

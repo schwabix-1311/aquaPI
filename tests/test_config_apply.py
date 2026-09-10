@@ -12,7 +12,7 @@ from flask import Flask
 
 import aquaPi
 from aquaPi import auth, db, api
-from aquaPi.driver import create_io_registry
+from aquaPi.driver import create_io_registry, IoRegistry
 from aquaPi.machineroom.msg_bus import MsgBus
 from aquaPi.machineroom.in_nodes import AnalogInput
 from aquaPi.machineroom.out_nodes import SwitchDevice
@@ -232,3 +232,82 @@ def test_apply_creates_alert_node(client, users, bus, app):
     assert new_node is not None
     assert new_node.conditions == set()
     assert new_node.receives == []
+
+
+def test_apply_delete_source_with_stale_receives_in_listener_update(client, users, bus, app):
+    """ regression: deleting a node while a surviving listener's update
+        payload still lists the just-deleted id in its 'receives' (the
+        /wiring editor marks that listener dirty for an unrelated pos
+        change) must NOT abort the whole diff - the dangling ref is
+        dropped, exactly as prune_dangling_references() does on apply.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'deletes': ['wasser'],
+        'updates': [{'id': 'heizen', 'pos_x': 42, 'receives': ['wasser']}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    assert bus.get_node('wasser') is None
+    assert bus.get_node('heizen').receives == []
+    assert bus.get_node('heizen').pos_x == 42
+    assert app.extensions['machineroom'].saved == 1
+
+
+def test_apply_delete_source_keeps_listener_other_receives(client, users, bus, app):
+    """ a multi-input listener that also names the deleted id in its
+        update payload keeps its *other*, still-valid wires.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    # a History listening to both 'wasser' and 'heizen'
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-h', 'type': 'History', 'name': 'Verlauf',
+            'receives': ['wasser', 'heizen'], 'fields': {'capacity': 1000},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    hist_id = resp.get_json()['id_map']['tmp-h']
+    assert set(bus.get_node(hist_id).receives) == {'wasser', 'heizen'}
+
+    resp = client.post('/api/config/apply', json={
+        'deletes': ['wasser'],
+        'updates': [{'id': hist_id, 'pos_x': 7, 'receives': ['wasser', 'heizen']}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    assert bus.get_node('wasser') is None
+    assert bus.get_node(hist_id).receives == ['heizen']
+
+
+def test_apply_delete_source_frees_its_port_despite_stale_receives(client, users, bus, app):
+    """ symptom 1: because the diff is atomic, a validation abort (from
+        the stale-receives case above) also meant node.pullout() never
+        ran and the deleted node's hardware port stayed held. With the
+        dangling ref tolerated, the delete goes through and the port is
+        released.
+    """
+    _login(client, 'admin1', 'adminPass123')
+    port = 'ADC #1 in 0'
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-s', 'type': 'AnalogInput', 'name': 'Becken',
+            'fields': {'unit': '°C', 'port': port},
+        }, {
+            'temp_id': 'tmp-h', 'type': 'History', 'name': 'Verlauf2',
+            'receives': ['tmp-s'], 'fields': {'capacity': 1000},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    id_map = resp.get_json()['id_map']
+    sensor_id, hist_id = id_map['tmp-s'], id_map['tmp-h']
+    assert IoRegistry._map[port].used == 1
+
+    resp = client.post('/api/config/apply', json={
+        'deletes': [sensor_id],
+        'updates': [{'id': hist_id, 'pos_x': 5, 'receives': [sensor_id]}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    assert bus.get_node(sensor_id) is None
+    assert IoRegistry._map[port].used == 0

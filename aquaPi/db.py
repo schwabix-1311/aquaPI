@@ -34,7 +34,7 @@ from typing import Any
 
 from werkzeug.security import generate_password_hash
 
-from .machineroom.msg_bus import MsgBus, BusNode, BusRole
+from .machineroom.msg_bus import MsgBus, BusNode, BusRole, DataRange
 from .machineroom.ctrl_nodes import (MaximumCtrl, MinimumCtrl, PidCtrl,
                                      SunCtrl, FadeCtrl)
 from .passphrase import generate_aquatic_passphrase, generate_url_token
@@ -113,9 +113,29 @@ def get_node_type_schema() -> dict[str, dict[str, Any]]:
         schema[type_name] = {
             'role': cls.ROLE.name,
             'receives': 'none' if cls.ROLE == BusRole.ALERTS else cls.get_receives_kind(),
+            # the class-level output data type - a not-yet-saved node in
+            # the /wiring editor has no live data_range yet, so the
+            # connection-type filter (wiringConnect.js) falls back to this
+            'data_range': cls.data_range.name,
             'fields': [s.to_dict() for s in cls.get_settings_schema() if s.key is not None],
         }
     return schema
+
+
+def source_data_range_ok(source_range: str) -> bool:
+    """ True if a node whose output data type is `source_range` (a
+        DataRange member name) may be wired as a 'receives' source.
+
+        The one incompatibility today is a STRING source (Alert,
+        TextInput): every consumer either compares the value numerically
+        (Ctrl setpoints, AlertCond limits, Aux math) or stores it in a
+        numeric column (History) - none handles a string, and wiring one
+        in used to crash the app on the next restart. Keyed on
+        data_range, not node type or role, so a new node variant needs
+        no change here; widen this when a consumer that genuinely
+        accepts STRING appears.
+    """
+    return source_range != DataRange.STRING.name
 
 
 def convert_duration_fields(cls: type[BusNode], fields: dict[str, Any]) -> dict[str, Any]:
@@ -292,10 +312,6 @@ class ConfigDiffError(ValueError):
         self.entry = entry
 
 
-# TODO(config-receives-type-filtering): only cardinality is checked here -
-# nothing validates the resolved sources' data_range compatibility (e.g. a
-# STRING-typed Alert can be wired into a History, which can't store it).
-# See .junie/plans/config-receives-type-filtering.md
 def _check_receives_cardinality(schema: dict[str, Any], resolved: list[str],
                                 entry: dict[str, Any]) -> None:
     if schema['receives'] == 'none' and resolved:
@@ -507,6 +523,24 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                     upd['_' + key] = float(upd[key])
                 except (TypeError, ValueError):
                     raise ConfigDiffError(f'{key} must be a number', upd)
+
+    # data_range compatibility of every resolved source (defense in depth
+    # - the /wiring picker already hides these, see wiringConnect.js). A
+    # source's output type is its class-level data_range, looked up via
+    # NODE_TYPE_SCHEMA by type name - same for an existing node and one
+    # created in this same diff.
+    type_by_id: dict[str, str] = {
+        node_id: type(node).__name__ for node_id, node in live_nodes.items()
+    }
+    for prep in prepared_creates:
+        type_by_id[prep['node_id']] = prep['entry']['type']
+    for node_id, receives in virtual_receives.items():
+        for src_id in receives:
+            src_schema = node_type_schema.get(type_by_id.get(src_id, ''))
+            if src_schema and not source_data_range_ok(src_schema['data_range']):
+                raise ConfigDiffError(
+                    f'{src_id!r} produces {src_schema["data_range"]} data, '
+                    'which cannot be wired as an input', {'id': node_id})
 
     for node_id, receives in virtual_receives.items():
         if _would_create_cycle_virtual(virtual_receives, node_id, receives):

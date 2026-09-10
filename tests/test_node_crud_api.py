@@ -216,6 +216,27 @@ def test_create_node_unknown_receives_returns_400(client, users):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
+def test_create_node_string_source_returns_400(client, users):
+    # the Alert 'warnungen' is STRING-typed - cannot feed a numeric
+    # consumer (POST path)
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.post('/api/nodes/', json={
+        'type': 'History', 'name': 'Verlauf', 'receives': ['warnungen'],
+        'fields': {'capacity': 1000},
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert 'STRING' in resp.get_json()['error']
+
+
+def test_update_node_string_source_returns_400(client, users, bus):
+    # PUT path: wiring the Alert as a MinimumCtrl's source is rejected,
+    # the ctrl keeps its existing wiring
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.put('/api/nodes/heizen', json={'receives': ['warnungen']})
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert bus.get_node('heizen').receives == ['wasser']
+
+
 def test_create_node_too_many_receives_for_single_returns_400(client, users):
     _login(client, 'admin1', 'adminPass123')
     resp = client.post('/api/nodes/', json={

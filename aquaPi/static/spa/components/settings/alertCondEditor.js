@@ -2,6 +2,7 @@ import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useWiringStore} from '../../store/modules/wiring.js'
 import {useUsersStore} from '../../store/modules/users.js'
+import {isNumericSource} from '../wiring/wiringConnect.js'
 
 // Shared between /settings (inline in NodeSettingsCard) and /config
 // (inside WiringNodeDialog) - the only editor for an Alert node's
@@ -113,8 +114,12 @@ const AlertCondEditor = {
 			return ALERT_COND_CLASSES.map(cls => ({title: this.$t('misc.alertConds.' + cls), value: cls}))
 		},
 		nodeItems: function() {
+			// AlertAbove/AlertBelow compare the watched value as a float,
+			// so only offer nodes that produce a plain number (see
+			// wiringConnect.js's isNumericSource) - never a STRING source
+			// (Alert, TextInput) or an unresolved one.
 			return Object.values(this.dashboardStore.nodes)
-				.filter(n => n.id !== this.node.id)
+				.filter(n => n.id !== this.node.id && isNumericSource(n, this.wiringStore.nodeTypes))
 				.map(n => ({title: n.name + ' (' + n.type + ')', value: n.id}))
 		},
 		normalizedRows: function() {

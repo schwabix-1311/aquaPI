@@ -4,6 +4,7 @@ import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useWiringStore} from '../../store/modules/wiring.js'
 import {useUsersStore} from '../../store/modules/users.js'
 import {isHistOrAlert, cardTitle, ancestorsForward, descendants, dedupeFanIn, branchAnchor, realParents} from './chains.js'
+import {connectableSources} from '../wiring/wiringConnect.js'
 import './alertCondEditor.js'
 import './escalationEditor.js'
 
@@ -746,8 +747,7 @@ const NodeReceivesEditor = {
 			return this.usersStore.isAdmin
 		},
 		receivesItems: function() {
-			return Object.values(this.dashboardStore.nodes)
-				.filter(n => n.id !== this.node.id)
+			return connectableSources(this.node, this.dashboardStore.nodes, this.wiringStore.nodeTypes)
 				.map(n => ({title: n.name + ' (' + n.type + ')', value: n.id}))
 		},
 		pseudoSetting: function() {

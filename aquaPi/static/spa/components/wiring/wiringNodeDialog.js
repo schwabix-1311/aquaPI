@@ -1,5 +1,6 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useWiringStore} from '../../store/modules/wiring.js'
+import {connectableSources} from './wiringConnect.js'
 import '../settings/alertCondEditor.js'
 // side effect: registers SettingNumber/SettingSlider/SettingDuration/... -
 // db.py's get_node_type_schema() returns the same Setting.to_dict() shape
@@ -182,14 +183,14 @@ const WiringNodeDialog = {
 		isCreatingAlert: function() {
 			return !this.editNode && this.form.type === 'Alert'
 		},
-		// TODO(config-receives-type-filtering): lists every other node
-		// unconditionally - doesn't filter by data_range compatibility
-		// (e.g. History can't handle a STRING source). See
-		// .junie/plans/config-receives-type-filtering.md
+		// only nodes that may actually feed this one (see wiringConnect.js):
+		// a data producer that isn't STRING-typed or a History. The target
+		// is the node being edited, or - while creating - a stand-in with
+		// just the type/role canConnect() needs.
 		receivesItems: function() {
-			const selfId = this.editNode ? this.editNode.id : null
-			return this.nodes
-				.filter(n => n.id !== selfId)
+			const target = this.editNode
+				|| {id: null, type: this.form.type, role: this.schema.role}
+			return connectableSources(target, this.nodes, this.nodeTypes)
 				.map(n => ({title: n.name + ' (' + n.type + ')', value: n.id, text: n.name + ' (' + n.type + ')'}))
 		},
 	},

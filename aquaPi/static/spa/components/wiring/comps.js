@@ -6,6 +6,7 @@
 
 import {registerGlobalComponent} from '../app/registry.js'
 import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './constants.js'
+import {targetAcceptsReceives, isUsableSource} from './wiringConnect.js'
 import './wiringNodeDialog.js'
 import './wiringTemplatesDialog.js'
 
@@ -31,46 +32,18 @@ const ROLE_COLORS = {
 	ALERTS: 'red',
 }
 
-// Which roles may act as a connection's SOURCE (i.e. show a draggable
-// output port, and be a valid drop target when dragging FROM another
-// node's input port). Checked against each role's actual runtime
-// behavior, not just what the live topology happens to use today:
-// - IN_ENDP/CTRL/AUX: their whole purpose is producing new data other
-//   nodes subscribe to - always sourceable.
-// - OUT_ENDP (output devices): SwitchDevice/SlowPwmDevice/AnalogDevice
-//   all genuinely self.post(MsgData(...)) their real, changing actuated
-//   value (out_nodes.py) - real data (e.g. History graphing what a
-//   device actually did, distinct from what its controller commanded)
-//   - sourceable.
-// - HISTORY: posts a hardcoded constant 0 on every message
-//   (hist_nodes.py, "just anything for MsgHello") - a keep-alive, not
-//   real data. Nothing downstream could meaningfully use it - excluded.
-// - ALERTS: does post real content (the joined alert-message string),
-//   but it's STRING-typed and no current consumer handles that safely -
-//   History would crash on it, AlertCond's numeric comparison would
-//   TypeError - this is exactly the still-deferred
-//   wiring-receives-type-filtering gap, so excluded here too rather
-//   than opening a new instance of the same problem.
-// Enforced at both ends: hasOutput below hides the affordance for a
-// forward (output-port-initiated) drag, and
-// AquapiWiring.isValidConnection (index.js) independently re-checks the
-// SOURCE role too, since a reverse (input-port-initiated) drag can
-// hover any card regardless of whether that card shows its own output
-// dot.
-const SOURCEABLE_ROLES = ['IN_ENDP', 'CTRL', 'AUX', 'OUT_ENDP']
-
-// Shared by WiringConnections, which owns rendering AND hit-testing for
-// both port kinds (see below - ports live in the SVG overlay, not on
-// the card itself, specifically so they can paint above connection
-// lines; a div nested inside WiringNodeBox never could, since the card
-// establishes its own stacking context that can't out-rank a sibling
-// one no matter its own z-index).
+// Which port dots a card shows. Both come straight from wiringConnect.js
+// (data-type rules, not a role whitelist) so the affordance and the
+// drop-validity check in index.js can never disagree:
+//  - input dot  = the card can receive wires (targetAcceptsReceives)
+//  - output dot = the card produces usable data (isUsableSource):
+//    everything except a History (constant keep-alive) and a STRING
+//    source (Alert, TextInput).
 function nodeHasInputPort(node, nodeTypes) {
-	const schema = nodeTypes[node.type]
-	return !schema || schema.receives !== 'none'
+	return targetAcceptsReceives(node, nodeTypes)
 }
-function nodeHasOutputPort(node) {
-	return SOURCEABLE_ROLES.includes(node.role)
+function nodeHasOutputPort(node, nodeTypes) {
+	return isUsableSource(node, nodeTypes)
 }
 
 const WiringNodeBox = {
@@ -296,7 +269,7 @@ const WiringConnections = {
 				if (nodeHasInputPort(node, this.nodeTypes)) {
 					ports.push({node, kind: 'input', x: (node.pos_x || 0), y})
 				}
-				if (nodeHasOutputPort(node)) {
+				if (nodeHasOutputPort(node, this.nodeTypes)) {
 					ports.push({node, kind: 'output', x: (node.pos_x || 0) + NODE_BOX_WIDTH, y})
 				}
 			})
@@ -363,6 +336,6 @@ const WiringConnections = {
 }
 registerGlobalComponent('WiringConnections', WiringConnections)
 
-export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT, SOURCEABLE_ROLES}
+export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT}
 
 // vim: set noet ts=4 sw=4:

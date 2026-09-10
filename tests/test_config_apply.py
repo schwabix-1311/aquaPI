@@ -311,3 +311,37 @@ def test_apply_delete_source_frees_its_port_despite_stale_receives(client, users
     assert resp.status_code == HTTPStatus.OK
     assert bus.get_node(sensor_id) is None
     assert IoRegistry._map[port].used == 0
+
+
+def test_apply_rejects_string_source_wiring(client, users, bus, app):
+    """ a STRING-typed source (the Alert 'warnungen') cannot be wired as
+        a 'receives' input - every consumer treats the value numerically
+        or stores it in a numeric column. Rejected for an update...
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'heizen', 'receives': ['warnungen']}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert 'STRING' in resp.get_json()['error']
+    assert bus.get_node('heizen').receives == ['wasser']
+
+    # ...and for a create
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-h', 'type': 'History', 'name': 'Verlauf',
+            'receives': ['warnungen'], 'fields': {'capacity': 1000},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert bus.get_node('verlauf') is None
+
+    # a normal numeric source still wires fine
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-h2', 'type': 'History', 'name': 'Verlauf2',
+            'receives': ['wasser'], 'fields': {'capacity': 1000},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.OK

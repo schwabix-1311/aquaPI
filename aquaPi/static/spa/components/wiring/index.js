@@ -1,5 +1,5 @@
 import './comps.js'
-import {SOURCEABLE_ROLES} from './comps.js'
+import {canConnect} from './wiringConnect.js'
 import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './constants.js'
 import {computeLayout} from './wiringLayout.js'
 import {registerGlobalComponent} from '../app/registry.js'
@@ -327,16 +327,13 @@ const AquapiWiring = {
 			document.addEventListener('pointercancel', onUp)
 		},
 
-		// validity only depends on the receiving end: for an output-drag
-		// that's whatever's hovered, for an input-drag it's the fixed
-		// drag origin itself (already guaranteed valid - hasInput only
-		// renders that port when receives !== 'none' in the first place)
+		// a drag resolves to (source, target) by which port it started
+		// from; canConnect() is the single rule both port dots and this
+		// drop check go through
 		isValidConnection(dragOriginNode, port, hoverNode) {
 			const source = port === 'output' ? dragOriginNode : hoverNode
-			const receiver = port === 'output' ? hoverNode : dragOriginNode
-			if (!SOURCEABLE_ROLES.includes(source.role)) return false
-			const schema = this.nodeTypes[receiver.type]
-			return !!schema && schema.receives !== 'none' && receiver.role !== 'ALERTS'
+			const target = port === 'output' ? hoverNode : dragOriginNode
+			return canConnect(source, target, this.nodeTypes)
 		},
 
 		wireConnection(source, target) {

@@ -1,7 +1,11 @@
 import {useDashboardStore} from './dashboard.js';
 import {apiRequest} from '../apiRequest.js';
+import {wiringDiff} from '../../components/wiring/wiringDiff.js';
 import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 import i18n from '../../i18n/index.js';
+
+// plain deep copy - node objects are JSON straight from the REST API
+const clone = (obj) => JSON.parse(JSON.stringify(obj))
 
 // shared "couldn't load X" toast for the read-only fetchers below
 // (mutating actions return {ok, error} and let the caller decide instead)
@@ -20,7 +24,13 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 		nodeTypesLoaded: false,
 		templates: [],
 		snapshots: [],
+		// draft = the working {id: node} map being edited; draftBaseline =
+		// an untouched snapshot of what the server had when the draft was
+		// opened. The diff between the two IS the pending change set - no
+		// per-node _new/_dirty/_deleted bookkeeping. Both null when no
+		// draft is open.
 		draft: null,
+		draftBaseline: null,
 		draftTempCounter: 0,
 	}),
 
@@ -29,16 +39,10 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 			return state.draft !== null
 		},
 		draftNodes: (state) => {
-			if (!state.draft) {
-				return []
-			}
-			return Object.values(state.draft).filter(node => !node._deleted)
+			return state.draft ? Object.values(state.draft) : []
 		},
 		draftDirty: (state) => {
-			if (!state.draft) {
-				return false
-			}
-			return Object.values(state.draft).some(node => node._new || node._dirty || node._deleted)
+			return wiringDiff(state.draftBaseline, state.draft, state.nodeTypes).hasChanges
 		},
 	},
 
@@ -77,17 +81,20 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 			useDashboardStore().setNode(body)
 			// This bypasses the /wiring draft entirely (Alert has no
 			// NODE_TYPE_SCHEMA entry, so its conditions/receives are
-			// never part of the create/update diff) - if a draft
-			// happens to be active, patch just this one node's stale
-			// copy in place so the canvas/edit dialog reflect the
-			// change immediately, without discarding any of the
-			// draft's OTHER unrelated pending edits the way a full
-			// initDraft() refetch would.
+			// never part of the create/update diff) - if a draft happens
+			// to be active, patch this one node's stale copy in BOTH the
+			// working map and the baseline, so the canvas/edit dialog
+			// reflect the (already persisted) change immediately without
+			// it showing up as a pending diff or disturbing the draft's
+			// other unrelated edits.
+			const patch = {conditions: body.conditions, receives: body.receives}
 			if (this.draft && this.draft[nodeId]) {
-				this.setDraftNode(Object.assign({}, this.draft[nodeId], {
-					conditions: body.conditions,
-					receives: body.receives,
-				}))
+				this.setDraftNode(Object.assign({}, this.draft[nodeId], patch))
+			}
+			if (this.draftBaseline && this.draftBaseline[nodeId]) {
+				this.draftBaseline = Object.assign({}, this.draftBaseline, {
+					[nodeId]: Object.assign({}, this.draftBaseline[nodeId], patch),
+				})
 			}
 			return {ok: true, node: body}
 		},
@@ -183,27 +190,26 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 
 		initDraft() {
 			const nodes = useDashboardStore().nodes
-			const draft = {}
-			Object.values(nodes).forEach(node => {
-				draft[node.id] = Object.assign({}, node, {_new: false, _dirty: false, _deleted: false})
-			})
-			this.setDraft(draft)
+			this.draftBaseline = clone(nodes)
+			this.draft = clone(nodes)
 		},
 
 		discardDraft() {
-			this.setDraft(null)
+			this.draft = null
+			this.draftBaseline = null
 		},
 
 		draftCreateNode(payload) {
 			const tempId = 'draft-' + (this.draftTempCounter + 1)
 			this.bumpDraftTempCounter()
+			// _tempId correlates this node with its create entry in the
+			// diff (so other nodes' `receives` can reference it and the
+			// backend can remap it to the real id). It's the ONLY marker
+			// left on a draft node - "new" is simply "id not in baseline".
 			const node = Object.assign({}, payload, {
 				id: tempId,
 				identifier: tempId,
 				_tempId: tempId,
-				_new: true,
-				_dirty: true,
-				_deleted: false,
 			})
 			this.setDraftNode(node)
 			return node
@@ -211,36 +217,28 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 
 		draftUpdateNode(payload) {
 			const {nodeId, changes} = payload
-			const existing = this.draft[nodeId]
+			const existing = this.draft && this.draft[nodeId]
 			if (!existing) {
 				return
 			}
-			const node = Object.assign({}, existing, changes, {
-				_dirty: existing._new ? existing._dirty : true,
-			})
-			this.setDraftNode(node)
+			this.setDraftNode(Object.assign({}, existing, changes))
 		},
 
 		draftDeleteNode(payload) {
 			const {nodeId} = payload
-			const existing = this.draft[nodeId]
-			if (!existing) {
+			if (!this.draft || !this.draft[nodeId]) {
 				return
 			}
 			// drop the now-dangling wire into this node from every surviving
 			// node, mirroring the backend's prune_dangling_references(): a
 			// receives entry pointing at a deleted node is not an error, it
-			// just goes away with the node. Without this the save diff can
-			// still carry the deleted id in a listener's receives (that
-			// listener being dirty for an unrelated reason, e.g. an
-			// auto-layout pos change), which the backend rejects as an
-			// "Unknown receives node id" - aborting the whole atomic diff
-			// and leaving the deleted node's hardware port held. Alert nodes
-			// are skipped: their receives derive from conditions (edited via
-			// a dedicated endpoint), the backend prunes those itself, and a
-			// plain receives edit for an Alert is rejected outright.
+			// just goes away with the node. Doing it here also keeps the
+			// canvas honest (the edge disappears at once). Alert nodes are
+			// skipped: their receives derive from conditions, edited through
+			// their own endpoint, and wiringDiff() never emits `receives`
+			// for them anyway.
 			Object.values(this.draft).forEach(other => {
-				if (other.id === nodeId || other._deleted || other.role === 'ALERTS') {
+				if (other.id === nodeId || other.role === 'ALERTS') {
 					return
 				}
 				if ((other.receives || []).includes(nodeId)) {
@@ -250,11 +248,9 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 					})
 				}
 			})
-			if (existing._new) {
-				this.removeDraftNode(nodeId)
-			} else {
-				this.setDraftNode(Object.assign({}, existing, {_deleted: true}))
-			}
+			// removed from the working map -> "in baseline but not working"
+			// is a delete; "in neither" (a create deleted again) is a no-op
+			this.removeDraftNode(nodeId)
 		},
 
 		async saveDraft() {
@@ -262,83 +258,20 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 				return {ok: true}
 			}
 
-			const fieldsOf = (node) => {
-				const schema = this.nodeTypes[node.type]
-				const fields = {}
-				;(schema && schema.fields || []).forEach(field => {
-					if (node[field.key] !== undefined) {
-						fields[field.key] = node[field.key]
-					}
-				})
-				return fields
-			}
-
-			const dashboardNodes = useDashboardStore().nodes
-
-			const creates = []
-			const updates = []
-			const deletes = []
-
-			Object.values(this.draft).forEach(node => {
-				if (node._new && node._deleted) {
-					return
-				}
-				if (node._new) {
-					creates.push({
-						temp_id: node._tempId,
-						type: node.type,
-						name: node.name,
-						receives: node.receives || [],
-						fields: fieldsOf(node),
-						group: node.group || '',
-						pos_x: node.pos_x || 0,
-						pos_y: node.pos_y || 0,
-					})
-				} else if (node._deleted) {
-					deletes.push(node.id)
-				} else if (node._dirty) {
-					const upd = {
-						id: node.id,
-						group: node.group || '',
-						pos_x: node.pos_x || 0,
-						pos_y: node.pos_y || 0,
-					}
-
-					// Alert's schema entry reports 'receives': 'none' (its
-					// receives are derived from 'conditions', never a plain
-					// list - edited through a dedicated endpoint instead,
-					// see NodeReceivesEditor/alertCondEditor.js), so any
-					// non-empty 'receives' in an update payload is rejected
-					// regardless of this node's actual current value. Since
-					// this node may be dirty for an unrelated reason (e.g.
-					// only pos_x/pos_y changed, as the /wiring auto-layout
-					// does for every node including these), only include
-					// receives/fields when they actually changed from the
-					// last-known server state, not unconditionally.
-					const original = dashboardNodes[node.id]
-					const receives = node.receives || []
-					if (!original || JSON.stringify(receives) !== JSON.stringify(original.receives || [])) {
-						upd.receives = receives
-					}
-					const fields = fieldsOf(node)
-					if (!original || JSON.stringify(fields) !== JSON.stringify(fieldsOf(original))) {
-						upd.fields = fields
-					}
-
-					updates.push(upd)
-				}
-			})
-
-			if (!creates.length && !updates.length && !deletes.length) {
-				this.setDraft(null)
+			const diff = wiringDiff(this.draftBaseline, this.draft, this.nodeTypes)
+			if (!diff.hasChanges) {
+				this.discardDraft()
 				return {ok: true}
 			}
 
-			const res = await apiRequest('post', '/api/config/apply',
-				{creates, updates, deletes})
+			const res = await apiRequest('post', '/api/config/apply', {
+				creates: diff.creates,
+				updates: diff.updates,
+				deletes: diff.deletes,
+			})
 			if (res.ok) {
 				await useDashboardStore().fetchNodes()
-				this.setDraft(null)
+				this.discardDraft()
 				return {ok: true, idMap: res.data && res.data.id_map}
 			}
 			return {ok: false, error: res.error}
@@ -353,9 +286,6 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 		},
 		setSnapshots(payload) {
 			this.snapshots = payload
-		},
-		setDraft(payload) {
-			this.draft = payload
 		},
 		setDraftNode(payload) {
 			this.draft = Object.assign({}, this.draft)

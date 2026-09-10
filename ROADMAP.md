@@ -27,14 +27,23 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   "Read error!" alert text still not localized. (Old ToDo note: use
   Python's `gettext` package for this - frontend i18n is already in
   place, this is backend-only.)
-- Review data-type compatibility between every node's output and every
-  node's input (e.g. `/wiring`'s "receives" dropdown currently offers
-  History a STRING source) - filter by type/property, not a whitelist.
-  A written plan exists at `.junie/plans/config-receives-type-filtering.md`;
-  the earlier hold on it is lifted. Backend spots: `db.py:295`,
-  `api.py` (existence/cardinality checks only, marked with
-  `TODO(config-receives-type-filtering)`); frontend: `receivesItems` in
-  `configNodeDialog.js` plus the AlertCondEditor source picker.
+- Data-type compatibility of `receives` wiring - DONE (feat/wiring-refactor):
+  one `data_range`-keyed rule in `components/wiring/wiringConnect.js`
+  (`canConnect`/`connectableSources`/`isNumericSource`), used by the
+  canvas port dots, the drop check, WiringNodeDialog, NodeReceivesEditor
+  and AlertCondEditor; enforced server-side in `db.source_data_range_ok`
+  (`apply_config_diff` + `api_create_node`/`api_update_node`). A STRING
+  source (Alert, TextInput) can no longer be wired anywhere. Remaining:
+  the rule is only "not STRING" - widen `source_data_range_ok` /
+  `isNumericSource` if a finer per-consumer contract is ever needed.
+- `ALERT_COND_CLASSES` in `alertCondEditor.js` is still a hand-kept copy
+  of `db.ALERT_COND_FACTORY` keys - derive it (with each class's
+  applicable `data_range`) from a backend-exposed list when a 3rd
+  AlertCond class lands.
+- The SPA's other Pinia stores (`dashboard`, `settings`, `auth`,
+  `users`, `notifications`) still hand-roll the fetch boilerplate that
+  `store/apiRequest.js` now encapsulates for the wiring store - migrate
+  them in a follow-up.
 - Alert "reverse chip" idea - show the causing node on a triggered
   AlertCond widget; blocked on no directed bus messaging today.
 - Remote Shelly + temperature add-on - paused mid-implementation,

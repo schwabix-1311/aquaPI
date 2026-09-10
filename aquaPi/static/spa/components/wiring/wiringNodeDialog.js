@@ -29,6 +29,7 @@ const WiringNodeDialog = {
 						:items="typeItems"
 						:label="$t('pages.wiring.nodeType')"
 						outlined dense
+						autocomplete="off"
 						@change="onTypeChange"
 					></v-select>
 
@@ -37,6 +38,7 @@ const WiringNodeDialog = {
 						v-model="form.name"
 						:label="$t('pages.wiring.nodeName')"
 						outlined dense
+						autocomplete="off"
 					></v-text-field>
 
 					<v-select
@@ -49,6 +51,7 @@ const WiringNodeDialog = {
 						:label="$t('pages.wiring.receives')"
 						outlined dense
 						clearable
+						autocomplete="off"
 					></v-select>
 
 					<v-combobox
@@ -57,6 +60,7 @@ const WiringNodeDialog = {
 						:label="$t('pages.wiring.group')"
 						outlined dense
 						clearable
+						autocomplete="off"
 					></v-combobox>
 
 					<div v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">

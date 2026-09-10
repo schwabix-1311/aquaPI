@@ -11,7 +11,7 @@ const NODE_TYPES = {
 	AnalogInput: {receives: 'none', fields: [{key: 'unit'}, {key: 'interval'}]},
 	MinimumCtrl: {receives: 'single', fields: [{key: 'setpoint'}]},
 	History: {receives: 'multi', fields: [{key: 'capacity'}]},
-	Alert: {receives: 'none', fields: [{key: 'repeat'}]},
+	Alert: {receives: 'none', fields: [{key: 'repeat'}, {key: 'conditions'}]},
 }
 
 // a small realistic baseline: sensor -> ctrl, plus a History on the sensor
@@ -93,13 +93,35 @@ test('deleted source -> delete entry + pruned survivor receives', () => {
 test('Alert: receives is never emitted even when it differs (schema says none)', () => {
 	const base = {
 		alert: {id: 'alert', type: 'Alert', name: 'A', role: 'ALERTS',
-			receives: ['sensor'], group: '', pos_x: 0, pos_y: 0, repeat: 3600},
+			receives: ['sensor'], group: '', pos_x: 0, pos_y: 0, repeat: 3600,
+			conditions: [{class: 'AlertAbove', node_id: 'sensor', limit: 30, duration: 0}]},
 	}
 	const w = clone(base)
 	w.alert.receives = ['sensor', 'ctrl']   // e.g. a stale prune
 	w.alert.pos_x = 42
 	const d = wiringDiff(base, w, NODE_TYPES)
 	assert.deepEqual(d.updates, [{id: 'alert', pos_x: 42}])
+})
+
+test('Alert: a conditions change is carried in fields; unchanged -> no fields', () => {
+	const base = {
+		alert: {id: 'alert', type: 'Alert', name: 'A', role: 'ALERTS',
+			receives: ['sensor'], group: '', pos_x: 0, pos_y: 0, repeat: 3600,
+			conditions: [{class: 'AlertAbove', node_id: 'sensor', limit: 30, duration: 0}]},
+	}
+	// pos moved, conditions untouched -> update has no `fields`
+	let w = clone(base)
+	w.alert.pos_x = 10
+	assert.deepEqual(wiringDiff(base, w, NODE_TYPES).updates, [{id: 'alert', pos_x: 10}])
+
+	// a condition limit changed -> the whole conditions list rides in `fields`
+	w = clone(base)
+	w.alert.conditions[0].limit = 25
+	const d = wiringDiff(base, w, NODE_TYPES)
+	assert.deepEqual(d.updates, [{id: 'alert', fields: {
+		repeat: 3600,
+		conditions: [{class: 'AlertAbove', node_id: 'sensor', limit: 25, duration: 0}],
+	}}])
 })
 
 test('missing nodeTypes entry: pos/group/receives still diffed, fields skipped', () => {

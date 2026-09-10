@@ -28,18 +28,24 @@ export function rowsFromValue(value, subFields) {
 	})
 }
 
-// rows -> the wire shape: drop _key, keep sub-schema order, coerce numbers
-// (a blank stays blank so the server can reject a required field clearly).
+// rows -> the wire shape: drop _key, coerce numbers (a blank stays blank
+// so the server can reject a required field clearly), and emit keys
+// alphabetically - the REST API's own JSON encoder sorts keys, so this
+// keeps a round-tripped value byte-identical (no phantom "dirty" in the
+// /wiring diff, no needless re-seed in the /parameters widget).
 export function stripRows(rows, subFields) {
+	const byKey = {}
+	subFields.forEach(sf => { byKey[sf.key] = sf })
+	const keys = subFields.map(sf => sf.key).sort()
 	return (rows || []).map(row => {
 		const rec = {}
-		subFields.forEach(sf => {
-			let v = row[sf.key]
-			if ((sf.attrs || {}).type === 'number'
+		keys.forEach(k => {
+			let v = row[k]
+			if ((byKey[k].attrs || {}).type === 'number'
 				&& v !== '' && v !== null && v !== undefined) {
 				v = Number(v)
 			}
-			rec[sf.key] = v
+			rec[k] = v
 		})
 		return rec
 	})

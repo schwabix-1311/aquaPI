@@ -45,13 +45,15 @@ test('rowsFromValue fills each row, missing sub-field falls back to default', ()
 	assert.deepEqual(rowsFromValue(null, SUB), [])
 })
 
-test('stripRows drops _key, keeps sub-schema order, coerces numbers', () => {
+test('stripRows drops _key, sorts keys (to match the API), coerces numbers', () => {
 	const rows = [{_key: 'x', duration: '5', limit: '24',
 		node_id: 'wasser', class: 'AlertBelow', junk: 1}]
 	const out = stripRows(rows, SUB)
 	assert.deepEqual(out, [{class: 'AlertBelow', node_id: 'wasser',
 		limit: 24, duration: 5}])
-	assert.deepEqual(Object.keys(out[0]), ['class', 'node_id', 'limit', 'duration'])
+	// keys alphabetical, so a value round-tripped through the API stays
+	// byte-identical (the Flask JSON encoder sorts keys)
+	assert.deepEqual(Object.keys(out[0]), ['class', 'duration', 'limit', 'node_id'])
 })
 
 test('stripRows leaves a blank number blank (server rejects a required blank)', () => {

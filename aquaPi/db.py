@@ -280,19 +280,26 @@ def would_create_cycle(bus: MsgBus, node_id: str, new_receives: list[str]) -> bo
     return False
 
 
+# DataRange names an AlertCond can float-compare (matches wiringConnect.js
+# isNumericSource) - BINARY is 100/0 numeric, see the MsgData convention.
+NUMERIC_DATA_RANGES = frozenset({
+    DataRange.ANALOG.name, DataRange.PERCENT.name, DataRange.BINARY.name})
+
+
 def check_watched_nodes(bus: MsgBus, node_id: str, watched_ids: list[str]) -> None:
     """ validate the watched nodes of an Alert's conditions (their
-        node_id) for the /settings PUT path: each must exist, produce
-        non-STRING data (an AlertCond compares the value as a float), and
+        node_id) for the direct /settings + /nodes PUT/POST paths: each
+        must exist, produce a plain number an AlertCond can compare, and
         not form a cycle with `node_id`. Raises ValueError.
         apply_config_diff() does the equivalent through its own
-        virtual-graph checks.
+        virtual-graph checks (STRING rejection there; the /wiring picker
+        already hides the non-numeric ones).
     """
     for wid in watched_ids:
         src = bus.get_node(wid)
         if not src:
             raise ValueError(f'Unknown watched node id: {wid!r}')
-        if not source_data_range_ok(src.data_range.name):
+        if src.data_range.name not in NUMERIC_DATA_RANGES:
             raise ValueError(f'{wid!r} produces {src.data_range.name} data, '
                              'which an alert condition cannot compare')
     if would_create_cycle(bus, node_id, watched_ids):

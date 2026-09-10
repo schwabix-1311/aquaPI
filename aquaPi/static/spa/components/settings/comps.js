@@ -5,7 +5,6 @@ import {useWiringStore} from '../../store/modules/wiring.js'
 import {useUsersStore} from '../../store/modules/users.js'
 import {isHistOrAlert, cardTitle, ancestorsForward, descendants, dedupeFanIn, branchAnchor, realParents} from './chains.js'
 import {connectableSources} from '../wiring/wiringConnect.js'
-import './alertCondEditor.js'
 import './settingRecordList.js'
 import './escalationEditor.js'
 
@@ -638,6 +637,7 @@ const NodeSettingsFields = {
 						<component
 							:is="widgetType(item)"
 							:item="item"
+							:owner-node-id="node.id"
 							:disabled="!item.editable"
 							@update="onUpdate(item, $event)"
 						></component>
@@ -919,7 +919,6 @@ const NodeSettingsCard = {
 			</v-card-title>
 			<v-card-text>
 				<template v-if="anchor.role === 'ALERTS'">
-					<alert-cond-editor :node="anchor" class="mb-4"></alert-cond-editor>
 					<node-settings-fields :node="anchor"></node-settings-fields>
 					<escalation-editor :node="anchor"></escalation-editor>
 				</template>

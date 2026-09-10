@@ -71,34 +71,6 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 			return {ok: false, error: res.error}
 		},
 
-		async updateNodeConditions(payload) {
-			const {nodeId, conditions} = payload
-			const res = await apiRequest('put', '/api/nodes/' + nodeId + '/conditions', {conditions})
-			if (!res.ok) {
-				return {ok: false, error: res.error}
-			}
-			const body = res.data
-			useDashboardStore().setNode(body)
-			// This bypasses the /wiring draft entirely (Alert has no
-			// NODE_TYPE_SCHEMA entry, so its conditions/receives are
-			// never part of the create/update diff) - if a draft happens
-			// to be active, patch this one node's stale copy in BOTH the
-			// working map and the baseline, so the canvas/edit dialog
-			// reflect the (already persisted) change immediately without
-			// it showing up as a pending diff or disturbing the draft's
-			// other unrelated edits.
-			const patch = {conditions: body.conditions, receives: body.receives}
-			if (this.draft && this.draft[nodeId]) {
-				this.setDraftNode(Object.assign({}, this.draft[nodeId], patch))
-			}
-			if (this.draftBaseline && this.draftBaseline[nodeId]) {
-				this.draftBaseline = Object.assign({}, this.draftBaseline, {
-					[nodeId]: Object.assign({}, this.draftBaseline[nodeId], patch),
-				})
-			}
-			return {ok: true, node: body}
-		},
-
 		async fetchTemplates() {
 			const lang = i18n.global.locale.value
 			const res = await apiRequest('get',

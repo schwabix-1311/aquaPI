@@ -6,8 +6,8 @@
 // Rules, keyed on data type - NOT on a hand-maintained role list, so a
 // new CTRL/AUX/OUT node variant is wireable automatically:
 //  - the target must accept `receives` at all (schema.receives != 'none')
-//    and not be an Alert (its `receives` is derived from conditions,
-//    edited through PUT /api/nodes/<id>/conditions).
+//    and not be an Alert (its `receives` is derived from its `conditions`
+//    record-list field).
 //  - the source must produce usable data: not a History (posts a
 //    constant keep-alive, not a real value) and not STRING-typed
 //    (Alert, TextInput) - every consumer either compares the value

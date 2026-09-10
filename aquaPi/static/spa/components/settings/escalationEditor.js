@@ -11,8 +11,8 @@ import {useUsersStore} from '../../store/modules/users.js'
 // schema-driven like NodeSettingsFields (this isn't part of the node's
 // own get_settings() - it's a separate, per-Alert-node REST resource,
 // GET/PUT /api/notifications/prefs..., GET open to operator+admin as
-// read-only, PUT admin-only), so it follows AlertCondEditor's shape
-// instead: own local dirty-tracking, own Save button, own store.
+// read-only, PUT admin-only), so it's a bespoke sub-editor: own local
+// dirty-tracking, own Save button, own store.
 const EscalationEditor = {
 	props: {
 		node: {type: Object, required: true},
@@ -72,8 +72,8 @@ const EscalationEditor = {
 		canEdit() {
 			// PUT /api/notifications/prefs/<alert_node_id> is admin-only
 			// (escalation is a single, shared config per Alert node, not a
-			// per-user preference) - unlike AlertCondEditor's conditions
-			// and NodeSettingsFields' sendTo/repeat on this same page
+			// per-user preference) - unlike the Alert's conditions/sendTo/
+			// repeat fields (NodeSettingsFields) on this same page
 			// (operator+admin), matching NodeReceivesEditor's admin-only edit
 			return this.usersStore.isAdmin
 		},

@@ -1,7 +1,6 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useWiringStore} from '../../store/modules/wiring.js'
 import {connectableSources} from './wiringConnect.js'
-import '../settings/alertCondEditor.js'
 // side effect: registers SettingNumber/SettingSlider/SettingDuration/... -
 // db.py's get_node_type_schema() returns the same Setting.to_dict() shape
 // /settings' own node settings API does, so this dialog can reuse those
@@ -41,7 +40,7 @@ const WiringNodeDialog = {
 					></v-text-field>
 
 					<v-select
-						v-if="receivesKind !== 'none' && !isAlert"
+						v-if="receivesKind !== 'none'"
 						v-model="form.receives"
 						:items="receivesItems"
 						item-title="title"
@@ -60,28 +59,14 @@ const WiringNodeDialog = {
 						clearable
 					></v-combobox>
 
-					<v-alert v-if="isCreatingAlert" type="info" dense text class="mb-3">
-						{{ $t('pages.wiring.hintAlertNoConditionsYet') }}
-					</v-alert>
-
-					<div v-if="!isAlert" v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">
+					<div v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">
 						<component
 							:is="widgetType(item)"
 							:item="item"
+							:owner-node-id="editNode ? editNode.id : null"
 							@update="form.fields[item.key] = $event"
 						></component>
 					</div>
-
-					<template v-if="isAlert">
-						<v-divider class="my-3"></v-divider>
-						<div class="text-overline mb-2">{{ $t('pages.settings.alertConds.heading') }}</div>
-						<alert-cond-editor
-							ref="alertCondEditor"
-							:node="editNode"
-							:hide-save-button="true"
-							:key="'alert-' + editNode.id + '-' + dialogInstanceKey"
-						></alert-cond-editor>
-					</template>
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
@@ -164,25 +149,6 @@ const WiringNodeDialog = {
 				value: this.form.fields[field.key],
 			}))
 		},
-		// Alert's conditions aren't a plain field, so this is only ever
-		// true while editing an existing Alert - conditions are handled
-		// entirely by <alert-cond-editor>, not by the generic
-		// receives/fields controls. Deliberately NOT true while *creating*
-		// an Alert (editNode is null): a brand-new Alert has no id yet for
-		// <alert-cond-editor> to attach to, so creation instead falls
-		// through to the ordinary generic-fields path below (port/repeat,
-		// same as any other type) - see isCreatingAlert for that hint.
-		isAlert: function() {
-			return !!this.editNode && this.editNode.role === 'ALERTS'
-		},
-		// Alert is creatable (via the ordinary generic-fields path,
-		// port+repeat only) but starts with zero conditions - conditions
-		// can only be added after the node is actually saved and has a
-		// real id (see isAlert above), so show a hint instead of a
-		// conditions editor while creating one.
-		isCreatingAlert: function() {
-			return !this.editNode && this.form.type === 'Alert'
-		},
 		// only nodes that may actually feed this one (see wiringConnect.js):
 		// a data producer that isn't STRING-typed or a History. The target
 		// is the node being edited, or - while creating - a stand-in with
@@ -252,7 +218,7 @@ const WiringNodeDialog = {
 			if (field.value !== undefined && field.value !== null) {
 				return field.value
 			}
-			return field.attrs.type === 'multiselect' ? [] : ''
+			return ['multiselect', 'record-list'].includes(field.attrs.type) ? [] : ''
 		},
 		onTypeChange: function() {
 			this.form.receives = this.receivesKind === 'multi' ? [] : null
@@ -279,19 +245,6 @@ const WiringNodeDialog = {
 						nodeId: this.editNode.id,
 						changes: changes,
 					})
-					if (this.isAlert) {
-						// single Save button covers both: 'group' above is
-						// only staged into the draft (committed later via
-						// the page's own "Save changes"), but conditions
-						// have no place in that schema-less diff, so they're
-						// persisted immediately here instead - see
-						// alertCondEditor.js's own comment on why.
-						const condResult = await this.$refs.alertCondEditor.save()
-						if (!condResult.ok) {
-							this.error = condResult.error || this.$t('misc.toast.saveError')
-							return
-						}
-					}
 				} else {
 					if (!this.form.type || !this.form.name) {
 						this.error = this.$t('pages.wiring.errNameType')

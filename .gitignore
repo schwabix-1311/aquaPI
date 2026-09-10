@@ -147,3 +147,6 @@ questdb-*.tar.gz
 
 # local MCP server config (per-machine, not shared)
 .mcp.json
+
+# Playwright MCP scratch output (page snapshots, console logs)
+.playwright-mcp/

@@ -397,6 +397,42 @@ def test_apply_update_keeps_nodes_own_in_use_port(client, users, bus, app):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
+def test_apply_reuses_a_port_freed_in_the_same_diff_only_for_its_function(client, users, bus, app):
+    """ deleting a Bout node in a diff frees its GPIO-out port; another
+        node in the *same* diff may take it - but only a node of the same
+        function (_schema_allowing_ports is gated on attrs.allPorts), not
+        e.g. an AnalogInput.
+    """
+    _login(client, 'admin1', 'adminPass123')
+    port = 'GPIO 12 out'
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'sw', 'type': 'SwitchDevice', 'name': 'Relais',
+                     'receives': ['heizen'], 'fields': {'port': port}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    sw_id = resp.get_json()['id_map']['sw']
+
+    # delete it and, in one diff, hand the freed Bout port to a new Bout node
+    resp = client.post('/api/config/apply', json={
+        'deletes': [sw_id],
+        'creates': [{'temp_id': 'sw2', 'type': 'SwitchDevice', 'name': 'Relais2',
+                     'receives': ['heizen'], 'fields': {'port': port}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    assert bus.get_node(resp.get_json()['id_map']['sw2']).port == port
+
+    # ...but an AnalogInput may not take that Bout port even though it is
+    # "freed" in the diff - it is not in AnalogInput's allPorts
+    sw2_id = resp.get_json()['id_map']['sw2']
+    resp = client.post('/api/config/apply', json={
+        'deletes': [sw2_id],
+        'creates': [{'temp_id': 'ai', 'type': 'AnalogInput', 'name': 'Sensor',
+                     'fields': {'unit': '°C', 'port': port}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
 def test_apply_rejects_two_nodes_claiming_the_same_port(client, users, bus, app):
     """ each 'port' select only offers *free* ports, so two draft nodes can
         independently pick the same one. That must be a clean 400 in the

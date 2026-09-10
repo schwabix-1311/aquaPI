@@ -117,6 +117,12 @@ def test_node_types_lists_creatable_types(client, users):
     assert [s['key'] for s in cond_field['attrs']['recordSchema']] == \
         ['class', 'node_id', 'limit', 'duration']
 
+    # the 'port' select carries both the free subset (options) and every
+    # port of its function (allPorts) for the /wiring draft editor
+    port_field = next(f for f in schema['SwitchDevice']['fields'] if f['key'] == 'port')
+    assert set(port_field['attrs']['options']) <= set(port_field['attrs']['allPorts'])
+    assert len(port_field['attrs']['allPorts']) >= len(port_field['attrs']['options'])
+
 
 # --- POST /api/nodes/ ---------------------------------------------------
 

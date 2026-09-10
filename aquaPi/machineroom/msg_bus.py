@@ -110,6 +110,11 @@ class Setting:
     # prefix the widget prepends to each value to get its display label
     # (e.g. 'misc.alertConds.' -> $t('misc.alertConds.AlertAbove')).
     option_label_prefix: str | None = None
+    # for the live-filtered 'port' select: every port name of the node's
+    # function, free AND in-use, while `options` stays the currently-free
+    # subset. The /wiring draft editor needs the full set to work out which
+    # ports a pending (unsaved) edit has vacated - see wiringPortOptions.js.
+    all_ports: list[str] | None = None
 
     @property
     def editable(self) -> bool:
@@ -150,6 +155,8 @@ class Setting:
             attrs['nodeFilter'] = self.node_filter
         if self.option_label_prefix is not None:
             attrs['optionLabelPrefix'] = self.option_label_prefix
+        if self.all_ports is not None:
+            attrs['allPorts'] = self.all_ports
         result: dict[str, Any] = {
             'key': self.key,
             'label': self.label,

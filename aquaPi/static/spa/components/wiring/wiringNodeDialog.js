@@ -1,6 +1,7 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useWiringStore} from '../../store/modules/wiring.js'
 import {connectableSources} from './wiringConnect.js'
+import {draftPortOptions} from './wiringPortOptions.js'
 // side effect: registers SettingNumber/SettingSlider/SettingDuration/... -
 // db.py's get_node_type_schema() returns the same Setting.to_dict() shape
 // /settings' own node settings API does, so this dialog can reuse those
@@ -146,22 +147,6 @@ const WiringNodeDialog = {
 		// seeded for both create and edit by buildFieldValues() below) -
 		// the schema's own 'value' is only ever a suggested default, not
 		// this field's actual current value.
-		// hardware ports another draft node already holds - offering them
-		// here lets two nodes claim the same port and the whole save then
-		// fails server-side. Exact-name only: dual-use pin conflicts (e.g.
-		// 'PWM 1' vs 'GPIO 19 out') aren't visible here since the schema
-		// carries no dep info - apply_config_diff() is the authority and
-		// returns a clear 400 for those. Skipped for ALERTS, whose channel
-		// "ports" (Email/Telegram) are legitimately shareable.
-		portsTakenByOthers: function() {
-			if (this.schema.role === 'ALERTS') {
-				return new Set()
-			}
-			const selfId = this.editNode ? this.editNode.id : null
-			return new Set(this.nodes
-				.filter(n => n.id !== selfId && n.port)
-				.map(n => n.port))
-		},
 		formFieldItems: function() {
 			return this.visibleFields.map(field => {
 				const value = this.form.fields[field.key]
@@ -179,14 +164,20 @@ const WiringNodeDialog = {
 						attrs = {...attrs, options: [...attrs.options, ...missing].sort()}
 					}
 				}
-				// drop ports a sibling draft node already claimed (keeping
-				// this node's own current pick, if any)
+				// the 'port' select: recompute against the pending draft so a
+				// port a sibling edit just vacated reappears and one it just
+				// claimed disappears, before anything is saved. ALERTS channel
+				// "ports" (Email/Telegram) are shareable - leave them alone.
 				if (field.key === 'port' && attrs && Array.isArray(attrs.options)
-						&& this.portsTakenByOthers.size) {
-					const free = attrs.options.filter(o => !this.portsTakenByOthers.has(o) || o === value)
-					if (free.length !== attrs.options.length) {
-						attrs = {...attrs, options: free}
-					}
+						&& this.schema.role !== 'ALERTS') {
+					attrs = {...attrs, options: draftPortOptions({
+						free: field.attrs.options,
+						allPorts: field.attrs.allPorts,
+						ownPort: this.editNode ? value : '',
+						draftNodes: this.nodes,
+						baselineNodes: Object.values(this.wiringStore.draftBaseline || {}),
+						selfId: this.editNode ? this.editNode.id : null,
+					})}
 				}
 				return {
 					...field,

@@ -72,10 +72,14 @@ class PortDriverMixin:
             falling back to an empty options list.
         """
         try:
-            free = IoRegistry.get().get_ports_by_function(cls._port_funcs, in_use=False)
+            reg = IoRegistry.get()
+            free = reg.get_ports_by_function(cls._port_funcs, in_use=False)
+            used = reg.get_ports_by_function(cls._port_funcs, in_use=True)
         except Exception:
-            free = []
-        return Setting('port', label, '', type='select', options=sorted(free))
+            free, used = [], []
+        return Setting('port', label, '', type='select',
+                       options=sorted(free),
+                       all_ports=sorted(set(free) | set(used)))
 
     def _port_setting(self, label: str) -> Setting:
         """ the 'port' Setting entry shared by InputNode/DeviceNode's

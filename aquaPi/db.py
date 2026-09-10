@@ -472,7 +472,9 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                                ) -> list[dict[str, Any]]:
         """ add `freed_ports` to the 'port' select's options so a field
             validated against get_node_type_schema() accepts a port this
-            diff frees elsewhere. No-op when nothing is freed.
+            diff frees elsewhere - but only a freed port that actually
+            belongs to this field's function (attrs.allPorts), so a freed
+            Bout pin isn't offered to an Ain node. No-op when nothing is freed.
         """
         if not freed_ports:
             return schema_fields
@@ -481,7 +483,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             attrs = field.get('attrs', {})
             opts = attrs.get('options')
             if field['key'] == 'port' and isinstance(opts, list):
-                missing = [p for p in freed_ports if p not in opts]
+                of_func = set(attrs.get('allPorts') or opts)
+                missing = [p for p in freed_ports if p in of_func and p not in opts]
                 if missing:
                     field = {**field, 'attrs': {**attrs, 'options': sorted(opts + missing)}}
             out.append(field)

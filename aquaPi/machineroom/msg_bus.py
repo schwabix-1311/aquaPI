@@ -106,6 +106,10 @@ class Setting:
     # feeding the chosen ids through the normal existence/data_range/cycle
     # checks.
     node_filter: str | None = None
+    # for a 'select' whose option VALUES are code identifiers: an i18n key
+    # prefix the widget prepends to each value to get its display label
+    # (e.g. 'misc.alertConds.' -> $t('misc.alertConds.AlertAbove')).
+    option_label_prefix: str | None = None
 
     @property
     def editable(self) -> bool:
@@ -144,6 +148,8 @@ class Setting:
             attrs['recordSchema'] = [s.to_dict() for s in self.record_schema]
         if self.node_filter is not None:
             attrs['nodeFilter'] = self.node_filter
+        if self.option_label_prefix is not None:
+            attrs['optionLabelPrefix'] = self.option_label_prefix
         result: dict[str, Any] = {
             'key': self.key,
             'label': self.label,

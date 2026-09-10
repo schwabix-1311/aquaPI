@@ -6,6 +6,7 @@ import {useUsersStore} from '../../store/modules/users.js'
 import {isHistOrAlert, cardTitle, ancestorsForward, descendants, dedupeFanIn, branchAnchor, realParents} from './chains.js'
 import {connectableSources} from '../wiring/wiringConnect.js'
 import './alertCondEditor.js'
+import './settingRecordList.js'
 import './escalationEditor.js'
 
 // a Setting is required unless attrs.optional is true, and must not be
@@ -572,6 +573,9 @@ export function settingWidgetType(item) {
 	}
 	if (attrs.type === 'multiselect') {
 		return 'SettingMultiSelect'
+	}
+	if (attrs.type === 'record-list') {
+		return 'SettingRecordList'
 	}
 	return 'SettingText'
 }

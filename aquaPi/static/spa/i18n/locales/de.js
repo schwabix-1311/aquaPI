@@ -72,6 +72,11 @@ export default
 				anchor: 'Startzeit',
 				weekdays: 'Wochentage',
 				repeat: 'Wiederholung',
+				conditions: 'Alarm-Bedingungen',
+				alertCondClass: 'Bedingung',
+				alertCondWatchedNode: 'Beobachtetes Element',
+				alertCondLimit: 'Grenzwert',
+				alertCondDuration: 'Mindestdauer (Min)',
 				receives: 'Empfängt von',
 				setpoint: 'Sollwert [{unit}]',
 				hysteresis: 'Hysterese [{unit}]',
@@ -300,6 +305,11 @@ export default
 			delete: 'Löschen',
 			save: 'Speichern',
 			cancel: 'Abbrechen',
+		},
+		recordList: {
+			add: 'Hinzufügen',
+			remove: 'Entfernen',
+			empty: 'Noch keine Einträge',
 		},
 		footer: {
 			servedBy: 'Server: {os}',

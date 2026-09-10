@@ -372,7 +372,8 @@ class Alert(PortDriverMixin, BusListener):
             type='record-list', optional=True,
             record_schema=[
                 Setting('class', 'alertCondClass', 'AlertAbove', type='select',
-                        options=list(db.ALERT_COND_FACTORY.keys())),
+                        options=list(db.ALERT_COND_FACTORY.keys()),
+                        option_label_prefix='misc.alertConds.'),
                 Setting('node_id', 'alertCondWatchedNode', None,
                         type='select', node_filter='numeric'),
                 Setting('limit', 'alertCondLimit', 50.0, type='number'),

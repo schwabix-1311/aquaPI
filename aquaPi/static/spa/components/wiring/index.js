@@ -2,7 +2,7 @@ import './comps.js'
 import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT, SOURCEABLE_ROLES} from './comps.js'
 import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
-import {useConfigStore} from '../../store/modules/config.js'
+import {useWiringStore} from '../../store/modules/wiring.js'
 import {isRoot, isHistOrAlert, descendants, flattenEntries} from '../settings/chains.js'
 
 const CANVAS_MIN_WIDTH = 1200
@@ -10,11 +10,11 @@ const CANVAS_MIN_HEIGHT = 700
 const LAYOUT_COL_GAP = 70
 const LAYOUT_ROW_GAP = 50
 
-const AquapiConfig = {
+const AquapiWiring = {
 	template: `
 		<v-card elevation="0" tile>
 			<aquapi-page-heading
-				:heading="$t('pages.config.heading')"
+				:heading="$t('pages.wiring.heading')"
 				icon="mdi-cog-outline"
 			></aquapi-page-heading>
 
@@ -22,33 +22,33 @@ const AquapiConfig = {
 				<v-row justify="space-between" class="mb-2">
 					<v-col cols="auto">
 						<v-alert v-if="selectedIds.length" dense text type="info" class="mb-0">
-							{{ $t('pages.config.hintSelecting', {count: selectedIds.length}) }}
+							{{ $t('pages.wiring.hintSelecting', {count: selectedIds.length}) }}
 						</v-alert>
 					</v-col>
 					<v-col cols="auto">
 						<v-btn color="primary" class="mr-2" @click="openTemplates(0)">
 							<v-icon left small>mdi-shape-outline</v-icon>
-							{{ $t('pages.config.templates') }}
+							{{ $t('pages.wiring.templates') }}
 						</v-btn>
 						<v-btn outlined class="mr-2" @click="openAddDialog">
 							<v-icon left small>mdi-plus</v-icon>
-							{{ $t('pages.config.addNode') }}
+							{{ $t('pages.wiring.addNode') }}
 						</v-btn>
 						<v-btn outlined class="mr-2" @click="openTemplates(1)">
 							<v-icon left small>mdi-backup-restore</v-icon>
-							{{ $t('pages.config.snapshots') }}
+							{{ $t('pages.wiring.snapshots') }}
 						</v-btn>
 						<v-btn outlined class="mr-2" @click="applyChainLayout">
 							<v-icon left small>mdi-sitemap</v-icon>
-							{{ $t('pages.config.autoArrange') }}
+							{{ $t('pages.wiring.autoArrange') }}
 						</v-btn>
 						<v-btn text class="mr-2" :disabled="!draftDirty" @click="onDiscard">
 							<v-icon left small>mdi-undo</v-icon>
-							{{ $t('pages.config.discard') }}
+							{{ $t('pages.wiring.discard') }}
 						</v-btn>
 						<v-btn color="success" :disabled="!draftDirty" :loading="saving" @click="onSave">
 							<v-icon left small>mdi-content-save</v-icon>
-							{{ $t('pages.config.saveChanges') }}
+							{{ $t('pages.wiring.saveChanges') }}
 						</v-btn>
 					</v-col>
 				</v-row>
@@ -64,13 +64,13 @@ const AquapiConfig = {
 				</v-row>
 
 				<v-alert v-else-if="!nodes.length" type="info" text>
-					{{ $t('pages.config.hintEmpty') }}
+					{{ $t('pages.wiring.hintEmpty') }}
 				</v-alert>
 
-				<div v-else class="config-canvas-wrapper">
-					<div class="config-canvas" ref="canvas" :style="canvasStyle"
+				<div v-else class="wiring-canvas-wrapper">
+					<div class="wiring-canvas" ref="canvas" :style="canvasStyle"
 						@pointerdown.self="clearSelection">
-						<config-connections
+						<wiring-connections
 							:nodes="nodesForConnections"
 							:node-types="nodeTypes"
 							:width="canvasWidth"
@@ -78,9 +78,9 @@ const AquapiConfig = {
 							:preview="previewEdge"
 							@remove="onRemoveEdge"
 							@port-pointerdown="onConnectDragStart"
-						></config-connections>
+						></wiring-connections>
 
-						<config-node-box
+						<wiring-node-box
 							v-for="node in nodes"
 							:key="node.identifier"
 							:node="node"
@@ -93,24 +93,24 @@ const AquapiConfig = {
 							@delete="onDelete"
 							@drag="onDrag"
 							@drag-end="onDragEnd"
-						></config-node-box>
+						></wiring-node-box>
 					</div>
 				</div>
 			</v-card-text>
 
-			<config-node-dialog
+			<wiring-node-dialog
 				v-model="dialogOpen"
 				:node-types="nodeTypes"
 				:nodes="nodes"
 				:edit-node="editingNode"
-			></config-node-dialog>
+			></wiring-node-dialog>
 
-			<config-templates-dialog
+			<wiring-templates-dialog
 				v-model="templatesDialogOpen"
 				:initial-tab="templatesInitialTab"
 				:selected-ids="selectedIds"
 				@saved="onTemplateSaved"
-			></config-templates-dialog>
+			></wiring-templates-dialog>
 		</v-card>
 	`,
 
@@ -133,11 +133,11 @@ const AquapiConfig = {
 		dashboardStore() {
 			return useDashboardStore()
 		},
-		configStore() {
-			return useConfigStore()
+		wiringStore() {
+			return useWiringStore()
 		},
 		nodes: function() {
-			return this.configStore.draftNodes
+			return this.wiringStore.draftNodes
 		},
 		nodesById: function() {
 			const map = {}
@@ -145,10 +145,10 @@ const AquapiConfig = {
 			return map
 		},
 		draftDirty: function() {
-			return this.configStore.draftDirty
+			return this.wiringStore.draftDirty
 		},
 		nodeTypes: function() {
-			return this.configStore.nodeTypes
+			return this.wiringStore.nodeTypes
 		},
 		nodesForConnections: function() {
 			// Overlay any in-progress drag position so connections visibly
@@ -182,13 +182,13 @@ const AquapiConfig = {
 			this.loading = true
 			await Promise.all([
 				this.dashboardStore.fetchNodes(),
-				this.configStore.fetchNodeTypes(),
+				this.wiringStore.fetchNodeTypes(),
 			])
-			this.configStore.initDraft()
+			this.wiringStore.initDraft()
 			// nobody has ever positioned anything yet (fresh/default wiring) -
 			// lay it out by chain instead of leaving every node stacked at (0,0)
-			if (this.configStore.draftNodes.length > 0
-				&& this.configStore.draftNodes.every(n => !n.pos_x && !n.pos_y)) {
+			if (this.wiringStore.draftNodes.length > 0
+				&& this.wiringStore.draftNodes.every(n => !n.pos_x && !n.pos_y)) {
 				this.applyChainLayout()
 			}
 			this.loading = false
@@ -200,7 +200,7 @@ const AquapiConfig = {
 		// row while every further listener fans out to a new row beneath -
 		// keeps sibling branches from overlapping in the same row.
 		applyChainLayout() {
-			const nodes = this.configStore.draftNodes
+			const nodes = this.wiringStore.draftNodes
 			const byId = {}
 			nodes.forEach(n => { byId[n.id] = n })
 
@@ -324,7 +324,7 @@ const AquapiConfig = {
 				// cell happens to be occupied first.
 				const receivesCount = (byId[nodeId]?.receives || []).length
 				const rowOffsetPx = receivesCount > 1 ? NODE_BOX_HEIGHT / 2 : 0
-				this.configStore.draftUpdateNode({
+				this.wiringStore.draftUpdateNode({
 					nodeId,
 					changes: {
 						pos_x: pos.col * (NODE_BOX_WIDTH + LAYOUT_COL_GAP),
@@ -353,13 +353,13 @@ const AquapiConfig = {
 		async onSave() {
 			this.saving = true
 			try {
-				const result = await this.configStore.saveDraft()
+				const result = await this.wiringStore.saveDraft()
 				if (!result.ok) {
 					this.error = result.error
 					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
 					return
 				}
-				this.configStore.initDraft()
+				this.wiringStore.initDraft()
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 			} finally {
 				this.saving = false
@@ -367,21 +367,21 @@ const AquapiConfig = {
 		},
 
 		async onDiscard() {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDiscard'), {
-				confirmLabel: this.$t('pages.config.discard'),
+			const ok = await this.$confirm(this.$t('pages.wiring.confirmDiscard'), {
+				confirmLabel: this.$t('pages.wiring.discard'),
 				confirmColor: 'error',
 			})
 			if (!ok) {
 				return
 			}
-			this.configStore.initDraft()
+			this.wiringStore.initDraft()
 			this.selectedIds = []
-			this.$toast.success(this.$t('pages.config.changesDiscarded'))
+			this.$toast.success(this.$t('pages.wiring.changesDiscarded'))
 		},
 
 		async reinitDraft() {
 			this.selectedIds = []
-			this.configStore.initDraft()
+			this.wiringStore.initDraft()
 		},
 
 		openAddDialog: function() {
@@ -501,7 +501,7 @@ const AquapiConfig = {
 				receives = [source.id]
 			}
 
-			this.configStore.draftUpdateNode({
+			this.wiringStore.draftUpdateNode({
 				nodeId: target.id,
 				changes: {receives},
 			})
@@ -511,7 +511,7 @@ const AquapiConfig = {
 			const target = this.nodesById[edge.targetId]
 			if (!target) return
 			const receives = (target.receives || []).filter(id => id !== edge.sourceId)
-			this.configStore.draftUpdateNode({
+			this.wiringStore.draftUpdateNode({
 				nodeId: target.id,
 				changes: {receives},
 			})
@@ -524,7 +524,7 @@ const AquapiConfig = {
 		},
 
 		onDragEnd(payload) {
-			this.configStore.draftUpdateNode({
+			this.wiringStore.draftUpdateNode({
 				nodeId: payload.node.id,
 				changes: {pos_x: payload.x, pos_y: payload.y},
 			})
@@ -532,14 +532,14 @@ const AquapiConfig = {
 		},
 
 		async onDelete(node) {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDelete', {name: node.name}), {
-				confirmLabel: this.$t('pages.config.delete'),
+			const ok = await this.$confirm(this.$t('pages.wiring.confirmDelete', {name: node.name}), {
+				confirmLabel: this.$t('misc.actions.delete'),
 				confirmColor: 'error',
 			})
 			if (!ok) {
 				return
 			}
-			this.configStore.draftDeleteNode({nodeId: node.id})
+			this.wiringStore.draftDeleteNode({nodeId: node.id})
 			this.selectedIds = this.selectedIds.filter(id => id !== node.id)
 		},
 	},
@@ -549,7 +549,7 @@ const AquapiConfig = {
 	},
 }
 
-registerGlobalComponent('AquapiConfig', AquapiConfig)
-export {AquapiConfig}
+registerGlobalComponent('AquapiWiring', AquapiWiring)
+export {AquapiWiring}
 
 // vim: set noet ts=4 sw=4:

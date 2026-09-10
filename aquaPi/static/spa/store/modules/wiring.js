@@ -2,7 +2,7 @@ import {useDashboardStore} from './dashboard.js';
 import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 import i18n from '../../i18n/index.js';
 
-export const useConfigStore = Pinia.defineStore('config', {
+export const useWiringStore = Pinia.defineStore('wiring', {
 	state: () => ({
 		nodeTypes: {},
 		nodeTypesLoaded: false,
@@ -140,7 +140,7 @@ export const useConfigStore = Pinia.defineStore('config', {
 
 				if (response.status == 200) {
 					useDashboardStore().setNode(body)
-					// This bypasses the /config draft entirely (Alert has no
+					// This bypasses the /wiring draft entirely (Alert has no
 					// NODE_TYPE_SCHEMA entry, so its conditions/receives are
 					// never part of the create/update diff) - if a draft
 					// happens to be active, patch just this one node's stale
@@ -382,7 +382,7 @@ export const useConfigStore = Pinia.defineStore('config', {
 			}
 		},
 
-		// --- /config editor draft mode (Step 16): all node CRUD below is
+		// --- /wiring editor draft mode (Step 16): all node CRUD below is
 		// applied client-side to state.draft only, and only actually sent
 		// to the backend as a single atomic diff by saveDraft() ---
 
@@ -516,7 +516,7 @@ export const useConfigStore = Pinia.defineStore('config', {
 					// non-empty 'receives' in an update payload is rejected
 					// regardless of this node's actual current value. Since
 					// this node may be dirty for an unrelated reason (e.g.
-					// only pos_x/pos_y changed, as the /config auto-layout
+					// only pos_x/pos_y changed, as the /wiring auto-layout
 					// does for every node including these), only include
 					// receives/fields when they actually changed from the
 					// last-known server state, not unconditionally.

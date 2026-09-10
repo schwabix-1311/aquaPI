@@ -8,7 +8,7 @@ import i18n from '../i18n/index.js'
 import {useUiStore} from '../store/modules/ui.js'
 import {useAuthStore} from '../store/modules/auth.js'
 import {useDashboardStore} from '../store/modules/dashboard.js'
-import {useConfigStore} from '../store/modules/config.js'
+import {useWiringStore} from '../store/modules/wiring.js'
 import {useUsersStore} from '../store/modules/users.js'
 
 // Thin wrapper around vue3-sfc-loader's loadModule(), so callers can just
@@ -39,7 +39,7 @@ const options = {
 		'store/ui': {useUiStore},
 		'store/auth': {useAuthStore},
 		'store/dashboard': {useDashboardStore},
-		'store/config': {useConfigStore},
+		'store/wiring': {useWiringStore},
 		'store/users': {useUsersStore},
 	},
 

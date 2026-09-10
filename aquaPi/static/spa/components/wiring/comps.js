@@ -1,12 +1,12 @@
 // Simple, dependency-free node box + SVG connector overlay for the
-// /config graph editor. Free-form drag&drop positioning is implemented
+// /wiring graph editor. Free-form drag&drop positioning is implemented
 // with plain mouse events (rather than vuedraggable, which targets
 // sortable *lists*, not absolute x/y placement) - no new dependency,
 // works fully offline/without a build step like the rest of the SPA.
 
 import {registerGlobalComponent} from '../app/registry.js'
-import './configNodeDialog.js'
-import './configTemplatesDialog.js'
+import './wiringNodeDialog.js'
+import './wiringTemplatesDialog.js'
 
 const NODE_BOX_WIDTH = 240
 const NODE_BOX_HEIGHT = 76
@@ -20,7 +20,7 @@ const DRAG_THRESHOLD = 4
 const DOUBLE_TAP_MS = 280
 // how far back from a port's exact position the connection line's
 // invisible delete-hit-region is trimmed, so it stops overlapping (and
-// stealing clicks from) the port dot itself - see ConfigConnections.edges
+// stealing clicks from) the port dot itself - see WiringConnections.edges
 const PORT_CLEARANCE = 14
 
 const ROLE_COLORS = {
@@ -50,20 +50,20 @@ const ROLE_COLORS = {
 //   but it's STRING-typed and no current consumer handles that safely -
 //   History would crash on it, AlertCond's numeric comparison would
 //   TypeError - this is exactly the still-deferred
-//   config-receives-type-filtering gap, so excluded here too rather
+//   wiring-receives-type-filtering gap, so excluded here too rather
 //   than opening a new instance of the same problem.
 // Enforced at both ends: hasOutput below hides the affordance for a
 // forward (output-port-initiated) drag, and
-// AquapiConfig.isValidConnection (index.js) independently re-checks the
+// AquapiWiring.isValidConnection (index.js) independently re-checks the
 // SOURCE role too, since a reverse (input-port-initiated) drag can
 // hover any card regardless of whether that card shows its own output
 // dot.
 const SOURCEABLE_ROLES = ['IN_ENDP', 'CTRL', 'AUX', 'OUT_ENDP']
 
-// Shared by ConfigConnections, which owns rendering AND hit-testing for
+// Shared by WiringConnections, which owns rendering AND hit-testing for
 // both port kinds (see below - ports live in the SVG overlay, not on
 // the card itself, specifically so they can paint above connection
-// lines; a div nested inside ConfigNodeBox never could, since the card
+// lines; a div nested inside WiringNodeBox never could, since the card
 // establishes its own stacking context that can't out-rank a sibling
 // one no matter its own z-index).
 function nodeHasInputPort(node, nodeTypes) {
@@ -74,7 +74,7 @@ function nodeHasOutputPort(node) {
 	return SOURCEABLE_ROLES.includes(node.role)
 }
 
-const ConfigNodeBox = {
+const WiringNodeBox = {
 	props: {
 		node: {type: Object, required: true},
 		nodeTypes: {type: Object, default: () => ({})},
@@ -86,12 +86,12 @@ const ConfigNodeBox = {
 		<v-sheet
 			:elevation="dragging ? 8 : 2"
 			outlined
-			class="config-node-box"
+			class="wiring-node-box"
 			:class="{
-				'config-node-box--connecting': connecting,
-				'config-node-box--selected': selected,
-				'config-node-box--drop-valid': dropTarget === 'valid',
-				'config-node-box--drop-invalid': dropTarget === 'invalid',
+				'wiring-node-box--connecting': connecting,
+				'wiring-node-box--selected': selected,
+				'wiring-node-box--drop-valid': dropTarget === 'valid',
+				'wiring-node-box--drop-invalid': dropTarget === 'invalid',
 			}"
 			:style="style"
 			@pointerdown.stop="onPointerDown"
@@ -101,7 +101,7 @@ const ConfigNodeBox = {
 					<v-chip x-small label :color="color" text-color="white" class="flex-shrink-0">{{ node.role }}</v-chip>
 					<span v-if="node.group" class="text-caption grey--text text-truncate ml-1" :title="node.group">{{ node.group }}</span>
 				</div>
-     <v-btn icon size="x-small" variant="text" color="grey-darken-1" class="flex-shrink-0" @pointerdown.stop @click.stop="$emit('delete', node)" :title="$t('pages.config.delete')">
+     <v-btn icon size="x-small" variant="text" color="grey-darken-1" class="flex-shrink-0" @pointerdown.stop @click.stop="$emit('delete', node)" :title="$t('misc.actions.delete')">
 					<v-icon size="small">mdi-delete</v-icon>
 				</v-btn>
 			</div>
@@ -202,9 +202,9 @@ const ConfigNodeBox = {
 		clearTimeout(this._tapTimer)
 	},
 }
-registerGlobalComponent('ConfigNodeBox', ConfigNodeBox)
+registerGlobalComponent('WiringNodeBox', WiringNodeBox)
 
-const ConfigConnections = {
+const WiringConnections = {
 	props: {
 		nodes: {type: Array, required: true},
 		nodeTypes: {type: Object, default: () => ({})},
@@ -213,40 +213,40 @@ const ConfigConnections = {
 		preview: {type: Object, default: null},
 	},
 	template: `
-		<svg class="config-connections" :width="width" :height="height">
+		<svg class="wiring-connections" :width="width" :height="height">
 			<g
 				v-for="edge in edges"
 				:key="edge.key"
-				class="config-connection-group"
+				class="wiring-connection-group"
 				@mouseenter="hoveredEdgeKey = edge.key"
 				@mouseleave="hoveredEdgeKey = null"
 			>
 				<path
 					:d="edge.hitPath"
 					fill="none"
-					class="config-connection-hit"
+					class="wiring-connection-hit"
 				></path>
 				<path
 					:d="edge.diagonalPath"
 					fill="none"
 					stroke="#90a4ae" stroke-width="2" stroke-dasharray="4 3"
-					class="config-connection-line"
-					:class="{'config-connection-line--hover': hoveredEdgeKey === edge.key}"
+					class="wiring-connection-line"
+					:class="{'wiring-connection-line--hover': hoveredEdgeKey === edge.key}"
 				></path>
 				<path
 					:d="edge.stubPath"
 					fill="none"
-					stroke="#90a4ae" stroke-width="2" marker-end="url(#config-arrow)"
-					class="config-connection-line"
-					:class="{'config-connection-line--hover': hoveredEdgeKey === edge.key}"
+					stroke="#90a4ae" stroke-width="2" marker-end="url(#wiring-arrow)"
+					class="wiring-connection-line"
+					:class="{'wiring-connection-line--hover': hoveredEdgeKey === edge.key}"
 				></path>
 				<g
 					v-if="edge.deletable && hoveredEdgeKey === edge.key"
-					class="config-connection-delete"
+					class="wiring-connection-delete"
 					:transform="'translate(' + edge.midX + ',' + edge.midY + ')'"
 					@click="$emit('remove', edge)"
 				>
-					<title>{{ $t('pages.config.deleteConnection') }}</title>
+					<title>{{ $t('pages.wiring.deleteConnection') }}</title>
 					<circle r="9" fill="#f44336"></circle>
 					<path d="M-4,-4 L4,4 M4,-4 L-4,4" stroke="white" stroke-width="1.6" stroke-linecap="round"></path>
 				</g>
@@ -256,24 +256,24 @@ const ConfigConnections = {
 				:d="'M' + preview.x1 + ',' + preview.y1 + ' L' + preview.x2 + ',' + preview.y2"
 				fill="none"
 				stroke="#1976d2" stroke-width="2"
-				:marker-end="preview.arrowAtStart ? null : 'url(#config-arrow-preview)'"
-				:marker-start="preview.arrowAtStart ? 'url(#config-arrow-preview)' : null"
-				class="config-connection-preview"
+				:marker-end="preview.arrowAtStart ? null : 'url(#wiring-arrow-preview)'"
+				:marker-start="preview.arrowAtStart ? 'url(#wiring-arrow-preview)' : null"
+				class="wiring-connection-preview"
 			></path>
 			<circle
 				v-for="port in ports"
 				:key="port.node.id + '-' + port.kind"
 				:cx="port.x" :cy="port.y" r="8"
-				:class="['config-node-port-svg', 'config-node-port-svg--' + port.kind]"
+				:class="['wiring-node-port-svg', 'wiring-node-port-svg--' + port.kind]"
 				@pointerdown.stop="$emit('port-pointerdown', {node: port.node, port: port.kind, clientX: $event.clientX, clientY: $event.clientY})"
 			>
-				<title>{{ $t(port.kind === 'input' ? 'pages.config.portIn' : 'pages.config.portOut') }}</title>
+				<title>{{ $t(port.kind === 'input' ? 'pages.wiring.portIn' : 'pages.wiring.portOut') }}</title>
 			</circle>
 			<defs>
-				<marker id="config-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+				<marker id="wiring-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
 					<path d="M0,0 L8,4 L0,8 z" fill="#90a4ae"></path>
 				</marker>
-				<marker id="config-arrow-preview" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+				<marker id="wiring-arrow-preview" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
 					<path d="M0,0 L8,4 L0,8 z" fill="#1976d2"></path>
 				</marker>
 			</defs>
@@ -362,7 +362,7 @@ const ConfigConnections = {
 		},
 	},
 }
-registerGlobalComponent('ConfigConnections', ConfigConnections)
+registerGlobalComponent('WiringConnections', WiringConnections)
 
 export {NODE_BOX_WIDTH, NODE_BOX_HEIGHT, SOURCEABLE_ROLES}
 

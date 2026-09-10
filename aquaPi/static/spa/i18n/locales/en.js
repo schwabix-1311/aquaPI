@@ -88,7 +88,7 @@ export default
 				capacity: 'In-memory history capacity',
 			},
 		},
-		config: {
+		wiring: {
 			label: 'Wiring',
 			heading: 'Wiring',
 			addNode: 'Add node',
@@ -98,10 +98,6 @@ export default
 			nodeName: 'Name',
 			receives: '@:pages.settings.fields.receives',
 			group: 'Group',
-			edit: 'Edit',
-			delete: 'Delete',
-			save: 'Save',
-			cancel: 'Cancel',
 			hintEmpty: 'No nodes yet - use "Add node" to create one',
 			hintAlertNoConditionsYet: 'Add alert conditions after saving, via Edit',
 			hintSelecting: 'Click nodes to select them for a template ({count} selected)',
@@ -299,6 +295,12 @@ export default
 		genericLabel: 'Label',
 		genericValue: 'Value',
 		noActiveAlerts: 'No active alerts',
+		actions: {
+			edit: 'Edit',
+			delete: 'Delete',
+			save: 'Save',
+			cancel: 'Cancel',
+		},
 		footer: {
 			servedBy: 'Served by {os}',
 			platform: ' on {model}',
@@ -328,8 +330,8 @@ export default
 			what: {
 				nodes: 'Nodes',
 				nodeTypes: 'Node types',
-				templates: '@:pages.config.templates',
-				snapshots: '@:pages.config.snapshots',
+				templates: '@:pages.wiring.templates',
+				snapshots: '@:pages.wiring.snapshots',
 				users: '@:pages.users.label',
 				nodeSettings: 'Node settings',
 				history: 'History data',

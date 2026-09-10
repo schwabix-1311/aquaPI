@@ -169,9 +169,7 @@ export default {
 			}
 			if (this.usersStore.isAdmin) {
 				items.push({
-					// see the 'settings' item above - 'name' stays the
-					// pages.config.* i18n prefix, only 'route' changed
-					name: 'config',
+					name: 'wiring',
 					icon: 'mdi-cog-outline',
 					route: 'wiring'
 				})

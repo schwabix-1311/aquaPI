@@ -1,7 +1,7 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useSettingsStore} from '../../store/modules/settings.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
-import {useConfigStore} from '../../store/modules/config.js'
+import {useWiringStore} from '../../store/modules/wiring.js'
 import {useUsersStore} from '../../store/modules/users.js'
 import {isHistOrAlert, cardTitle, ancestorsForward, descendants, dedupeFanIn, branchAnchor, realParents} from './chains.js'
 import './alertCondEditor.js'
@@ -541,8 +541,8 @@ const SettingReadonly = {
 }
 registerGlobalComponent('SettingReadonly', SettingReadonly)
 
-// exported for reuse by ConfigNodeDialog (components/config/configNodeDialog.js) -
-// /config's create/edit dialog renders the exact same Setting.to_dict()
+// exported for reuse by WiringNodeDialog (components/wiring/wiringNodeDialog.js) -
+// /wiring's create/edit dialog renders the exact same Setting.to_dict()
 // shape (db.py's get_node_type_schema()) and wants the same widgets
 // (sliders, duration pickers, ...) instead of its own plain inputs.
 export function settingWidgetType(item) {
@@ -709,9 +709,9 @@ registerGlobalComponent('NodeSettingsFields', NodeSettingsFields)
 
 // HISTORY/ALERTS nodes don't get a nested Eingänge tree (see chains.js) -
 // instead, a quick multi-select for their `receives` directly, mirroring
-// the /config page's own node-edit dialog (configNodeDialog.js's `receivesKind`/
+// the /wiring page's own node-edit dialog (wiringNodeDialog.js's `receivesKind`/
 // `receivesItems` pattern) and reusing its exact save mechanism
-// (configStore.updateNode -> PUT /api/nodes/<id>), not the settings API.
+// (wiringStore.updateNode -> PUT /api/nodes/<id>), not the settings API.
 const NodeReceivesEditor = {
 	props: {
 		node: {type: Object, required: true},
@@ -730,8 +730,8 @@ const NodeReceivesEditor = {
 		}
 	},
 	computed: {
-		configStore() {
-			return useConfigStore()
+		wiringStore() {
+			return useWiringStore()
 		},
 		dashboardStore() {
 			return useDashboardStore()
@@ -769,7 +769,7 @@ const NodeReceivesEditor = {
 	methods: {
 		async onChange(value) {
 			this.saving = true
-			const result = await this.configStore.updateNode({
+			const result = await this.wiringStore.updateNode({
 				nodeId: this.node.id,
 				changes: {receives: value},
 			})
@@ -783,7 +783,7 @@ const NodeReceivesEditor = {
 		},
 	},
 	mounted: function() {
-		this.configStore.fetchNodeTypes()
+		this.wiringStore.fetchNodeTypes()
 	},
 }
 registerGlobalComponent('NodeReceivesEditor', NodeReceivesEditor)

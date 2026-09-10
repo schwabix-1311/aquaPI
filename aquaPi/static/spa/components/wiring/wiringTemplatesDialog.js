@@ -1,7 +1,7 @@
 import {registerGlobalComponent} from '../app/registry.js'
-import {useConfigStore} from '../../store/modules/config.js'
+import {useWiringStore} from '../../store/modules/wiring.js'
 
-const ConfigTemplatesDialog = {
+const WiringTemplatesDialog = {
 	props: {
 		modelValue: {type: Boolean, default: false},
 		selectedIds: {type: Array, default: () => []},
@@ -13,24 +13,24 @@ const ConfigTemplatesDialog = {
 				<v-overlay v-if="restoring" contained :model-value="true" :opacity="0.85" color="white">
 					<div class="text-center black--text">
 						<aquapi-loading-indicator color="primary"></aquapi-loading-indicator>
-						<div class="mt-3">{{ $t('pages.config.restoringSnapshot') }}</div>
+						<div class="mt-3">{{ $t('pages.wiring.restoringSnapshot') }}</div>
 					</div>
 				</v-overlay>
-				<v-card-title>{{ $t('pages.config.templatesSnapshots') }}</v-card-title>
+				<v-card-title>{{ $t('pages.wiring.templatesSnapshots') }}</v-card-title>
 				<v-tabs v-model="tab">
-					<v-tab>{{ $t('pages.config.templates') }}</v-tab>
-					<v-tab>{{ $t('pages.config.snapshots') }}</v-tab>
+					<v-tab>{{ $t('pages.wiring.templates') }}</v-tab>
+					<v-tab>{{ $t('pages.wiring.snapshots') }}</v-tab>
 				</v-tabs>
 				<v-card-text>
 					<v-alert v-if="error" type="error" dense text class="mb-3">{{ error }}</v-alert>
-					<v-alert v-if="draftDirty" type="warning" dense text class="mb-3">{{ $t('pages.config.draftDirtyBlocksTemplates') }}</v-alert>
+					<v-alert v-if="draftDirty" type="warning" dense text class="mb-3">{{ $t('pages.wiring.draftDirtyBlocksTemplates') }}</v-alert>
 
 					<v-window v-model="tab">
 						<v-window-item>
 							<div class="d-flex align-center mt-3 mb-2">
 								<v-text-field
 									v-model="newTemplateName"
-									:label="$t('pages.config.templateName')"
+									:label="$t('pages.wiring.templateName')"
 									dense outlined hide-details
 									autocomplete="off"
 									class="mr-2"
@@ -40,10 +40,10 @@ const ConfigTemplatesDialog = {
 									:disabled="!newTemplateName || !selectedIds.length"
 									:loading="saving"
 									@click="saveTemplate"
-								>{{ $t('pages.config.saveSelection') }}</v-btn>
+								>{{ $t('pages.wiring.saveSelection') }}</v-btn>
 							</div>
 							<div class="text-caption grey--text mb-3">
-								{{ $t('pages.config.selectedCount', {count: selectedIds.length}) }}
+								{{ $t('pages.wiring.selectedCount', {count: selectedIds.length}) }}
 							</div>
 
 							<v-list dense v-if="templates.length">
@@ -51,28 +51,28 @@ const ConfigTemplatesDialog = {
 									<v-list-item-title>
 										{{ tpl.name }}
 										<v-chip v-if="tpl.source === 'predefined'" size="x-small" label class="ml-2">
-											{{ $t('pages.config.templatePredefined') }}
+											{{ $t('pages.wiring.templatePredefined') }}
 										</v-chip>
 									</v-list-item-title>
 									<v-list-item-subtitle>{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
 									<template #append>
-        <v-btn v-if="tpl.source !== 'predefined'" icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('pages.config.delete')">
+        <v-btn v-if="tpl.source !== 'predefined'" icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('misc.actions.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
-        <v-btn icon variant="text" color="grey-darken-1" :disabled="draftDirty" @click="insertTemplate(tpl)" :title="$t('pages.config.insert')">
+        <v-btn icon variant="text" color="grey-darken-1" :disabled="draftDirty" @click="insertTemplate(tpl)" :title="$t('pages.wiring.insert')">
 											<v-icon>mdi-tray-arrow-down</v-icon>
 										</v-btn>
 									</template>
 								</v-list-item>
 							</v-list>
-							<v-alert v-else type="info" text dense>{{ $t('pages.config.hintNoTemplates') }}</v-alert>
+							<v-alert v-else type="info" text dense>{{ $t('pages.wiring.hintNoTemplates') }}</v-alert>
 						</v-window-item>
 
 						<v-window-item>
 							<div class="d-flex align-center mt-3 mb-2">
 								<v-text-field
 									v-model="newSnapshotName"
-									:label="$t('pages.config.snapshotName')"
+									:label="$t('pages.wiring.snapshotName')"
 									dense outlined hide-details
 									autocomplete="off"
 									class="mr-2"
@@ -82,7 +82,7 @@ const ConfigTemplatesDialog = {
 									:disabled="!newSnapshotName"
 									:loading="saving"
 									@click="saveSnapshot"
-								>{{ $t('pages.config.saveSnapshot') }}</v-btn>
+								>{{ $t('pages.wiring.saveSnapshot') }}</v-btn>
 							</div>
 
 							<v-list dense v-if="snapshots.length">
@@ -90,22 +90,22 @@ const ConfigTemplatesDialog = {
 									<v-list-item-title>{{ snap.name }}</v-list-item-title>
 									<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
 									<template #append>
-        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring || draftDirty" @click="restoreSnapshot(snap)" :title="$t('pages.config.restore')">
+        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring || draftDirty" @click="restoreSnapshot(snap)" :title="$t('pages.wiring.restore')">
 											<v-icon>mdi-restore</v-icon>
 										</v-btn>
-        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('pages.config.delete')">
+        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('misc.actions.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
 									</template>
 								</v-list-item>
 							</v-list>
-							<v-alert v-else type="info" text dense>{{ $t('pages.config.hintNoSnapshots') }}</v-alert>
+							<v-alert v-else type="info" text dense>{{ $t('pages.wiring.hintNoSnapshots') }}</v-alert>
 						</v-window-item>
 					</v-window>
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
-					<v-btn text @click="show = false">{{ $t('pages.config.close') }}</v-btn>
+					<v-btn text @click="show = false">{{ $t('pages.wiring.close') }}</v-btn>
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
@@ -121,21 +121,21 @@ const ConfigTemplatesDialog = {
 		}
 	},
 	computed: {
-		configStore() {
-			return useConfigStore()
+		wiringStore() {
+			return useWiringStore()
 		},
 		show: {
 			get: function() { return this.modelValue },
 			set: function(val) { this.$emit('update:modelValue', val) },
 		},
 		templates: function() {
-			return this.configStore.templates
+			return this.wiringStore.templates
 		},
 		snapshots: function() {
-			return this.configStore.snapshots
+			return this.wiringStore.snapshots
 		},
 		draftDirty: function() {
-			return this.configStore.draftDirty
+			return this.wiringStore.draftDirty
 		},
 	},
 	watch: {
@@ -143,8 +143,8 @@ const ConfigTemplatesDialog = {
 			if (val) {
 				this.error = null
 				this.tab = this.initialTab
-				this.configStore.fetchTemplates()
-				this.configStore.fetchSnapshots()
+				this.wiringStore.fetchTemplates()
+				this.wiringStore.fetchSnapshots()
 			}
 		},
 	},
@@ -152,7 +152,7 @@ const ConfigTemplatesDialog = {
 		async saveTemplate() {
 			this.saving = true
 			try {
-				const result = await this.configStore.createTemplate({
+				const result = await this.wiringStore.createTemplate({
 					name: this.newTemplateName,
 					node_ids: this.selectedIds,
 				})
@@ -170,11 +170,11 @@ const ConfigTemplatesDialog = {
 		},
 		async insertTemplate(tpl) {
 			if (this.draftDirty) {
-				this.error = this.$t('pages.config.draftDirtyBlocksTemplates')
+				this.error = this.$t('pages.wiring.draftDirtyBlocksTemplates')
 				this.$toast.error(this.error)
 				return
 			}
-			const result = await this.configStore.insertTemplate({id: tpl.id})
+			const result = await this.wiringStore.insertTemplate({id: tpl.id})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.saveError'))
@@ -185,14 +185,14 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async deleteTemplate(tpl) {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteTemplate', {name: tpl.name}), {
-				confirmLabel: this.$t('pages.config.delete'),
+			const ok = await this.$confirm(this.$t('pages.wiring.confirmDeleteTemplate', {name: tpl.name}), {
+				confirmLabel: this.$t('misc.actions.delete'),
 				confirmColor: 'error',
 			})
 			if (!ok) {
 				return
 			}
-			const result = await this.configStore.deleteTemplate({id: tpl.id})
+			const result = await this.wiringStore.deleteTemplate({id: tpl.id})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))
@@ -203,7 +203,7 @@ const ConfigTemplatesDialog = {
 		async saveSnapshot() {
 			this.saving = true
 			try {
-				const result = await this.configStore.createSnapshot({name: this.newSnapshotName})
+				const result = await this.wiringStore.createSnapshot({name: this.newSnapshotName})
 				if (result.ok) {
 					this.newSnapshotName = ''
 					this.$toast.success(this.$t('misc.toast.saveSuccess'))
@@ -217,12 +217,12 @@ const ConfigTemplatesDialog = {
 		},
 		async restoreSnapshot(snap) {
 			if (this.draftDirty) {
-				this.error = this.$t('pages.config.draftDirtyBlocksTemplates')
+				this.error = this.$t('pages.wiring.draftDirtyBlocksTemplates')
 				this.$toast.error(this.error)
 				return
 			}
-			const ok = await this.$confirm(this.$t('pages.config.confirmRestoreSnapshot', {name: snap.name}), {
-				confirmLabel: this.$t('pages.config.restore'),
+			const ok = await this.$confirm(this.$t('pages.wiring.confirmRestoreSnapshot', {name: snap.name}), {
+				confirmLabel: this.$t('pages.wiring.restore'),
 				confirmColor: 'error',
 			})
 			if (!ok) {
@@ -230,7 +230,7 @@ const ConfigTemplatesDialog = {
 			}
 			this.restoring = true
 			try {
-				const result = await this.configStore.restoreSnapshot({name: snap.name})
+				const result = await this.wiringStore.restoreSnapshot({name: snap.name})
 				if (!result.ok) {
 					this.error = result.error
 					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
@@ -244,14 +244,14 @@ const ConfigTemplatesDialog = {
 			}
 		},
 		async deleteSnapshot(snap) {
-			const ok = await this.$confirm(this.$t('pages.config.confirmDeleteSnapshot', {name: snap.name}), {
-				confirmLabel: this.$t('pages.config.delete'),
+			const ok = await this.$confirm(this.$t('pages.wiring.confirmDeleteSnapshot', {name: snap.name}), {
+				confirmLabel: this.$t('misc.actions.delete'),
 				confirmColor: 'error',
 			})
 			if (!ok) {
 				return
 			}
-			const result = await this.configStore.deleteSnapshot({name: snap.name})
+			const result = await this.wiringStore.deleteSnapshot({name: snap.name})
 			if (!result.ok) {
 				this.error = result.error
 				this.$toast.error(result.error || this.$t('misc.toast.deleteError'))
@@ -261,6 +261,6 @@ const ConfigTemplatesDialog = {
 		},
 	},
 }
-registerGlobalComponent('ConfigTemplatesDialog', ConfigTemplatesDialog)
+registerGlobalComponent('WiringTemplatesDialog', WiringTemplatesDialog)
 
 // vim: set noet ts=4 sw=4:

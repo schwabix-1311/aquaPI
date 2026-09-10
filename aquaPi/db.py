@@ -151,6 +151,8 @@ def convert_duration_fields(cls: type[BusNode], fields: dict[str, Any]) -> dict[
     converted = dict(fields)
     for key, value in fields.items():
         entry = schema.get(key)
+        # a 'record-list' field (e.g. Alert.conditions) is left untouched:
+        # its sub-values travel verbatim, never carry a factor.
         if entry and entry.type == 'duration' and entry.factor != 1 and value is not None:
             converted[key] = value / entry.factor
     return converted
@@ -183,9 +185,10 @@ def build_node(type_name: str, name: str, receives: list[str],
 
     if type_name == 'Alert':
         if receives:
-            raise ValueError('Alert does not accept receives at creation - '
-                             'add conditions afterward via Edit')
-        return Alert(name, set(), fields['port'], repeat=int(fields['repeat']))
+            raise ValueError('Alert does not accept a plain receives list - '
+                             'its watched nodes come from its conditions')
+        return Alert(name, fields.get('conditions') or [], fields['port'],
+                     repeat=int(fields['repeat']))
     if type_name == 'AnalogInput':
         return AnalogInput(name, fields['port'], fields['initval'], fields['unit'],
                            interval=fields['interval'], avg=int(fields['avg']))
@@ -277,6 +280,25 @@ def would_create_cycle(bus: MsgBus, node_id: str, new_receives: list[str]) -> bo
     return False
 
 
+def check_watched_nodes(bus: MsgBus, node_id: str, watched_ids: list[str]) -> None:
+    """ validate the watched nodes of an Alert's conditions (their
+        node_id) for the /settings PUT path: each must exist, produce
+        non-STRING data (an AlertCond compares the value as a float), and
+        not form a cycle with `node_id`. Raises ValueError.
+        apply_config_diff() does the equivalent through its own
+        virtual-graph checks.
+    """
+    for wid in watched_ids:
+        src = bus.get_node(wid)
+        if not src:
+            raise ValueError(f'Unknown watched node id: {wid!r}')
+        if not source_data_range_ok(src.data_range.name):
+            raise ValueError(f'{wid!r} produces {src.data_range.name} data, '
+                             'which an alert condition cannot compare')
+    if would_create_cycle(bus, node_id, watched_ids):
+        raise ValueError('This wiring would create a cycle')
+
+
 def prune_dangling_references(bus: MsgBus, deleted_id: str) -> None:
     """ remove every reference to 'deleted_id' from every other live
         node's wiring, right before it is actually deleted. Plain nodes:
@@ -294,8 +316,7 @@ def prune_dangling_references(bus: MsgBus, deleted_id: str) -> None:
         if other.ROLE == BusRole.ALERTS:
             remaining = {c for c in other.conditions if c.node_id != deleted_id}
             if len(remaining) != len(other.conditions):
-                other.conditions = remaining
-                other.receives = [c.node_id for c in other.conditions]
+                other.conditions = remaining   # setter recomputes .receives
             continue
         if deleted_id in other.receives:
             other.receives = [r for r in other.receives if r != deleted_id]
@@ -482,11 +503,24 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         for node_id, node in live_nodes.items() if node_id in remaining_ids
     }
 
+    def _resolve_watched(fields: dict[str, Any], err_entry: dict[str, Any]) -> list[str]:
+        """ an Alert's watched nodes are its conditions[].node_id, not a
+            plain 'receives' list. Resolve them in place (temp-id remap +
+            unknown-id rejection) so the cycle/data_range checks below
+            cover Alert conditions, the apply phase builds real ids, and
+            the setter-derived .receives stays consistent.
+        """
+        for cond in fields.get('conditions', []):
+            cond['node_id'] = resolve_ref(cond['node_id'], err_entry)
+        return [c['node_id'] for c in fields.get('conditions', [])]
+
     for prep in prepared_creates:
         resolved = [resolve_ref(r, prep['entry']) for r in _drop_deleted(prep['raw_receives'])]
         _check_receives_cardinality(prep['schema'], resolved, prep['entry'])
         prep['resolved_receives'] = resolved
         virtual_receives[prep['node_id']] = resolved
+        if prep['schema']['role'] == BusRole.ALERTS.name:
+            virtual_receives[prep['node_id']] = _resolve_watched(prep['fields'], prep['entry'])
 
     for upd_id, upd in updates_by_id.items():
         node = live_nodes[upd_id]
@@ -516,6 +550,10 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                     type(node), validate_fields(schema['fields'], raw_fields, require_all=False))
             except ValueError as ex:
                 raise ConfigDiffError(str(ex), upd) from ex
+            # editing an Alert's conditions changes what it watches -
+            # reflect the NEW watched set in the cycle/data_range graph
+            if schema['role'] == BusRole.ALERTS.name and 'conditions' in upd['_fields']:
+                virtual_receives[upd_id] = _resolve_watched(upd['_fields'], upd)
 
         for key in ('pos_x', 'pos_y'):
             if key in upd:

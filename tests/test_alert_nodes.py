@@ -170,6 +170,38 @@ def test_alert_text_reports_direction_and_limit_when_alerted():
 # --- Alert node -------------------------------------------------------------
 
 
+def test_conditions_setter_normalizes_inputs(fake_alert_port):
+    """ Alert.conditions accepts a set[AlertCond], a bare AlertCond, or a
+        list[dict] wire shape, and each derives .receives from scratch.
+    """
+    alert = Alert('W', AlertAbove('sensor_a', 30.0), 'Fake #1')
+    assert {type(c).__name__ for c in alert.conditions} == {'AlertAbove'}
+    assert alert.receives == ['sensor_a']
+
+    # bare AlertCond
+    alert.conditions = AlertBelow('sensor_b', 10.0)
+    assert alert.receives == ['sensor_b']
+
+    # set[AlertCond]
+    alert.conditions = {AlertAbove('sensor_c', 1.0), AlertBelow('sensor_c', 2.0)}
+    assert alert.receives == ['sensor_c', 'sensor_c']
+
+    # list[dict] (the {class,node_id,limit,duration} wire shape)
+    alert.conditions = [
+        {'class': 'AlertBelow', 'node_id': 'sensor_d', 'limit': 7.0, 'duration': 4},
+    ]
+    assert len(alert.conditions) == 1
+    cond = next(iter(alert.conditions))
+    assert type(cond).__name__ == 'AlertBelow'
+    assert cond.node_id == 'sensor_d' and cond.limit == 7.0 and cond.duration == 4
+    assert alert.receives == ['sensor_d']
+
+    # empty
+    alert.conditions = []
+    assert alert.conditions == set()
+    assert alert.receives == []
+
+
 def test_alert_uses_sender_name_not_id_in_message(fake_alert_port):
     """ regression test for commit ab064bd ('alert messages now use
         names instead of ids'): the alert text must contain the human

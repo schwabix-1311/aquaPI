@@ -182,15 +182,33 @@ class Alert(PortDriverMixin, BusListener):
         self._driver: OutDriver | None = None
         self._port: str = ''
         self.port = port
-        if isinstance(conditions, AlertCond):
-            conditions = {conditions}
-        self.conditions: set[AlertCond] = conditions
-        self.receives: list[str] = [c.node_id for c in self.conditions]
+        self._conditions: set[AlertCond] = set()
+        self.receives: list[str] = []
+        self.conditions = conditions   # setter normalizes + derives .receives
         # Step 28: track how long an alert has been continuously active,
         # to notify a 2nd, escalation channel once it stays unresolved
         # longer than the admin-configured 'escalation_after_minutes'
         self._alert_since: float | None = None
         self._escalated: bool = False
+
+    @property
+    def conditions(self) -> set[AlertCond]:
+        return self._conditions
+
+    @conditions.setter
+    def conditions(self, value) -> None:
+        """ accept a set[AlertCond] / a bare AlertCond / a list[dict]
+            (the {class,node_id,limit,duration} wire shape) and normalize
+            to a set[AlertCond]. This is the ONE place Alert.receives is
+            derived from the watched conditions.
+        """
+        if isinstance(value, AlertCond):
+            value = [value]
+        conds: set[AlertCond] = set()
+        for c in value:
+            conds.add(c if isinstance(c, AlertCond) else db._dict_to_cond(c))
+        self._conditions = conds
+        self.receives = [c.node_id for c in conds]
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -329,6 +347,13 @@ class Alert(PortDriverMixin, BusListener):
         settings.append(self._port_setting('alertPort'))
         schema = {s.key: s for s in type(self).get_settings_schema()}
         settings.append(self._fill_setting(schema['repeat']))
+        # 'conditions' is a record-list - _fill_setting can't (it would
+        # hand back the set of AlertCond objects); serialize to the wire
+        # shape by hand, in a stable order so an unchanged edit doesn't
+        # look dirty to the /wiring draft diff.
+        settings.append(schema['conditions'].with_value(sorted(
+            (db._cond_to_dict(c) for c in self.conditions),
+            key=lambda d: (d['node_id'], d['class'], d['limit'], d['duration']))))
         return settings
 
     @classmethod
@@ -337,4 +362,20 @@ class Alert(PortDriverMixin, BusListener):
         schema.append(cls.get_port_schema('alertPort'))
         schema.append(Setting('repeat', 'repeat', 60 * 60,
                               type='duration', min=0, max=24*60*60, step=60))
+        # each AlertCond watches one node with a comparison + threshold +
+        # debounce. `duration` is a plain minutes int (NOT type='duration' -
+        # AlertThreshold._check multiplies by 60 itself, no Setting.factor).
+        # `node_id`'s choices are live numeric nodes the class schema can't
+        # know - node_filter tells the widget/validator which.
+        schema.append(Setting(
+            'conditions', 'conditions', [],
+            type='record-list', optional=True,
+            record_schema=[
+                Setting('class', 'alertCondClass', 'AlertAbove', type='select',
+                        options=list(db.ALERT_COND_FACTORY.keys())),
+                Setting('node_id', 'alertCondWatchedNode', None,
+                        type='select', node_filter='numeric'),
+                Setting('limit', 'alertCondLimit', 50.0, type='number'),
+                Setting('duration', 'alertCondDuration', 0, type='number', min=0),
+            ]))
         return schema

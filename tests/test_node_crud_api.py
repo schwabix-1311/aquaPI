@@ -108,11 +108,14 @@ def test_node_types_lists_creatable_types(client, users):
     assert 'AnalogInput' in schema
     assert 'MinimumCtrl' in schema
     assert schema['MinimumCtrl']['receives'] == 'single'
-    # Alert is creatable, but always reports 'none' - its conditions
-    # aren't a plain field, they're added afterward via a dedicated
-    # endpoint (PUT /api/nodes/<id>/conditions)
+    # Alert reports 'receives': 'none' - it has no plain receives list;
+    # its watched nodes live in a 'conditions' record-list field
     assert 'Alert' in schema
     assert schema['Alert']['receives'] == 'none'
+    cond_field = next(f for f in schema['Alert']['fields'] if f['key'] == 'conditions')
+    assert cond_field['attrs']['type'] == 'record-list'
+    assert [s['key'] for s in cond_field['attrs']['recordSchema']] == \
+        ['class', 'node_id', 'limit', 'duration']
 
 
 # --- POST /api/nodes/ ---------------------------------------------------
@@ -159,9 +162,8 @@ def test_create_node_unknown_type_returns_400(client, users):
 
 
 def test_create_alert_node(client, users, bus):
-    # Alert is creatable with its two real constructor fields (port,
-    # repeat) and starts with zero conditions - those are added
-    # afterward via PUT /api/nodes/<id>/conditions (AlertCondEditor)
+    # Alert is creatable with port/repeat and no conditions (empty
+    # 'conditions' record-list field -> silenced alert)
     _login(client, 'admin1', 'adminPass123')
     resp = client.post('/api/nodes/', json={
         'type': 'Alert', 'name': 'Neuer Alarm',
@@ -176,6 +178,22 @@ def test_create_alert_node(client, users, bus):
     assert new_node is not None
     assert new_node.conditions == set()
     assert new_node.receives == []
+
+
+def test_create_alert_node_with_conditions(client, users, bus):
+    # an Alert can now be created with its conditions in one call
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.post('/api/nodes/', json={
+        'type': 'Alert', 'name': 'Alarm Mit',
+        'fields': {'port': '', 'repeat': 3600, 'conditions': [
+            {'class': 'AlertBelow', 'node_id': 'wasser', 'limit': 20.0, 'duration': 3},
+        ]},
+    })
+    assert resp.status_code == HTTPStatus.CREATED
+    node = bus.get_node('alarmmit')
+    assert len(node.conditions) == 1
+    assert node.receives == ['wasser']
+    assert next(iter(node.conditions)).duration == 3
 
 
 def test_create_alert_node_rejects_receives(client, users):
@@ -371,42 +389,46 @@ def test_delete_node_persists_wiring(client, users, app):
     assert app.extensions['machineroom'].saved == 1
 
 
-# --- PUT /api/nodes/<id>/conditions -------------------------------------
+# --- Alert conditions via PUT /api/nodes/<id>/settings ----------------
+# (the dedicated PUT /api/nodes/<id>/conditions route was removed once
+#  'conditions' became an ordinary record-list settings field)
+
+
+def _put_conditions(client, node_id, conditions):
+    return client.put(f'/api/nodes/{node_id}/settings', json={'conditions': conditions})
+
+
+def test_get_alert_settings_exposes_conditions_record_list(client, users, bus):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.get('/api/nodes/warnungen/settings')
+    assert resp.status_code == HTTPStatus.OK
+    entry = next(e for e in resp.get_json() if e['key'] == 'conditions')
+    assert entry['attrs']['type'] == 'record-list'
+    sub = {s['key']: s for s in entry['attrs']['recordSchema']}
+    assert sub['class']['attrs']['options'] == ['AlertAbove', 'AlertBelow']
+    assert sub['node_id']['attrs']['nodeFilter'] == 'numeric'
+    # value is the current condition set, serialised as plain dicts
+    assert entry['value'] == [{'class': 'AlertAbove', 'node_id': 'wasser',
+                               'limit': 30.0, 'duration': 0}]
 
 
 def test_set_conditions_rejects_viewer(client, users):
     _login(client, 'viewer1', 'viewerPass1')
-    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
-    assert resp.status_code == HTTPStatus.FORBIDDEN
+    assert _put_conditions(client, 'warnungen', []).status_code == HTTPStatus.FORBIDDEN
 
 
 def test_set_conditions_allows_operator(client, users, bus):
     _login(client, 'operator1', 'operatorPass1')
-    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
-        {'class': 'AlertAbove', 'node_id': 'wasser', 'limit': 30.0},
-    ]})
+    resp = _put_conditions(client, 'warnungen', [
+        {'class': 'AlertAbove', 'node_id': 'wasser', 'limit': 30.0}])
     assert resp.status_code == HTTPStatus.OK
-    node = bus.get_node('warnungen')
-    assert len(node.conditions) == 1
-
-
-def test_set_conditions_unknown_node_returns_404(client, users):
-    _login(client, 'admin1', 'adminPass123')
-    resp = client.put('/api/nodes/doesnotexist/conditions', json={'conditions': []})
-    assert resp.status_code == HTTPStatus.NOT_FOUND
-
-
-def test_set_conditions_rejects_non_alert_node(client, users):
-    _login(client, 'admin1', 'adminPass123')
-    resp = client.put('/api/nodes/heizstab/conditions', json={'conditions': []})
-    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert len(bus.get_node('warnungen').conditions) == 1
 
 
 def test_set_conditions_replaces_and_derives_receives(client, users, bus):
     _login(client, 'admin1', 'adminPass123')
-    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
-        {'class': 'AlertBelow', 'node_id': 'wasser', 'limit': 10.0, 'duration': 5},
-    ]})
+    resp = _put_conditions(client, 'warnungen', [
+        {'class': 'AlertBelow', 'node_id': 'wasser', 'limit': 10.0, 'duration': 5}])
     assert resp.status_code == HTTPStatus.OK
     node = bus.get_node('warnungen')
     assert len(node.conditions) == 1
@@ -418,7 +440,7 @@ def test_set_conditions_replaces_and_derives_receives(client, users, bus):
 
 def test_set_conditions_accepts_empty_list(client, users, bus):
     _login(client, 'admin1', 'adminPass123')
-    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
+    resp = _put_conditions(client, 'warnungen', [])
     assert resp.status_code == HTTPStatus.OK
     node = bus.get_node('warnungen')
     assert node.conditions == set()
@@ -427,29 +449,26 @@ def test_set_conditions_accepts_empty_list(client, users, bus):
 
 def test_set_conditions_rejects_unknown_class(client, users):
     _login(client, 'admin1', 'adminPass123')
-    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
-        {'class': 'AlertLongActive', 'node_id': 'wasser', 'limit': 1.0},
-    ]})
+    resp = _put_conditions(client, 'warnungen', [
+        {'class': 'AlertLongActive', 'node_id': 'wasser', 'limit': 1.0}])
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_set_conditions_rejects_unknown_node_id(client, users):
     _login(client, 'admin1', 'adminPass123')
-    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
-        {'class': 'AlertAbove', 'node_id': 'doesnotexist', 'limit': 1.0},
-    ]})
+    resp = _put_conditions(client, 'warnungen', [
+        {'class': 'AlertAbove', 'node_id': 'doesnotexist', 'limit': 1.0}])
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_set_conditions_rejects_self_reference(client, users):
     _login(client, 'admin1', 'adminPass123')
-    resp = client.put('/api/nodes/warnungen/conditions', json={'conditions': [
-        {'class': 'AlertAbove', 'node_id': 'warnungen', 'limit': 1.0},
-    ]})
+    resp = _put_conditions(client, 'warnungen', [
+        {'class': 'AlertAbove', 'node_id': 'warnungen', 'limit': 1.0}])
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_set_conditions_persists_wiring(client, users, app):
     _login(client, 'admin1', 'adminPass123')
-    client.put('/api/nodes/warnungen/conditions', json={'conditions': []})
+    _put_conditions(client, 'warnungen', [])
     assert app.extensions['machineroom'].saved == 1

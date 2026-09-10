@@ -234,6 +234,51 @@ def test_apply_creates_alert_node(client, users, bus, app):
     assert new_node.receives == []
 
 
+def test_apply_creates_alert_node_with_conditions(client, users, bus, app):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-a', 'type': 'Alert', 'name': 'Alarm',
+            'fields': {'port': '', 'repeat': 3600, 'conditions': [
+                {'class': 'AlertAbove', 'node_id': 'wasser', 'limit': 28.0, 'duration': 0},
+            ]},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    node = bus.get_node('alarm')
+    assert len(node.conditions) == 1
+    assert node.receives == ['wasser']
+
+
+def test_apply_updates_alert_conditions_and_derives_receives(client, users, bus, app):
+    _login(client, 'admin1', 'adminPass123')
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'warnungen', 'fields': {'conditions': [
+            {'class': 'AlertBelow', 'node_id': 'wasser', 'limit': 5.0, 'duration': 2},
+        ]}}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    node = bus.get_node('warnungen')
+    assert [type(c).__name__ for c in node.conditions] == ['AlertBelow']
+    assert node.receives == ['wasser']
+
+
+def test_apply_rejects_alert_condition_on_string_source(client, users, bus, app):
+    _login(client, 'admin1', 'adminPass123')
+    # create a STRING-typed TextInput, then try to watch it from an Alert
+    resp = client.post('/api/config/apply', json={
+        'creates': [
+            {'temp_id': 't-txt', 'type': 'TextInput', 'name': 'Notiz', 'fields': {'port': ''}},
+            {'temp_id': 't-al', 'type': 'Alert', 'name': 'Alarm', 'fields': {
+                'port': '', 'repeat': 3600,
+                'conditions': [{'class': 'AlertAbove', 'node_id': 't-txt', 'limit': 1.0}]}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert bus.get_node('alarm') is None
+    assert bus.get_node('notiz') is None
+
+
 def test_apply_delete_source_with_stale_receives_in_listener_update(client, users, bus, app):
     """ regression: deleting a node while a surviving listener's update
         payload still lists the just-deleted id in its 'receives' (the

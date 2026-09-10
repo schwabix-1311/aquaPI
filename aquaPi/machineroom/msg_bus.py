@@ -50,7 +50,8 @@ class Setting:
     # /config create form, not a claim about any real node's current state.
     # get_settings() always overwrites this with the real value.
     value: Any = None
-    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration' | 'time'
+    # 'number' | 'checkbox' | 'text' | 'select' | 'multiselect' | 'duration'
+    # | 'time' | 'record-list'
     type: str = 'text'
     min: float | None = None
     max: float | None = None
@@ -92,6 +93,19 @@ class Setting:
     # like 'Sollwert [{unit}]' - same {name} convention vue-i18n already
     # uses elsewhere in the SPA (e.g. '{count} node(s) selected').
     label_params: dict[str, Any] | None = None
+    # only for type='record-list': the Setting list describing ONE record's
+    # fields (value is then a list[dict]). Sub-field values travel verbatim -
+    # no factor/duration recursion, a record-list sub-field is a plain
+    # number/select/text/checkbox. The whole list is filled by the owning
+    # class in get_settings() (like live 'port' options), not _fill_setting().
+    record_schema: list['Setting'] | None = None
+    # for a record-list 'select' sub-field whose choices are live nodes the
+    # class schema can't enumerate (e.g. an AlertCond's watched node):
+    # 'numeric' | 'usable' | 'any' - resolved client-side by SettingRecordList
+    # against the live node list (wiringConnect.js), and server-side by
+    # feeding the chosen ids through the normal existence/data_range/cycle
+    # checks.
+    node_filter: str | None = None
 
     @property
     def editable(self) -> bool:
@@ -126,6 +140,10 @@ class Setting:
             'options': self.options, 'optional': self.optional or None,
             'factor': self.factor if self.factor != 1 else None,
         }.items() if v is not None}
+        if self.record_schema is not None:
+            attrs['recordSchema'] = [s.to_dict() for s in self.record_schema]
+        if self.node_filter is not None:
+            attrs['nodeFilter'] = self.node_filter
         result: dict[str, Any] = {
             'key': self.key,
             'label': self.label,
@@ -332,8 +350,9 @@ class BusNode(ABC):
             names a real attribute on self, no further transformation
             needed beyond the wire-unit conversion 'duration'-type settings
             already use (see Setting.factor). Fields needing more than that
-            (rcv_unit-dependent bounds, live port options, ...) are filled
-            by hand instead of going through this helper.
+            (rcv_unit-dependent bounds, live port options, a 'record-list'
+            value that must be JSON-serialised, ...) are filled by hand
+            instead of going through this helper.
         """
         value = getattr(self, entry.key)
         if entry.type == 'duration' and entry.factor != 1:

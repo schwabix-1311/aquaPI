@@ -18,7 +18,6 @@ from .driver.base import DriverError
 from .driver.DriverADC import SIMULATED
 from .machineroom import (MachineRoom, MsgBus)
 from .machineroom.msg_bus import BusRole, DataRange
-from .machineroom.alert_nodes import Alert
 from .machineroom.aux_nodes import ScaleAux
 from .machineroom.in_nodes import UiInput
 from .machineroom.hist_nodes import (QUEST_DB, check_questdb_reachable,
@@ -421,15 +420,41 @@ def api_get_node_settings(node_id: str) -> Response:
 
 def _validate_and_cast(key: str, raw_value, vtype: str,
                        vmin: float | None = None, vmax: float | None = None,
-                       voptions: list[str] | None = None, voptional: bool = False):
+                       voptions: list[str] | None = None, voptional: bool = False,
+                       vrecord_schema: list | None = None):
     """ validate & cast a single value against a type/min/max/options -
         shared by the /settings API (sourced from a node's get_settings())
         and the /config node-schema API (sourced from get_node_type_schema());
         raises ValueError on an invalid type or an out-of-range/-list value.
         Values are required (non-empty) unless voptional is set.
+
+        For vtype='record-list' the value is a list of dicts; vrecord_schema
+        is the sub-field list (Setting.to_dict() shape) and each record is
+        validated field-by-field and rebuilt in sub-schema order (dropping
+        any keys not in the schema, e.g. the client's row _key).
     """
     if not voptional and raw_value in (None, '', []):
         raise ValueError(f'{key}: value is required')
+
+    if vtype == 'record-list':
+        if not isinstance(raw_value, list):
+            raise ValueError(f'{key}: expected a list of records')
+        out = []
+        for i, rec in enumerate(raw_value):
+            if not isinstance(rec, dict):
+                raise ValueError(f'{key}[{i}]: expected an object')
+            cast_rec = {}
+            for sf in (vrecord_schema or []):
+                sk = sf['key']
+                sattrs = sf.get('attrs', {})
+                sraw = rec[sk] if sk in rec else sf.get('value')
+                cast_rec[sk] = _validate_and_cast(
+                    f'{key}[{i}].{sk}', sraw, sattrs['type'],
+                    sattrs.get('min'), sattrs.get('max'),
+                    sattrs.get('options'), voptional=False,
+                    vrecord_schema=sattrs.get('recordSchema'))
+            out.append(cast_rec)
+        return out
 
     if vtype in ('number', 'duration'):
         # 'duration' is a plain number on the wire (always seconds) - the
@@ -504,12 +529,22 @@ def api_set_node_settings(node_id: str) -> Response:
     try:
         for key, raw_value in body.items():
             entry = editable[key]
+            sub_schema = ([s.to_dict() for s in entry.record_schema]
+                          if entry.record_schema else None)
             value = _validate_and_cast(key, raw_value, entry.type, entry.min, entry.max,
-                                       entry.options, entry.optional)
+                                       entry.options, entry.optional,
+                                       vrecord_schema=sub_schema)
             if entry.type == 'duration' and entry.factor != 1:
                 # raw_value/value is in the wire unit (seconds) - convert
                 # back to whatever unit the node itself stores internally
                 value = value / entry.factor
+            if entry.type == 'record-list' and entry.record_schema:
+                # a record-list sub-field carrying a live node reference
+                # (node_filter set, e.g. an AlertCond's watched node) gets
+                # the same existence/data_range/cycle check receives does
+                ref_keys = [s.key for s in entry.record_schema if s.node_filter]
+                db.check_watched_nodes(
+                    bus, node_id, [rec[k] for rec in value for k in ref_keys])
             if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
                 calibration_changes.append((key, getattr(node, key), value))
             setattr(node, key, value)
@@ -558,10 +593,14 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
             # handling (below, for *missing* keys) - always pass
             # voptional=True here so this shared validator doesn't also
             # reject a submitted blank value; that's a separate,
-            # /settings-only concept (Setting.optional).
+            # /settings-only concept (Setting.optional). 'options' and
+            # 'recordSchema' ARE passed, so a select/multiselect/record-list
+            # field's choices are enforced on the create/edit path too.
             result[key] = _validate_and_cast(key, raw_fields[key], attrs['type'],
                                              attrs.get('min'), attrs.get('max'),
-                                             voptional=True)
+                                             voptions=attrs.get('options'),
+                                             voptional=True,
+                                             vrecord_schema=attrs.get('recordSchema'))
         elif require_all:
             if field.get('value') is not None:
                 result[key] = field['value']
@@ -574,11 +613,10 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
 @login_required
 def api_node_types() -> Response:
     """ metadata describing every creatable node type: its fields and
-        how many 'receives' connections it accepts. Alert is included
-        but always reports 'receives': 'none' - its conditions (which
-        node(s) it watches, and under what limits) are a separate
-        resource, added/edited after creation via
-        PUT /api/nodes/<id>/conditions, not through this generic schema.
+        how many 'receives' connections it accepts. Alert reports
+        'receives': 'none' - it has no plain receives list; which node(s)
+        it watches (and under what limits) is a 'conditions' field of
+        type 'record-list' in its schema, edited like any other field.
     """
     return jsonify(db.get_node_type_schema())
 
@@ -636,6 +674,10 @@ def api_create_node() -> Response:
     try:
         fields = _validate_fields(schema['fields'], raw_fields, require_all=True)
         node = db.build_node(type_name, name, receives, fields)
+        # an Alert watches nodes via its conditions, not 'receives' - same
+        # existence/data_range/cycle check
+        db.check_watched_nodes(bus, node_id,
+                               [c['node_id'] for c in fields.get('conditions', [])])
     except (ValueError, KeyError) as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
 
@@ -713,6 +755,9 @@ def api_update_node(node_id: str) -> Response:
         try:
             fields = db.convert_duration_fields(
                 type(node), _validate_fields(schema['fields'], raw_fields, require_all=False))
+            if 'conditions' in fields:
+                db.check_watched_nodes(bus, node_id,
+                                       [c['node_id'] for c in fields['conditions']])
         except ValueError as ex:
             return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
         for key, value in fields.items():
@@ -739,77 +784,6 @@ def api_update_node(node_id: str) -> Response:
     log.verbose('User %r updated node %r: %s', current_user.username, node_id, list(body.keys()))
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_node', node_id, {'fields': list(body.keys())})
-
-    return jsonify(_node_to_dict(node))
-
-
-@bp.route('/api/nodes/<node_id>/conditions', methods=['PUT'])
-@roles_required('operator', 'admin')
-def api_set_alert_conditions(node_id: str) -> Response:
-    """ bulk-replace every AlertCond of an Alert node in one call -
-        add/change/remove are all expressed as the new, complete list.
-        AlertCond has no stable per-item id (stored/compared by Python
-        object identity inside a set, not a persisted key), so no
-        partial add/remove-by-id route is offered; a full bulk-replace
-        (matching PUT /api/dashboard/'s existing convention) is atomic
-        and needs no new identity scheme. An empty list is accepted -
-        it silences the alert without deleting the node (and its
-        port/repeat/notification prefs).
-    """
-    bus = the_bus()
-    if not bus:
-        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
-
-    node = bus.get_node(node_id)
-    if not node:
-        return Response(status=HTTPStatus.NOT_FOUND)
-    if not isinstance(node, Alert):
-        return jsonify(error=f'{type(node).__name__} does not have alert conditions'), \
-            HTTPStatus.BAD_REQUEST
-
-    body = request.get_json(silent=True)
-    if not isinstance(body, dict) or not isinstance(body.get('conditions'), list):
-        return jsonify(error="Body must be a JSON object with a 'conditions' list"), \
-            HTTPStatus.BAD_REQUEST
-
-    conditions = set()
-    for i, raw in enumerate(body['conditions']):
-        if not isinstance(raw, dict):
-            return jsonify(error=f'conditions[{i}] must be an object'), HTTPStatus.BAD_REQUEST
-
-        cls = db.ALERT_COND_FACTORY.get(raw.get('class'))
-        if not cls:
-            return jsonify(error=f"conditions[{i}]: unknown class {raw.get('class')!r}"), \
-                HTTPStatus.BAD_REQUEST
-
-        cond_node_id = raw.get('node_id')
-        if not isinstance(cond_node_id, str) or not bus.get_node(cond_node_id):
-            return jsonify(error=f'conditions[{i}]: unknown node_id {cond_node_id!r}'), \
-                HTTPStatus.BAD_REQUEST
-
-        try:
-            limit = _validate_and_cast(f'conditions[{i}].limit', raw.get('limit'), 'number')
-            duration = _validate_and_cast(f'conditions[{i}].duration', raw.get('duration', 0),
-                                          'number', vmin=0, voptional=True)
-        except ValueError as ex:
-            return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
-
-        conditions.add(cls(cond_node_id, limit=limit, duration=int(duration)))
-
-    receives = [c.node_id for c in conditions]
-    if db.would_create_cycle(bus, node_id, receives):
-        return jsonify(error='This wiring would create a cycle'), HTTPStatus.BAD_REQUEST
-
-    node.conditions = conditions
-    node.receives = receives
-
-    mr: MachineRoom = current_app.extensions['machineroom']
-    mr.save_nodes(bus)
-
-    log.verbose('User %r replaced conditions of alert %r: %d condition(s)',
-                current_user.username, node_id, len(conditions))
-    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
-                           'update_alert_conditions', node_id, {'count': len(conditions)})
 
     return jsonify(_node_to_dict(node))
 

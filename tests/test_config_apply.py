@@ -358,6 +358,45 @@ def test_apply_delete_source_frees_its_port_despite_stale_receives(client, users
     assert IoRegistry._map[port].used == 0
 
 
+def test_apply_update_keeps_nodes_own_in_use_port(client, users, bus, app):
+    """ get_node_type_schema()'s 'port' select lists only *free* ports, but
+        the /wiring editor resubmits the whole fields object on any edit -
+        so an unrelated change to a node that holds a port must not be
+        rejected just because its own (now in-use) port isn't in the free
+        list. merge_live_select_options() unions it back in.
+    """
+    _login(client, 'admin1', 'adminPass123')
+    port = 'ADC #1 in 0'
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-s', 'type': 'AnalogInput', 'name': 'Becken',
+            'fields': {'unit': '°C', 'port': port},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    sensor_id = resp.get_json()['id_map']['tmp-s']
+    port_field = next(f for f in db.get_node_type_schema()['AnalogInput']['fields']
+                      if f['key'] == 'port')
+    assert port not in port_field['attrs']['options']  # in use -> not offered
+
+    # an edit that changes 'interval' but resubmits the held port verbatim
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': sensor_id,
+                     'fields': {'unit': '°C', 'port': port, 'interval': 30.0}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    assert bus.get_node(sensor_id).interval == 30.0
+    assert bus.get_node(sensor_id).port == port
+
+    # a genuinely bogus port is still rejected
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': sensor_id,
+                     'fields': {'unit': '°C', 'port': 'ADC #9 in 9', 'interval': 30.0}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+
+
 def test_apply_rejects_string_source_wiring(client, users, bus, app):
     """ a STRING-typed source (the Alert 'warnungen') cannot be wired as
         a 'receives' input - every consumer treats the value numerically

@@ -757,7 +757,9 @@ def api_update_node(node_id: str) -> Response:
                 HTTPStatus.BAD_REQUEST
         try:
             fields = db.convert_duration_fields(
-                type(node), _validate_fields(schema['fields'], raw_fields, require_all=False))
+                type(node), _validate_fields(
+                    db.merge_live_select_options(node, schema['fields']),
+                    raw_fields, require_all=False))
             if 'conditions' in fields:
                 db.check_watched_nodes(bus, node_id,
                                        [c['node_id'] for c in fields['conditions']])

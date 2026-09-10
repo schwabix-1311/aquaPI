@@ -155,6 +155,31 @@ def convert_duration_fields(cls: type[BusNode], fields: dict[str, Any]) -> dict[
     return converted
 
 
+def merge_live_select_options(node: BusNode,
+                              schema_fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """ get_node_type_schema() lists only the *currently-free* choices for a
+        live-filtered 'select'/'multiselect' field - notably 'port', whose
+        options are IoRegistry.get_ports_by_function(in_use=False). An
+        *update* that leaves such a field unchanged still resubmits it, and
+        the value the node already holds (its own in-use port) is then not
+        in that list and would fail validation. Return a copy of the field
+        list with each select field's options unioned with the value the
+        node currently carries, mirroring InputNode/DeviceNode._port_setting().
+    """
+    patched: list[dict[str, Any]] = []
+    for field in schema_fields:
+        attrs = field.get('attrs', {})
+        opts = attrs.get('options')
+        if attrs.get('type') in ('select', 'multiselect') and isinstance(opts, list):
+            current = getattr(node, field['key'], None)
+            held = current if attrs['type'] == 'multiselect' else [current]
+            extra = [v for v in held if isinstance(v, str) and v and v not in opts]
+            if extra:
+                field = {**field, 'attrs': {**attrs, 'options': sorted(opts + extra)}}
+        patched.append(field)
+    return patched
+
+
 def _mk_receives_arg(receives_kind: str, receives: list[str]):
     """ shape the plain list of receiver ids the API accepts into what
         each node type's constructor expects
@@ -551,7 +576,9 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                 raise ConfigDiffError(f'{type(node).__name__} does not support editing fields', upd)
             try:
                 upd['_fields'] = convert_duration_fields(
-                    type(node), validate_fields(schema['fields'], raw_fields, require_all=False))
+                    type(node), validate_fields(
+                        merge_live_select_options(node, schema['fields']),
+                        raw_fields, require_all=False))
             except ValueError as ex:
                 raise ConfigDiffError(str(ex), upd) from ex
             # editing an Alert's conditions changes what it watches -

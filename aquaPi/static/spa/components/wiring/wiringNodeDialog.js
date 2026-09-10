@@ -147,11 +147,29 @@ const WiringNodeDialog = {
 		// the schema's own 'value' is only ever a suggested default, not
 		// this field's actual current value.
 		formFieldItems: function() {
-			return this.visibleFields.map(field => ({
-				...field,
-				label: this.$t('pages.settings.fields.' + field.label),
-				value: this.form.fields[field.key],
-			}))
+			return this.visibleFields.map(field => {
+				const value = this.form.fields[field.key]
+				let attrs = field.attrs
+				// a live-filtered select (notably 'port') only lists the
+				// currently-free choices; when editing, whatever this node
+				// already holds (its own in-use port) must stay selectable -
+				// mirrors the backend's merge_live_select_options() /
+				// DeviceNode/InputNode._port_setting()
+				if (this.editNode && attrs && Array.isArray(attrs.options)
+						&& (attrs.type === 'select' || attrs.type === 'multiselect')) {
+					const held = attrs.type === 'multiselect' ? (value || []) : [value]
+					const missing = held.filter(v => v && !attrs.options.includes(v))
+					if (missing.length) {
+						attrs = {...attrs, options: [...attrs.options, ...missing].sort()}
+					}
+				}
+				return {
+					...field,
+					attrs,
+					label: this.$t('pages.settings.fields.' + field.label),
+					value,
+				}
+			})
 		},
 		// only nodes that may actually feed this one (see wiringConnect.js):
 		// a data producer that isn't STRING-typed or a History. The target

@@ -131,25 +131,47 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 			}
 		},
 
-		fetchNode(payload) {
+		async fetchNode(payload) {
 			const { nodeId } = payload
 
-			return fetch('/api/nodes/' + nodeId, {
-				method: 'get',
-				mode: 'same-origin',
-				cache: 'no-cache',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-					'Accept': 'application/json'
-				},
-				redirect: 'follow'
-			})
-				.then(response => response.json())
-				.then(response => (response.result == 'SUCCESS' ? response.data : null))
-				.catch((e) => {
-					console.error('Failed to load node ' + nodeId + ': ' + e.message)
-					return null
+			let response
+			try {
+				response = await fetch('/api/nodes/' + nodeId, {
+					method: 'get',
+					mode: 'same-origin',
+					cache: 'no-cache',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Accept': 'application/json'
+					},
+					redirect: 'follow'
 				})
+			} catch (e) {
+				console.error('Failed to load node ' + nodeId + ': ' + e.message)
+				return null
+			}
+
+			// fetchNodes() lists all node ids, then fetches each in parallel -
+			// one can be deleted (elsewhere, or by an SSE-triggered reload)
+			// between the list and this fetch. That 404 has no body, so
+			// parsing it as JSON would throw; treat it as the expected "it's
+			// gone" case instead of a load failure.
+			if (response.status === 404) {
+				console.debug(`fetchNode: ${nodeId} no longer exists (404 above is expected)`)
+				return null
+			}
+			if (!response.ok) {
+				console.error(`Failed to load node ${nodeId}: HTTP ${response.status}`)
+				return null
+			}
+
+			try {
+				const body = await response.json()
+				return body.result === 'SUCCESS' ? body.data : null
+			} catch (e) {
+				console.error('Failed to load node ' + nodeId + ': ' + e.message)
+				return null
+			}
 		},
 
 		async fetchNodes() {

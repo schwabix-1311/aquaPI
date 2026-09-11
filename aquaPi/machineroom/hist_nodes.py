@@ -511,7 +511,11 @@ class History(BusListener):
     @classmethod
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
+        # min 1 h: capacity is the in-memory ring-buffer depth in hours, and
+        # anything below 1 h rounds to 0 -> deque(maxlen=0) which can't hold
+        # even the just-fed sample (feed() guards the crash, but a 0-depth
+        # History is pointless)
         schema.append(Setting('capacity', 'capacity', 24 * 60*60,
-                              type='duration', min=0, max=7*24*60*60, step=60*60,
-                              factor=60*60))
+                              type='duration', min=60*60, max=7*24*60*60,
+                              step=60*60, factor=60*60))
         return schema

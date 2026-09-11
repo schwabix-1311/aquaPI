@@ -82,15 +82,35 @@ const App = {
 			} else if (typeof payload == 'object') {
 				nodeId = payload.id
 			}
+			if (!nodeId) {
+				return
+			}
 
-			const response = await fetch('/api/nodes/' + nodeId)
+			let response
+			try {
+				response = await fetch('/api/nodes/' + encodeURIComponent(nodeId))
+			} catch (e) {
+				console.error(`SSE: network error fetching node ${nodeId}`, e)
+				return
+			}
+
+			// the SSE event can race a delete: the node is already gone by the
+			// time we fetch it. That's expected - drop it from the store, don't
+			// try to parse a 404's (empty/HTML) body as JSON.
+			if (response.status === 404) {
+				this.dashboardStore.removeNode(nodeId)
+				return
+			}
+			if (!response.ok) {
+				console.error(`SSE: fetching node ${nodeId} failed (${response.status})`)
+				return
+			}
 
 			try {
-				const {result, data} = await response.json()
+				const {data} = await response.json()
 				this.dashboardStore.setNode(data)
 			} catch (e) {
-				console.error(`Could not fetch node ${nodeId}`)
-				console.log(e)
+				console.error(`SSE: could not parse node ${nodeId}`, e)
 			}
 		}
 	},

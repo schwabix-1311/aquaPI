@@ -252,6 +252,14 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 				console.error(e)
 			}
 		},
+		removeNode(nodeId) {
+			if (this.nodes[nodeId] === undefined) {
+				return
+			}
+			const nodes = Object.assign({}, this.nodes)
+			delete nodes[nodeId]
+			this.nodes = nodes
+		},
 		setNodes(payload) {
 			this.nodes = Object.assign({}, payload)
 		},

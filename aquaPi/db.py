@@ -453,19 +453,55 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             raise ConfigDiffError(f'Duplicate update for node id: {upd_id!r}', upd)
         updates_by_id[upd_id] = upd
 
-    # ports this same diff releases - a deleted node's port, or the old
-    # port of an update that reassigns/clears it. A create or another
-    # update may legitimately take one of these even though it still
-    # reads as "in use" in get_node_type_schema()'s free-ports list.
+    # IoRegistry lookup used both to work out what a delete/reassign frees
+    # (below) and, later, whether two of this diff's own port claims
+    # collide (the dual-use-pin check further down)
+    from .driver import IoRegistry
+    try:
+        io_map = IoRegistry.get()._map
+    except Exception:
+        io_map = {}
+
+    def _reserved_by(port: str) -> set[str]:
+        """ the IoRegistry names a claim on `port` occupies: the port plus
+            its direct deps (deps are plain GPIO pins, deps=[] - one level
+            suffices). Empty for a shareable port (Email/Telegram). """
+        io_port = io_map.get(port)
+        if io_port is not None and getattr(io_port, 'shareable', False):
+            return set()
+        return {port, *(getattr(io_port, 'deps', None) or [])}
+
+    # ports/pins this same diff releases - a deleted node's port, or the
+    # old port of an update that reassigns/clears it, PLUS that port's
+    # IoRegistry deps: deleting a 'PWM 1' node frees 'GPIO 19 out' too, so
+    # a plain-GPIO node may take over that pin in the very same diff. But
+    # not if the dep is a shared bus pin (I2C SCL/SDA, a 1-Wire pin) still
+    # held by some OTHER, untouched node - exclude anything any node this
+    # diff leaves alone still needs, primary or dep.
+    reassigned_ids = {
+        upd_id for upd_id, upd in updates_by_id.items()
+        if isinstance(upd.get('fields'), dict) and 'port' in upd['fields']
+        and upd['fields']['port'] != (getattr(live_nodes[upd_id], 'port', '') or '')
+    }
+    still_needed: set[str] = set()
+    for node_id, node in live_nodes.items():
+        if node_id in deleted_ids or node_id in reassigned_ids:
+            continue
+        held = getattr(node, 'port', '') or ''
+        if held:
+            still_needed |= _reserved_by(held)
+
     freed_ports: set[str] = set()
     for del_id in deleted_ids:
-        freed_ports.add(getattr(live_nodes[del_id], 'port', '') or '')
-    for upd_id, upd in updates_by_id.items():
-        raw = upd.get('fields')
-        if isinstance(raw, dict) and 'port' in raw:
-            old_port = getattr(live_nodes[upd_id], 'port', '') or ''
-            if old_port and raw['port'] != old_port:
-                freed_ports.add(old_port)
+        p = getattr(live_nodes[del_id], 'port', '') or ''
+        if p:
+            freed_ports |= _reserved_by(p) - still_needed
+            freed_ports.add(p)
+    for upd_id in reassigned_ids:
+        old_port = getattr(live_nodes[upd_id], 'port', '') or ''
+        if old_port:
+            freed_ports |= _reserved_by(old_port) - still_needed
+            freed_ports.add(old_port)
     freed_ports.discard('')
 
     def _schema_allowing_ports(schema_fields: list[dict[str, Any]]
@@ -667,21 +703,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     # pins); IoRegistry refcounts those and driver_factory() never rejects
     # on a dep. Without this check a collision only surfaces as a
     # DriverPortInuseError - or a silent double-claim - deep in the apply
-    # phase below.
-    from .driver import IoRegistry
-    try:
-        io_map = IoRegistry.get()._map
-    except Exception:
-        io_map = {}
-
-    def _reserved_by(port: str) -> set[str]:
-        """ the IoRegistry names a claim on `port` occupies: the port plus
-            its direct deps (deps are plain GPIO pins, deps=[] - one level
-            suffices). Empty for a shareable port (Email/Telegram). """
-        io_port = io_map.get(port)
-        if io_port is not None and getattr(io_port, 'shareable', False):
-            return set()
-        return {port, *(getattr(io_port, 'deps', None) or [])}
+    # phase below. (io_map/_reserved_by are defined earlier, alongside
+    # freed_ports, and reused here.)
 
     # (owner_id, primary_port, reserved_names) for every node this diff
     # creates or re-ports - an untouched live node's ports are already

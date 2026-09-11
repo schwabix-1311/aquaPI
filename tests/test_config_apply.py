@@ -506,6 +506,58 @@ def test_apply_allows_shared_bus_deps(client, users, bus, app):
     assert bus.get_node('sensorb').port == 'ADC #1 in 1'
 
 
+def test_apply_reuses_a_freed_dual_use_pin_in_the_same_diff(client, users, bus, app):
+    """ deleting a 'PWM 1' node frees the dual-use pin it also reserved
+        as a dep ('GPIO 19 out'), not just the port name 'PWM 1' itself -
+        a plain-GPIO node may take that pin over in the very same diff.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'ad', 'type': 'AnalogDevice', 'name': 'Dimmer2',
+                     'receives': ['heizen'], 'fields': {'port': 'PWM 1'}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    ad_id = resp.get_json()['id_map']['ad']
+
+    resp = client.post('/api/config/apply', json={
+        'deletes': [ad_id],
+        'creates': [{'temp_id': 'sw', 'type': 'SwitchDevice', 'name': 'Relais3',
+                     'receives': ['heizen'], 'fields': {'port': 'GPIO 19 out'}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    assert bus.get_node(resp.get_json()['id_map']['sw']).port == 'GPIO 19 out'
+
+
+def test_apply_does_not_over_free_a_shared_bus_pin(client, users, bus, app):
+    """ deleting one of two ADC channels sharing the I2C-bus pins must NOT
+        free those pins for a third node - the surviving channel still
+        needs them (unlike the dual-use-pin case above, where nobody else
+        was left holding the freed pin).
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [
+            {'temp_id': 'a', 'type': 'AnalogInput', 'name': 'SensorC',
+             'fields': {'unit': '°C', 'port': 'ADC #1 in 0'}},
+            {'temp_id': 'b', 'type': 'AnalogInput', 'name': 'SensorD',
+             'fields': {'unit': '°C', 'port': 'ADC #1 in 1'}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    a_id = resp.get_json()['id_map']['a']
+
+    resp = client.post('/api/config/apply', json={
+        'deletes': [a_id],
+        'creates': [{'temp_id': 'sw', 'type': 'SwitchDevice', 'name': 'Relais5',
+                     'receives': ['heizen'], 'fields': {'port': 'GPIO 2 out'}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert bus.get_node('relais5') is None
+    assert bus.get_node('sensord') is not None   # SensorD (and its bus claim) survived
+
+
 def test_apply_swaps_two_nodes_ports(client, users, bus, app):
     """ two updates that swap ports A<->B have a valid end state; the apply
         phase releases both before reclaiming so it doesn't transiently

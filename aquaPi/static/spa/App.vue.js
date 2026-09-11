@@ -96,8 +96,11 @@ const App = {
 
 			// the SSE event can race a delete: the node is already gone by the
 			// time we fetch it. That's expected - drop it from the store, don't
-			// try to parse a 404's (empty/HTML) body as JSON.
+			// try to parse a 404's (empty/HTML) body as JSON. The browser's own
+			// network log still shows the 404 itself (not ours to suppress);
+			// this just labels it so it doesn't read as a bug.
 			if (response.status === 404) {
+				console.debug(`SSE: node ${nodeId} already deleted (404 above is expected)`)
 				this.dashboardStore.removeNode(nodeId)
 				return
 			}

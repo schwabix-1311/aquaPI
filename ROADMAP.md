@@ -50,9 +50,12 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   can hang off a future `nodeFilterByClass` schema hint
   (`recordListRows.nodeFilterFor` already reads it).
 - The SPA's other Pinia stores (`dashboard`, `settings`, `auth`,
-  `users`, `notifications`) still hand-roll the fetch boilerplate that
-  `store/apiRequest.js` now encapsulates for the wiring store - migrate
-  them in a follow-up.
+  `users`, `notifications`) now use `store/apiRequest.js` too - DONE.
+  `apiRequest()` gained an optional `{form: true}` mode (x-www-form-
+  urlencoded body) for `auth`'s plain Flask-Login routes (`/login`,
+  `/reset-password`), which reply with `{result, message}` rather than
+  the JSON API's `{error}` shape - those callers still read `res.data`
+  themselves instead of `res.error`.
 - Alert "reverse chip" idea - show the causing node on a triggered
   AlertCond widget; blocked on no directed bus messaging today.
 - Remote Shelly + temperature add-on - paused mid-implementation,

@@ -1,5 +1,6 @@
 import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 import i18n from '../../i18n/index.js';
+import {apiRequest} from '../apiRequest.js';
 
 export const useSettingsStore = Pinia.defineStore('settings', {
 	state: () => ({
@@ -18,81 +19,37 @@ export const useSettingsStore = Pinia.defineStore('settings', {
 
 	actions: {
 		async fetchNodeSettings(nodeId) {
-			try {
-				const response = await fetch('/api/nodes/' + nodeId + '/settings', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
+			const res = await apiRequest('get', '/api/nodes/' + nodeId + '/settings')
 
-				if (response.status == 200) {
-					const settings = await response.json()
-					this.setSettings({nodeId, settings})
-					this.setError({nodeId, error: null})
-					return true
-				}
-
-				this.setError({nodeId, error: 'HTTP ' + response.status})
-				console.error('ERROR loading settings for node ' + nodeId + ': HTTP ' + response.status)
-				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
-					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodeSettings')}),
-					color: 'error',
-					timeout: 6000,
-				})
-				return false
-			} catch (e) {
-				this.setError({nodeId, error: e.message})
-				console.error('ERROR loading settings for node ' + nodeId + ': ' + e.message)
-				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
-					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodeSettings')}),
-					color: 'error',
-					timeout: 6000,
-				})
-				return false
+			if (res.ok) {
+				this.setSettings({nodeId, settings: res.data})
+				this.setError({nodeId, error: null})
+				return true
 			}
+
+			this.setError({nodeId, error: res.error})
+			console.error('ERROR loading settings for node ' + nodeId + ': ' + res.error)
+			EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+				message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.nodeSettings')}),
+				color: 'error',
+				timeout: 6000,
+			})
+			return false
 		},
 
 		async updateNodeSetting(payload) {
 			const {nodeId, key, value} = payload
 
-			try {
-				const response = await fetch('/api/nodes/' + nodeId + '/settings', {
-					method: 'put',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({[key]: value}),
-				})
+			const res = await apiRequest('put', '/api/nodes/' + nodeId + '/settings', {[key]: value})
 
-				if (response.status == 200) {
-					const settings = await response.json()
-					this.setSettings({nodeId, settings})
-					this.setError({nodeId, error: null})
-					return true
-				}
-
-				let error = 'HTTP ' + response.status
-				try {
-					const body = await response.json()
-					if (body && body.error) {
-						error = body.error
-					}
-				} catch (e) {}
-
-				this.setError({nodeId, error})
-				return false
-			} catch (e) {
-				this.setError({nodeId, error: e.message})
-				return false
+			if (res.ok) {
+				this.setSettings({nodeId, settings: res.data})
+				this.setError({nodeId, error: null})
+				return true
 			}
+
+			this.setError({nodeId, error: res.error})
+			return false
 		},
 
 		setSettings(payload) {

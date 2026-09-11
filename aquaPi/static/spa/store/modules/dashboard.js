@@ -1,5 +1,6 @@
 import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 import i18n from '../../i18n/index.js';
+import {apiRequest} from '../apiRequest.js';
 
 export const useDashboardStore = Pinia.defineStore('dashboard', {
 	state: () => ({
@@ -24,42 +25,15 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 
 	actions: {
 		async fetchDashboard() {
-			try {
-				const response = await fetch('/api/dashboard/', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-				if (response.status !== 200) {
-					return null
-				}
-				return await response.json()
-			} catch (e) {
-				return null
-			}
+			const res = await apiRequest('get', '/api/dashboard/')
+			return res.ok ? res.data : null
 		},
 		async saveDashboard(config) {
-			try {
-				const response = await fetch('/api/dashboard/', {
-					method: 'put',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(config),
-				})
-				return response.status === 200
-			} catch (e) {
-				console.error('ERROR saving dashboard config: ' + e.message)
-				return false
+			const res = await apiRequest('put', '/api/dashboard/', config)
+			if (!res.ok) {
+				console.error('ERROR saving dashboard config: ' + res.error)
 			}
+			return res.ok
 		},
 		async loadConfig() {
 			let configChanged = false
@@ -134,44 +108,23 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 		async fetchNode(payload) {
 			const { nodeId } = payload
 
-			let response
-			try {
-				response = await fetch('/api/nodes/' + nodeId, {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-					redirect: 'follow'
-				})
-			} catch (e) {
-				console.error('Failed to load node ' + nodeId + ': ' + e.message)
-				return null
-			}
+			const res = await apiRequest('get', '/api/nodes/' + nodeId)
 
 			// fetchNodes() lists all node ids, then fetches each in parallel -
 			// one can be deleted (elsewhere, or by an SSE-triggered reload)
 			// between the list and this fetch. That 404 has no body, so
-			// parsing it as JSON would throw; treat it as the expected "it's
-			// gone" case instead of a load failure.
-			if (response.status === 404) {
+			// treat it as the expected "it's gone" case instead of a load
+			// failure.
+			if (res.status === 404) {
 				console.debug(`fetchNode: ${nodeId} no longer exists (404 above is expected)`)
 				return null
 			}
-			if (!response.ok) {
-				console.error(`Failed to load node ${nodeId}: HTTP ${response.status}`)
+			if (!res.ok) {
+				console.error(`Failed to load node ${nodeId}: ${res.error}`)
 				return null
 			}
 
-			try {
-				const body = await response.json()
-				return body.result === 'SUCCESS' ? body.data : null
-			} catch (e) {
-				console.error('Failed to load node ' + nodeId + ': ' + e.message)
-				return null
-			}
+			return res.data && res.data.result === 'SUCCESS' ? res.data.data : null
 		},
 
 		async fetchNodes() {
@@ -179,24 +132,14 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 
 			try {
 				// Fetch all nodes (returns array of node id)
-				const response = await fetch('/api/nodes/', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-					redirect: 'follow'
-				});
-
-				if (response.status !== 200) {
-					throw new Error('GET /api/nodes/ returned ' + response.status)
+				const res = await apiRequest('get', '/api/nodes/')
+				if (!res.ok) {
+					throw new Error('GET /api/nodes/ returned ' + res.status)
 				}
 
-				const nodeIds = await response.json()
+				const nodeIds = res.data
 
-				if (nodeIds.length) {
+				if (nodeIds && nodeIds.length) {
 					const values = await Promise.all(nodeIds.map(nodeId => this.fetchNode({nodeId})))
 					values.filter(item => item).forEach(item => {
 						nodes[item.id] = item
@@ -229,36 +172,21 @@ export const useDashboardStore = Pinia.defineStore('dashboard', {
 				step = 0
 			}
 
-			try {
-				const fetchResult = await fetch('/api/history/' + nodeId + '?start=' + start + '&step=' + step, {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-					redirect: 'follow'
-				});
+			const res = await apiRequest('get',
+				'/api/history/' + nodeId + '?start=' + start + '&step=' + step)
 
-				if (fetchResult.status !== 200) {
-					throw new Error('GET /api/history/ returned ' + fetchResult.status)
-				}
-
-				const response = await fetchResult.json()
-				if (response.result == 'SUCCESS' && response.data) {
-					return response.data
-				}
-				throw new Error('Unexpected response: ' + JSON.stringify(response))
-			} catch (e) {
-				console.error('ERROR loading history for node ' + nodeId + ': ' + e.message)
-				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
-					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.history')}),
-					color: 'error',
-					timeout: 6000,
-				})
-				return null
+			if (res.ok && res.data && res.data.result == 'SUCCESS' && res.data.data) {
+				return res.data.data
 			}
+
+			console.error('ERROR loading history for node ' + nodeId + ': '
+				+ (res.error || 'Unexpected response: ' + JSON.stringify(res.data)))
+			EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
+				message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.history')}),
+				color: 'error',
+				timeout: 6000,
+			})
+			return null
 		},
 
 		setWidgets(payload) {

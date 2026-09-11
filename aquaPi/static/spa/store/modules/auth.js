@@ -1,4 +1,5 @@
 import {AQUAPI_EVENTS, EventBus} from '../../components/app/EventBus.js';
+import {apiRequest} from '../apiRequest.js';
 import {useUsersStore} from './users.js';
 
 export const useAuthStore = Pinia.defineStore('auth', {
@@ -20,31 +21,20 @@ export const useAuthStore = Pinia.defineStore('auth', {
 
 	actions: {
 		async login(payload) {
-			let data
-			try {
-				const response = await fetch('/login', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Content-Type': 'application/x-www-form-urlencoded',
-						'Accept': 'application/json',
-					},
-					body: new URLSearchParams({username: payload.username, password: payload.password}),
-				})
-				data = await response.json().catch(() => null)
-				if (!data) {
-					// non-JSON body (e.g. a 500 error page) - the status
-					// code is the only useful information left
-					return {ok: false, error: 'HTTP ' + response.status}
-				}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			// these are plain Flask-Login form routes, not the JSON /api/*
+			// surface - {form: true} posts x-www-form-urlencoded, and a
+			// wrong password/username still comes back HTTP 200 with
+			// {result: 'FAIL', message}, so success is read from the body,
+			// not apiRequest()'s own ok/error (HTTP-status-derived)
+			const res = await apiRequest('post', '/login',
+				{username: payload.username, password: payload.password}, {form: true})
+			if (!res.data) {
+				// non-JSON body (e.g. a 500 error page) - the status code is
+				// the only useful information left
+				return {ok: false, error: res.error || ('HTTP ' + res.status)}
 			}
-
-			if (data.result !== 'SUCCESS') {
-				return {ok: false, error: data.message || 'Login failed'}
+			if (res.data.result !== 'SUCCESS') {
+				return {ok: false, error: res.data.message || 'Login failed'}
 			}
 
 			// the login itself only confirms the credentials - fetch the
@@ -56,19 +46,9 @@ export const useAuthStore = Pinia.defineStore('auth', {
 			return {ok: true}
 		},
 		async logout() {
-			try {
-				await fetch('/logout', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-					},
-				})
-			} catch (e) {
-				// best-effort: still refresh identity below
-			}
+			// best-effort: apiRequest() never throws, and its result is
+			// intentionally ignored here - either way, refresh identity below
+			await apiRequest('get', '/logout')
 			// the backend immediately re-establishes the reserved
 			// <anonymous> session on the very next request (see auth.py's
 			// before_request hook) - refetch identity instead of freezing
@@ -92,68 +72,26 @@ export const useAuthStore = Pinia.defineStore('auth', {
 		},
 
 		async requestPasswordReset(username) {
-			try {
-				const response = await fetch('/reset-password', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Content-Type': 'application/x-www-form-urlencoded',
-						'Accept': 'application/json',
-					},
-					body: new URLSearchParams({username}),
-				})
-				const data = await response.json().catch(() => null)
-				if (!data || data.result !== 'SUCCESS') {
-					return {ok: false, error: (data && data.message) || 'HTTP ' + response.status}
-				}
-				return {ok: true}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('post', '/reset-password', {username}, {form: true})
+			if (!res.data || res.data.result !== 'SUCCESS') {
+				return {ok: false, error: (res.data && res.data.message) || res.error || ('HTTP ' + res.status)}
 			}
+			return {ok: true}
 		},
 
 		async checkResetToken(token) {
-			try {
-				const response = await fetch('/reset-password/' + token, {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-					},
-				})
-				const data = await response.json().catch(() => null)
-				return !!(data && data.valid)
-			} catch (e) {
-				return false
-			}
+			const res = await apiRequest('get', '/reset-password/' + token)
+			return !!(res.data && res.data.valid)
 		},
 
 		async confirmPasswordReset(token, password, password2) {
-			try {
-				const response = await fetch('/reset-password/' + token, {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Content-Type': 'application/x-www-form-urlencoded',
-						'Accept': 'application/json',
-					},
-					body: new URLSearchParams({password, password2}),
-				})
-				const data = await response.json().catch(() => null)
-				if (!data || data.result !== 'SUCCESS') {
-					return {ok: false, error: (data && data.message) || 'HTTP ' + response.status}
-				}
-				this.resetToken = null
-				return {ok: true}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('post', '/reset-password/' + token,
+				{password, password2}, {form: true})
+			if (!res.data || res.data.result !== 'SUCCESS') {
+				return {ok: false, error: (res.data && res.data.message) || res.error || ('HTTP ' + res.status)}
 			}
+			this.resetToken = null
+			return {ok: true}
 		},
 	}
 })

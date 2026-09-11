@@ -1,5 +1,6 @@
 import {EventBus, AQUAPI_EVENTS} from '../../components/app/EventBus.js';
 import i18n from '../../i18n/index.js';
+import {apiRequest} from '../apiRequest.js';
 
 export const useUsersStore = Pinia.defineStore('users', {
 	state: () => ({
@@ -29,50 +30,17 @@ export const useUsersStore = Pinia.defineStore('users', {
 
 	actions: {
 		async fetchCurrentUser() {
-			try {
-				const response = await fetch('/api/users/me', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-
-				if (response.status == 200) {
-					const user = await response.json()
-					this.setCurrentUser(user)
-					return user
-				}
-			} catch (e) {
-				// not logged in (yet), or network error - keep currentUser null
-			}
-			this.setCurrentUser(null)
-			return null
+			// not logged in (yet), or network error - keep currentUser null,
+			// no error log (this is the expected state before a session exists)
+			const res = await apiRequest('get', '/api/users/me')
+			this.setCurrentUser(res.ok ? res.data : null)
+			return res.ok ? res.data : null
 		},
 
 		async fetchAll() {
-			try {
-				const response = await fetch('/api/users/', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-
-				if (response.status !== 200) {
-					throw new Error('GET /api/users/ returned ' + response.status)
-				}
-
-				const users = await response.json()
-				this.setList(users)
-				return users
-			} catch (e) {
-				console.error('ERROR loading users: ' + e.message)
+			const res = await apiRequest('get', '/api/users/')
+			if (!res.ok) {
+				console.error('ERROR loading users: ' + res.error)
 				EventBus.$emit(AQUAPI_EVENTS.TOAST_REQUESTED, {
 					message: i18n.global.t('misc.toast.loadError', {what: i18n.global.t('misc.toast.what.users')}),
 					color: 'error',
@@ -80,106 +48,45 @@ export const useUsersStore = Pinia.defineStore('users', {
 				})
 				return []
 			}
+			this.setList(res.data)
+			return res.data
 		},
 
 		async suggestPassword() {
-			try {
-				const response = await fetch('/api/users/suggest-password', {
-					method: 'get',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json'
-					},
-				})
-
-				if (response.status !== 200) {
-					throw new Error('GET /api/users/suggest-password returned ' + response.status)
-				}
-
-				const body = await response.json()
-				return body.password
-			} catch (e) {
-				console.error('ERROR suggesting password: ' + e.message)
+			const res = await apiRequest('get', '/api/users/suggest-password')
+			if (!res.ok) {
+				console.error('ERROR suggesting password: ' + res.error)
 				return null
 			}
+			return res.data.password
 		},
 
 		async create(payload) {
-			try {
-				const response = await fetch('/api/users/', {
-					method: 'post',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(payload),
-				})
-
-				const body = await response.json().catch(() => null)
-
-				if (response.status == 201) {
-					await this.fetchAll()
-					return {ok: true, user: body}
-				}
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('post', '/api/users/', payload)
+			if (res.status === 201) {
+				await this.fetchAll()
+				return {ok: true, user: res.data}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async update(payload) {
 			const {userId, changes} = payload
-			try {
-				const response = await fetch('/api/users/' + userId, {
-					method: 'put',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(changes),
-				})
-
-				const body = await response.json().catch(() => null)
-
-				if (response.status == 200) {
-					await this.fetchAll()
-					return {ok: true, user: body}
-				}
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('put', '/api/users/' + userId, changes)
+			if (res.status === 200) {
+				await this.fetchAll()
+				return {ok: true, user: res.data}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		async remove(userId) {
-			try {
-				const response = await fetch('/api/users/' + userId, {
-					method: 'delete',
-					mode: 'same-origin',
-					cache: 'no-cache',
-					headers: {
-						'X-Requested-With': 'XMLHttpRequest',
-						'Accept': 'application/json',
-					},
-				})
-
-				if (response.status == 204) {
-					await this.fetchAll()
-					return {ok: true}
-				}
-				const body = await response.json().catch(() => null)
-				return {ok: false, error: (body && body.error) || ('HTTP ' + response.status)}
-			} catch (e) {
-				return {ok: false, error: e.message}
+			const res = await apiRequest('delete', '/api/users/' + userId)
+			if (res.status === 204) {
+				await this.fetchAll()
+				return {ok: true}
 			}
+			return {ok: false, error: res.error}
 		},
 
 		setCurrentUser(user) {

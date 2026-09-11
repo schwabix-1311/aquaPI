@@ -36,6 +36,7 @@ const SettingNumber = {
 			density="compact"
 			variant="outlined"
 			hide-details="auto"
+			autocomplete="off"
 			@change="onChange"
 		></v-text-field>
 	`,
@@ -86,6 +87,7 @@ const SettingSlider = {
 					hide-details
 					class="text-right text-body-2 aquapi-shrinkable"
 					style="flex: 0 0 64px;"
+					autocomplete="off"
 					@change="onChange"
 				></v-text-field>
 			</div>
@@ -218,6 +220,7 @@ const SettingDuration = {
 					variant="underlined"
 					hide-details
 					class="text-right text-body-2"
+					autocomplete="off"
 					@change="onChange"
 				></v-text-field>
 				<v-select
@@ -227,6 +230,7 @@ const SettingDuration = {
 					density="compact"
 					variant="underlined"
 					hide-details
+					autocomplete="off"
 					@update:modelValue="onUnitChange"
 				></v-select>
 			</div>
@@ -371,6 +375,7 @@ const SettingText = {
 			density="compact"
 			variant="outlined"
 			hide-details="auto"
+			autocomplete="off"
 			@change="onChange"
 		></v-text-field>
 	`,
@@ -411,6 +416,7 @@ const SettingTime = {
 			density="compact"
 			variant="outlined"
 			hide-details="auto"
+			autocomplete="off"
 			@change="onChange"
 		></v-text-field>
 	`,
@@ -432,6 +438,7 @@ const SettingSelect = {
 			density="compact"
 			variant="outlined"
 			hide-details="auto"
+			autocomplete="off"
 			@update:modelValue="onChange"
 		></v-select>
 	`,
@@ -477,6 +484,7 @@ const SettingMultiSelect = {
 			density="compact"
 			variant="outlined"
 			hide-details="auto"
+			autocomplete="off"
 			@update:modelValue="onChange"
 		></v-select>
 	`,

@@ -150,3 +150,6 @@ questdb-*.tar.gz
 
 # Playwright MCP scratch output (page snapshots, console logs)
 .playwright-mcp/
+
+# Claude Code local project settings/state (per-machine, not shared)
+.claude/

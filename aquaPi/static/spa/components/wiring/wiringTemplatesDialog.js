@@ -54,14 +54,14 @@ const WiringTemplatesDialog = {
 								<v-text-field
 									v-model="newTemplateName"
 									:label="$t('pages.wiring.templateName')"
-									:disabled="!selectedIds.length"
+									:disabled="!selectedIds.length || draftDirty"
 									dense outlined hide-details
 									autocomplete="off"
 									class="mr-2"
 								></v-text-field>
 								<v-btn
 									color="primary"
-									:disabled="!newTemplateName || !selectedIds.length"
+									:disabled="!newTemplateName || !selectedIds.length || draftDirty"
 									:loading="saving"
 									@click="saveTemplate"
 								>{{ $t('pages.wiring.saveSelection') }}</v-btn>
@@ -153,6 +153,17 @@ const WiringTemplatesDialog = {
 	},
 	methods: {
 		async saveTemplate() {
+			// a just-created, not-yet-saved node only exists as a draft
+			// temp_id (e.g. 'draft-1') - capture_node_template() only
+			// knows about live, persisted nodes, so selecting one and
+			// saving as a template would otherwise reach the backend and
+			// fail with a raw "Unknown node id: draft-1". Same guard
+			// insertTemplate() already has, for the same reason.
+			if (this.draftDirty) {
+				this.error = this.$t('pages.wiring.draftDirtyBlocksTemplates')
+				this.$toast.error(this.error)
+				return
+			}
 			this.saving = true
 			try {
 				const result = await this.wiringStore.createTemplate({

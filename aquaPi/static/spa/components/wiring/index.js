@@ -1,5 +1,5 @@
 import './comps.js'
-import {canConnect} from './wiringConnect.js'
+import {canConnect, findDropTarget} from './wiringConnect.js'
 import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './constants.js'
 import {computeLayout} from './wiringLayout.js'
 import {resolveConfigDiffError} from './wiringErrors.js'
@@ -9,6 +9,11 @@ import {useWiringStore} from '../../store/modules/wiring.js'
 
 const CANVAS_MIN_WIDTH = 1200
 const CANVAS_MIN_HEIGHT = 700
+
+// findDropTarget()'s hit-test margin - see its own doc comment
+// (wiringConnect.js) for why a drag-connect drop needs slack around a
+// node's box rect at all.
+const PORT_DROP_MARGIN = 16
 
 const AquapiWiring = {
 	template: `
@@ -327,9 +332,8 @@ const AquapiWiring = {
 				const p = toLocal(mv.clientX, mv.clientY)
 				this.connectDrag.x2 = p.x
 				this.connectDrag.y2 = p.y
-				const hover = this.nodes.find(n => n.id !== node.id
-					&& p.x >= (n.pos_x || 0) && p.x <= (n.pos_x || 0) + NODE_BOX_WIDTH
-					&& p.y >= (n.pos_y || 0) && p.y <= (n.pos_y || 0) + NODE_BOX_HEIGHT)
+				const hover = findDropTarget(this.nodes, node.id, p.x, p.y,
+					PORT_DROP_MARGIN, NODE_BOX_WIDTH, NODE_BOX_HEIGHT)
 				this.connectDrag.hoverTargetId = hover ? hover.id : null
 				this.connectDrag.validDrop = hover ? this.isValidConnection(node, port, hover) : false
 			}

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 
 import {
 	canConnect, connectableSources, isUsableSource,
-	isNumericSource, targetAcceptsReceives,
+	isNumericSource, targetAcceptsReceives, findDropTarget,
 } from '../../aquaPi/static/spa/components/wiring/wiringConnect.js'
 
 const NODE_TYPES = {
@@ -86,4 +86,38 @@ test('isNumericSource: only ANALOG/PERCENT/BINARY, never STRING or UNDEF', () =>
 	assert.equal(isNumericSource(dev, NODE_TYPES), true)      // PERCENT
 	assert.equal(isNumericSource(alert, NODE_TYPES), false)   // STRING
 	assert.equal(isNumericSource(hist, NODE_TYPES), false)    // UNDEF
+})
+
+// findDropTarget() - regression coverage for a real bug found via a live
+// pointer-drag repro (not reachable from a pure state-layer test alone):
+// dropping a connection exactly on the target's port dot silently
+// registered nothing, because comps.js centers that dot ON the node
+// box's edge line - a drop landing there sits right on the hit-test
+// boundary and can miss it by a sub-pixel rounding difference.
+const BOX_W = 240, BOX_H = 76
+const nodeAt = (id, x, y) => ({id, pos_x: x, pos_y: y})
+
+test('findDropTarget: a point inside the box matches', () => {
+	const target = nodeAt('t', 500, 900)
+	const hit = findDropTarget([target], 's', 550, 920, 16, BOX_W, BOX_H)
+	assert.equal(hit, target)
+})
+
+test('findDropTarget: a point exactly on the box edge (the input port dot' +
+    ' position) matches with margin, would miss with none', () => {
+	const target = nodeAt('t', 500, 900)
+	// the input port sits at (pos_x, pos_y + BOX_H/2) - right on the left edge
+	const portX = 500, portY = 900 + BOX_H / 2
+	assert.equal(findDropTarget([target], 's', portX, portY, 16, BOX_W, BOX_H), target)
+	assert.equal(findDropTarget([target], 's', portX - 1, portY, 0, BOX_W, BOX_H), null)
+})
+
+test('findDropTarget: a point beyond the margin does not match', () => {
+	const target = nodeAt('t', 500, 900)
+	assert.equal(findDropTarget([target], 's', 500 - 20, 920, 16, BOX_W, BOX_H), null)
+})
+
+test('findDropTarget: excludes the dragged node itself even if the point is over it', () => {
+	const self = nodeAt('s', 500, 900)
+	assert.equal(findDropTarget([self], 's', 550, 920, 16, BOX_W, BOX_H), null)
 })

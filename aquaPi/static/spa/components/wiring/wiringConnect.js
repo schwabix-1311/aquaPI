@@ -56,4 +56,24 @@ export function connectableSources(target, allNodes, nodeTypes) {
 		.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
 }
 
+// which node (if any) a drag-connect pointer is currently over, in
+// canvas-local coordinates. `margin` pads the node's box rect on every
+// side - needed because comps.js draws each port as an SVG circle
+// centered EXACTLY on the box edge (straddling the boundary line, half
+// in/half out), so the natural place to release a connection - right on
+// the port dot - sits partly outside the strict box rect by design.
+// Without a margin a drop centered on the dot lands right on the
+// boundary and can miss by a sub-pixel rounding difference, registering
+// nothing with no feedback that it failed (found via a real
+// pointer-drag repro, not just reasoning about the geometry - a plain
+// state-layer test of draftUpdateNode()/wiringDiff() alone couldn't
+// have caught this, since neither goes near hit-testing).
+export function findDropTarget(nodes, excludeId, x, y, margin, boxWidth, boxHeight) {
+	return nodes.find(n => n.id !== excludeId
+		&& x >= (n.pos_x || 0) - margin
+		&& x <= (n.pos_x || 0) + boxWidth + margin
+		&& y >= (n.pos_y || 0) - margin
+		&& y <= (n.pos_y || 0) + boxHeight + margin) || null
+}
+
 // vim: set noet ts=4 sw=4:

@@ -1,0 +1,91 @@
+{
+ "id": "heater-threshold-relay",
+ "i18n": {
+  "de": {
+   "name": "Heizung, 2-Punkt, DS1820",
+   "descr": "Einfache 2-Punkt-Regelung (Hysterese) eines Heizstabs über ein Relais. Temperatur von einem DS1820 (1-Wire) oder einem analogen Sensor, je nach Portwahl.",
+   "nodes": {
+    "wasser": "Wasser",
+    "heizen": "Heizen",
+    "heizstab": "Heizstab"
+   }
+  },
+  "en": {
+   "name": "Heater, two-point, DS1820",
+   "descr": "Simple two-point (hysteresis) control of a heater via a relay. Temperature from a DS1820 (1-Wire) or an analog sensor, whichever you assign at the port.",
+   "nodes": {
+    "wasser": "Water",
+    "heizen": "Heater control",
+    "heizstab": "Heater driver"
+   }
+  }
+ },
+ "data": {
+  "nodes": [
+   {
+    "id": "wasser",
+    "type": "AnalogInput",
+    "state": {
+     "name": "Wasser",
+     "id": "wasser",
+     "identifier": "AnalogInput.wasser",
+     "data": 25.0,
+     "receives": [],
+     "unit": "°C",
+     "rcv_unit": "",
+     "data_range": "ANALOG",
+     "group": "",
+     "pos_x": 0.0,
+     "pos_y": 0.0,
+     "port": "",
+     "interval": 30.0,
+     "initval": 25.0,
+     "avg": 1
+    }
+   },
+   {
+    "id": "heizen",
+    "type": "MinimumCtrl",
+    "state": {
+     "name": "Heizen",
+     "id": "heizen",
+     "identifier": "MinimumCtrl.heizen",
+     "data": 0.0,
+     "receives": [
+      "wasser"
+     ],
+     "unit": "%",
+     "rcv_unit": "°C",
+     "data_range": "BINARY",
+     "group": "",
+     "pos_x": 374.13330078125,
+     "pos_y": 0.0,
+     "setpoint": 25.0,
+     "hysteresis": 0.1,
+     "alert": null
+    }
+   },
+   {
+    "id": "heizstab",
+    "type": "SwitchDevice",
+    "state": {
+     "name": "Heizstab",
+     "id": "heizstab",
+     "identifier": "SwitchDevice.heizstab",
+     "data": false,
+     "receives": [
+      "heizen"
+     ],
+     "unit": "%",
+     "rcv_unit": "",
+     "data_range": "BINARY",
+     "group": "",
+     "pos_x": 681.3333129882812,
+     "pos_y": 0.0,
+     "port": "",
+     "inverted": false
+    }
+   }
+  ]
+ }
+}

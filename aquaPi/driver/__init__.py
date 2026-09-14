@@ -106,6 +106,29 @@ class PortClaimPreview:
         this claim be legal if these releases+claims happened" without
         side effects, e.g. for /wiring's atomic-diff validation
         (aquaPi.db.apply_config_diff). Obtain one via IoRegistry.preview().
+
+        NOT a lock or a transaction, and not thread-safe: `preview()`
+        takes a snapshot at one instant; nothing stops the real registry
+        from changing (another request's apply_config_diff, or a
+        background thread claiming a shareable port, e.g. an Alert's
+        escalation send on 'Email #N'/'Telegram #N' from a sensor-reader
+        thread - see machineroom/alert_nodes.py) between that snapshot
+        and the real apply phase that follows a successful validation.
+        A stale preview can only make the real apply phase's own
+        (uncommon) DriverPortInuseError surface where it always could -
+        this doesn't weaken the existing "validate first" guarantee, it
+        just doesn't add locking that was never there either. Real
+        `driver_factory`/`driver_destruct` mutate `IoRegistry._map`/
+        `_primary_claims` (a plain dict, no lock) the same way - a
+        genuine data race between two threads is possible in principle;
+        aquaPi has gotten away without one because `flask run` (./run,
+        ./dbg) defaults to single-threaded request handling and the only
+        cross-thread claim/release traffic is the shareable, exemption-
+        heavy Email/Telegram path above. Worth real locking (a
+        threading.Lock around _check_claim/_commit_claim/_commit_release,
+        or making preview()+apply one held section) if that ever changes
+        (multi-threaded/multi-worker serving, more background claim
+        traffic) - not done here, flagged 2026-09-14.
     """
 
     def __init__(self, m: dict[str, IoPort], claims: dict[str, int]):

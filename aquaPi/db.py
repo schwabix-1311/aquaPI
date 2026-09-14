@@ -457,7 +457,10 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     # work out what's free after a delete/reassign (below) and, later,
     # whether two of this diff's own port claims collide (the dual-use-
     # pin check further down). Never touches the real IoRegistry - see
-    # PortClaimPreview in aquaPi/driver/__init__.py.
+    # PortClaimPreview in aquaPi/driver/__init__.py, including the
+    # no-locking/no-concurrency-protection caveat documented there - a
+    # concurrent claim/release on the real registry between this
+    # snapshot and the real apply phase below is not guarded against.
     from .driver import IoRegistry, DriverError
     preview = IoRegistry.get().preview()
 

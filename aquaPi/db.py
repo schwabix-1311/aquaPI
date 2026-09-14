@@ -453,74 +453,57 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             raise ConfigDiffError(f'Duplicate update for node id: {upd_id!r}', upd)
         updates_by_id[upd_id] = upd
 
-    # IoRegistry lookup used both to work out what a delete/reassign frees
-    # (below) and, later, whether two of this diff's own port claims
-    # collide (the dual-use-pin check further down)
-    from .driver import IoRegistry
-    try:
-        io_map = IoRegistry.get()._map
-    except Exception:
-        io_map = {}
-
-    def _reserved_by(port: str) -> set[str]:
-        """ the IoRegistry names a claim on `port` occupies: the port plus
-            its direct deps (deps are plain GPIO pins, deps=[] - one level
-            suffices). Empty for a shareable port (Email/Telegram). """
-        io_port = io_map.get(port)
-        if io_port is not None and getattr(io_port, 'shareable', False):
-            return set()
-        return {port, *(getattr(io_port, 'deps', None) or [])}
+    # a disconnected preview of IoRegistry's claim state, used both to
+    # work out what's free after a delete/reassign (below) and, later,
+    # whether two of this diff's own port claims collide (the dual-use-
+    # pin check further down). Never touches the real IoRegistry - see
+    # PortClaimPreview in aquaPi/driver/__init__.py.
+    from .driver import IoRegistry, DriverError
+    preview = IoRegistry.get().preview()
 
     # ports/pins this same diff releases - a deleted node's port, or the
-    # old port of an update that reassigns/clears it, PLUS that port's
-    # IoRegistry deps: deleting a 'PWM 1' node frees 'GPIO 19 out' too, so
-    # a plain-GPIO node may take over that pin in the very same diff. But
-    # not if the dep is a shared bus pin (I2C SCL/SDA, a 1-Wire pin) still
-    # held by some OTHER, untouched node - exclude anything any node this
-    # diff leaves alone still needs, primary or dep.
+    # old port of an update that reassigns/clears it. preview.release()
+    # applies the exact same cascading-dep-release rule driver_destruct()
+    # uses on the real registry, so e.g. deleting a 'PWM 1' node frees
+    # 'GPIO 19 out' too (a plain-GPIO node may take over that pin in the
+    # very same diff), while a shared bus pin (I2C SCL/SDA, a 1-Wire pin)
+    # still held by some OTHER, untouched node stays correctly reserved -
+    # the preview starts as a full copy of every live claim, so releasing
+    # one channel's claim only ever decrements that one claim's share.
     reassigned_ids = {
         upd_id for upd_id, upd in updates_by_id.items()
         if isinstance(upd.get('fields'), dict) and 'port' in upd['fields']
         and upd['fields']['port'] != (getattr(live_nodes[upd_id], 'port', '') or '')
     }
-    still_needed: set[str] = set()
-    for node_id, node in live_nodes.items():
-        if node_id in deleted_ids or node_id in reassigned_ids:
-            continue
-        held = getattr(node, 'port', '') or ''
-        if held:
-            still_needed |= _reserved_by(held)
-
-    freed_ports: set[str] = set()
     for del_id in deleted_ids:
-        p = getattr(live_nodes[del_id], 'port', '') or ''
-        if p:
-            freed_ports |= _reserved_by(p) - still_needed
-            freed_ports.add(p)
+        preview.release(getattr(live_nodes[del_id], 'port', '') or '')
     for upd_id in reassigned_ids:
-        old_port = getattr(live_nodes[upd_id], 'port', '') or ''
-        if old_port:
-            freed_ports |= _reserved_by(old_port) - still_needed
-            freed_ports.add(old_port)
-    freed_ports.discard('')
+        preview.release(getattr(live_nodes[upd_id], 'port', '') or '')
 
     def _schema_allowing_ports(schema_fields: list[dict[str, Any]]
                                ) -> list[dict[str, Any]]:
-        """ add `freed_ports` to the 'port' select's options so a field
-            validated against get_node_type_schema() accepts a port this
-            diff frees elsewhere - but only a freed port that actually
-            belongs to this field's function (attrs.allPorts), so a freed
-            Bout pin isn't offered to an Ain node. No-op when nothing is freed.
+        """ add whatever this diff's releases (above) newly freed to the
+            'port' select's options, so a field validated against
+            get_node_type_schema() accepts it - but only a freed port
+            that actually belongs to this field's function
+            (attrs.allPorts), so a freed Bout pin isn't offered to an
+            Ain node. Uses preview.is_free() rather than a hand-derived
+            "freed" set, so this is symmetric: freeing a primary port
+            frees its dep pins (e.g. deleting a PWM node frees its GPIO
+            dep), AND freeing a dep pin can unblock the primary port it
+            was blocking (e.g. deleting the plain-GPIO node squatting on
+            a PWM's dep pin unblocks that PWM port) - both are just
+            consequences of asking the same claim rules IoRegistry
+            itself uses, not two separately-maintained directions.
         """
-        if not freed_ports:
-            return schema_fields
         out = []
         for field in schema_fields:
             attrs = field.get('attrs', {})
             opts = attrs.get('options')
             if field['key'] == 'port' and isinstance(opts, list):
-                of_func = set(attrs.get('allPorts') or opts)
-                missing = [p for p in freed_ports if p in of_func and p not in opts]
+                of_func = attrs.get('allPorts') or opts
+                missing = sorted(p for p in of_func
+                                 if p not in opts and preview.is_free(p))
                 if missing:
                     field = {**field, 'attrs': {**attrs, 'options': sorted(opts + missing)}}
             out.append(field)
@@ -701,37 +684,31 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     # node's primary port is another's primary-or-dep. Sharing deps alone
     # is fine (e.g. every 'ADC #1 in N' channel sits on the same I2C bus
     # pins); IoRegistry refcounts those and driver_factory() never rejects
-    # on a dep. Without this check a collision only surfaces as a
-    # DriverPortInuseError - or a silent double-claim - deep in the apply
-    # phase below. (io_map/_reserved_by are defined earlier, alongside
-    # freed_ports, and reused here.)
-
-    # (owner_id, primary_port, reserved_names) for every node this diff
-    # creates or re-ports - an untouched live node's ports are already
-    # reserved in IoRegistry, so the free-ports list the diff validated
-    # against can't have offered anything overlapping them.
-    port_claims: list[tuple[str, str, set[str]]] = []
+    # on a dep. Rather than re-deriving that rule here, replay each of
+    # this diff's own new port claims against the same `preview` used
+    # above (already primed with this diff's releases) - the exact same
+    # legality check driver_factory() runs for real, so this can't drift
+    # from it, and it catches a same-port double-claim or a dual-use-pin
+    # collision in either order without needing a separate pairwise scan.
     for upd_id, upd in updates_by_id.items():
-        if 'port' in upd.get('_fields', {}) and upd['_fields']['port']:
-            port_claims.append((upd_id, upd['_fields']['port'],
-                                _reserved_by(upd['_fields']['port'])))
+        # only a genuine reassignment is a *new* claim - an update that
+        # resubmits its own currently-held port unchanged (the /wiring
+        # editor always sends the whole fields object on any edit) is
+        # already reflected in the preview's initial live-state copy
+        # and must not be claimed a second time
+        port = upd.get('_fields', {}).get('port')
+        if port and upd_id in reassigned_ids:
+            try:
+                preview.claim(port)
+            except DriverError as ex:
+                raise ConfigDiffError(ex.msg, {'id': upd_id}) from ex
     for prep in prepared_creates:
         port = prep['fields'].get('port') or ''
         if port:
-            port_claims.append((prep['node_id'], port, _reserved_by(port)))
-
-    for i, (oid_a, port_a, reserved_a) in enumerate(port_claims):
-        for oid_b, port_b, reserved_b in port_claims[i + 1:]:
-            if oid_a == oid_b:
-                continue
-            if port_a == port_b:
-                raise ConfigDiffError(
-                    f'Port {port_a!r} is assigned to more than one node',
-                    {'id': oid_b})
-            if port_a in reserved_b or port_b in reserved_a:
-                raise ConfigDiffError(
-                    f'Ports {port_a!r} and {port_b!r} share the same pin',
-                    {'id': oid_b})
+            try:
+                preview.claim(port)
+            except DriverError as ex:
+                raise ConfigDiffError(ex.msg, {'id': prep['node_id']}) from ex
 
     # --- everything about this diff has been validated: apply it for
     #     real, deletes first, then updates, then creates ---

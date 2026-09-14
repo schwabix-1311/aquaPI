@@ -26,6 +26,108 @@ driver_config: dict[str, str] = dict()
 _io_reg: 'IoRegistry'
 
 
+# ========== claim/release rules, shared by the real IoRegistry and by
+#             PortClaimPreview's disconnected simulation of it ==========
+
+
+def _check_claim(m: dict[str, IoPort], claims: dict[str, int], port: str) -> None:
+    """ raise if claiming `port` in map `m` (with primary-claim counts
+        `claims`) would be illegal - no mutation. Same rule
+        driver_factory() enforces on the real registry.
+    """
+    if port not in m:
+        raise DriverInvalidPortError(port)
+    io_port = m[port]
+    if io_port.used and not io_port.shareable:
+        raise DriverPortInuseError(port)
+    # a dep already held as somebody's primary means this port's pin is
+    # really taken (e.g. 'GPIO 19 out' claimed directly, now 'PWM 1'
+    # wants it as a dep) - .used on the primary alone wouldn't catch
+    # that ordering. Two primaries sharing a dep only as a dep (a bus)
+    # is fine and not recorded in `claims`.
+    for dep in io_port.deps:
+        dep_port = m.get(dep)
+        if claims.get(dep) and dep_port is not None and not dep_port.shareable:
+            raise DriverPortInuseError(dep)
+
+
+def _commit_claim(m: dict[str, IoPort], claims: dict[str, int], port: str) -> None:
+    """ mutate `m`/`claims` to record a (pre-checked) claim on `port`. """
+    io_port = m[port]
+    # same as io_port.used += 1 - on immutable
+    m[port] = io_port._replace(used=io_port.used + 1)
+    claims[port] = claims.get(port, 0) + 1
+    for dep in io_port.deps:
+        # same as m[dep].used += 1
+        dep_port = m[dep]
+        m[dep] = dep_port._replace(used=dep_port.used + 1)
+
+
+def _commit_release(m: dict[str, IoPort], claims: dict[str, int], port: str) -> None:
+    """ mutate `m`/`claims` to release one claim on `port`. """
+    io_port = m[port]
+    # decrement rather than reset to 0: a shareable port can have more
+    # than one concurrent claim, and releasing one must not drop the
+    # others' - for a non-shareable port used is always 1 here, so this
+    # is equivalent to the old reset-to-0
+    m[port] = io_port._replace(used=max(0, io_port.used - 1))
+    left = claims.get(port, 0) - 1
+    if left > 0:
+        claims[port] = left
+    else:
+        claims.pop(port, None)
+    for dep in io_port.deps:
+        # same as m[dep].used -= 1
+        dep_port = m[dep]
+        m[dep] = dep_port._replace(used=dep_port.used - 1)
+
+
+def _is_free(m: dict[str, IoPort], claims: dict[str, int], port: str) -> bool:
+    """ is `port` claimable right now - a shareable port always has room
+        for another claim, so it counts as free regardless of its
+        current claim count; a port whose dep is somebody's primary (a
+        dual-use pin) is not actually claimable even though its own
+        .used is still 0.
+    """
+    io_port = m.get(port)
+    if io_port is None:
+        return False
+    if io_port.shareable:
+        return True
+    if io_port.used:
+        return False
+    return not any(claims.get(dep) for dep in io_port.deps)
+
+
+class PortClaimPreview:
+    """ disconnected simulation of IoRegistry's claim/release rules,
+        seeded from a snapshot of the live state. Never touches the
+        real IoRegistry - used to answer "what would be free / would
+        this claim be legal if these releases+claims happened" without
+        side effects, e.g. for /wiring's atomic-diff validation
+        (aquaPi.db.apply_config_diff). Obtain one via IoRegistry.preview().
+    """
+
+    def __init__(self, m: dict[str, IoPort], claims: dict[str, int]):
+        self._map = m
+        self._claims = claims
+
+    def release(self, port: str) -> None:
+        """ no-op for an empty/unknown port - callers pass a node's
+            possibly-empty .port straight through """
+        if port and port in self._map:
+            _commit_release(self._map, self._claims, port)
+
+    def claim(self, port: str) -> None:
+        """ raises DriverInvalidPortError/DriverPortInuseError if
+            illegal, otherwise records the claim """
+        _check_claim(self._map, self._claims, port)
+        _commit_claim(self._map, self._claims, port)
+
+    def is_free(self, port: str) -> bool:
+        return _is_free(self._map, self._claims, port)
+
+
 class IoRegistry(object):
     """
     example
@@ -164,19 +266,20 @@ class IoRegistry(object):
         mp = IoRegistry._map
 
         def _free(key: str) -> bool:
-            io_port = mp[key]
-            if io_port.shareable:
-                return True
-            if io_port.used:
-                return False
-            # a port whose dep is somebody's primary (a dual-use pin) is
-            # not actually claimable even though its own .used is still 0
-            return not any(IoRegistry._primary_claims.get(dep)
-                           for dep in io_port.deps)
+            return _is_free(mp, IoRegistry._primary_claims, key)
 
         return {key: mp[key] for key in mp
                 if mp[key].func in funcs
                 and (not _free(key) if in_use else _free(key))}
+
+    def preview(self) -> PortClaimPreview:
+        """ a disconnected snapshot of the current claim state - see
+            PortClaimPreview. A shallow copy suffices: IoPort is an
+            immutable namedtuple, every mutation already goes through
+            _replace() rather than in place.
+        """
+        return PortClaimPreview(dict(IoRegistry._map),
+                                dict(IoRegistry._primary_claims))
 
     def driver_factory(self, port: str, drv_options: dict | None = None
                        ) -> Driver | None:
@@ -184,37 +287,14 @@ class IoRegistry(object):
             Drivers that use >1 port are created by a dedicated factory (later)
         """
         log.debug('create a driver for %r', port)
-        if port not in IoRegistry._map:
-            raise DriverInvalidPortError(port)
-
+        _check_claim(IoRegistry._map, IoRegistry._primary_claims, port)
         io_port = IoRegistry._map[port]
-        if io_port.used and not io_port.shareable:
-            raise DriverPortInuseError(port)
-        # a dep already held as somebody's primary means this port's pin
-        # is really taken (e.g. 'GPIO 19 out' claimed directly, now 'PWM
-        # 1' wants it as a dep) - .used on the primary alone wouldn't
-        # catch that ordering. Two primaries sharing a dep only as a dep
-        # (a bus) is fine and not recorded in _primary_claims.
-        for dep in io_port.deps:
-            dep_port = IoRegistry._map.get(dep)
-            if (IoRegistry._primary_claims.get(dep)
-                    and dep_port is not None and not dep_port.shareable):
-                raise DriverPortInuseError(dep)
 
         try:
             if drv_options:
                 io_port.cfg.update(drv_options)
             driver = io_port.driver(io_port.cfg, io_port.func)
-            # same as io_port.used += 1 - on immutable
-            IoRegistry._map[port] = io_port._replace(used=io_port.used + 1)
-            IoRegistry._primary_claims[port] = \
-                IoRegistry._primary_claims.get(port, 0) + 1
-
-            for dep in io_port.deps:
-                # same as IoRegistry._map[dep].used += 1
-                dep_port = IoRegistry._map[dep]
-                IoRegistry._map[dep] = dep_port._replace(used=dep_port.used + 1)
-
+            _commit_claim(IoRegistry._map, IoRegistry._primary_claims, port)
             return driver
         except Exception:
             log.exception('Failed to create port driver: %s', port)
@@ -225,23 +305,8 @@ class IoRegistry(object):
         if port not in IoRegistry._map:
             raise DriverInvalidPortError(port)
 
-        io_port = IoRegistry._map[port]
         driver.close()
-        # decrement rather than reset to 0: a shareable port can have
-        # more than one concurrent claim, and releasing one must not
-        # drop the others' - for a non-shareable port used is always 1
-        # here, so this is equivalent to the old reset-to-0
-        IoRegistry._map[port] = io_port._replace(used=max(0, io_port.used - 1))
-        left = IoRegistry._primary_claims.get(port, 0) - 1
-        if left > 0:
-            IoRegistry._primary_claims[port] = left
-        else:
-            IoRegistry._primary_claims.pop(port, None)
-
-        for dep in io_port.deps:
-            # same as IoRegistry._map[dep].used -= 1
-            dep_port = IoRegistry._map[dep]
-            IoRegistry._map[dep] = dep_port._replace(used=dep_port.used - 1)
+        _commit_release(IoRegistry._map, IoRegistry._primary_claims, port)
 
 
 # ========== IoRegistry is a singleton -> 1 global instance ==========

@@ -529,6 +529,31 @@ def test_apply_reuses_a_freed_dual_use_pin_in_the_same_diff(client, users, bus, 
     assert bus.get_node(resp.get_json()['id_map']['sw']).port == 'GPIO 19 out'
 
 
+def test_apply_frees_a_pwm_port_when_its_dep_pin_owner_is_deleted_in_the_same_diff(
+        client, users, bus, app):
+    """ item #8 (reverse of the dual-use-pin test above): a plain-GPIO
+        node squatting on a PWM's dep pin hides that PWM port. Deleting
+        the GPIO node and creating a new PWM node in the very same diff
+        must unblock the PWM port too - not just the reverse direction.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'sw', 'type': 'SwitchDevice', 'name': 'Luefter',
+                     'receives': ['heizen'], 'fields': {'port': 'GPIO 19 out'}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    sw_id = resp.get_json()['id_map']['sw']
+
+    resp = client.post('/api/config/apply', json={
+        'deletes': [sw_id],
+        'creates': [{'temp_id': 'ad', 'type': 'AnalogDevice', 'name': 'Dimmer3',
+                     'receives': ['heizen'], 'fields': {'port': 'PWM 1'}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    assert bus.get_node(resp.get_json()['id_map']['ad']).port == 'PWM 1'
+
+
 def test_apply_does_not_over_free_a_shared_bus_pin(client, users, bus, app):
     """ deleting one of two ADC channels sharing the I2C-bus pins must NOT
         free those pins for a third node - the surviving channel still

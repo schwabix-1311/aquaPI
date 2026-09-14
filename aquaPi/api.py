@@ -765,8 +765,20 @@ def api_update_node(node_id: str) -> Response:
                                        [c['node_id'] for c in fields['conditions']])
         except ValueError as ex:
             return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
-        for key, value in fields.items():
-            setattr(node, key, value)
+        try:
+            for key, value in fields.items():
+                setattr(node, key, value)
+        except (DriverError, ValueError, KeyError) as ex:
+            # validation above is meant to catch everything before the
+            # live node is touched (schema options are already live-
+            # filtered, unlike apply_config_diff's batch case); if a
+            # field setter still fails - e.g. a same-instant race with
+            # another claim on this port - surface it with a message
+            # instead of a bare 500. Mirrors api_config_apply's guard.
+            log.exception('api_update_node: setting a field failed after validation')
+            detail = ex.msg if isinstance(ex, DriverError) else str(ex)
+            return jsonify(error=f'Updating the node failed: {detail}'), \
+                HTTPStatus.INTERNAL_SERVER_ERROR
 
     if 'group' in body:
         node.group = str(body['group'] or '')

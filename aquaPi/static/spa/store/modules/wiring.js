@@ -259,7 +259,12 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 				this.discardDraft()
 				return {ok: true, idMap: res.data && res.data.id_map}
 			}
-			return {ok: false, error: res.error}
+			return {
+				ok: false, error: res.error,
+				errorKey: res.data && res.data.error_key,
+				errorParams: res.data && res.data.error_params,
+				errorItems: res.data && res.data.error_items,
+			}
 		},
 
 		setNodeTypes(payload) {

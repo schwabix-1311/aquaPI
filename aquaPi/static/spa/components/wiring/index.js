@@ -2,6 +2,7 @@ import './comps.js'
 import {canConnect} from './wiringConnect.js'
 import {NODE_BOX_WIDTH, NODE_BOX_HEIGHT} from './constants.js'
 import {computeLayout} from './wiringLayout.js'
+import {resolveConfigDiffError} from './wiringErrors.js'
 import {registerGlobalComponent} from '../app/registry.js'
 import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {useWiringStore} from '../../store/modules/wiring.js'
@@ -176,6 +177,23 @@ const AquapiWiring = {
 		},
 	},
 
+	watch: {
+		// a failed save's error banner otherwise lingers verbatim while the
+		// user keeps editing - even after they've fixed exactly what it
+		// complained about - since nothing re-evaluates it until the next
+		// Save click. Watching draftDirty itself isn't enough: it's often
+		// already true both before and after the fixing edit (e.g. some
+		// OTHER pending change was already staged), so a true->true
+		// transition wouldn't even fire a watcher on it. 'wiringStore.draft'
+		// is a fresh object reference on every single draftUpdateNode/
+		// draftCreateNode/draftDeleteNode call (setDraftNode/removeDraftNode
+		// always replace it), so this fires on every edit, clearing stale
+		// feedback immediately regardless of dirty-state transitions.
+		'wiringStore.draft': function() {
+			this.error = null
+		},
+	},
+
 	methods: {
 		async loadAll() {
 			this.loading = true
@@ -209,8 +227,13 @@ const AquapiWiring = {
 			try {
 				const result = await this.wiringStore.saveDraft()
 				if (!result.ok) {
-					this.error = result.error
-					this.$toast.error(result.error || this.$t('misc.toast.saveError'))
+					// the persistent banner below is enough here - unlike a
+					// one-off toast, it stays up (and auto-clears once the
+					// draft changes, see the 'wiringStore.draft' watch) so
+					// the user has time to read a possibly multi-part
+					// message and act on it; a toast would just repeat it
+					// and then vanish on its own
+					this.error = resolveConfigDiffError(result, this.$t) || this.$t('misc.toast.saveError')
 					return
 				}
 				this.wiringStore.initDraft()

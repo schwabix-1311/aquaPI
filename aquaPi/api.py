@@ -854,7 +854,9 @@ def api_config_apply() -> Response:
     try:
         result = db.apply_config_diff(bus, diff, _validate_fields)
     except db.ConfigDiffError as ex:
-        return jsonify(error=str(ex), entry=ex.entry), HTTPStatus.BAD_REQUEST
+        return jsonify(error=str(ex), entry=ex.entry,
+                       error_key=ex.key, error_params=ex.params,
+                       error_items=ex.items), HTTPStatus.BAD_REQUEST
     except (DriverError, ValueError, KeyError) as ex:
         # validation is meant to catch everything before the bus is
         # touched; if something still fails mid-apply, surface it with a

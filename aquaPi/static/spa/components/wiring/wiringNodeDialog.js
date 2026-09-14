@@ -258,6 +258,21 @@ const WiringNodeDialog = {
 			}
 			return ['multiselect', 'record-list'].includes(field.attrs.type) ? [] : ''
 		},
+		// inverse of valueFromLiveNode()'s *factor: form.fields holds
+		// wire-unit values, but draft*Node() stage into the same slot
+		// live nodes fill with internal-unit values - unconverted, a
+		// reopen would multiply by factor again (compounding each save).
+		toInternalFields: function(fields) {
+			const converted = {}
+			this.visibleFields.forEach(field => {
+				if (!(field.key in fields)) return
+				const value = fields[field.key]
+				converted[field.key] = (field.attrs.factor && value !== null && value !== undefined)
+					? value / field.attrs.factor
+					: value
+			})
+			return converted
+		},
 		onTypeChange: function() {
 			this.form.receives = this.receivesKind === 'multi' ? [] : null
 			this.form.fields = this.buildFieldValues(null)
@@ -275,7 +290,7 @@ const WiringNodeDialog = {
 			this.saving = true
 			try {
 				if (this.editNode) {
-					const changes = Object.assign({group: this.form.group}, this.form.fields)
+					const changes = Object.assign({group: this.form.group}, this.toInternalFields(this.form.fields))
 					if (this.receivesKind !== 'none') {
 						changes.receives = this.asReceivesList()
 					}
@@ -296,7 +311,7 @@ const WiringNodeDialog = {
 						group: this.form.group,
 						pos_x: 20,
 						pos_y: 20,
-					}, this.form.fields))
+					}, this.toInternalFields(this.form.fields)))
 				}
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))
 				this.show = false

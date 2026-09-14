@@ -27,24 +27,7 @@ const WiringTemplatesDialog = {
 
 					<v-window v-model="tab">
 						<v-window-item>
-							<div class="d-flex align-center mt-3 mb-2">
-								<v-text-field
-									v-model="newTemplateName"
-									:label="$t('pages.wiring.templateName')"
-									dense outlined hide-details
-									autocomplete="off"
-									class="mr-2"
-								></v-text-field>
-								<v-btn
-									color="primary"
-									:disabled="!newTemplateName || !selectedIds.length"
-									:loading="saving"
-									@click="saveTemplate"
-								>{{ $t('pages.wiring.saveSelection') }}</v-btn>
-							</div>
-							<div class="text-caption grey--text mb-3">
-								{{ $t('pages.wiring.selectedCount', {count: selectedIds.length}) }}
-							</div>
+							<div class="text-subtitle-2 mt-3 mb-2">{{ $t('pages.wiring.templatesListHeading') }}</div>
 
 							<v-list dense v-if="templates.length">
 								<v-list-item v-for="tpl in templates" :key="tpl.id">
@@ -66,6 +49,26 @@ const WiringTemplatesDialog = {
 								</v-list-item>
 							</v-list>
 							<v-alert v-else type="info" text dense>{{ $t('pages.wiring.hintNoTemplates') }}</v-alert>
+
+							<div class="d-flex align-center mt-4 mb-2">
+								<v-text-field
+									v-model="newTemplateName"
+									:label="$t('pages.wiring.templateName')"
+									:disabled="!selectedIds.length"
+									dense outlined hide-details
+									autocomplete="off"
+									class="mr-2"
+								></v-text-field>
+								<v-btn
+									color="primary"
+									:disabled="!newTemplateName || !selectedIds.length"
+									:loading="saving"
+									@click="saveTemplate"
+								>{{ $t('pages.wiring.saveSelection') }}</v-btn>
+							</div>
+							<div class="text-caption grey--text mb-3">
+								{{ $t('pages.wiring.selectedCount', {count: selectedIds.length}) }}
+							</div>
 						</v-window-item>
 
 						<v-window-item>

@@ -3,7 +3,7 @@
  "i18n": {
   "de": {
    "name": "Kühlung, regelbarer Lüfter",
-   "descr": "Regelbarer Lüfter als Kühlung; ergänzt eine bestehende Heizungsregelung.",
+   "descr": "Geregelter Lüfter als Kühlung; ergänzt eine bestehende Heizungsregelung.",
    "nodes": {
     "lueftersteuerung": "Lüftersteuerung",
     "kuehlungsluefter": "Kühlungslüfter"
@@ -11,7 +11,7 @@
   },
   "en": {
    "name": "Cooling, variable-speed fan",
-   "descr": "Variable-speed fan for cooling; complements an existing heater loop.",
+   "descr": "Controlled fan for cooling; complements an existing heater loop.",
    "nodes": {
     "lueftersteuerung": "Fan control",
     "kuehlungsluefter": "Cooling fan"

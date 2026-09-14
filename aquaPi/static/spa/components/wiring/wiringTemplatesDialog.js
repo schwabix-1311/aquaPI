@@ -54,7 +54,7 @@ const WiringTemplatesDialog = {
 											{{ $t('pages.wiring.templatePredefined') }}
 										</v-chip>
 									</v-list-item-title>
-									<v-list-item-subtitle>{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
+									<v-list-item-subtitle style="white-space: normal; -webkit-line-clamp: unset; display: block;">{{ tpl.descr }} ({{ tpl.node_count }})</v-list-item-subtitle>
 									<template #append>
         <v-btn v-if="tpl.source !== 'predefined'" icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('misc.actions.delete')">
 											<v-icon>mdi-delete</v-icon>

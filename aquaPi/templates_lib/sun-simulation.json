@@ -3,7 +3,7 @@
  "i18n": {
   "de": {
    "name": "Sonnensimulation, PWM-Dimmer",
-   "descr": "Sonnenauf- und -untergang mit Wolken; Ausgabe über PWM-Dimmer am MOSFET (12/24 V).",
+   "descr": "Sonnenauf- und -untergang mit Wolken; Ausgabe über PWM-Dimmer (MOSFET, 12/24 V, oder TC420-Kanal), je nach Portwahl.",
    "nodes": {
     "zeitplanlicht": "Zeitplan Licht",
     "licht": "Licht",
@@ -13,7 +13,7 @@
   },
   "en": {
    "name": "Sun simulation, PWM dimmer",
-   "descr": "Sunrise and sunset with clouds; output via a PWM dimmer on a MOSFET (12/24 V).",
+   "descr": "Sunrise and sunset with clouds; output via a PWM dimmer (a MOSFET, 12/24 V, or a TC420 channel), whichever you assign at the port.",
    "nodes": {
     "zeitplanlicht": "Light Schedule",
     "licht": "Light",

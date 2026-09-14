@@ -58,9 +58,18 @@ class Setting:
     step: float | None = None
     options: list[str] | None = None   # choices for 'select' / 'multiselect'
     optional: bool = False             # True = value may be left empty/unset
-    # True = must be supplied on creation, no usable default - only
-    # meaningful on a get_settings_schema() entry, checked by the /config
-    # create flow.
+    # True = must end up with a non-empty value. Two consumers: (1) the
+    # /config create flow (api.py's _validate_fields) rejects a create
+    # that omits this key entirely and has no usable schema default -
+    # only meaningful on a get_settings_schema() entry there. (2) a
+    # field can also be required with an empty-string/list *sentinel*
+    # default rather than no default at all (e.g. 'port': '' - a
+    # get_port_schema() entry) - (1) never catches that (a default
+    # value, even the sentinel, always wins over the required check),
+    # so apply_config_diff's whole-draft save gate independently walks
+    # every resulting node's *effective* final value for each required
+    # field, regardless of how it got there (untouched, updated,
+    # freshly created), and rejects the save if still empty.
     required: bool = False
     # True = only meaningful as a constructor argument at node creation,
     # never re-read afterward (get_settings() never includes it - see

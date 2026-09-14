@@ -31,13 +31,15 @@ def _io_registry():
 @pytest.fixture
 def bus():
     bus = MsgBus(threaded=False)
-    sensor = AnalogInput('Wasser', '', 25.0, '°C')
+    # real ports, not '' - apply_config_diff now rejects a save that
+    # leaves a port-having node with none set
+    sensor = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C')
     sensor.plugin(bus)
 
     ctrl = MinimumCtrl('Heizen', sensor.id, setpoint=24.0, hysteresis=0.5)
     ctrl.plugin(bus)
 
-    out = SwitchDevice('Heizstab', ctrl.id, '')
+    out = SwitchDevice('Heizstab', ctrl.id, 'GPIO 13 out')
     out.plugin(bus)
 
     yield bus
@@ -183,10 +185,10 @@ def test_config_apply_creates_audit_entry(client, users, users_db_path):
     resp = client.post('/api/config/apply', json={
         'creates': [{
             'temp_id': 'tmp-1', 'type': 'AnalogInput', 'name': 'Luft',
-            'fields': {'unit': '°C'},
+            'fields': {'unit': '°C', 'port': 'DS1820 #2'},
         }],
     })
-    assert resp.status_code == HTTPStatus.OK
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
 
     result = db.list_audit_log(users_db_path)
     entry = next(e for e in result['entries'] if e['action'] == 'apply_config_diff')

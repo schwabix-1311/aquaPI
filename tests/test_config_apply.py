@@ -31,13 +31,17 @@ def _io_registry():
 @pytest.fixture
 def bus():
     bus = MsgBus(threaded=False)
-    sensor = AnalogInput('Wasser', '', 25.0, '°C')
+    # real ports, not '' - apply_config_diff now rejects a save that
+    # leaves a port-having node with none set (see test_config_apply's
+    # "missing required value" tests below), so a node this fixture
+    # provides untouched must not itself violate that on every test
+    sensor = AnalogInput('Wasser', 'DS1820 #1', 25.0, '°C')
     sensor.plugin(bus)
 
     ctrl = MinimumCtrl('Heizen', sensor.id, setpoint=24.0, hysteresis=0.5)
     ctrl.plugin(bus)
 
-    out = SwitchDevice('Heizstab', ctrl.id, '')
+    out = SwitchDevice('Heizstab', ctrl.id, 'GPIO 13 out')
     out.plugin(bus)
 
     alert = Alert('Warnungen', AlertAbove(sensor.id, 30.0), '')
@@ -110,12 +114,12 @@ def test_apply_mixed_diff_atomic(client, users, bus, app):
     resp = client.post('/api/config/apply', json={
         'creates': [{
             'temp_id': 'tmp-1', 'type': 'AnalogInput', 'name': 'Luft',
-            'fields': {'unit': '°C'},
+            'fields': {'unit': '°C', 'port': 'DS1820 #2'},
         }],
         'updates': [{'id': 'heizen', 'receives': ['tmp-1']}],
         'deletes': ['heizstab'],
     })
-    assert resp.status_code == HTTPStatus.OK
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
     data = resp.get_json()
 
     luft_id = data['id_map']['tmp-1']
@@ -186,12 +190,12 @@ def test_apply_temp_id_remap_between_two_new_nodes(client, users, bus, app):
     resp = client.post('/api/config/apply', json={
         'creates': [
             {'temp_id': 't-sensor', 'type': 'AnalogInput', 'name': 'Luft',
-             'fields': {'unit': '°C'}},
+             'fields': {'unit': '°C', 'port': 'DS1820 #2'}},
             {'temp_id': 't-ctrl', 'type': 'MinimumCtrl', 'name': 'Luftregler',
              'receives': ['t-sensor'], 'fields': {'setpoint': 20.0}},
         ],
     })
-    assert resp.status_code == HTTPStatus.OK
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
     data = resp.get_json()
 
     sensor_id = data['id_map']['t-sensor']
@@ -285,16 +289,22 @@ def test_apply_delete_source_with_stale_receives_in_listener_update(client, user
         /wiring editor marks that listener dirty for an unrelated pos
         change) must NOT abort the whole diff - the dangling ref is
         dropped, exactly as prune_dangling_references() does on apply.
+        'heizen' is single-cardinality, so alongside the dangling ref
+        the update also rewires it to a fresh replacement sensor in the
+        same diff - otherwise it would end up with zero receives, which
+        is itself now rejected (see the missing-required-value tests).
     """
     _login(client, 'admin1', 'adminPass123')
 
     resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 't-new', 'type': 'AnalogInput', 'name': 'Ersatz',
+                     'fields': {'unit': '°C', 'port': 'DS1820 #2'}}],
         'deletes': ['wasser'],
-        'updates': [{'id': 'heizen', 'pos_x': 42, 'receives': ['wasser']}],
+        'updates': [{'id': 'heizen', 'pos_x': 42, 'receives': ['wasser', 't-new']}],
     })
-    assert resp.status_code == HTTPStatus.OK
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
     assert bus.get_node('wasser') is None
-    assert bus.get_node('heizen').receives == []
+    assert bus.get_node('heizen').receives == ['ersatz']
     assert bus.get_node('heizen').pos_x == 42
     assert app.extensions['machineroom'].saved == 1
 
@@ -317,10 +327,20 @@ def test_apply_delete_source_keeps_listener_other_receives(client, users, bus, a
     assert set(bus.get_node(hist_id).receives) == {'wasser', 'heizen'}
 
     resp = client.post('/api/config/apply', json={
+        # 'heizen' is untouched by this diff's own updates, but its only
+        # source ('wasser') is being deleted - left as-is it would end up
+        # with zero receives too (now itself rejected), so rewire it to a
+        # fresh replacement in the same diff, same as the dangling-ref test
+        # above.
+        'creates': [{'temp_id': 't-new', 'type': 'AnalogInput', 'name': 'Ersatz2',
+                     'fields': {'unit': '°C', 'port': 'DS1820 #2'}}],
         'deletes': ['wasser'],
-        'updates': [{'id': hist_id, 'pos_x': 7, 'receives': ['wasser', 'heizen']}],
+        'updates': [
+            {'id': 'heizen', 'receives': ['t-new']},
+            {'id': hist_id, 'pos_x': 7, 'receives': ['wasser', 'heizen']},
+        ],
     })
-    assert resp.status_code == HTTPStatus.OK
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
     assert bus.get_node('wasser') is None
     assert bus.get_node(hist_id).receives == ['heizen']
 
@@ -351,9 +371,12 @@ def test_apply_delete_source_frees_its_port_despite_stale_receives(client, users
 
     resp = client.post('/api/config/apply', json={
         'deletes': [sensor_id],
-        'updates': [{'id': hist_id, 'pos_x': 5, 'receives': [sensor_id]}],
+        # 'heizen' alongside the now-dangling sensor_id: History is
+        # multi-cardinality, and this keeps hist_id from ending up with
+        # zero receives (itself now rejected) once the stale ref drops.
+        'updates': [{'id': hist_id, 'pos_x': 5, 'receives': [sensor_id, 'heizen']}],
     })
-    assert resp.status_code == HTTPStatus.OK
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
     assert bus.get_node(sensor_id) is None
     assert IoRegistry._map[port].used == 0
 
@@ -645,3 +668,152 @@ def test_apply_rejects_string_source_wiring(client, users, bus, app):
         }],
     })
     assert resp.status_code == HTTPStatus.OK
+
+
+# --- missing-required-value save gate (port/receives) + its i18n key/items ---
+
+
+def test_apply_rejects_a_new_node_with_no_port(client, users, bus, app):
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'AnalogInput', 'name': 'Sensor',
+                     'fields': {'unit': '°C', 'port': ''}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    body = resp.get_json()
+    assert "'Sensor'" in body['error'] and 'inputPort' in body['error']
+    assert body['error_items'] == [
+        {'key': 'missingValue', 'params': {'node': 'Sensor', 'fieldLabel': 'inputPort'}},
+    ]
+    assert bus.get_node('sensor') is None
+
+
+def test_apply_rejects_clearing_an_existing_nodes_port(client, users, bus, app):
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'heizstab', 'fields': {'port': ''}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    body = resp.get_json()
+    assert body['error_items'] == [
+        {'key': 'missingValue', 'params': {'node': 'Heizstab', 'fieldLabel': 'outputPort'}},
+    ]
+    assert bus.get_node('heizstab').port == 'GPIO 13 out'   # unchanged, nothing applied
+
+
+def test_apply_rejects_a_listener_with_no_receives(client, users, bus, app):
+    """ ScaleAux (and any other listener type) needs at least one input
+        to do anything - the concrete case that prompted this: a
+        template-inserted ScaleAux ships with receives=[] by design.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'ScaleAux', 'name': 'Skalierung',
+                     'fields': {'factor': 1.0, 'offset': 0.0}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    body = resp.get_json()
+    assert body['error_items'] == [
+        {'key': 'notConnected', 'params': {'node': 'Skalierung'}},
+    ]
+    assert 'not' in body['error'] or 'missing' in body['error']
+    assert bus.get_node('skalierung') is None
+
+
+def test_apply_rejects_an_untouched_live_node_left_unconnected(client, users, bus, app):
+    """ the whole-draft scan isn't limited to nodes THIS diff touches -
+        an already-broken node (e.g. from a template insert, which
+        bypasses apply_config_diff entirely) blocks the next, otherwise
+        unrelated save too, until it's fixed.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    stray = MinimumCtrl('Stray', 'wasser', setpoint=1.0)
+    stray.plugin(bus)
+    stray.receives = []   # simulate an already-broken, disconnected node
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'heizstab', 'pos_x': 99}],   # harmless, unrelated
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    body = resp.get_json()
+    assert body['error_items'] == [
+        {'key': 'notConnected', 'params': {'node': 'Stray'}},
+    ]
+    assert bus.get_node('heizstab').pos_x != 99   # nothing was applied
+
+    stray.pullout()
+
+
+def test_apply_reports_multiple_missing_values_in_one_diff(client, users, bus, app):
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [
+            {'temp_id': 'a', 'type': 'AnalogInput', 'name': 'SensorX',
+             'fields': {'unit': '°C', 'port': ''}},
+            {'temp_id': 'b', 'type': 'ScaleAux', 'name': 'SkalierungX',
+             'fields': {'factor': 1.0, 'offset': 0.0}},
+        ],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    body = resp.get_json()
+    assert len(body['error_items']) == 2
+    keys = {(item['key'], item['params']['node']) for item in body['error_items']}
+    assert keys == {('missingValue', 'SensorX'), ('notConnected', 'SkalierungX')}
+
+
+def test_apply_allows_alert_with_no_port_and_no_conditions(client, users, bus, app):
+    """ both of Alert's exemptions hold: no escalation channel and no
+        watched conditions are both legitimate (dashboard-only alert).
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'Alert', 'name': 'StillerAlarm',
+                     'fields': {'port': '', 'repeat': 3600}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    assert bus.get_node('stilleralarm') is not None
+
+
+def test_apply_still_rejects_missing_setpoint(client, users, bus, app):
+    """ no regression from routing 'setpoint' through the same generic
+        missing-required-value mechanism as port/receives.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'MinimumCtrl', 'name': 'CtrlOhneSollwert',
+                     'receives': ['wasser'], 'fields': {}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert bus.get_node('ctrlohnesollwert') is None
+
+
+def test_apply_error_key_and_params_for_a_plain_and_a_parametrized_message(
+        client, users, bus, app):
+    """ locks in the error_key/error_params contract (not just error_items)
+        for the two other message shapes: no params, and one param.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'heizen', 'receives': ['heizstab']}],   # heizstab receives from heizen
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    body = resp.get_json()
+    assert body['error_key'] == 'cycleDetected'
+    assert body['error_params'] is None
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'AnalogInput', 'name': 'Heizstab',
+                     'fields': {'unit': '°C', 'port': 'DS1820 #2'}}],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    body = resp.get_json()
+    assert body['error_key'] == 'duplicateName'
+    assert body['error_params'] == {'name': 'Heizstab'}

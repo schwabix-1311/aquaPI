@@ -63,13 +63,20 @@ class PortDriverMixin:
         """
 
     @classmethod
-    def get_port_schema(cls, label: str) -> Setting:
+    def get_port_schema(cls, label: str, required: bool = True) -> Setting:
         """ static counterpart to _port_setting() below - the free-ports
             query only needs _port_funcs (a class attribute), so this works
             without any instance, for the /config create form. Tolerates
             IoRegistry not being initialized yet (e.g. get_node_type_schema()
             called outside a running app, such as some test setups) by
             falling back to an empty options list.
+
+            required=True (the default) marks an unset port as something
+            apply_config_diff's whole-draft save gate must reject - a
+            real sensor/actuator with no port is silently inert. Alert
+            passes required=False: its escalation channel is genuinely
+            optional (a dashboard-only alert with no channel still
+            works), unlike InputNode/DeviceNode's port.
         """
         try:
             reg = IoRegistry.get()
@@ -79,7 +86,8 @@ class PortDriverMixin:
             free, used = [], []
         return Setting('port', label, '', type='select',
                        options=sorted(free),
-                       all_ports=sorted(set(free) | set(used)))
+                       all_ports=sorted(set(free) | set(used)),
+                       required=required)
 
     def _port_setting(self, label: str) -> Setting:
         """ the 'port' Setting entry shared by InputNode/DeviceNode's

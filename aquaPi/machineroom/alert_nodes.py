@@ -359,7 +359,7 @@ class Alert(PortDriverMixin, BusListener):
     @classmethod
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
-        schema.append(cls.get_port_schema('alertPort'))
+        schema.append(cls.get_port_schema('alertPort', required=False))
         schema.append(Setting('repeat', 'repeat', 60 * 60,
                               type='duration', min=0, max=24*60*60, step=60))
         # each AlertCond watches one node with a comparison + threshold +

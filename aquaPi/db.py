@@ -356,18 +356,36 @@ class ConfigDiffError(ValueError):
         invalid. Carries the offending 'entry' (the create/update dict,
         or a small identifying dict for deletes/cycle errors) so the
         API can report which part of the diff failed.
+
+        'message' is always a plain-English fallback string, unchanged
+        regardless of 'key'/'params'/'items' - api.py returns it as
+        'error' either way, so an old/non-updated frontend (or a site
+        below that hasn't been given a key yet) keeps working exactly
+        as before. 'key'/'params' are for ONE i18n-translatable message
+        (pages.wiring.errors.<key>, {param} named interpolation, see
+        api.py's api_config_apply); 'items' is for a message that's
+        inherently a *list* of independent violations (currently just
+        the missing-required-values check) - a list of {key, params}
+        dicts the frontend resolves and joins itself.
     """
-    def __init__(self, message: str, entry: dict[str, Any] | None = None):
+    def __init__(self, message: str, entry: dict[str, Any] | None = None, *,
+                key: str | None = None, params: dict[str, Any] | None = None,
+                items: list[dict[str, Any]] | None = None):
         super().__init__(message)
         self.entry = entry
+        self.key = key
+        self.params = params
+        self.items = items
 
 
 def _check_receives_cardinality(schema: dict[str, Any], resolved: list[str],
                                 entry: dict[str, Any]) -> None:
     if schema['receives'] == 'none' and resolved:
-        raise ConfigDiffError('This node type does not accept any receives', entry)
+        raise ConfigDiffError('This node type does not accept any receives', entry,
+                              key='receivesNotAccepted')
     if schema['receives'] == 'single' and len(resolved) > 1:
-        raise ConfigDiffError('This node type accepts at most 1 receives entry', entry)
+        raise ConfigDiffError('This node type accepts at most 1 receives entry', entry,
+                              key='receivesTooMany')
 
 
 def _would_create_cycle_virtual(graph: dict[str, list[str]], node_id: str,
@@ -429,7 +447,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     deletes = diff.get('deletes') or []
     if not isinstance(creates, list) or not isinstance(updates, list) \
             or not isinstance(deletes, list):
-        raise ConfigDiffError("'creates', 'updates' and 'deletes' must each be a list")
+        raise ConfigDiffError("'creates', 'updates' and 'deletes' must each be a list",
+                             key='diffShape')
 
     live_nodes = {n.id: n for n in bus.get_nodes()}
     node_type_schema = get_node_type_schema()  # computed once, reused below
@@ -437,7 +456,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     deleted_ids: set[str] = set()
     for del_id in deletes:
         if not isinstance(del_id, str) or del_id not in live_nodes:
-            raise ConfigDiffError(f'Unknown node id to delete: {del_id!r}', {'id': del_id})
+            raise ConfigDiffError(f'Unknown node id to delete: {del_id!r}', {'id': del_id},
+                                 key='unknownDeleteId', params={'id': del_id})
         deleted_ids.add(del_id)
 
     remaining_ids = set(live_nodes) - deleted_ids
@@ -445,12 +465,15 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     updates_by_id: dict[str, dict[str, Any]] = {}
     for upd in updates:
         if not isinstance(upd, dict):
-            raise ConfigDiffError('Each update entry must be an object', upd)
+            raise ConfigDiffError('Each update entry must be an object', upd,
+                                 key='updateNotObject')
         upd_id = upd.get('id')
         if not isinstance(upd_id, str) or upd_id not in remaining_ids:
-            raise ConfigDiffError(f'Unknown or deleted node id to update: {upd_id!r}', upd)
+            raise ConfigDiffError(f'Unknown or deleted node id to update: {upd_id!r}', upd,
+                                 key='unknownUpdateId', params={'id': upd_id})
         if upd_id in updates_by_id:
-            raise ConfigDiffError(f'Duplicate update for node id: {upd_id!r}', upd)
+            raise ConfigDiffError(f'Duplicate update for node id: {upd_id!r}', upd,
+                                 key='duplicateUpdateId', params={'id': upd_id})
         updates_by_id[upd_id] = upd
 
     # a disconnected preview of IoRegistry's claim state, used both to
@@ -521,35 +544,40 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
 
     for entry in creates:
         if not isinstance(entry, dict):
-            raise ConfigDiffError('Each create entry must be an object', entry)
+            raise ConfigDiffError('Each create entry must be an object', entry,
+                                 key='createNotObject')
 
         type_name = entry.get('type')
         schema = node_type_schema.get(type_name)
         if not schema:
-            raise ConfigDiffError(f'Unknown or non-creatable node type: {type_name!r}', entry)
+            raise ConfigDiffError(f'Unknown or non-creatable node type: {type_name!r}', entry,
+                                 key='unknownNodeType', params={'type': type_name})
 
         name = (entry.get('name') or '').strip()
         if not name:
-            raise ConfigDiffError('name must not be empty', entry)
+            raise ConfigDiffError('name must not be empty', entry, key='nameRequired')
 
         node_id = compute_node_id(name)
         if node_id in remaining_ids or node_id in new_ids:
-            raise ConfigDiffError(f'A node named {name!r} already exists', entry)
+            raise ConfigDiffError(f'A node named {name!r} already exists', entry,
+                                 key='duplicateName', params={'name': name})
         new_ids.add(node_id)
 
         temp_id = entry.get('temp_id')
         if temp_id is not None:
             if str(temp_id) in temp_id_map:
-                raise ConfigDiffError(f'Duplicate temp_id: {temp_id!r}', entry)
+                raise ConfigDiffError(f'Duplicate temp_id: {temp_id!r}', entry,
+                                     key='duplicateTempId', params={'tempId': temp_id})
             temp_id_map[str(temp_id)] = node_id
 
         raw_receives = entry.get('receives', [])
         if not isinstance(raw_receives, list) or not all(isinstance(r, str) for r in raw_receives):
-            raise ConfigDiffError('receives must be a list of node ids', entry)
+            raise ConfigDiffError('receives must be a list of node ids', entry,
+                                 key='receivesNotList')
 
         raw_fields = entry.get('fields', {})
         if not isinstance(raw_fields, dict):
-            raise ConfigDiffError('fields must be a JSON object', entry)
+            raise ConfigDiffError('fields must be a JSON object', entry, key='fieldsNotObject')
         try:
             fields = validate_fields(_schema_allowing_ports(schema['fields']),
                                      raw_fields, require_all=True)
@@ -568,7 +596,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             return temp_id_map[ref]
         if ref in all_ids:
             return ref
-        raise ConfigDiffError(f'Unknown receives node id: {ref!r}', err_entry)
+        raise ConfigDiffError(f'Unknown receives node id: {ref!r}', err_entry,
+                             key='unknownReceivesId', params={'id': ref})
 
     # a 'receives' entry that names a node being deleted in this same diff
     # is not an error - it's just a wire that goes away with the node. The
@@ -619,10 +648,12 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             raw_receives = upd['receives']
             if not isinstance(raw_receives, list) \
                or not all(isinstance(r, str) for r in raw_receives):
-                raise ConfigDiffError('receives must be a list of node ids', upd)
+                raise ConfigDiffError('receives must be a list of node ids', upd,
+                                     key='receivesNotList')
             if not schema:
                 raise ConfigDiffError(f'{type(node).__name__} does not support changing receives',
-                                      upd)
+                                      upd, key='receivesNotSupported',
+                                      params={'type': type(node).__name__})
             resolved = [resolve_ref(r, upd) for r in _drop_deleted(raw_receives)]
             _check_receives_cardinality(schema, resolved, upd)
             upd['_resolved_receives'] = resolved
@@ -631,9 +662,10 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         if 'fields' in upd:
             raw_fields = upd['fields']
             if not isinstance(raw_fields, dict):
-                raise ConfigDiffError('fields must be a JSON object', upd)
+                raise ConfigDiffError('fields must be a JSON object', upd, key='fieldsNotObject')
             if not schema:
-                raise ConfigDiffError(f'{type(node).__name__} does not support editing fields', upd)
+                raise ConfigDiffError(f'{type(node).__name__} does not support editing fields', upd,
+                                     key='fieldsNotSupported', params={'type': type(node).__name__})
             try:
                 upd['_fields'] = convert_duration_fields(
                     type(node), validate_fields(
@@ -652,7 +684,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                 try:
                     upd['_' + key] = float(upd[key])
                 except (TypeError, ValueError):
-                    raise ConfigDiffError(f'{key} must be a number', upd)
+                    raise ConfigDiffError(f'{key} must be a number', upd,
+                                         key='notANumber', params={'key': key})
 
     # data_range compatibility of every resolved source (defense in depth
     # - the /wiring picker already hides these, see wiringConnect.js). A
@@ -670,11 +703,14 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             if src_schema and not source_data_range_ok(src_schema['data_range']):
                 raise ConfigDiffError(
                     f'{src_id!r} produces {src_schema["data_range"]} data, '
-                    'which cannot be wired as an input', {'id': node_id})
+                    'which cannot be wired as an input', {'id': node_id},
+                    key='incompatibleDataRange',
+                    params={'id': src_id, 'dataRange': src_schema['data_range']})
 
     for node_id, receives in virtual_receives.items():
         if _would_create_cycle_virtual(virtual_receives, node_id, receives):
-            raise ConfigDiffError('This wiring would create a cycle', {'id': node_id})
+            raise ConfigDiffError('This wiring would create a cycle', {'id': node_id},
+                                 key='cycleDetected')
 
     # no two nodes may hold the same exclusive hardware port in the
     # resulting config. Each 'port' select only offers ports the *live*
@@ -712,6 +748,73 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                 preview.claim(port)
             except DriverError as ex:
                 raise ConfigDiffError(ex.msg, {'id': prep['node_id']}) from ex
+
+    # reject the whole save if any node the draft will end up with - an
+    # untouched live one, an updated one, or a new create - is left with
+    # an empty value for a field the schema marks 'required' (currently
+    # 'port' on InputNode/DeviceNode, and 'setpoint' on some Ctrl types;
+    # Alert's escalation port is exempt, see get_port_schema()), or with
+    # an empty 'receives' although its type needs at least one (a
+    # ScaleAux/Ctrl/DeviceNode/History with nothing feeding it is
+    # silently inert). This scans the WHOLE resulting draft, not just
+    # this diff's own creates/updates - a node mis-configured earlier
+    # (e.g. an inserted template nobody finished wiring, which always
+    # ships with 'port'/'receives' blanked - see instantiate_template())
+    # blocks the next unrelated save too, until it's fixed - that's the
+    # only place such a node ever gets surfaced, since template
+    # insertion doesn't go through apply_config_diff at all.
+    def _missing_required(schema_fields: list[dict[str, Any]],
+                          effective: dict[str, Any]) -> list[str]:
+        # 'label' (not 'key') - it's already a valid pages.settings.fields.*
+        # i18n key (inputPort/outputPort/alertPort/setpoint/...), the same
+        # one NodeSettingsFields resolves for /settings and /wiring's own
+        # dialog - reusing it here means the missing-value message needs
+        # no i18n strings of its own for field names.
+        return [f['label'] for f in schema_fields
+                if f.get('required') and effective.get(f['key']) in (None, '', [])]
+
+    def _missing_receives(schema: dict[str, Any], node_id: str) -> list[str]:
+        # get_node_type_schema() already reports 'none' here for Alert
+        # (its real receives is conditions-derived, not user-wired) -
+        # nothing extra needed to exempt it.
+        if schema['receives'] != 'none' and not virtual_receives.get(node_id):
+            return ['receives']
+        return []
+
+    missing: list[tuple[str, list[str]]] = []  # (node name, [missing keys])
+
+    for node_id, node in live_nodes.items():
+        if node_id in deleted_ids:
+            continue
+        schema = node_type_schema.get(type(node).__name__)
+        if not schema:
+            continue
+        upd_fields = updates_by_id.get(node_id, {}).get('_fields', {})
+        effective = {f['key']: upd_fields.get(f['key'], getattr(node, f['key'], None))
+                    for f in schema['fields']}
+        miss = _missing_required(schema['fields'], effective) + _missing_receives(schema, node_id)
+        if miss:
+            missing.append((node.name, miss))
+
+    for prep in prepared_creates:
+        miss = (_missing_required(prep['schema']['fields'], prep['fields'])
+               + _missing_receives(prep['schema'], prep['node_id']))
+        if miss:
+            missing.append((prep['entry'].get('name') or prep['node_id'], miss))
+
+    if missing:
+        detail = '; '.join(f'{name!r} is missing a value for {", ".join(keys)}'
+                           for name, keys in missing)
+        # 'receives' gets its own beginner-friendly sentence ("X is not
+        # connected to anything") rather than the generic field-label
+        # phrasing - a new /wiring user isn't exposed to the term
+        # "receives" anywhere else in the UI.
+        items = [{'key': 'notConnected', 'params': {'node': name}}
+                if label == 'receives' else
+                {'key': 'missingValue', 'params': {'node': name, 'fieldLabel': label}}
+                for name, labels in missing for label in labels]
+        raise ConfigDiffError(f'Cannot save: {detail}',
+                              {'nodes': [n for n, _ in missing]}, items=items)
 
     # --- everything about this diff has been validated: apply it for
     #     real, deletes first, then updates, then creates ---

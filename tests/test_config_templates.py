@@ -456,6 +456,41 @@ def test_insert_template_twice_avoids_collision(client, users):
     assert id1 != id2
 
 
+def test_instantiate_template_remaps_alert_condition_node_id_on_collision(bus):
+    """ regression: instantiate_template() remapped 'receives' through its
+        id_map on a name/id collision but not Alert.conditions[].node_id -
+        since Alert.receives is re-derived FROM conditions on deserialize
+        (overwriting the remapped 'receives'), a colliding insert left the
+        alert silently watching the wrong, pre-existing node.
+
+        capture_node_template() (the UI "save selected nodes as template"
+        path) refuses Alert nodes outright, so this builds the template
+        dict directly, the way a hand-authored predefined template
+        (aquaPi/templates_lib/*.json) would - that's the path an Alert
+        template actually ships through.
+    """
+    # a self-contained sensor + Alert pair, same ids/names as the bus
+    # fixture's own 'wasser'/'warnungen' -> forces an id collision on insert
+    tmp_bus = MsgBus(threaded=False)
+    sensor = AnalogInput('Wasser', '', 25.0, '°C')
+    sensor.plugin(tmp_bus)
+    alert = Alert('Warnungen', AlertAbove(sensor.id, 30.0), '')
+    alert.plugin(tmp_bus)
+    data = {'nodes': [
+        {'id': sensor.id, 'type': type(sensor).__name__, 'state': db.serialize_node(sensor)},
+        {'id': alert.id, 'type': type(alert).__name__, 'state': db.serialize_node(alert)},
+    ]}
+    tmp_bus.teardown()
+
+    new_nodes = db.instantiate_template(bus, data)
+    new_sensor = next(n for n in new_nodes if isinstance(n, AnalogInput))
+    new_alert = next(n for n in new_nodes if isinstance(n, Alert))
+    assert new_sensor.id != 'wasser'
+
+    assert new_alert.receives == [new_sensor.id]
+    assert [c.node_id for c in new_alert.conditions] == [new_sensor.id]
+
+
 def test_insert_template_requires_admin(client, users):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/templates/', json={'name': 'X', 'node_ids': ['wasser']})

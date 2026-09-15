@@ -1365,6 +1365,17 @@ def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
         state = dict(entry['state'])
         state['name'] = new_names[entry['id']]
         state['receives'] = [id_map[r] for r in state.get('receives', []) if r in id_map]
+        if state.get('conditions'):
+            # an Alert's conditions[].node_id is the same kind of internal
+            # wiring reference as 'receives' (and is what its 'receives'
+            # is later re-derived FROM on deserialize, overwriting the
+            # line above) - must go through the same id_map remap, or a
+            # colliding id here would leave the alert silently watching
+            # an unrelated pre-existing node
+            state['conditions'] = [
+                {**cond, 'node_id': id_map[cond['node_id']]}
+                for cond in state['conditions'] if cond['node_id'] in id_map
+            ]
         state['pos_x'] = float(state.get('pos_x', 0.0) or 0.0) + offset_x
         state['pos_y'] = float(state.get('pos_y', 0.0) or 0.0) + offset_y
         if 'port' in state:

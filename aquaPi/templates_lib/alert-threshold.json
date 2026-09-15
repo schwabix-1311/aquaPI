@@ -1,0 +1,82 @@
+{
+ "id": "alert-threshold",
+ "i18n": {
+  "de": {
+   "name": "Warnung, Temperatur außerhalb Bereich",
+   "descr": "Warnt per Email oder Telegram, wenn ein Messwert einen oberen oder unteren Grenzwert über- bzw. unterschreitet; der Benachrichtigungskanal wird über die Portwahl festgelegt.",
+   "nodes": {
+    "wasser": "Wasser",
+    "warnungen": "Warnungen"
+   }
+  },
+  "en": {
+   "name": "Alert, temperature out of range",
+   "descr": "Warns via Email or Telegram when a reading goes above or below a limit; the notification channel is chosen via the port selection.",
+   "nodes": {
+    "wasser": "Water",
+    "warnungen": "Alerts"
+   }
+  }
+ },
+ "data": {
+  "nodes": [
+   {
+    "id": "wasser",
+    "type": "AnalogInput",
+    "state": {
+     "name": "Wasser",
+     "id": "wasser",
+     "identifier": "AnalogInput.wasser",
+     "data": 0.0,
+     "receives": [],
+     "unit": "°C",
+     "rcv_unit": "",
+     "data_range": "ANALOG",
+     "group": "",
+     "pos_x": 0.0,
+     "pos_y": 0.0,
+     "port": "",
+     "interval": 60.0,
+     "initval": 25.0,
+     "avg": 1
+    }
+   },
+   {
+    "id": "warnungen",
+    "type": "Alert",
+    "state": {
+     "name": "Warnungen",
+     "id": "warnungen",
+     "identifier": "Alert.warnungen",
+     "data": [],
+     "receives": [
+      "wasser",
+      "wasser"
+     ],
+     "unit": "",
+     "rcv_unit": "",
+     "data_range": "STRING",
+     "group": "",
+     "pos_x": 320.0,
+     "pos_y": 0.0,
+     "conditions": [
+      {
+       "class": "AlertBelow",
+       "node_id": "wasser",
+       "limit": 22.0,
+       "duration": 0
+      },
+      {
+       "class": "AlertAbove",
+       "node_id": "wasser",
+       "limit": 28.0,
+       "duration": 0
+      }
+     ],
+     "port": "",
+     "repeat": 3600
+    }
+   }
+  ]
+ }
+}

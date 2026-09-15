@@ -17,12 +17,15 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {computeOffsetFactor} from './scaleCalibration.js'
 
-// common pH buffer-solution values, offered as v-combobox suggestions
-// only when this node is clearly a voltage->pH calibration (measuredUnit
-// 'V', referenceUnit 'pH') - free typing always still works, for any
-// other unit combination (e.g. a fan curve's °C->%) the combobox simply
-// has no preset items.
-const PH_BUFFER_VALUES = [4.0, 6.86, 7.0, 9.18, 10.0]
+// Referenz v-combobox suggestions, keyed by referenceUnit - free typing
+// always still works regardless; a unit with no entry here (or none at
+// all) just gets an empty suggestion list. pH: common buffer-solution
+// values. %: round quarter-steps, useful for a fan-curve's 0/100-style
+// target endpoints.
+const REFERENCE_SUGGESTIONS_BY_UNIT = {
+	'pH': [4.0, 6.86, 7.0, 9.18, 10.0],
+	'%': [0, 25, 50, 75, 100],
+}
 
 const CalibrationHelper = {
 	props: {
@@ -31,10 +34,19 @@ const CalibrationHelper = {
 		currentMeasuredValue: {type: Number, default: null},
 	},
 	template: `
-		<v-card variant="outlined" class="mb-3 pa-3">
+			<div class="mb-3">
 			<div class="text-subtitle-2 mb-2">{{ $t('misc.calibration.heading') }}</div>
 			<v-row v-for="(point, idx) in points" :key="idx" dense align="center">
-				<v-col cols="12" sm="5">
+				<v-col cols="12" sm="6" md="4">
+					<v-combobox
+						v-model="point.reference"
+						:items="referenceSuggestions"
+						:label="referenceLabel"
+						density="compact" variant="outlined" hide-details="auto"
+						autocomplete="off" clearable
+					></v-combobox>
+				</v-col>
+				<v-col cols="12" sm="6" md="4">
 					<v-text-field
 						v-model.number="point.measured"
 						:label="measuredLabel"
@@ -51,15 +63,6 @@ const CalibrationHelper = {
 							><v-icon size="small">mdi-target</v-icon></v-btn>
 						</template>
 					</v-text-field>
-				</v-col>
-				<v-col cols="12" sm="5">
-					<v-combobox
-						v-model="point.reference"
-						:items="referenceSuggestions"
-						:label="referenceLabel"
-						density="compact" variant="outlined" hide-details="auto"
-						autocomplete="off" clearable
-					></v-combobox>
 				</v-col>
 			</v-row>
 
@@ -82,7 +85,7 @@ const CalibrationHelper = {
 				:disabled="!preview"
 				@click="apply"
 			>{{ $t('misc.calibration.apply') }}</v-btn>
-		</v-card>
+			</div>
 	`,
 	data: function() {
 		return {
@@ -103,7 +106,7 @@ const CalibrationHelper = {
 			return this.measuredUnit === 'V' && this.referenceUnit === 'pH'
 		},
 		referenceSuggestions: function() {
-			return this.isPhFromVoltage ? PH_BUFFER_VALUES : []
+			return REFERENCE_SUGGESTIONS_BY_UNIT[this.referenceUnit] || []
 		},
 		showJblHint: function() {
 			return this.isPhFromVoltage

@@ -152,6 +152,17 @@ div.aquapi-settings div.v-expansion-panel + div.v-expansion-panel {
     border-top: none;
 }
 
+/* settingColSpan()'s field widths (comps.js) are fractions of whatever
+   row width they're given (e.g. md:4 = 3-per-row) - the app's outer
+   v-container is fluid (Default.vue), so on a wide desktop viewport a
+   single compact field (even a 1-character "Einheit") balloons to
+   several hundred pixels, looking sparse/scattered. Cap this page's own
+   content width so the grid's fractions stay a sane absolute size,
+   without touching the global fluid container other pages rely on. */
+div.aquapi-settings {
+    max-width: 1100px;
+}
+
 /* Vuetify 3's v-toolbar-title__placeholder is single-line by default
    (overflow: hidden + text-overflow: ellipsis) - cuts off longer
    headings on narrow/mobile viewports (AquapiPageHeading, e.g.

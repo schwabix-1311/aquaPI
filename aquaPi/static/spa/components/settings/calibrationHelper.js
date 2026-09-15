@@ -138,7 +138,16 @@ const CalibrationHelper = {
 	methods: {
 		apply: function() {
 			if (!this.preview) return
-			this.$emit('apply', this.preview)
+			// the raw points travel along too (measured+reference, the
+			// literal shape hist_nodes.py's log_calibration_event()
+			// expects) - so a recalibration's history can show what was
+			// actually measured, not just the offset/factor it produced
+			this.$emit('apply', {
+				...this.preview,
+				points: this.points.map(p => ({
+					measured: Number(p.measured), reference: Number(p.reference),
+				})),
+			})
 		},
 	},
 }

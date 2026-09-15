@@ -22,6 +22,11 @@ from aquaPi.machineroom.alert_nodes import Alert, AlertAbove
 
 _TEMPLATE_FOLDER = os.path.join(os.path.dirname(aquaPi.__file__), 'templates')
 
+# a valid, otherwise-arbitrary 2-point calibration (factor 1, offset 0) -
+# ScaleAux.points is required with no default, so every create below needs
+# one just to be a legal node, independent of whatever else the test checks
+_CALIB_POINTS = [{'measured': 0.0, 'reference': 0.0}, {'measured': 1.0, 'reference': 1.0}]
+
 
 @pytest.fixture(autouse=True, scope='session')
 def _io_registry():
@@ -712,7 +717,7 @@ def test_apply_rejects_a_listener_with_no_receives(client, users, bus, app):
 
     resp = client.post('/api/config/apply', json={
         'creates': [{'temp_id': 'a', 'type': 'ScaleAux', 'name': 'Skalierung',
-                     'fields': {'factor': 1.0, 'offset': 0.0}}],
+                     'fields': {'points': _CALIB_POINTS}}],
     })
     assert resp.status_code == HTTPStatus.BAD_REQUEST
     body = resp.get_json()
@@ -756,7 +761,7 @@ def test_apply_reports_multiple_missing_values_in_one_diff(client, users, bus, a
             {'temp_id': 'a', 'type': 'AnalogInput', 'name': 'SensorX',
              'fields': {'unit': '°C', 'port': ''}},
             {'temp_id': 'b', 'type': 'ScaleAux', 'name': 'SkalierungX',
-             'fields': {'factor': 1.0, 'offset': 0.0}},
+             'fields': {'points': _CALIB_POINTS}},
         ],
     })
     assert resp.status_code == HTTPStatus.BAD_REQUEST
@@ -820,59 +825,39 @@ def test_apply_error_key_and_params_for_a_plain_and_a_parametrized_message(
 
 
 # --- calibration history logging parity with PUT /api/nodes/<id>/settings ---
-# (see tests/test_history_export.py:311-332 for that endpoint's own coverage)
+# (see tests/test_history_export.py's own "PUT .../settings triggers
+# calibration logging" section for that endpoint's coverage)
 
 
 def test_apply_updates_scaleaux_logs_calibration_event(client, users, bus, app, monkeypatch):
     recorded = []
     monkeypatch.setattr(db, 'log_calibration_event',
-                        lambda node_id, offset=None, factor=None:
-                            recorded.append((node_id, offset, factor)))
+                        lambda node_id, old_points, new_points:
+                            recorded.append((node_id, old_points, new_points)))
     _login(client, 'admin1', 'adminPass123')
 
     resp = client.post('/api/config/apply', json={
         'creates': [{'temp_id': 'a', 'type': 'ScaleAux', 'name': 'Skalierung',
                      'receives': ['wasser'],
-                     'fields': {'unit': 'pH', 'offset': 0.0, 'factor': 1.0}}],
+                     'fields': {'unit': 'pH', 'points': _CALIB_POINTS}}],
     })
     assert resp.status_code == HTTPStatus.OK
     node_id = bus.get_node('skalierung').id
     assert recorded == []   # a create is not a calibration "change"
 
+    new_points = [{'measured': 0.0, 'reference': 1.5}, {'measured': 1.0, 'reference': 2.5}]
     resp = client.post('/api/config/apply', json={
-        'updates': [{'id': node_id, 'fields': {'offset': 1.5}}],
+        'updates': [{'id': node_id, 'fields': {'points': new_points}}],
     })
     assert resp.status_code == HTTPStatus.OK
-    assert recorded == [(node_id, (0.0, 1.5), None)]
-
-
-def test_apply_updates_scaleaux_logs_both_fields_as_one_event(client, users, bus, app, monkeypatch):
-    recorded = []
-    monkeypatch.setattr(db, 'log_calibration_event',
-                        lambda node_id, offset=None, factor=None:
-                            recorded.append((node_id, offset, factor)))
-    _login(client, 'admin1', 'adminPass123')
-
-    resp = client.post('/api/config/apply', json={
-        'creates': [{'temp_id': 'a', 'type': 'ScaleAux', 'name': 'Skalierung',
-                     'receives': ['wasser'],
-                     'fields': {'unit': 'pH', 'offset': 0.0, 'factor': 1.0}}],
-    })
-    assert resp.status_code == HTTPStatus.OK
-    node_id = bus.get_node('skalierung').id
-
-    resp = client.post('/api/config/apply', json={
-        'updates': [{'id': node_id, 'fields': {'offset': 1.5, 'factor': 2.5}}],
-    })
-    assert resp.status_code == HTTPStatus.OK
-    assert recorded == [(node_id, (0.0, 1.5), (1.0, 2.5))]
+    assert recorded == [(node_id, _CALIB_POINTS, new_points)]
 
 
 def test_apply_updates_non_calibration_field_does_not_log(client, users, bus, app, monkeypatch):
     recorded = []
     monkeypatch.setattr(db, 'log_calibration_event',
-                        lambda node_id, offset=None, factor=None:
-                            recorded.append((node_id, offset, factor)))
+                        lambda node_id, old_points, new_points:
+                            recorded.append((node_id, old_points, new_points)))
     _login(client, 'admin1', 'adminPass123')
 
     resp = client.post('/api/config/apply', json={

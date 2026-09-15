@@ -647,6 +647,8 @@ const NodeSettingsFields = {
 				<calibration-history
 					v-if="node.type === 'ScaleAux'"
 					:node-id="node.id"
+					:measured-unit="calibrationMeasuredUnit"
+					:reference-unit="node.unit"
 				></calibration-history>
 				<v-row>
 					<v-col
@@ -717,6 +719,10 @@ const NodeSettingsFields = {
 			const ownControlTypes = ['UiSwitchInput', 'UiAnalogInput']
 			return this.settingsStore.settingsForNode(this.node.id)
 				.filter(item => !(item.key === null && item.label === 'receives'))
+				// a real, validated field, but never a generic widget - a
+				// bespoke component (e.g. ScaleAux.points -> CalibrationHelper)
+				// handles it instead, rendered separately above
+				.filter(item => !item.customWidget)
 				.map(item => ({
 					...item,
 					label: (ownControlTypes.includes(this.node.type) && item.key === 'value')
@@ -743,14 +749,15 @@ const NodeSettingsFields = {
 				this.$toast.error(this.error || this.$t('misc.toast.saveError'))
 			}
 		},
-		// this page saves each field immediately (unlike /wiring's staged
-		// form), so apply offset+factor together in one PUT - also gets
-		// calibration-log history for free, since that PUT path already
-		// logs ScaleAux offset/factor changes (api.py)
-		async onApplyCalibration({offset, factor}) {
+		// points is a real Setting field (ScaleAux.points) - a normal
+		// immediate PUT, no different from any other field on this page.
+		// offset/factor (still emitted for the widget's own live preview
+		// text) are intentionally ignored here - never submitted.
+		async onApplyCalibration({points}) {
 			const ok = await this.settingsStore.updateNodeSetting({
 				nodeId: this.node.id,
-				fields: {offset, factor},
+				key: 'points',
+				value: points,
 			})
 			if (ok) {
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))

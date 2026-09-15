@@ -64,8 +64,16 @@
      "group": "",
      "pos_x": 310.0,
      "pos_y": 252.0,
-     "offset": 22.06458333333332,
-     "factor": -6.041666666666662,
+     "points": [
+      {
+       "measured": 2.99,
+       "reference": 4.0
+      },
+      {
+       "measured": 2.51,
+       "reference": 6.9
+      }
+     ],
      "limit": [
       4.0,
       10.0

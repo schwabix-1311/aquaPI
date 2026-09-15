@@ -86,6 +86,16 @@ class Setting:
     # elsewhere, that staging can silently revert a change made in the
     # meantime.
     live_only: bool = False
+    # True = a real, validated field (required/min/max/type all still
+    # enforced normally) that never gets the generic per-field widget -
+    # a dedicated, bespoke SPA component elsewhere handles its display
+    # and edit instead (e.g. ScaleAux.points -> CalibrationHelper,
+    # which isn't a fit for any generic widget: not a plain scalar, and
+    # SettingRecordList's variable-length add/remove UI doesn't suit a
+    # fixed pair). /wiring's WiringNodeDialog and /parameters'
+    # NodeSettingsFields both filter this out of their generic per-field
+    # render loop the same way they already filter creation_only/live_only.
+    custom_widget: bool = False
     # for type='duration': value/min/max/step always travel the API as
     # seconds (wire unit) - the /settings widget lets the user display/edit
     # in s, min or h, converting back to seconds before saving. The largest
@@ -179,6 +189,8 @@ class Setting:
             result['creationOnly'] = True
         if self.live_only:
             result['liveOnly'] = True
+        if self.custom_widget:
+            result['customWidget'] = True
         if self.label_params is not None:
             result['labelParams'] = self.label_params
         return result

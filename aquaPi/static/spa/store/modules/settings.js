@@ -6,7 +6,9 @@ export const useSettingsStore = Pinia.defineStore('settings', {
 	state: () => ({
 		byNode: {},          // nodeId -> array of settings entries (from get_settings())
 		errors: {},          // nodeId -> error string or null
-		calibrationLog: {},  // nodeId -> array of {ts, field, old_value, new_value}
+		// nodeId -> array of {ts, old_points: [{measured,reference} x2],
+		//                     new_points: [{measured,reference} x2]}
+		calibrationLog: {},
 	}),
 
 	getters: {
@@ -44,9 +46,7 @@ export const useSettingsStore = Pinia.defineStore('settings', {
 		async updateNodeSetting(payload) {
 			// a single {key: value} update by default - pass `fields` (a
 			// {key: value, ...} dict) instead to apply several at once in
-			// one PUT, e.g. CalibrationHelper's offset+factor pair, so
-			// both land in the same PUT/calibration-log-history moment
-			// rather than two sequential requests
+			// one PUT
 			const {nodeId, key, value, fields} = payload
 
 			const res = await apiRequest('put', '/api/nodes/' + nodeId + '/settings',

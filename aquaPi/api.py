@@ -319,9 +319,9 @@ def api_history_export(node_id: str) -> Response:
 @bp.route('/api/nodes/<node_id>/calibration-log')
 @login_required
 def api_calibration_log(node_id: str) -> Response:
-    """ return the recorded calibration history (offset/factor changes)
-        of a ScaleAux node (?limit=<max entries>, default 100); empty
-        list if QuestDB is unavailable or the node never had a
+    """ return the recorded calibration history (2-point calibration
+        changes) of a ScaleAux node (?limit=<max entries>, default 100);
+        empty list if QuestDB is unavailable or the node never had a
         calibration change recorded.
     """
     bus = the_bus()
@@ -439,6 +439,28 @@ def _validate_and_cast(key: str, raw_value, vtype: str,
     if not voptional and raw_value in (None, '', []):
         raise ValueError(f'{key}: value is required')
 
+    if vtype == 'calibration-points':
+        # ScaleAux.points: exactly 2 {'measured': ..., 'reference': ...}
+        # records - a fixed pair, not a fit for 'record-list' (built for
+        # variable-length add/remove lists) nor a plain scalar type;
+        # CalibrationHelper (a bespoke SPA component) is the only editor
+        if not isinstance(raw_value, list) or len(raw_value) != 2:
+            raise ValueError(f'{key}: expected exactly 2 calibration points')
+        out_points = []
+        for i, rec in enumerate(raw_value):
+            if not isinstance(rec, dict):
+                raise ValueError(f'{key}[{i}]: expected an object')
+            try:
+                out_points.append({
+                    'measured': float(rec['measured']),
+                    'reference': float(rec['reference']),
+                })
+            except (KeyError, TypeError, ValueError):
+                raise ValueError(f'{key}[{i}]: expected numeric measured/reference')
+        if out_points[0]['measured'] == out_points[1]['measured']:
+            raise ValueError(f'{key}: the two points must have different measured values')
+        return out_points
+
     if vtype == 'record-list':
         if not isinstance(raw_value, list):
             raise ValueError(f'{key}: expected a list of records')
@@ -526,11 +548,8 @@ def api_set_node_settings(node_id: str) -> Response:
             return jsonify(error=f'Unknown or read-only setting: {key}'), HTTPStatus.BAD_REQUEST
 
     # Step 28: calibration history - ScaleAux is used for linear sensor
-    # calibrations (e.g. pH probes); log offset/factor changes to QuestDB
-    # as ONE event (both fields, if both changed in this request), not
-    # one row per field - keyed dict, filled in below, turned into a
-    # single log_calibration_event() call after the loop
-    calibration_changes: dict[str, tuple[float, float]] = {}
+    # calibrations (e.g. pH probes); log a points change to QuestDB
+    calibration_change: tuple[Any, Any] | None = None  # (old_points, new_points)
 
     try:
         for key, raw_value in body.items():
@@ -551,8 +570,8 @@ def api_set_node_settings(node_id: str) -> Response:
                 ref_keys = [s.key for s in entry.record_schema if s.node_filter]
                 db.check_watched_nodes(
                     bus, node_id, [rec[k] for rec in value for k in ref_keys])
-            if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
-                calibration_changes[key] = (getattr(node, key), value)
+            if isinstance(node, ScaleAux) and key == 'points':
+                calibration_change = (getattr(node, 'points'), value)
             setattr(node, key, value)
     except ValueError as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
@@ -565,9 +584,8 @@ def api_set_node_settings(node_id: str) -> Response:
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_settings', node_id, {'fields': list(body.keys())})
 
-    if calibration_changes:
-        log_calibration_event(node_id, offset=calibration_changes.get('offset'),
-                              factor=calibration_changes.get('factor'))
+    if calibration_change:
+        log_calibration_event(node_id, *calibration_change)
 
     settings = [entry.to_dict() for entry in node.get_settings()]
     return jsonify(settings)

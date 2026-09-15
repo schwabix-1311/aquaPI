@@ -72,39 +72,47 @@ class MultiInAux(AuxNode, ABC):
 
 
 class ScaleAux(SingleInAux):
-    """ A 1:1 node rescaling via a graph defined by
-        offset and factor, or by 2 points.
-        Useful for calibrations of linear (!) sensors.
-        And quite a few other creative use cases ...
+    """ A 1:1 node rescaling via a graph defined by 2 calibration
+        points - useful for calibrating linear (!) sensors, and quite
+        a few other creative use cases.
+
+        offset/factor (out = in * factor + offset) are the actual
+        runtime math, but are never independently stored or settable -
+        they're derived once from `points` here (in __init__, so
+        listen() stays a cheap read of self.offset/self.factor, not a
+        recompute per message) and again whenever `points` changes.
+        `points` is the one thing a user actually calibrates against
+        and can interpret later (e.g. "6.9 pH = 2.51 V"), unlike a bare
+        offset/factor number - see [[project ScaleAux 2-point-only]].
 
         Options:
             unit   - the unit after scaling the received data
-            offset - a simple offset:  in + offset = out
-            factor - a scaling factor: in * factor = out
-            points - alternate way to define offset and factor
-                      by 2 points as [(in1 out1),(in2 out2)]
+            points - exactly 2 calibration points, each
+                     {'measured': <raw value>, 'reference': <target
+                     value>} - required, no default: a ScaleAux with
+                     no calibration is a modelling mistake, not a
+                     valid state.
             limit  - limit result to this range,
                      defaults to 0.0 .. 100.0
     """
     data_range = DataRange.ANALOG
 
     def __init__(self, name: str, receives: str, unit: str,
-                 offset: float = 0, factor: float = 1.0,
-                 points: list[tuple[float, float]] | None = None,
+                 points: list[dict[str, float]],
                  limit: tuple[float, float] = (0.0, 100.0),
                  _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.unit: str = unit
-        self.offset: float = offset
-        self.factor: float = factor
-        if points:
-            try:
-                dX = points[1][0] - points[0][0]
-                dY = points[1][1] - points[0][1]
-                self.factor = dY / dX
-                self.offset = points[0][1] - self.factor * points[0][0]
-            except (TypeError, IndexError):
-                log.error('ScaleAux %s: No valid calibration points found', self.name)
+        self.points: list[dict[str, float]] = points
+        self.offset: float = 0.0
+        self.factor: float = 1.0
+        try:
+            dX = points[1]['measured'] - points[0]['measured']
+            dY = points[1]['reference'] - points[0]['reference']
+            self.factor = dY / dX
+            self.offset = points[0]['reference'] - self.factor * points[0]['measured']
+        except (TypeError, IndexError, KeyError, ZeroDivisionError):
+            log.error('ScaleAux %s: No valid calibration points found', self.name)
 
         self.limit: tuple[float, float] = limit
         try:
@@ -118,16 +126,14 @@ class ScaleAux(SingleInAux):
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
         state["unit"] = self.unit
-        state["offset"] = self.offset
-        state["factor"] = self.factor
+        state["points"] = self.points
         state["limit"] = self.limit
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         ScaleAux.__init__(self, state['name'], state['receives'], unit=state['unit'],
-                          offset=state['offset'], factor=state['factor'],
-                          limit=state['limit'],
+                          points=state['points'], limit=state['limit'],
                           _cont=True)
 
     def listen(self, msg: Msg) -> None:
@@ -143,8 +149,7 @@ class ScaleAux(SingleInAux):
         settings = super().get_settings()
         schema = {s.key: s for s in type(self).get_settings_schema()}
         settings.append(self._fill_setting(schema['unit']))
-        settings.append(schema['offset'].with_value(round(self.offset, 4)))
-        settings.append(schema['factor'].with_value(round(self.factor, 4)))
+        settings.append(schema['points'].with_value(self.points))
         # settings.append(Setting('limit', 'Grenzen', self.limit,
         #                         type='combo'))  #  None/0..100/(min,max)
         return settings
@@ -153,8 +158,13 @@ class ScaleAux(SingleInAux):
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
         schema.append(Setting('unit', 'unit', ''))
-        schema.append(Setting('offset', 'offset', 0.0, type='number', step=0.0001))
-        schema.append(Setting('factor', 'scaleFactor', 1.0, type='number', step=0.0001))
+        # not a generic-widget field - CalibrationHelper (a bespoke SPA
+        # component, not the generic Setting dispatch) is the only editor;
+        # 'required' is what makes /wiring's whole-draft save check reject
+        # a newly-created ScaleAux until it's actually been calibrated
+        schema.append(Setting('points', 'calibrationPoints', None,
+                              type='calibration-points', required=True,
+                              custom_widget=True))
         return schema
 
 

@@ -66,15 +66,17 @@ const WiringNodeDialog = {
 					></v-combobox>
 
 					<calibration-helper
-						v-if="editNode && editNode.type === 'ScaleAux'"
+						v-if="isScaleAux"
 						:measured-unit="calibrationMeasuredUnit"
-						:reference-unit="editNode.unit"
+						:reference-unit="form.fields.unit"
 						:current-measured-value="calibrationSourceValue"
 						@apply="onApplyCalibration"
 					></calibration-helper>
 					<calibration-history
 						v-if="editNode && editNode.type === 'ScaleAux'"
 						:node-id="editNode.id"
+						:measured-unit="calibrationMeasuredUnit"
+						:reference-unit="form.fields.unit"
 					></calibration-history>
 
 					<div v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">
@@ -109,15 +111,22 @@ const WiringNodeDialog = {
 		dashboardStore() {
 			return useDashboardStore()
 		},
-		// the ScaleAux node's own upstream sensor - only meaningful while
-		// editing an already-wired, existing node, never while creating
-		// one (no live reading exists yet). rcv_unit is NOT usable here:
-		// it's only ever populated for MultiInAux nodes (msg_bus.py),
-		// ScaleAux is SingleInAux and its rcv_unit stays '' forever - the
-		// upstream node's own .unit is the real measured-value unit.
+		// available while editing an existing ScaleAux, AND while
+		// creating one: points is a required field (see aux_nodes.py),
+		// so calibrating is part of getting through the create dialog
+		// at all, not just an edit-time nicety
+		isScaleAux: function() {
+			return (this.editNode ? this.editNode.type : this.form.type) === 'ScaleAux'
+		},
+		// the already-chosen upstream source - works the same in create
+		// and edit, since 'Empfängt von' is filled in via the same
+		// form.receives either way. rcv_unit is NOT usable here: it's
+		// only ever populated for MultiInAux nodes (msg_bus.py),
+		// ScaleAux is SingleInAux and its rcv_unit stays '' forever -
+		// the upstream node's own .unit is the real measured-value unit.
 		calibrationSourceNode: function() {
-			if (!this.editNode || this.editNode.type !== 'ScaleAux') return null
-			const srcId = (this.editNode.receives || [])[0]
+			if (!this.isScaleAux) return null
+			const srcId = Array.isArray(this.form.receives) ? this.form.receives[0] : this.form.receives
 			return srcId ? this.dashboardStore.nodes[srcId] : null
 		},
 		calibrationSourceValue: function() {
@@ -173,6 +182,16 @@ const WiringNodeDialog = {
 				return true
 			})
 		},
+		// visibleFields minus customWidget fields (e.g. ScaleAux.points) -
+		// ONLY for the generic per-field widget loop below. Deliberately
+		// NOT used by toInternalFields()/buildFieldValues(): those still
+		// need every visibleFields entry, customWidget or not, since a
+		// customWidget field's value is real and must still be staged/
+		// submitted - a bespoke component (e.g. CalibrationHelper) just
+		// writes into form.fields directly instead of via a generic widget.
+		genericWidgetFields: function() {
+			return this.visibleFields.filter(field => !field.customWidget)
+		},
 		// what the Setting* widgets (SettingNumber/SettingSlider/...) render:
 		// each schema field's static metadata, plus its label resolved from
 		// an i18n key (Setting.label convention, see msg_bus.py - same
@@ -182,7 +201,7 @@ const WiringNodeDialog = {
 		// the schema's own 'value' is only ever a suggested default, not
 		// this field's actual current value.
 		formFieldItems: function() {
-			return this.visibleFields.map(field => {
+			return this.genericWidgetFields.map(field => {
 				const value = this.form.fields[field.key]
 				let attrs = field.attrs
 				// a live-filtered select (notably 'port') only lists the
@@ -241,13 +260,14 @@ const WiringNodeDialog = {
 	},
 	methods: {
 		widgetType: settingWidgetType,
-		// CalibrationHelper writes straight into the same staged
-		// form.fields the manual offset/factor SettingNumber widgets
-		// already use - Save/toInternalFields()/draftUpdateNode() need
-		// no awareness of calibration at all
-		onApplyCalibration: function({offset, factor}) {
-			this.form.fields.offset = offset
-			this.form.fields.factor = factor
+		// points is a real Setting field (ScaleAux.points) now, so this
+		// writes into the exact same staged form.fields every other
+		// generic field widget uses - Save/toInternalFields()/
+		// draftUpdateNode() need no special-case awareness of calibration
+		// at all. offset/factor (still emitted for the widget's own live
+		// preview text) are intentionally ignored here - never submitted.
+		onApplyCalibration: function({points}) {
+			this.form.fields.points = points
 		},
 		resetForm: function() {
 			this.error = null

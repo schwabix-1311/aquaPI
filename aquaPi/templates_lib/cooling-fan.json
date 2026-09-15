@@ -35,8 +35,16 @@
      "group": "",
      "pos_x": 310.0,
      "pos_y": 126.0,
-     "offset": -1300.0,
-     "factor": 50.0,
+     "points": [
+      {
+       "measured": 26.0,
+       "reference": 0
+      },
+      {
+       "measured": 28.0,
+       "reference": 100
+      }
+     ],
      "limit": [
       0.0,
       100.0

@@ -7,6 +7,8 @@ import {isHistOrAlert, cardTitle, ancestorsForward, descendants, dedupeFanIn, br
 import {connectableSources} from '../wiring/wiringConnect.js'
 import './settingRecordList.js'
 import './escalationEditor.js'
+import './calibrationHelper.js'
+import './calibrationHistory.js'
 
 // a Setting is required unless attrs.optional is true, and must not be
 // left empty - this is enforced server-side (api.py's _validate_and_cast),
@@ -635,6 +637,17 @@ const NodeSettingsFields = {
 				<v-alert v-if="error" type="error" text dense class="mb-2">
 					{{ error }}
 				</v-alert>
+				<calibration-helper
+					v-if="node.type === 'ScaleAux'"
+					:measured-unit="calibrationMeasuredUnit"
+					:reference-unit="node.unit"
+					:current-measured-value="calibrationSourceValue"
+					@apply="onApplyCalibration"
+				></calibration-helper>
+				<calibration-history
+					v-if="node.type === 'ScaleAux'"
+					:node-id="node.id"
+				></calibration-history>
 				<v-row>
 					<v-col
 						v-for="(item, idx) in settings"
@@ -662,6 +675,25 @@ const NodeSettingsFields = {
 	computed: {
 		settingsStore() {
 			return useSettingsStore()
+		},
+		dashboardStore() {
+			return useDashboardStore()
+		},
+		// mirrors wiringNodeDialog.js's calibrationSourceNode - rcv_unit is
+		// NOT usable for measuredUnit here: it's only ever populated for
+		// MultiInAux nodes, ScaleAux is SingleInAux and its rcv_unit stays
+		// '' forever - the upstream node's own .unit is the real one
+		calibrationSourceNode: function() {
+			if (this.node.type !== 'ScaleAux') return null
+			const srcId = (this.node.receives || [])[0]
+			return srcId ? this.dashboardStore.nodes[srcId] : null
+		},
+		calibrationMeasuredUnit: function() {
+			return (this.calibrationSourceNode && this.calibrationSourceNode.unit) || ''
+		},
+		calibrationSourceValue: function() {
+			const src = this.calibrationSourceNode
+			return (src && typeof src.data === 'number') ? src.data : null
 		},
 		// item.label arrives from the backend as a short i18n key (e.g.
 		// 'setpoint'), not display text - resolved here once, centrally,
@@ -704,6 +736,21 @@ const NodeSettingsFields = {
 				nodeId: this.node.id,
 				key: item.key,
 				value: value
+			})
+			if (ok) {
+				this.$toast.success(this.$t('misc.toast.saveSuccess'))
+			} else {
+				this.$toast.error(this.error || this.$t('misc.toast.saveError'))
+			}
+		},
+		// this page saves each field immediately (unlike /wiring's staged
+		// form), so apply offset+factor together in one PUT - also gets
+		// calibration-log history for free, since that PUT path already
+		// logs ScaleAux offset/factor changes (api.py)
+		async onApplyCalibration({offset, factor}) {
+			const ok = await this.settingsStore.updateNodeSetting({
+				nodeId: this.node.id,
+				fields: {offset, factor},
 			})
 			if (ok) {
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))

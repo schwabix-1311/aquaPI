@@ -1,5 +1,6 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useWiringStore} from '../../store/modules/wiring.js'
+import {useDashboardStore} from '../../store/modules/dashboard.js'
 import {connectableSources} from './wiringConnect.js'
 import {draftPortOptions} from './wiringPortOptions.js'
 // side effect: registers SettingNumber/SettingSlider/SettingDuration/... -
@@ -64,6 +65,18 @@ const WiringNodeDialog = {
 						autocomplete="off"
 					></v-combobox>
 
+					<calibration-helper
+						v-if="editNode && editNode.type === 'ScaleAux'"
+						:measured-unit="calibrationMeasuredUnit"
+						:reference-unit="editNode.unit"
+						:current-measured-value="calibrationSourceValue"
+						@apply="onApplyCalibration"
+					></calibration-helper>
+					<calibration-history
+						v-if="editNode && editNode.type === 'ScaleAux'"
+						:node-id="editNode.id"
+					></calibration-history>
+
 					<div v-for="item in formFieldItems" :key="item.key + '.' + dialogInstanceKey" class="mb-3">
 						<component
 							:is="widgetType(item)"
@@ -92,6 +105,27 @@ const WiringNodeDialog = {
 	computed: {
 		wiringStore() {
 			return useWiringStore()
+		},
+		dashboardStore() {
+			return useDashboardStore()
+		},
+		// the ScaleAux node's own upstream sensor - only meaningful while
+		// editing an already-wired, existing node, never while creating
+		// one (no live reading exists yet). rcv_unit is NOT usable here:
+		// it's only ever populated for MultiInAux nodes (msg_bus.py),
+		// ScaleAux is SingleInAux and its rcv_unit stays '' forever - the
+		// upstream node's own .unit is the real measured-value unit.
+		calibrationSourceNode: function() {
+			if (!this.editNode || this.editNode.type !== 'ScaleAux') return null
+			const srcId = (this.editNode.receives || [])[0]
+			return srcId ? this.dashboardStore.nodes[srcId] : null
+		},
+		calibrationSourceValue: function() {
+			const src = this.calibrationSourceNode
+			return (src && typeof src.data === 'number') ? src.data : null
+		},
+		calibrationMeasuredUnit: function() {
+			return (this.calibrationSourceNode && this.calibrationSourceNode.unit) || ''
 		},
 		show: {
 			get: function() { return this.modelValue },
@@ -207,6 +241,14 @@ const WiringNodeDialog = {
 	},
 	methods: {
 		widgetType: settingWidgetType,
+		// CalibrationHelper writes straight into the same staged
+		// form.fields the manual offset/factor SettingNumber widgets
+		// already use - Save/toInternalFields()/draftUpdateNode() need
+		// no awareness of calibration at all
+		onApplyCalibration: function({offset, factor}) {
+			this.form.fields.offset = offset
+			this.form.fields.factor = factor
+		},
 		resetForm: function() {
 			this.error = null
 			this.dialogInstanceKey++

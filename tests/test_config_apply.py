@@ -817,3 +817,42 @@ def test_apply_error_key_and_params_for_a_plain_and_a_parametrized_message(
     body = resp.get_json()
     assert body['error_key'] == 'duplicateName'
     assert body['error_params'] == {'name': 'Heizstab'}
+
+
+# --- calibration history logging parity with PUT /api/nodes/<id>/settings ---
+# (see tests/test_history_export.py:311-332 for that endpoint's own coverage)
+
+
+def test_apply_updates_scaleaux_logs_calibration_event(client, users, bus, app, monkeypatch):
+    recorded = []
+    monkeypatch.setattr(db, 'log_calibration_event',
+                        lambda node_id, field, old, new: recorded.append((node_id, field, old, new)))
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'ScaleAux', 'name': 'Skalierung',
+                     'receives': ['wasser'],
+                     'fields': {'unit': 'pH', 'offset': 0.0, 'factor': 1.0}}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    node_id = bus.get_node('skalierung').id
+    assert recorded == []   # a create is not a calibration "change"
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': node_id, 'fields': {'offset': 1.5}}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    assert recorded == [(node_id, 'offset', 0.0, 1.5)]
+
+
+def test_apply_updates_non_calibration_field_does_not_log(client, users, bus, app, monkeypatch):
+    recorded = []
+    monkeypatch.setattr(db, 'log_calibration_event',
+                        lambda node_id, field, old, new: recorded.append((node_id, field, old, new)))
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'heizen', 'fields': {'setpoint': 26.0}}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    assert recorded == []

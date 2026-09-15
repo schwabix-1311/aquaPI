@@ -143,7 +143,6 @@ class ScaleAux(SingleInAux):
         settings = super().get_settings()
         schema = {s.key: s for s in type(self).get_settings_schema()}
         settings.append(self._fill_setting(schema['unit']))
-        # TODO frontend should also offer 2-point calibration, this is most practical for pH
         settings.append(schema['offset'].with_value(round(self.offset, 4)))
         settings.append(schema['factor'].with_value(round(self.factor, 4)))
         # settings.append(Setting('limit', 'Grenzen', self.limit,

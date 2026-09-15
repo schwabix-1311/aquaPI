@@ -1,0 +1,144 @@
+// 2-point calibration helper for ScaleAux's offset/factor fields - not a
+// Setting-driven widget (ScaleAux only ever persists offset/factor, see
+// aux_nodes.py get_settings_schema()), a bespoke component that computes
+// offset/factor from two (measured, reference) points and writes the
+// result directly into the SAME offset/factor fields each host page
+// already has (wiringNodeDialog.js's staged form.fields, or
+// NodeSettingsFields' immediate PUT) - see ./scaleCalibration.js for the
+// math. Labeling is user-perspective, not wire-perspective: "Messwert"
+// is what's read off the live sensor, "Referenz" is the known/target
+// value the user provides (a pH buffer's value, or a fan-curve's target
+// %) - not ScaleAux's own "receives"/output terms.
+//
+// Used both by NodeSettingsFields (/parameters) and WiringNodeDialog's
+// edit dialog (/wiring) - never the /wiring create dialog, calibrating
+// needs a live reading from an already-wired node.
+
+import {registerGlobalComponent} from '../app/registry.js'
+import {computeOffsetFactor} from './scaleCalibration.js'
+
+// common pH buffer-solution values, offered as v-combobox suggestions
+// only when this node is clearly a voltage->pH calibration (measuredUnit
+// 'V', referenceUnit 'pH') - free typing always still works, for any
+// other unit combination (e.g. a fan curve's °C->%) the combobox simply
+// has no preset items.
+const PH_BUFFER_VALUES = [4.0, 6.86, 7.0, 9.18, 10.0]
+
+const CalibrationHelper = {
+	props: {
+		measuredUnit: {type: String, default: ''},
+		referenceUnit: {type: String, default: ''},
+		currentMeasuredValue: {type: Number, default: null},
+	},
+	template: `
+		<v-card variant="outlined" class="mb-3 pa-3">
+			<div class="text-subtitle-2 mb-2">{{ $t('misc.calibration.heading') }}</div>
+			<v-row v-for="(point, idx) in points" :key="idx" dense align="center">
+				<v-col cols="12" sm="5">
+					<v-text-field
+						v-model.number="point.measured"
+						:label="measuredLabel"
+						type="number" step="any"
+						density="compact" variant="outlined" hide-details="auto"
+						autocomplete="off"
+					>
+						<template #append-inner>
+							<v-btn
+								icon size="x-small" variant="text"
+								:disabled="currentMeasuredValue === null"
+								:title="$t('misc.calibration.readSensor')"
+								@click="point.measured = currentMeasuredValue"
+							><v-icon size="small">mdi-target</v-icon></v-btn>
+						</template>
+					</v-text-field>
+				</v-col>
+				<v-col cols="12" sm="5">
+					<v-combobox
+						v-model="point.reference"
+						:items="referenceSuggestions"
+						:label="referenceLabel"
+						density="compact" variant="outlined" hide-details="auto"
+						autocomplete="off" clearable
+					></v-combobox>
+				</v-col>
+			</v-row>
+
+			<div v-if="preview" class="text-caption grey--text mt-2">
+				{{ $t('misc.calibration.preview', {offset: preview.offset.toFixed(4), factor: preview.factor.toFixed(4)}) }}
+			</div>
+			<v-alert v-else-if="degenerate" type="warning" density="compact" variant="text" class="mt-2 pa-0">
+				{{ $t('misc.calibration.identicalMeasured') }}
+			</v-alert>
+
+			<div v-if="showJblHint" class="text-caption grey--text mt-2">
+				<div>{{ $t('misc.calibration.jblHint') }}</div>
+				<div v-if="measuredDiff !== null">
+					{{ $t('misc.calibration.measuredDiff', {diff: measuredDiff.toFixed(3)}) }}
+				</div>
+			</div>
+
+			<v-btn
+				class="mt-3" color="primary" size="small"
+				:disabled="!preview"
+				@click="apply"
+			>{{ $t('misc.calibration.apply') }}</v-btn>
+		</v-card>
+	`,
+	data: function() {
+		return {
+			points: [
+				{measured: null, reference: null},
+				{measured: null, reference: null},
+			],
+		}
+	},
+	computed: {
+		measuredLabel: function() {
+			return this.$t('misc.calibration.measured', {unit: this.measuredUnit})
+		},
+		referenceLabel: function() {
+			return this.$t('misc.calibration.reference', {unit: this.referenceUnit})
+		},
+		isPhFromVoltage: function() {
+			return this.measuredUnit === 'V' && this.referenceUnit === 'pH'
+		},
+		referenceSuggestions: function() {
+			return this.isPhFromVoltage ? PH_BUFFER_VALUES : []
+		},
+		showJblHint: function() {
+			return this.isPhFromVoltage
+		},
+		bothPointsFilled: function() {
+			return this.points.every(p =>
+				p.measured !== null && p.measured !== '' &&
+				p.reference !== null && p.reference !== '')
+		},
+		preview: function() {
+			if (!this.bothPointsFilled) return null
+			try {
+				return computeOffsetFactor(
+					{measured: Number(this.points[0].measured), reference: Number(this.points[0].reference)},
+					{measured: Number(this.points[1].measured), reference: Number(this.points[1].reference)},
+				)
+			} catch (e) {
+				return null
+			}
+		},
+		degenerate: function() {
+			return this.bothPointsFilled && !this.preview
+		},
+		measuredDiff: function() {
+			if (!this.bothPointsFilled) return null
+			return Math.abs(Number(this.points[1].measured) - Number(this.points[0].measured))
+		},
+	},
+	methods: {
+		apply: function() {
+			if (!this.preview) return
+			this.$emit('apply', this.preview)
+		},
+	},
+}
+registerGlobalComponent('CalibrationHelper', CalibrationHelper)
+
+// vim: set noet ts=4 sw=4:

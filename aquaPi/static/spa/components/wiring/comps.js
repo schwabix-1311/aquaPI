@@ -73,8 +73,8 @@ const WiringNodeBox = {
 					<v-chip x-small label :color="color" text-color="white" class="flex-shrink-0">{{ node.role }}</v-chip>
 					<span v-if="node.group" class="text-caption grey--text text-truncate ml-1" :title="node.group">{{ node.group }}</span>
 				</div>
-     <v-btn icon size="x-small" variant="text" color="grey-darken-1" class="flex-shrink-0" @pointerdown.stop @click.stop="$emit('delete', node)" :title="$t('misc.actions.delete')">
-					<v-icon size="small">mdi-delete</v-icon>
+				<v-btn icon size="small" variant="text" color="grey-darken-1" class="flex-shrink-0" @pointerdown.stop @click.stop="$emit('delete', node)" :title="$t('misc.actions.delete')">
+					<v-icon>mdi-delete</v-icon>
 				</v-btn>
 			</div>
 			<div class="px-2 pb-1">

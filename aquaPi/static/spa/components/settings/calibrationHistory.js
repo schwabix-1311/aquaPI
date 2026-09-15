@@ -10,6 +10,7 @@
 import {registerGlobalComponent} from '../app/registry.js'
 import {useSettingsStore} from '../../store/modules/settings.js'
 import i18n from '../../i18n/index.js'
+import {groupCalibrationLog} from './calibrationHistoryGrouping.js'
 
 // calibration_log's 'field' column stores the raw Setting KEY ('offset'/
 // 'factor', see the isinstance(node, ScaleAux) checks in api.py and
@@ -29,14 +30,13 @@ const CalibrationHistory = {
 			<div v-if="loading" class="text-caption grey--text">
 				<aquapi-loading-indicator :size="16" color="primary"></aquapi-loading-indicator>
 			</div>
-			<div v-else-if="!entries.length" class="text-caption grey--text">
+			<div v-else-if="!groups.length" class="text-caption grey--text">
 				{{ $t('misc.calibration.historyEmpty') }}
 			</div>
 			<v-list v-else density="compact" class="pa-0">
-				<v-list-item v-for="(entry, idx) in entries" :key="idx" class="px-0" min-height="28">
+				<v-list-item v-for="(group, idx) in groups" :key="idx" class="px-0" min-height="28">
 					<v-list-item-title class="text-caption">
-						{{ formatTs(entry.ts) }} - {{ fieldLabel(entry.field) }}:
-						{{ entry.old_value }} → {{ entry.new_value }}
+						{{ formatTs(group.ts) }}: {{ groupLine(group) }}
 					</v-list-item-title>
 				</v-list-item>
 			</v-list>
@@ -54,6 +54,12 @@ const CalibrationHistory = {
 		entries: function() {
 			return this.settingsStore.calibrationLogForNode(this.nodeId)
 		},
+		// one calibration event (2-point apply, or a hand-edit) writes one
+		// calibration_log row per changed field, a few ms apart - group
+		// them back into one line per event: "<date>: Faktor a->b, Offset c->d"
+		groups: function() {
+			return groupCalibrationLog(this.entries)
+		},
 	},
 	methods: {
 		formatTs: function(ts) {
@@ -61,6 +67,16 @@ const CalibrationHistory = {
 		},
 		fieldLabel: function(field) {
 			return this.$t('pages.settings.fields.' + (FIELD_LABEL_KEYS[field] || field))
+		},
+		groupLine: function(group) {
+			const parts = []
+			if (group.factor) {
+				parts.push(this.fieldLabel('factor') + ' ' + group.factor.old + '→' + group.factor.new)
+			}
+			if (group.offset) {
+				parts.push(this.fieldLabel('offset') + ' ' + group.offset.old + '→' + group.offset.new)
+			}
+			return parts.join(', ')
 		},
 	},
 	mounted: function() {

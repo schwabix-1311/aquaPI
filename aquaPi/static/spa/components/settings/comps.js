@@ -642,6 +642,7 @@ const NodeSettingsFields = {
 					:measured-unit="calibrationMeasuredUnit"
 					:reference-unit="node.unit"
 					:current-measured-value="calibrationSourceValue"
+					:current-points="node.points"
 					@apply="onApplyCalibration"
 				></calibration-helper>
 				<calibration-history

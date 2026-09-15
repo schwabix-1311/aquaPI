@@ -27,11 +27,30 @@ const REFERENCE_SUGGESTIONS_BY_UNIT = {
 	'%': [0, 25, 50, 75, 100],
 }
 
+// module-level (not a component method) so data() can call it directly,
+// independent of Vue's methods-vs-data setup ordering - clones, never
+// holds a live reference into the currentPoints prop: editing the seeded
+// fields must not mutate the node's real data
+function seedPoints(currentPoints) {
+	if (currentPoints && currentPoints.length === 2) {
+		return currentPoints.map(p => ({measured: p.measured, reference: p.reference}))
+	}
+	return [
+		{measured: null, reference: null},
+		{measured: null, reference: null},
+	]
+}
+
 const CalibrationHelper = {
 	props: {
 		measuredUnit: {type: String, default: ''},
 		referenceUnit: {type: String, default: ''},
 		currentMeasuredValue: {type: Number, default: null},
+		// the node's actually-stored points (e.g. from a template insert,
+		// or just never re-touched since creation) - seeds the entry
+		// fields below so an existing calibration is visible and editable
+		// in place, rather than looking uncalibrated until overwritten
+		currentPoints: {type: Array, default: null},
 	},
 	template: `
 			<div class="mb-3">
@@ -89,11 +108,17 @@ const CalibrationHelper = {
 	`,
 	data: function() {
 		return {
-			points: [
-				{measured: null, reference: null},
-				{measured: null, reference: null},
-			],
+			points: seedPoints(this.currentPoints),
 		}
+	},
+	watch: {
+		// the host dialog/component instance can be reused across
+		// different nodes (e.g. switching which node is being edited
+		// without a remount) - re-seed whenever the underlying node's
+		// own points change, not just once at creation
+		currentPoints: function(newVal) {
+			this.points = seedPoints(newVal)
+		},
 	},
 	computed: {
 		measuredLabel: function() {

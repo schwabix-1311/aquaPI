@@ -70,10 +70,11 @@ const WiringNodeDialog = {
 						:measured-unit="calibrationMeasuredUnit"
 						:reference-unit="form.fields.unit"
 						:current-measured-value="calibrationSourceValue"
+						:current-points="editNode ? editNode.points : null"
 						@apply="onApplyCalibration"
 					></calibration-helper>
 					<calibration-history
-						v-if="editNode && editNode.type === 'ScaleAux'"
+						v-if="editNode && editNode.type === 'ScaleAux' && !editNode._tempId"
 						:node-id="editNode.id"
 						:measured-unit="calibrationMeasuredUnit"
 						:reference-unit="form.fields.unit"

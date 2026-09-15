@@ -581,7 +581,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             fields = validate_fields(_schema_allowing_ports(schema['fields']),
                                      raw_fields, require_all=True)
         except (ValueError, KeyError) as ex:
-            raise ConfigDiffError(str(ex), entry) from ex
+            raise ConfigDiffError(f'{name!r}: {ex}', entry) from ex
 
         prepared_creates.append({
             'entry': entry, 'node_id': node_id, 'schema': schema,
@@ -672,7 +672,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                             node, _schema_allowing_ports(schema['fields'])),
                         raw_fields, require_all=False))
             except ValueError as ex:
-                raise ConfigDiffError(str(ex), upd) from ex
+                raise ConfigDiffError(f'{node.name!r}: {ex}', upd) from ex
             # editing an Alert's conditions changes what it watches -
             # reflect the NEW watched set in the cycle/data_range graph
             if schema['role'] == BusRole.ALERTS.name and 'conditions' in upd['_fields']:

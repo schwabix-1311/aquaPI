@@ -704,7 +704,7 @@ def api_create_node() -> Response:
         db.check_watched_nodes(bus, node_id,
                                [c['node_id'] for c in fields.get('conditions', [])])
     except (ValueError, KeyError) as ex:
-        return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
+        return jsonify(error=f'{name!r}: {ex}'), HTTPStatus.BAD_REQUEST
 
     node.group = str(body.get('group', '') or '')
     try:

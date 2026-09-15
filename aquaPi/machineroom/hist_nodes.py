@@ -52,57 +52,77 @@ def _questdb_conn_str() -> str:
             'dbname=aquaPi application_name=aquaPi')
 
 
-def log_calibration_event(node_id: str, field: str,
-                          old_value: float, new_value: float) -> bool:
-    """ record a calibration change (e.g. a ScaleAux node's 'offset'/
-        'factor', typically adjusted after re-calibrating a pH probe or
-        similar sensor) with timestamp and old/new value in QuestDB, so
-        it can be reviewed later (Step 28). Like the rest of this module,
-        this degrades gracefully: if QuestDB isn't installed/reachable,
-        the event is just logged and skipped, never raises.
+def log_calibration_event(node_id: str,
+                          offset: tuple[float, float] | None = None,
+                          factor: tuple[float, float] | None = None) -> bool:
+    """ record a calibration change (a ScaleAux node's 'offset'/'factor',
+        typically both at once after re-calibrating a pH probe or similar
+        sensor, but either may be adjusted alone by hand) as ONE row with
+        timestamp and old/new values in QuestDB, so it can be reviewed
+        later (Step 28). One row per event, not per field, so a stored
+        record and its display never need reconciling - pass whichever
+        of offset/factor actually changed (at least one), the other stays
+        NULL. Like the rest of this module, this degrades gracefully: if
+        QuestDB isn't installed/reachable, the event is just logged and
+        skipped, never raises.
     """
+    if offset is None and factor is None:
+        return False
     if not QUEST_DB:
-        log.warning('Calibration event for %s.%s not recorded: QuestDB not available',
-                    node_id, field)
+        log.warning('Calibration event for %s not recorded: QuestDB not available', node_id)
         return False
     try:
         with pg.connect(_questdb_conn_str(), autocommit=True) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS calibration_log (
-                    ts        timestamp,
-                    node_id   symbol CAPACITY 64,
-                    field     symbol CAPACITY 16,
-                    old_value double,
-                    new_value double )
+                    ts          timestamp,
+                    node_id     symbol CAPACITY 64,
+                    offset_old  double,
+                    offset_new  double,
+                    factor_old  double,
+                    factor_new  double )
                     timestamp(ts) PARTITION BY MONTH;
             """)
-            qry = SQL("INSERT INTO {} VALUES (now(), %s, %s, %s, %s)"
+            qry = SQL("INSERT INTO {} VALUES (now(), %s, %s, %s, %s, %s)"
                       ).format(Identifier('calibration_log'))
-            conn.execute(qry, [node_id, field, old_value, new_value])
-        log.info('Calibration event recorded: %s.%s %s -> %s', node_id, field, old_value, new_value)
+            conn.execute(qry, [
+                node_id,
+                offset[0] if offset else None, offset[1] if offset else None,
+                factor[0] if factor else None, factor[1] if factor else None,
+            ])
+        log.info('Calibration event recorded: %s offset=%s factor=%s', node_id, offset, factor)
         return True
     except Exception:
-        log.exception('Failed to record calibration event for %s.%s', node_id, field)
+        log.exception('Failed to record calibration event for %s', node_id)
         return False
 
 
 def get_calibration_log(node_id: str, limit: int = 100) -> list[dict[str, Any]]:
     """ return the most recent calibration events for one node, newest
-        first; empty list if QuestDB is unavailable or on any error
+        first; empty list if QuestDB is unavailable or on any error.
+        Each entry is {'ts', 'offset': {'old','new'} | None,
+        'factor': {'old','new'} | None} - the exact shape a single
+        calibration event was recorded in, no reassembly needed.
     """
     if not QUEST_DB:
         return []
     try:
         with pg.connect(_questdb_conn_str(), autocommit=True) as conn:
             with conn.cursor() as curs:
-                qry = SQL("SELECT ts, field, old_value, new_value FROM {} "
+                qry = SQL("SELECT ts, offset_old, offset_new, factor_old, factor_new FROM {} "
                           "WHERE node_id=%s ORDER BY ts DESC LIMIT %s"
                           ).format(Identifier('calibration_log'))
                 curs.execute(qry, [node_id, limit])
                 rows = curs.fetchall()
-                return [{'ts': ts.isoformat(), 'field': field,
-                        'old_value': old_value, 'new_value': new_value}
-                        for (ts, field, old_value, new_value) in rows]
+                result = []
+                for (ts, offset_old, offset_new, factor_old, factor_new) in rows:
+                    entry: dict[str, Any] = {'ts': ts.isoformat()}
+                    entry['offset'] = ({'old': offset_old, 'new': offset_new}
+                                       if offset_old is not None else None)
+                    entry['factor'] = ({'old': factor_old, 'new': factor_new}
+                                       if factor_old is not None else None)
+                    result.append(entry)
+                return result
     except Exception:
         log.exception('Failed to read calibration log for %s', node_id)
         return []

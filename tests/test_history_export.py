@@ -214,7 +214,8 @@ def test_calibration_log_returns_recorded_entries(client, users, bus, monkeypatc
 
         def execute(self, *_a, **_kw):
             self._rows = [
-                (_FakeTs('2024-01-01T00:00:00'), 'offset', 1.0, 1.5),
+                # one row per event: both fields changed together here
+                (_FakeTs('2024-01-01T00:00:00'), 1.0, 1.5, 2.0, 2.5),
             ]
 
         def fetchall(self):
@@ -249,8 +250,9 @@ def test_calibration_log_returns_recorded_entries(client, users, bus, monkeypatc
     resp = client.get(f'/api/nodes/{calib.id}/calibration-log')
     assert resp.status_code == HTTPStatus.OK
     body = resp.get_json()
-    assert body == [{'ts': '2024-01-01T00:00:00', 'field': 'offset',
-                     'old_value': 1.0, 'new_value': 1.5}]
+    assert body == [{'ts': '2024-01-01T00:00:00',
+                     'offset': {'old': 1.0, 'new': 1.5},
+                     'factor': {'old': 2.0, 'new': 2.5}}]
 
 
 # --- hist_nodes.log_calibration_event()/get_calibration_log() -----------
@@ -258,10 +260,15 @@ def test_calibration_log_returns_recorded_entries(client, users, bus, monkeypatc
 
 def test_log_calibration_event_returns_false_without_questdb(monkeypatch):
     monkeypatch.setattr(hist_nodes, 'QUEST_DB', False)
-    assert hist_nodes.log_calibration_event('node1', 'offset', 1.0, 2.0) is False
+    assert hist_nodes.log_calibration_event('node1', offset=(1.0, 2.0)) is False
 
 
-def test_log_calibration_event_executes_insert(monkeypatch):
+def test_log_calibration_event_returns_false_when_nothing_changed():
+    # neither offset nor factor given - nothing to log, no QuestDB call at all
+    assert hist_nodes.log_calibration_event('node1') is False
+
+
+def test_log_calibration_event_executes_insert_one_row_per_event(monkeypatch):
     executed = []
 
     class _FakeConn:
@@ -282,11 +289,40 @@ def test_log_calibration_event_executes_insert(monkeypatch):
     monkeypatch.setattr(hist_nodes, 'QUEST_DB', True)
     monkeypatch.setattr(hist_nodes, 'pg', _FakePg)
 
-    assert hist_nodes.log_calibration_event('ph_probe', 'factor', 2.0, 2.1) is True
+    # both fields changed in the same event -> one row, not two
+    assert hist_nodes.log_calibration_event(
+        'ph_probe', offset=(1.0, 1.5), factor=(2.0, 2.1)) is True
     # 1 CREATE TABLE + 1 INSERT
     assert len(executed) == 2
     insert_params = executed[1][1]
-    assert insert_params == ['ph_probe', 'factor', 2.0, 2.1]
+    assert insert_params == ['ph_probe', 1.0, 1.5, 2.0, 2.1]
+
+
+def test_log_calibration_event_leaves_unset_field_null(monkeypatch):
+    executed = []
+
+    class _FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def execute(self, qry, params=None):
+            executed.append((str(qry), params))
+
+    class _FakePg:
+        @staticmethod
+        def connect(*_a, **_kw):
+            return _FakeConn()
+
+    monkeypatch.setattr(hist_nodes, 'QUEST_DB', True)
+    monkeypatch.setattr(hist_nodes, 'pg', _FakePg)
+
+    # only factor changed (e.g. a hand-edit of one field) - offset stays NULL
+    assert hist_nodes.log_calibration_event('ph_probe', factor=(2.0, 2.1)) is True
+    insert_params = executed[1][1]
+    assert insert_params == ['ph_probe', None, None, 2.0, 2.1]
 
 
 def test_get_calibration_log_returns_empty_without_questdb(monkeypatch):
@@ -302,7 +338,7 @@ def test_log_calibration_event_swallows_errors(monkeypatch):
 
     monkeypatch.setattr(hist_nodes, 'QUEST_DB', True)
     monkeypatch.setattr(hist_nodes, 'pg', _FakePg)
-    assert hist_nodes.log_calibration_event('node1', 'offset', 1.0, 2.0) is False
+    assert hist_nodes.log_calibration_event('node1', offset=(1.0, 2.0)) is False
 
 
 # --- PUT /api/nodes/<id>/settings triggers calibration logging ----------
@@ -312,12 +348,26 @@ def test_settings_update_of_scaleaux_logs_calibration_event(client, users, bus, 
     calib = next(n for n in bus.get_nodes() if isinstance(n, ScaleAux))
     recorded = []
     monkeypatch.setattr(api, 'log_calibration_event',
-                        lambda node_id, field, old, new: recorded.append((node_id, field, old, new)))
+                        lambda node_id, offset=None, factor=None:
+                            recorded.append((node_id, offset, factor)))
 
     _login(client, 'operator1', 'operatorPass1')
     resp = client.put(f'/api/nodes/{calib.id}/settings', json={'offset': 1.5})
     assert resp.status_code == HTTPStatus.OK
-    assert recorded == [(calib.id, 'offset', 1.0, 1.5)]
+    assert recorded == [(calib.id, (1.0, 1.5), None)]
+
+
+def test_settings_update_of_scaleaux_logs_both_fields_as_one_event(client, users, bus, monkeypatch):
+    calib = next(n for n in bus.get_nodes() if isinstance(n, ScaleAux))
+    recorded = []
+    monkeypatch.setattr(api, 'log_calibration_event',
+                        lambda node_id, offset=None, factor=None:
+                            recorded.append((node_id, offset, factor)))
+
+    _login(client, 'operator1', 'operatorPass1')
+    resp = client.put(f'/api/nodes/{calib.id}/settings', json={'offset': 1.5, 'factor': 2.5})
+    assert resp.status_code == HTTPStatus.OK
+    assert recorded == [(calib.id, (1.0, 1.5), (2.0, 2.5))]
 
 
 def test_settings_update_of_non_calibration_field_does_not_log(client, users, bus, monkeypatch):

@@ -836,8 +836,11 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     # which already logs ScaleAux offset/factor changes made through
     # PUT /api/nodes/<id>/settings; this is the equivalent for changes
     # made through /wiring's save (POST /api/config/apply), a separate
-    # code path that would otherwise silently skip history logging
-    calibration_changes: list[tuple[str, str, float, float]] = []
+    # code path that would otherwise silently skip history logging. One
+    # event (both fields, if both changed) per node, not one row per
+    # field - a diff can touch several ScaleAux nodes at once, so this
+    # is keyed by node id, each value itself keyed by field.
+    calibration_changes: dict[str, dict[str, tuple[float, float]]] = {}
 
     for upd_id, upd in updates_by_id.items():
         node = live_nodes[upd_id]
@@ -846,7 +849,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         if '_fields' in upd:
             for key, value in upd['_fields'].items():
                 if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
-                    calibration_changes.append((upd_id, key, getattr(node, key), value))
+                    calibration_changes.setdefault(upd_id, {})[key] = (getattr(node, key), value)
                 setattr(node, key, value)
         if 'group' in upd:
             node.group = str(upd['group'] or '')
@@ -855,8 +858,8 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         if '_pos_y' in upd:
             node.pos_y = upd['_pos_y']
 
-    for node_id, field, old_value, new_value in calibration_changes:
-        log_calibration_event(node_id, field, old_value, new_value)
+    for node_id, changes in calibration_changes.items():
+        log_calibration_event(node_id, offset=changes.get('offset'), factor=changes.get('factor'))
 
     for prep in prepared_creates:
         entry = prep['entry']

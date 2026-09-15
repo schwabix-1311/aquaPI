@@ -527,7 +527,10 @@ def api_set_node_settings(node_id: str) -> Response:
 
     # Step 28: calibration history - ScaleAux is used for linear sensor
     # calibrations (e.g. pH probes); log offset/factor changes to QuestDB
-    calibration_changes: list[tuple[str, float, float]] = []
+    # as ONE event (both fields, if both changed in this request), not
+    # one row per field - keyed dict, filled in below, turned into a
+    # single log_calibration_event() call after the loop
+    calibration_changes: dict[str, tuple[float, float]] = {}
 
     try:
         for key, raw_value in body.items():
@@ -549,7 +552,7 @@ def api_set_node_settings(node_id: str) -> Response:
                 db.check_watched_nodes(
                     bus, node_id, [rec[k] for rec in value for k in ref_keys])
             if isinstance(node, ScaleAux) and key in ('offset', 'factor'):
-                calibration_changes.append((key, getattr(node, key), value))
+                calibration_changes[key] = (getattr(node, key), value)
             setattr(node, key, value)
     except ValueError as ex:
         return jsonify(error=str(ex)), HTTPStatus.BAD_REQUEST
@@ -562,8 +565,9 @@ def api_set_node_settings(node_id: str) -> Response:
     db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
                            'update_settings', node_id, {'fields': list(body.keys())})
 
-    for field, old_value, new_value in calibration_changes:
-        log_calibration_event(node_id, field, old_value, new_value)
+    if calibration_changes:
+        log_calibration_event(node_id, offset=calibration_changes.get('offset'),
+                              factor=calibration_changes.get('factor'))
 
     settings = [entry.to_dict() for entry in node.get_settings()]
     return jsonify(settings)

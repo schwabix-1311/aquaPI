@@ -826,7 +826,8 @@ def test_apply_error_key_and_params_for_a_plain_and_a_parametrized_message(
 def test_apply_updates_scaleaux_logs_calibration_event(client, users, bus, app, monkeypatch):
     recorded = []
     monkeypatch.setattr(db, 'log_calibration_event',
-                        lambda node_id, field, old, new: recorded.append((node_id, field, old, new)))
+                        lambda node_id, offset=None, factor=None:
+                            recorded.append((node_id, offset, factor)))
     _login(client, 'admin1', 'adminPass123')
 
     resp = client.post('/api/config/apply', json={
@@ -842,13 +843,36 @@ def test_apply_updates_scaleaux_logs_calibration_event(client, users, bus, app, 
         'updates': [{'id': node_id, 'fields': {'offset': 1.5}}],
     })
     assert resp.status_code == HTTPStatus.OK
-    assert recorded == [(node_id, 'offset', 0.0, 1.5)]
+    assert recorded == [(node_id, (0.0, 1.5), None)]
+
+
+def test_apply_updates_scaleaux_logs_both_fields_as_one_event(client, users, bus, app, monkeypatch):
+    recorded = []
+    monkeypatch.setattr(db, 'log_calibration_event',
+                        lambda node_id, offset=None, factor=None:
+                            recorded.append((node_id, offset, factor)))
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{'temp_id': 'a', 'type': 'ScaleAux', 'name': 'Skalierung',
+                     'receives': ['wasser'],
+                     'fields': {'unit': 'pH', 'offset': 0.0, 'factor': 1.0}}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    node_id = bus.get_node('skalierung').id
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': node_id, 'fields': {'offset': 1.5, 'factor': 2.5}}],
+    })
+    assert resp.status_code == HTTPStatus.OK
+    assert recorded == [(node_id, (0.0, 1.5), (1.0, 2.5))]
 
 
 def test_apply_updates_non_calibration_field_does_not_log(client, users, bus, app, monkeypatch):
     recorded = []
     monkeypatch.setattr(db, 'log_calibration_event',
-                        lambda node_id, field, old, new: recorded.append((node_id, field, old, new)))
+                        lambda node_id, offset=None, factor=None:
+                            recorded.append((node_id, offset, factor)))
     _login(client, 'admin1', 'adminPass123')
 
     resp = client.post('/api/config/apply', json={

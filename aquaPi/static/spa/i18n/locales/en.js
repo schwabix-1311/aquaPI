@@ -333,6 +333,7 @@ export default
 			identicalMeasured: 'Both measured values are identical - no valid calibration possible',
 			jblHint: 'JBL reference values: a new probe reads about 0 mV at pH 7 and about 186 mV at pH 4 (probe/amplifier input voltage, not necessarily the same as the value measured here). A probe is considered worn out at a zero-point offset beyond ±40 mV, or a voltage difference of less than 90 mV between pH 7 and pH 4.',
 			measuredDiff: 'Measured difference between the points: {diff}',
+			restoreIntervalReminder: 'Calibration applied. If you temporarily shortened the source\'s read interval for faster live values: don\'t forget to restore it to its original value.',
 			historyHeading: 'Calibration history',
 			historyEmpty: 'No calibration recorded yet',
 		},

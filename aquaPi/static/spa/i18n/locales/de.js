@@ -333,6 +333,7 @@ export default
 			identicalMeasured: 'Beide Messwerte sind identisch - keine gültige Kalibrierung möglich',
 			jblHint: 'Referenzwerte laut JBL: eine neue Sonde liefert ca. 0 mV bei pH 7 und ca. 186 mV bei pH 4 (Sondenspannung am Verstärkereingang, nicht zwingend identisch mit dem hier gemessenen Wert). Als verschlissen gilt eine Sonde bei einem Nullpunkt-Offset von mehr als ±40 mV oder einer Spannungsdifferenz von weniger als 90 mV zwischen pH 7 und pH 4.',
 			measuredDiff: 'Messwert-Differenz zwischen den Punkten: {diff}',
+			restoreIntervalReminder: 'Kalibrierung übernommen. Falls du das Leseintervall der Quelle für schnellere Live-Werte vorübergehend verkürzt hast: nicht vergessen, es wieder auf den ursprünglichen Wert zurückzusetzen.',
 			historyHeading: 'Kalibrierverlauf',
 			historyEmpty: 'Noch keine Kalibrierung erfasst',
 		},

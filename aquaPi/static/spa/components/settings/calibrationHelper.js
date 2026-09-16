@@ -222,6 +222,13 @@ const CalibrationHelper = {
 					measured: Number(p.measured), reference: Number(p.reference),
 				})),
 			})
+			// a passive tooltip hint is too easy to miss (user feedback,
+			// 2026-09-16) - a modal is not. Shared here rather than in
+			// each host component so both /parameters and /wiring's edit
+			// dialog get it for free from the one place this button
+			// exists; fire-and-forget, doesn't gate or delay the apply
+			// itself above
+			this.$alert(this.$t('misc.calibration.restoreIntervalReminder'))
 		},
 	},
 }

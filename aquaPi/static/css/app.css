@@ -452,3 +452,26 @@ li.aquapi-chain-tree__item--muted:not(:last-child)::after {
 .aquapi-alertcond-content {
     max-width: 700px;
 }
+
+/* stock-ticker style flash on CalibrationHelper's Messwert field each
+   time a live-followed reading updates it - brief highlight fading back
+   to normal, so a change reads as an event even when the number itself
+   barely moves. Targets .v-field__overlay, the same absolutely
+   positioned, border-radius-matched tint layer Vuetify's outlined
+   variant already uses for hover/focus (opacity-based over currentColor)
+   - reusing it keeps the flash correctly clipped to the field's rounded
+   outline instead of guessing at the field's own box. */
+.aquapi-calibration-flash .v-field__overlay {
+    animation: aquapi-calibration-flash-fade 600ms ease-out;
+}
+@keyframes aquapi-calibration-flash-fade {
+    0% { background-color: rgb(76, 175, 80); opacity: 0.35; }
+    100% { background-color: rgb(76, 175, 80); opacity: 0; }
+}
+.v-theme--dark .aquapi-calibration-flash .v-field__overlay {
+    animation-name: aquapi-calibration-flash-fade-dark;
+}
+@keyframes aquapi-calibration-flash-fade-dark {
+    0% { background-color: rgb(129, 199, 132); opacity: 0.3; }
+    100% { background-color: rgb(129, 199, 132); opacity: 0; }
+}

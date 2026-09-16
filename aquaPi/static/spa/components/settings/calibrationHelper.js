@@ -70,6 +70,8 @@ const CalibrationHelper = {
 						v-model.number="point.measured"
 						:label="measuredLabel"
 						type="number" step="any"
+						:readonly="followingIndex === idx"
+						:class="{'aquapi-calibration-flash': flashIndex === idx}"
 						density="compact" variant="outlined" hide-details="auto"
 						autocomplete="off"
 					>
@@ -77,9 +79,12 @@ const CalibrationHelper = {
 							<v-btn
 								icon size="x-small" variant="text"
 								:disabled="currentMeasuredValue === null"
-								:title="$t('misc.calibration.readSensor')"
-								@click="point.measured = currentMeasuredValue"
-							><v-icon size="small">mdi-target</v-icon></v-btn>
+								:color="followingIndex === idx ? 'primary' : undefined"
+								:title="followingIndex === idx
+									? $t('misc.calibration.readSensorStop')
+									: $t('misc.calibration.readSensorStart')"
+								@click="toggleFollow(idx)"
+							><v-icon size="small">{{ followingIndex === idx ? 'mdi-record-circle' : 'mdi-target' }}</v-icon></v-btn>
 						</template>
 					</v-text-field>
 				</v-col>
@@ -109,15 +114,44 @@ const CalibrationHelper = {
 	data: function() {
 		return {
 			points: seedPoints(this.currentPoints),
+			// index (0/1) of the point row currently live-following
+			// currentMeasuredValue, or null if neither is - mutually
+			// exclusive by construction (a single index, not two flags),
+			// so turning one row's toggle on always turns the other off
+			followingIndex: null,
+			// index of the row to briefly flash (stock-ticker style) after
+			// its Messwert just changed from a live update
+			flashIndex: null,
 		}
 	},
 	watch: {
 		// the host dialog/component instance can be reused across
 		// different nodes (e.g. switching which node is being edited
 		// without a remount) - re-seed whenever the underlying node's
-		// own points change, not just once at creation
-		currentPoints: function(newVal) {
+		// own points genuinely change. NOT just whenever this prop's
+		// array happens to get a new reference: a ScaleAux re-posts (and
+		// therefore gets a fresh SSE-pushed node object, points array
+		// included - see App.vue.js) every time its own upstream source
+		// ticks, even though its *stored* points haven't changed at all -
+		// comparing by value, not by reference, is what keeps a live
+		// follow (below) from being silently reset moments after it starts
+		currentPoints: function(newVal, oldVal) {
+			if (JSON.stringify(newVal) === JSON.stringify(oldVal)) return
 			this.points = seedPoints(newVal)
+			this.followingIndex = null
+		},
+		// this is what makes a locked (following) field keep updating as
+		// new readings arrive via SSE (dashboardStore.setNode(), see
+		// App.vue.js) - currentMeasuredValue is already reactively bound
+		// to the source node's live .data by the host component
+		currentMeasuredValue: function(newVal) {
+			if (this.followingIndex === null || newVal === null) return
+			this.points[this.followingIndex].measured = newVal
+			const idx = this.followingIndex
+			this.flashIndex = idx
+			setTimeout(() => {
+				if (this.flashIndex === idx) this.flashIndex = null
+			}, 600)
 		},
 	},
 	computed: {
@@ -161,6 +195,21 @@ const CalibrationHelper = {
 		},
 	},
 	methods: {
+		toggleFollow: function(idx) {
+			if (this.followingIndex === idx) {
+				// turn off - freeze whatever's currently shown
+				this.followingIndex = null
+				return
+			}
+			// switching row (or turning on from off) - the other row, if
+			// any, stops following as a side effect of only one index
+			// ever being tracked; snapshot right away instead of waiting
+			// for the next live reading to arrive
+			this.followingIndex = idx
+			if (this.currentMeasuredValue !== null) {
+				this.points[idx].measured = this.currentMeasuredValue
+			}
+		},
 		apply: function() {
 			if (!this.preview) return
 			// the raw points travel along too (measured+reference, the

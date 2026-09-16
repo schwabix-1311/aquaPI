@@ -35,8 +35,26 @@ class InputNode(PortDriverMixin, BusNode, ABC):
         self._port: str = ''
         self._reader_thread: Thread | None = None
         self._reader_stop: bool = False
-        self.interval: float = max(0.1, float(interval))
+        self._reader_wake: Event = Event()
+        self._interval: float = 0.5
+        self.interval = interval
         self.port: str = port
+
+    @property
+    def interval(self) -> float:
+        return self._interval
+
+    @interval.setter
+    def interval(self, value: float) -> None:
+        self._interval = max(0.1, float(value))
+        # wake a currently-sleeping reader thread immediately rather than
+        # letting it finish out its old (possibly much longer) wait first -
+        # shortening the interval (e.g. for faster live readings during
+        # calibration) should take effect right away, not up to one full
+        # old interval later. Harmless no-op if no thread is running yet
+        # (still inside __init__) or the change happens to lengthen it.
+        if self._reader_thread is not None:
+            self._reader_wake.set()
 
     def __getstate__(self) -> dict[str, Any]:
         state = super().__getstate__()
@@ -91,7 +109,14 @@ class InputNode(PortDriverMixin, BusNode, ABC):
             now = time.time()
             if next_run < now:
                 next_run = now
-            time.sleep(next_run - now)
+            # woken early (interval.setter, on a live settings change)
+            # rather than timed out - restart the schedule from right now
+            # instead of keeping the stale, old-interval-based next_run,
+            # so a shortened interval takes effect immediately instead of
+            # after one oddly-timed transitional cycle
+            if self._reader_wake.wait(next_run - now):
+                next_run = time.time()
+            self._reader_wake.clear()
 
         self._reader_thread = None
         self._reader_stop = False

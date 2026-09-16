@@ -599,10 +599,16 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
         field list (Setting.to_dict() shape - type/min/max/options live
         under each field's 'attrs'). On creation (require_all=True), fields
         without a submitted value fall back to their schema 'value' (a
-        suggested default, may be absent), or raise if 'required' and none
-        is given. On update (require_all=False), only the submitted keys
-        are validated. Raises ValueError on an unknown key or an invalid
-        value.
+        suggested default, may be absent). A 'required' field with no
+        default that's still missing after that is deliberately NOT
+        raised here - it's simply left out of the returned dict, so a
+        caller with its own missing-required-value scan (apply_config_diff's
+        whole-draft gate) can report it with a proper node name and i18n'd
+        field label instead of this function's own plain message. A
+        caller with no such scan (api_create_node) still ends up erroring
+        via the KeyError its own build_node() call raises on the same gap.
+        On update (require_all=False), only the submitted keys are
+        validated. Raises ValueError on an unknown key or an invalid value.
     """
     by_key = {f['key']: f for f in schema_fields}
 
@@ -626,11 +632,8 @@ def _validate_fields(schema_fields: list, raw_fields: dict, *, require_all: bool
                                              voptions=attrs.get('options'),
                                              voptional=True,
                                              vrecord_schema=attrs.get('recordSchema'))
-        elif require_all:
-            if field.get('value') is not None:
-                result[key] = field['value']
-            elif field.get('required'):
-                raise ValueError(f'Missing required field: {key}')
+        elif require_all and field.get('value') is not None:
+            result[key] = field['value']
     return result
 
 

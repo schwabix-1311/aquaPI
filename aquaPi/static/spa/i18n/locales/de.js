@@ -44,8 +44,7 @@ export default
 			},
 			fields: {
 				unit: 'Einheit',
-				offset: 'Offset',
-				scaleFactor: 'Skalierfaktor',
+				calibrationPoints: 'Kalibrierung',
 				unfairAvg: 'Ungewichteter Mittelwert [0=aus]',
 				inputPort: 'Eingangsport',
 				outputPort: 'Ausgangsport',

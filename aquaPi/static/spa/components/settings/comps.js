@@ -762,6 +762,14 @@ const NodeSettingsFields = {
 			})
 			if (ok) {
 				this.$toast.success(this.$t('misc.toast.saveSuccess'))
+				// the just-applied change is now a fresh calibration_log
+				// event (db.py's apply_config_diff/api_set_node_settings
+				// both log it) - refetch so CalibrationHistory, sitting
+				// right below this widget on the same page, shows it
+				// immediately instead of only after a reload. Its own
+				// `entries` is a plain store computed, so updating the
+				// store here is enough - no ref/event needed.
+				await this.settingsStore.fetchCalibrationLog(this.node.id)
 			} else {
 				this.$toast.error(this.error || this.$t('misc.toast.saveError'))
 			}

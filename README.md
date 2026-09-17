@@ -67,9 +67,15 @@ A minimal temperature controller is three nodes:
 Add a **history** node and you get temperature graphs with a selectable
 period. For redundancy later, add a second input node for another sensor plus
 an **averaging** node, and point the threshold node at the average instead of
-a single sensor — no other change needed. The same building-block approach
-scales up to several controllers sharing outputs, pH-triggered lighting,
-over-temperature fan/dimming, and so on.
+a single sensor — no other change needed.
+
+Because nodes exchange messages on a shared bus rather than being wired
+point-to-point, the same sensor reading can just as easily feed several
+independent controller loops at once — e.g. one temperature sensor driving
+both the heater's threshold controller and a separate over-temperature
+fan/dimming controller — again with no extra hardware or duplicate sensor
+config. The same building-block approach scales up to several controllers
+sharing outputs, pH-triggered lighting, and so on.
 
 ## No cloud, no calling home
 

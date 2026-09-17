@@ -9,13 +9,15 @@ overlap/repeat each other - that's fine, sort/dedupe later.
 
 ## Carried over from recent working notes
 
-- `ScaleAux` calibration/adjustment UI in general, not just pH - needs
-  frontend design, not just a backend change. 2-point pH calibration
-  (`aux_nodes.py`) is the motivating case (JBL's aging-probe guidance -
-  reject a probe if the pH7/pH4 calibration offset exceeds ~40mV or
-  their voltage diff drops below ~90mV - is a relevant reference), but
-  any `ScaleAux` (offset/factor) could use the same kind of guided
-  adjustment.
+- `ScaleAux` calibration/adjustment UI - DONE, shipped to `main`+`aquapi2`
+  2026-09-16 (latest 0053275). 2-point calibration is now the sole
+  canonical state (`aux_nodes.py`), with a frontend widget that shows/
+  pre-fills the stored calibration, a live-follow "Sensor lesen" toggle,
+  history refresh right after applying, and a reminder to restore the
+  read interval afterward. JBL's aging-probe guidance (reject a probe if
+  the pH7/pH4 offset exceeds ~40mV or the voltage diff drops below
+  ~90mV) was not built in as an automated check - still a possible
+  follow-up if wanted.
 - Interrupt-driven IO instead of polling (`in_nodes.py`) - driver/
   architecture-level change, likely hardware-dependent.
 - Systemverwaltung page (global/system-wide app preferences - driver
@@ -129,9 +131,6 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   service creation, etc. - today's deployment is a manually-run
   `./run` script in a kept-open shell, not a packaged/serviced install.
 - Less common feature ideas, not designed yet:
-  - Multiple sensors feeding one controller for redundancy/safety.
-  - Several controllers driving one output in a predictable, combined
-    way.
   - Over-temperature dimming the light or spinning up a fan, e.g.
     `min(LightCtrl, clipped_inverse_scaled_temperature) -> AnalogOut`.
   - Low pH turning on the light, to let plants consume more CO2.

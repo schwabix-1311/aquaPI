@@ -116,7 +116,10 @@ fine, sort/dedupe later.
 - A guided setup wizard for first-time configuration, built on the
   existing Wiring editor's Templates & Snapshots feature (which already
   covers saving/restoring node-graph presets) - the wizard/guided-flow
-  layer on top of it was never built.
+  layer on top of it was never built. **Priority: high** - same topic as
+  Packaging/deployment below (`--reconfig` etc.): the deployment script
+  covers scripted/headless setup, the wizard covers the guided/UI-driven
+  version of the same first-time-configuration problem.
 - New node types: a delay controller; an analog or random-value
   schedule input (today's `ScheduleInput` is binary-only); cloud
   telemetry. **Priority: medium.**
@@ -150,7 +153,9 @@ fine, sort/dedupe later.
   `./run` script in a kept-open shell, not a packaged/serviced install.
   **Priority: high** - this is the pre-ship v1.0 deployment-script item
   (`--reconfig`/`--backup`/`--restore`/`--list-backups`); see also
-  Systemverwaltung above, intended to ride along with it.
+  Systemverwaltung above (intended to ride along with it) and the guided
+  setup wizard above (same first-time-configuration topic, UI-driven
+  instead of scripted).
 - Less common feature ideas, not designed yet (**Priority: low** for
   all of the below):
   - Over-temperature dimming the light or spinning up a fan, e.g.

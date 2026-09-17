@@ -1,11 +1,12 @@
 # aquaPi Roadmap
 
-Unsorted idea collection - not prioritized yet. Includes unfinished
-items moved over from the legacy `ToDo` file (verified against the
-current code first - several original ToDo entries turned out to
-already be done and were left there instead, see its DONE section) plus
-items already tracked in recent working notes. Some entries below may
-overlap/repeat each other - that's fine, sort/dedupe later.
+Idea collection, now roughly prioritized (see **Priority:** on each entry;
+unmarked entries are still unprioritized). Includes unfinished items moved
+over from the legacy `ToDo` file (verified against the current code first -
+several original ToDo entries turned out to already be done and were left
+there instead, see its DONE section) plus items already tracked in recent
+working notes. Some entries below may overlap/repeat each other - that's
+fine, sort/dedupe later.
 
 ## Carried over from recent working notes
 
@@ -19,16 +20,20 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   ~90mV) was not built in as an automated check - still a possible
   follow-up if wanted.
 - Interrupt-driven IO instead of polling (`in_nodes.py`) - driver/
-  architecture-level change, likely hardware-dependent.
+  architecture-level change, likely hardware-dependent. **Priority: low.**
 - Systemverwaltung page (global/system-wide app preferences - driver
   accounts, blacklist) - name agreed, page not built; `config.json`
-  hand-edited for now.
+  hand-edited for now. **Priority: high** - intended to be part of the
+  shell-based deployment script (see Packaging/deployment below),
+  covering driver accounts, blacklist, Email/Telegram config etc. as one
+  scripted setup surface rather than two separate features.
 - Profil page (personal per-user preferences: language, theme) - name
   agreed, deliberately not built while it's only 2 settings.
+  **Priority: low.**
 - Backend i18n debt - `api.py` error messages, Dashboard's generic
   "Read error!" alert text still not localized. (Old ToDo note: use
   Python's `gettext` package for this - frontend i18n is already in
-  place, this is backend-only.)
+  place, this is backend-only.) **Priority: low.**
 - Data-type compatibility of `receives` wiring - DONE (feat/wiring-refactor):
   one `data_range`-keyed rule in `components/wiring/wiringConnect.js`
   (`canConnect`/`connectableSources`/`isNumericSource`), used by the
@@ -60,10 +65,16 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   themselves instead of `res.error`.
 - Alert "reverse chip" idea - show the causing node on a triggered
   AlertCond widget; blocked on no directed bus messaging today.
+  **Priority: medium.**
 - Remote Shelly + temperature add-on - paused mid-implementation,
   needs a live `/status` check to finish `_identify()` parsing.
+  **Priority: medium** - grouped with the other Shelly-input work
+  (buttons, see the momentary-push-button entry in the hardware
+  coverage section below) as "finish off remaining Shelly input types."
 - Rare `SunCtrl` fader thread "join before start" flake - confirmed
   environmental, not reproduced in isolation, not investigated further.
+  **Priority: high** - possibly already gone (not seen recently), worth
+  a quick recheck before investing further.
 - Template insert / snapshot restore should be *draft* operations. Today
   they commit to the live bus immediately (`instantiate_template` +
   `save_nodes`), then `reinitDraft()` rebuilds the draft from the fresh
@@ -74,45 +85,50 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   without persisting; `instantiate_template` takes an explicit id-set for
   its collision check (not `bus.nodes`); the frontend folds the nodes
   into `state.draft` as `_new`; nothing hits the bus until Save.
+  **Priority: high.**
 - Macro/scene architecture - a scheduled/triggered sender of messages
   on the bus, possibly needing affected nodes to suspend their own
   listening to avoid conflicts (a "MsgControl" with suspend/overrule/
-  resume?) - not fully designed, still just discussion.
+  resume?) - not fully designed, still just discussion. **Priority:
+  medium.**
 
 ## Moved from the legacy ToDo file (still unfinished)
 
 - Raspberry Pi Zero 2 W loses WLAN after some days - a known upstream
   issue (https://forums.raspberrypi.com/viewtopic.php?t=357703),
   `sudo iw wlan0 set power_save off` was tried as a workaround.
+  **Priority: medium.**
 - Consider replacing `__setstate__`/`__getstate__` with `__reduce__`
   (remove per-class `__setstate__` except where a class needs to start
   threads on restore) - never done; the codebase has since leaned
   further into `__getstate__`/`__setstate__` for every new node type
   (most recently `ScheduleInput`), so this would now touch a lot of code.
+  **Priority: medium.**
 - Logging to the systemd journal (see
   https://trstringer.com/systemd-logging-in-python/) - notably, the
   real production Pi (`aquapi2`) doesn't run as a systemd service at
   all today (a `./run` process kept alive in a long-lived interactive
-  shell) - this idea would want that as a prerequisite.
+  shell) - this idea would want that as a prerequisite. **Priority: low.**
 - A `/log` route/page to view logs, warnings, and configured events -
-  no such route exists yet.
+  no such route exists yet. **Priority: medium.**
 - Allow (re-)configuring the app via a command-line JSON option, for
   simplified/scripted initial setup - not implemented.
 - A guided setup wizard for first-time configuration, built on the
   existing Wiring editor's Templates & Snapshots feature (which already
   covers saving/restoring node-graph presets) - the wizard/guided-flow
   layer on top of it was never built.
-- A "simple UI" mode for easy onboarding (e.g. hiding AUX nodes) versus
-  the current "advanced" UI - not implemented, no mode toggle exists.
 - New node types: a delay controller; an analog or random-value
   schedule input (today's `ScheduleInput` is binary-only); cloud
-  telemetry.
+  telemetry. **Priority: medium.**
 - More input/output drivers: a generic file-based input, a Shelly
   *input* (distinct from the existing Shelly relay/output driver,
   which is already implemented), a PCA9685 PWM driver, a file-based
-  output, and a shell-script output driver.
+  output, and a shell-script output driver. **Priority: medium** - the
+  Shelly input part is grouped with the other Shelly-input work (see
+  Remote Shelly + temperature add-on above).
 - Add `click`-based CLI options (e.g. `--resetfactory`, `--list`, ...)
   instead of today's plain env-var/flag-based `./run`/`./dbg` scripts.
+  **Priority: medium.**
 - Known repo hygiene issue: two old QuestDB tarballs
   (`questdb-7.1.3-no-jre-bin.tar.gz`, `questdb-7.1.3-rt-linux-amd64.tar.gz`)
   are still bloating git *history* (confirmed still present via
@@ -120,17 +136,23 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   prevents new ones from being tracked. Rewriting history
   (`git filter-repo`/BFG) would shrink the repo significantly but is
   destructive for a shared repo - needs an explicit, separate,
-  approved pass.
+  approved pass. **Priority: low.**
 - Review the `wallneradam/tc420` fork's packaging/installation as a git
   submodule (`pip install tc420`, udev rules, `plugdev` group, etc.) -
   overlaps with the already-tracked `tc420` driver work (worktree
   parked on PEP 541, tier-2 bugs already fixed) - check that backlog
-  item first before treating this as new work.
+  item first before treating this as new work. **Priority: high, but
+  blocked** on the external PEP 541 name-claim process before the
+  worktree can be unparked.
 - Packaging/deployment: look at how `ReefSpy`/`ReefberryPi` (GitHub)
   freeze dependencies and package for one-file deployment (PyInstaller),
   service creation, etc. - today's deployment is a manually-run
   `./run` script in a kept-open shell, not a packaged/serviced install.
-- Less common feature ideas, not designed yet:
+  **Priority: high** - this is the pre-ship v1.0 deployment-script item
+  (`--reconfig`/`--backup`/`--restore`/`--list-backups`); see also
+  Systemverwaltung above, intended to ride along with it.
+- Less common feature ideas, not designed yet (**Priority: low** for
+  all of the below):
   - Over-temperature dimming the light or spinning up a fan, e.g.
     `min(LightCtrl, clipped_inverse_scaled_temperature) -> AnalogOut`.
   - Low pH turning on the light, to let plants consume more CO2.
@@ -143,6 +165,7 @@ overlap/repeat each other - that's fine, sort/dedupe later.
 - Split bus - either a headless sub-bus running on a different
   system/location, coupled through bridge nodes; or two full-blown
   aquaPi systems sharing some or all of their bus traffic.
+  **Priority: low.**
 - More `AlertCond` descendants: warn for hyper/sleepy activity (a
   controller cycling too fast, or stuck on/off too long) - commented-out
   stubs in `alert_nodes.py` (`AlertLongActive`/`AlertLongInactive`,
@@ -151,19 +174,22 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   sub-field's `options`, and (if it applies to a different data_range,
   e.g. BINARY-only) set `node_filter_by_class` on the `node_id`
   sub-field. The record-list widget + validator pick it up automatically.
+  **Priority: medium.**
 - New `AuxNode` descendant computing a running standard deviation of
   received data, triggering when it leaves a defined range - a
   concrete approach for recommending filter cleaning based on reduced
   water flow (which increases temperature volatility), merging the
   earlier vague "filter cleaning heuristics" idea into this one.
+  **Priority: medium.**
 - A node to send predefined messages (distinct from Alerts) when
   triggered - for reminders, statistics, and similar notifications that
-  aren't really "alerts".
+  aren't really "alerts". **Priority: medium.**
 - Remove hash-based (`/#/`) routing, now that Jinja removal is done and
-  no longer blocks it.
+  no longer blocks it. **Priority: high.**
 - Explore how sub-data could be allowed, i.e. nodes posting more than
   one datum on the bus, and listeners to listen to specific sub-data -
   RGB light support (below) is a concrete motivating case for this.
+  **Priority: medium.**
 - RGB light support (e.g. `DriverShellyDimmer`'s sibling for
   Shelly devices' `/color/N` endpoint, not just brightness-only
   `/light/N`) - would need a new TUPLE-like MsgData range for an
@@ -173,7 +199,7 @@ overlap/repeat each other - that's fine, sort/dedupe later.
   controller emits one RGB tuple and 3 separate AnalogDevice dimmer
   nodes each listen to just their own R/G/B sub-datum, or a single new
   DeviceNode receives the whole tuple and internally combines 3
-  dimmer drivers (channels) into one node.
+  dimmer drivers (channels) into one node. **Priority: medium.**
 
 ## Hardware coverage: chains and drivers (analysis 2026-09-10)
 
@@ -224,7 +250,8 @@ UV / skimmer on-off, single PWM fan.
   feeders / actuated valves / steppers ("run N ml / N s / N steps" one-
   shot action node), momentary push buttons (event vs level - see the
   Shelly-input entry and the parked `project_shelly_button_modes_bus_fit`
-  note; needs a toggle/latch node).
+  note; needs a toggle/latch node). **Priority: medium** for the Shelly
+  button case, grouped with the other Shelly-input work above.
 - **Interlock / state machine / anti-short-cycle** - chiller/compressor
   (min-on and min-off time; `ThresholdCtrl` is pure hysteresis today),
   redundant ATO (dual float + fill-timeout + reservoir-low, hard-stop on

@@ -1091,6 +1091,7 @@ def load_wiring(db_path: str) -> MsgBus:
     bus = MsgBus(threaded=False)
     nodes: list[BusNode] = []
     failures: list[str] = []
+    failed_ids: set[str] = set()
     for row in rows:
         state = json.loads(row['params'])
         try:
@@ -1102,10 +1103,12 @@ def load_wiring(db_path: str) -> MsgBus:
             log.error('load_wiring: failed to restore node %r (type %r), skipping: %s',
                       row['id'], row['type'], ex.msg)
             failures.append(f"{row['id']!r} ({row['type']}): {ex.msg}")
+            failed_ids.add(row['id'])
         except (ValueError, KeyError, TypeError) as ex:
             log.exception('load_wiring: failed to restore node %r (type %r), skipping',
                           row['id'], row['type'])
             failures.append(f"{row['id']!r} ({row['type']}): {ex}")
+            failed_ids.add(row['id'])
 
     for node in nodes:
         try:
@@ -1114,10 +1117,24 @@ def load_wiring(db_path: str) -> MsgBus:
             log.error('load_wiring: failed to plug in node %r, skipping: %s',
                       getattr(node, 'id', '?'), ex.msg)
             failures.append(f"{getattr(node, 'id', '?')!r}: {ex.msg}")
+            failed_ids.add(getattr(node, 'id', '?'))
         except (ValueError, KeyError, TypeError) as ex:
             log.exception('load_wiring: failed to plug in node %r, skipping',
                           getattr(node, 'id', '?'))
             failures.append(f"{getattr(node, 'id', '?')!r}: {ex}")
+            failed_ids.add(getattr(node, 'id', '?'))
+
+    # a node that failed to restore or plug in leaves dangling references
+    # in every OTHER node's receives/conditions that was wired to it -
+    # prune those now that every successfully-loaded node is actually on
+    # `bus` (prune_dangling_references reads bus.get_nodes(), empty until
+    # this point). Without this, the dangling reference persists forever:
+    # nothing else ever gets a chance to clean it up, since the normal
+    # delete-time pruning (api_delete_node/apply_config_diff) only runs
+    # as a side effect of deleting a node bus.get_node() can actually
+    # find - one that failed to load was never there to find or delete.
+    for failed_id in failed_ids:
+        prune_dangling_references(bus, failed_id)
 
     log.verbose('load_wiring: %d nodes restored from %s', len(nodes), db_path)
 

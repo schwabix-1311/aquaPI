@@ -139,3 +139,54 @@ def test_save_replaces_previous_wiring(db_path):
         assert {n.id for n in restored.nodes} == {'only'}
     finally:
         restored.teardown()
+
+
+def test_load_wiring_prunes_dangling_references_to_a_node_that_failed_to_restore(db_path,
+                                                                                 monkeypatch):
+    """ regression test for a real production incident: a node that
+        fails to deserialize (here: corrupted saved params) was silently
+        skipped, but every OTHER node still wired to it kept a dangling
+        reference forever - nothing else ever gets a chance to prune it,
+        since the normal delete-time pruning (api_delete_node/
+        apply_config_diff) only runs against a node bus.get_node() can
+        actually find, and one that failed to load was never there to
+        find. This left e.g. a History node's chart hung on a receives
+        entry that no longer resolved to anything.
+    """
+    bus = MsgBus(threaded=False)
+    sensor = AnalogInput('Wasser', '', 25.0, '°C')
+    avg = AvgAux('Mittel', {sensor.id})
+    dependent = MinimumCtrl('Heizen', avg.id, 25.0, hysteresis=0.2)   # wired to 'avg'
+    sibling = MinimumCtrl('Kuehlen', sensor.id, 25.0, hysteresis=0.2)  # unaffected, wired to 'wasser'
+    for node in (sensor, avg, dependent, sibling):
+        node.plugin(bus)
+    db.save_wiring(bus, db_path)
+    bus.teardown()
+
+    # corrupt 'avg's saved params so _deserialize_node raises (KeyError on
+    # the missing 'receives') - simulates any real deserialize failure,
+    # not the specific float/int bug that originally triggered this
+    conn = db.get_connection(db_path)
+    try:
+        row = conn.execute("SELECT params FROM nodes WHERE id='mittel'").fetchone()
+        params = json.loads(row['params'])
+        del params['receives']
+        conn.execute("UPDATE nodes SET params=? WHERE id='mittel'", (json.dumps(params),))
+        conn.commit()
+    finally:
+        conn.close()
+
+    # a real deployment with Email/Telegram configured would notify and
+    # keep running rather than hard-abort (see the startup-failure
+    # notify/abort behavior this deliberately doesn't touch) - simulate
+    # that so this test can inspect the resulting bus
+    monkeypatch.setattr(db, '_notify_startup_failures', lambda failures: True)
+
+    restored = db.load_wiring(db_path)
+    try:
+        assert restored.get_node('mittel') is None   # failed to restore, as expected
+        assert restored.get_node('heizen').receives == []   # pruned
+        # unaffected sibling, confirms pruning is targeted, not a wipe
+        assert restored.get_node('kuehlen').receives == ['wasser']
+    finally:
+        restored.teardown()

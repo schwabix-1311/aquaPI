@@ -250,13 +250,32 @@ class StdDevAux(SingleInAux):
         super().__init__(name, receives, _cont=_cont)
         self.samples: int = samples
         self.scale: float = scale
-        self.auto_scale: bool = auto_scale
         # only ever transitions False -> True, once, for this node
         # instance's lifetime (see auto_scale's docstring) - a process
         # restart (a fresh __init__ via __setstate__) is the only way to
         # re-arm it, deliberately not persisted
         self._calibrated: bool = False
+        # bypass the auto_scale property setter here - constructing/
+        # restoring a node must NOT clear an already-calibrated (or
+        # user-set) scale, only a live re-toggle should (see the setter)
+        self._auto_scale: bool = auto_scale
         self._values: deque[float] = deque(maxlen=samples)
+
+    @property
+    def auto_scale(self) -> bool:
+        return self._auto_scale
+
+    @auto_scale.setter
+    def auto_scale(self, value: bool) -> None:
+        # a live re-enable (e.g. via /wiring, on an already-running node -
+        # __init__ above sets self._auto_scale directly and never reaches
+        # here) re-arms calibration and clears whatever scale currently
+        # holds, so the dashboard doesn't keep showing a stale pre-toggle
+        # value until the next reading happens to recalibrate it
+        if value and not self._auto_scale:
+            self._calibrated = False
+            self.scale = 1.0
+        self._auto_scale = value
 
     def __getstate__(self) -> dict[str, Any]:
         # a standard deviation carries its source's unit (a °C signal's

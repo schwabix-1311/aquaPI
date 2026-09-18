@@ -201,6 +201,40 @@ def test_auto_scale_does_not_recalibrate_on_later_windows():
     assert node.scale == calibrated_scale
 
 
+def test_constructing_with_auto_scale_true_does_not_clear_an_explicit_scale():
+    # __init__ (a fresh create, or __setstate__ restoring a previously-
+    # calibrated node) must bypass the "clear on enable" side effect -
+    # only a live re-toggle on an already-running node should reset it
+    node = StdDevAux('StdDev', 'sensor', scale=50, auto_scale=True)
+    assert node.scale == 50
+
+
+def test_live_reenable_of_auto_scale_clears_stale_scale():
+    # simulates what apply_config_diff's update path does to an existing
+    # live node: setattr(node, 'auto_scale', True) - not a fresh __init__
+    node = StdDevAux('StdDev', 'sensor', samples=3, scale=99, auto_scale=False)
+    _feed(node, [24.9, 25.0, 25.1])   # some stale state accumulated
+    assert node.scale == 99   # untouched while auto_scale is off
+
+    node.auto_scale = True   # live re-toggle, via the property setter
+    assert node.scale == 1.0
+    assert node._calibrated is False
+
+    # and it then calibrates normally on the next reading
+    node.listen(MsgData('sensor', 30.0))
+    assert node.scale != 1.0
+    assert node._calibrated is True
+
+
+def test_toggling_auto_scale_off_leaves_the_calibrated_scale_alone():
+    node = StdDevAux('StdDev', 'sensor', samples=3, auto_scale=True)
+    _feed(node, [24.9, 25.0, 25.1])
+    calibrated_scale = node.scale
+
+    node.auto_scale = False
+    assert node.scale == calibrated_scale
+
+
 def test_auto_scale_retries_after_a_perfectly_flat_first_window():
     node = StdDevAux('StdDev', 'sensor', samples=3, auto_scale=True)
 

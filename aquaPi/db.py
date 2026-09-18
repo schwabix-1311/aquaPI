@@ -256,6 +256,8 @@ def build_node(type_name: str, name: str, receives: list[str],
         return UiDisplay(name, rcv)
     if type_name == 'ScaleAux':
         return ScaleAux(name, rcv, fields['unit'], points=fields['points'])
+    if type_name == 'StdDevAux':
+        return StdDevAux(name, rcv, window=fields['window'])
     if type_name == 'History':
         return History(name, rcv, capacity=int(fields['capacity']))
 

@@ -259,6 +259,32 @@ def test_apply_creates_alert_node_with_conditions(client, users, bus, app):
     assert node.receives == ['wasser']
 
 
+def test_apply_creates_stddev_aux_node(client, users, bus, app):
+    # exercises apply_config_diff's own build_node() call (creates path) -
+    # NODE_FACTORY alone isn't enough for a type to be creatable via
+    # /api/config/apply, build_node() has its own separate type_name
+    # dispatch that must also know the type, or it falls through to an
+    # untranslated ValueError even though node_type_schema (built from
+    # NODE_FACTORY) already listed the type as valid
+    _login(client, 'admin1', 'adminPass123')
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-sd', 'type': 'StdDevAux', 'name': 'Schwankung',
+            'receives': ['wasser'], 'fields': {'window': 1800},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+    data = resp.get_json()
+
+    node_id = data['id_map']['tmp-sd']
+    assert node_id == 'schwankung'
+    node = bus.get_node(node_id)
+    assert node is not None
+    assert node.receives == ['wasser']
+    assert node.window == 1800
+
+
 def test_apply_updates_alert_conditions_and_derives_receives(client, users, bus, app):
     _login(client, 'admin1', 'adminPass123')
     resp = client.post('/api/config/apply', json={
@@ -769,6 +795,31 @@ def test_apply_reports_multiple_missing_values_in_one_diff(client, users, bus, a
     assert len(body['error_items']) == 2
     keys = {(item['key'], item['params']['node']) for item in body['error_items']}
     assert keys == {('missingValue', 'SensorX'), ('notConnected', 'SkalierungX')}
+
+
+def test_apply_localizes_an_unexpected_post_validation_failure(client, users, bus, app,
+                                                                monkeypatch):
+    """ apply_config_diff's own validation is meant to catch everything
+        before the bus is touched - if something still raises a plain
+        ValueError/KeyError/DriverError past that (e.g. a NODE_FACTORY
+        entry with no matching build_node() branch, the exact bug that
+        prompted this test), api.py wraps it instead of a bare 500, and
+        that wrapper must carry error_key/error_params so the frontend
+        can localize it rather than showing raw English (see
+        wiringErrors.js's documented fallback contract).
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    def _boom(bus, diff, validate_fields):
+        raise ValueError("Unknown or non-creatable node type: 'Bogus'")
+
+    monkeypatch.setattr(db, 'apply_config_diff', _boom)
+
+    resp = client.post('/api/config/apply', json={'updates': []})
+    assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    body = resp.get_json()
+    assert body['error_key'] == 'applyFailedUnexpected'
+    assert body['error_params'] == {'detail': "Unknown or non-creatable node type: 'Bogus'"}
 
 
 def test_apply_allows_alert_with_no_port_and_no_conditions(client, users, bus, app):

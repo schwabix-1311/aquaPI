@@ -146,6 +146,7 @@ export default
 				receivesTooMany: 'Dieser Elementtyp akzeptiert höchstens eine Verbindung bei „Empfängt von“',
 				missingValue: '"{node}" hat keinen Wert für {fieldLabel}',
 				notConnected: '"{node}" ist mit nichts verbunden',
+				applyFailedUnexpected: 'Anwenden der Verschaltung fehlgeschlagen: {detail}',
 			},
 		},
 		about: {

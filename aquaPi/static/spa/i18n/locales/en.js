@@ -146,6 +146,7 @@ export default
 				receivesTooMany: 'This element type accepts at most 1 receives entry',
 				missingValue: '"{node}" has no value for {fieldLabel}',
 				notConnected: '"{node}" is not connected to anything',
+				applyFailedUnexpected: 'Applying the wiring failed: {detail}',
 			},
 		},
 		about: {

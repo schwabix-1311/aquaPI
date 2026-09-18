@@ -110,6 +110,35 @@ def test_state_round_trip_defaults_samples_for_pre_migration_saved_nodes():
     assert restored.samples == 30
 
 
+def test_samples_coerces_a_float_to_int():
+    # regression test: every 'number'-type Setting travels the wire as a
+    # float (api.py's _validate_and_cast), and a live /wiring or
+    # /settings edit sets 'samples' via plain setattr(), bypassing
+    # build_node()'s own int() cast entirely - persisting that float and
+    # restoring it crashed deque(maxlen=<float>) in production
+    node = StdDevAux('StdDev', 'sensor', samples=20.0)
+    assert node.samples == 20
+    assert isinstance(node.samples, int)
+    assert node._values.maxlen == 20
+
+    node.samples = 15.0   # simulates a live setattr() from an edit
+    assert node.samples == 15
+    assert isinstance(node.samples, int)
+
+
+def test_state_round_trip_survives_a_float_samples_value():
+    # simulates a node that was live-edited (setattr with a float, see
+    # above) then saved - its persisted state has samples as a float
+    node = StdDevAux('StdDev', 'sensor', samples=10)
+    state = node.__getstate__()
+    state['samples'] = 20.0
+
+    restored = StdDevAux.__new__(StdDevAux)
+    restored.__setstate__(state)   # must not raise
+    assert restored.samples == 20
+    assert isinstance(restored.samples, int)
+
+
 def test_data_range_is_analog_without_receiving_data():
     # unlike AvgAux/MinAux/MaxAux (whose data_range only becomes numeric
     # once they've actually received data), StdDevAux must be immediately

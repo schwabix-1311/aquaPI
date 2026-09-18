@@ -248,7 +248,7 @@ class StdDevAux(SingleInAux):
                  scale: float = 1.0, auto_scale: bool = False,
                  _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
-        self.samples: int = samples
+        self.samples = samples   # via the property below - always int
         self.scale: float = scale
         # only ever transitions False -> True, once, for this node
         # instance's lifetime (see auto_scale's docstring) - a process
@@ -259,7 +259,23 @@ class StdDevAux(SingleInAux):
         # restoring a node must NOT clear an already-calibrated (or
         # user-set) scale, only a live re-toggle should (see the setter)
         self._auto_scale: bool = auto_scale
-        self._values: deque[float] = deque(maxlen=samples)
+        self._values: deque[float] = deque(maxlen=self.samples)
+
+    @property
+    def samples(self) -> int:
+        return self._samples
+
+    @samples.setter
+    def samples(self, value: int) -> None:
+        # every 'number'-type Setting travels the wire as a float
+        # (api.py's _validate_and_cast casts uniformly - correct for
+        # 'scale', not for a count), and a live /wiring or /settings edit
+        # sets this via plain setattr(), bypassing __init__/build_node()'s
+        # own int() cast entirely - persisting that float and later
+        # restoring it crashed deque(maxlen=<float>) in production. Coerce
+        # unconditionally here instead of only at the few call sites that
+        # happened to remember to.
+        self._samples = int(round(value))
 
     @property
     def auto_scale(self) -> bool:

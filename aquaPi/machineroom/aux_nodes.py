@@ -4,7 +4,6 @@ from abc import ABC
 from collections import deque
 import logging
 import statistics
-from time import monotonic
 from typing import (Callable, Iterable, Any)
 
 from .msg_types import (Msg, MsgData)
@@ -172,19 +171,37 @@ class ScaleAux(SingleInAux):
 
 
 class StdDevAux(SingleInAux):
-    """ Rolling standard deviation of a received signal over a trailing
-        time window - e.g. flags reduced water flow via increased
-        temperature volatility (heater cycling not mixed away fast
-        enough when circulation is weak). Pair with an AlertAbove
-        watching this node's output; its `duration` field should be
-        sized well beyond any normal settling transient (e.g. a PID
-        walking off drift after a disturbance), so only variance that
-        stays elevated for longer than that trips the alert.
+    """ Standard deviation of a signal's N most recent readings - e.g.
+        flags reduced water flow via increased temperature volatility
+        (heater cycling not mixed away fast enough when circulation is
+        weak). Pair with an AlertAbove watching this node's output; its
+        `duration` field should be sized well beyond any normal settling
+        transient (e.g. a PID walking off drift after a disturbance), so
+        only variance that stays elevated for longer than that trips the
+        alert.
 
         Options:
-            window - trailing time window (seconds) the standard
-                     deviation is computed over
-            scale  - plain output multiplier, default 1.0 (no rescaling).
+            samples - number of most recent readings the standard
+                      deviation is computed over - not a time span: how
+                      much real time that covers depends entirely on the
+                      source's own read interval. Deliberately count-
+                      based, same pattern as AvgAux - a time-windowed
+                      version was tried first, but a source's read
+                      interval is a live Setting this node has no
+                      visibility into (and isn't even guaranteed to
+                      exist - a non-InputNode source has no fixed cadence
+                      at all), so a too-short time window relative to a
+                      slow source could never accumulate enough samples
+                      before the oldest one aged back out - permanently,
+                      not just slower. A plain sample count can't have
+                      that problem: it always eventually fills for any
+                      source cadence. Nothing here needs the extra
+                      precision of "the last hour" vs. "the last 30
+                      readings" anyway - there's no responsiveness
+                      requirement (a fish tank's temperature is slow, and
+                      the paired Alert's `duration` is already meant to
+                      be hours).
+            scale   - plain output multiplier, default 1.0 (no rescaling).
                      Charted next to its source, a source-unit stddev is
                      usually tiny next to the source's own magnitude (e.g.
                      0.05 °C next to a 25 °C reading) and lands on the same
@@ -201,19 +218,45 @@ class StdDevAux(SingleInAux):
                      some sources (e.g. a duty-cycle output at 0%, or a
                      sensor whose range straddles zero), blowing up for
                      reasons unrelated to actual variability.
+            auto_scale - if set, `scale` is computed once (not
+                     continuously - see below) from the first raw stddev
+                     this node ever computes, targeting `_AUTO_SCALE_TARGET`,
+                     then left alone; disable to set `scale` by hand
+                     instead. Deliberately a *one-time* calibration, not
+                     a continuously-adapting one: if `scale` kept being
+                     recomputed from a recent/current value, the display
+                     would auto-normalize toward a constant target
+                     regardless of whether things are actually fine or
+                     bad right now - exactly the kind of change this node
+                     exists to surface, silently masked by the very
+                     mechanism meant to make it visible. A one-time
+                     calibration risks only its *starting* assumption (the
+                     first window happens to be representative/"sane") -
+                     accepted deliberately: if it isn't, the monitored
+                     signal still has to get *worse than that* to raise
+                     the flag, which is a materially smaller problem than
+                     an alert that can never fire because it keeps
+                     rescaling itself back to "normal".
     """
     data_range = DataRange.ANALOG
 
-    # guards against a misleadingly-confident stddev (0.0, or a fluke)
-    # right after start or with a too-short window
-    _MIN_SAMPLES = 5
+    # the same rule of thumb folded into the 'scale' field's own label
+    # (i18n/locales/*.js's stdDevScale) - see that field's docstring bullet
+    _AUTO_SCALE_TARGET = 10
 
-    def __init__(self, name: str, receives: str, window: float = 3600,
-                 scale: float = 1.0, _cont: bool = False):
+    def __init__(self, name: str, receives: str, samples: int = 30,
+                 scale: float = 1.0, auto_scale: bool = False,
+                 _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
-        self.window: float = window
+        self.samples: int = samples
         self.scale: float = scale
-        self._samples: deque[tuple[float, float]] = deque()
+        self.auto_scale: bool = auto_scale
+        # only ever transitions False -> True, once, for this node
+        # instance's lifetime (see auto_scale's docstring) - a process
+        # restart (a fresh __init__ via __setstate__) is the only way to
+        # re-arm it, deliberately not persisted
+        self._calibrated: bool = False
+        self._values: deque[float] = deque(maxlen=samples)
 
     def __getstate__(self) -> dict[str, Any]:
         # a standard deviation carries its source's unit (a °C signal's
@@ -228,24 +271,38 @@ class StdDevAux(SingleInAux):
             self.unit = rcv.unit if self.scale == 1.0 else '%'
             break
         state = super().__getstate__()
-        state["window"] = self.window
+        state["samples"] = self.samples
         state["scale"] = self.scale
+        state["auto_scale"] = self.auto_scale
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
+        # a node saved before 'samples'/'auto_scale' existed (the old
+        # time-windowed 'window' Setting) has no such keys - fall back to
+        # the schema defaults rather than reinterpret an old seconds
+        # value as a sample count (nonsensical, e.g. "3600 samples")
         StdDevAux.__init__(self, state['name'], state['receives'],
-                           window=state['window'], scale=state.get('scale', 1.0),
+                           samples=state.get('samples', 30),
+                           scale=state.get('scale', 1.0),
+                           auto_scale=state.get('auto_scale', False),
                            _cont=True)
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
-            now = monotonic()
-            self._samples.append((now, float(msg.data)))
-            while self._samples and self._samples[0][0] < now - self.window:
-                self._samples.popleft()
-            if len(self._samples) >= self._MIN_SAMPLES:
-                self.data = round(statistics.pstdev(v for _, v in self._samples) * self.scale, 4)
+            self._values.append(float(msg.data))
+            if len(self._values) >= self.samples:
+                raw = statistics.pstdev(self._values)
+                if self.auto_scale and not self._calibrated:
+                    # a perfectly flat first window (raw == 0) can't
+                    # calibrate a scale from - retry on the next reading
+                    # rather than lock in a divide-by-zero/nonsense value
+                    if raw > 0:
+                        self.scale = round(self._AUTO_SCALE_TARGET / raw, 4)
+                        self._calibrated = True
+                        log.verbose('StdDevAux %s: auto-calibrated scale to %f',
+                                   self.id, self.scale)
+                self.data = round(raw * self.scale, 4)
                 log.verbose('StdDevAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
 
@@ -254,17 +311,17 @@ class StdDevAux(SingleInAux):
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()
         schema = {s.key: s for s in type(self).get_settings_schema()}
-        settings.append(self._fill_setting(schema['window']))
+        settings.append(self._fill_setting(schema['samples']))
         settings.append(self._fill_setting(schema['scale']))
+        settings.append(self._fill_setting(schema['auto_scale']))
         return settings
 
     @classmethod
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
-        schema.append(Setting('window', 'stdDevWindow', 3600,
-                              type='duration', min=300, max=24 * 60 * 60,
-                              step=60))
+        schema.append(Setting('samples', 'stdDevSamples', 30, type='number', min=2))
         schema.append(Setting('scale', 'stdDevScale', 1.0, type='number', min=0))
+        schema.append(Setting('auto_scale', 'stdDevAutoScale', False, type='checkbox'))
         return schema
 
 

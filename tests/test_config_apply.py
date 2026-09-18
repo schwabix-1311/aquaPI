@@ -271,7 +271,7 @@ def test_apply_creates_stddev_aux_node(client, users, bus, app):
     resp = client.post('/api/config/apply', json={
         'creates': [{
             'temp_id': 'tmp-sd', 'type': 'StdDevAux', 'name': 'Schwankung',
-            'receives': ['wasser'], 'fields': {'window': 1800},
+            'receives': ['wasser'], 'fields': {'samples': 10},
         }],
     })
     assert resp.status_code == HTTPStatus.OK, resp.get_json()
@@ -282,7 +282,7 @@ def test_apply_creates_stddev_aux_node(client, users, bus, app):
     node = bus.get_node(node_id)
     assert node is not None
     assert node.receives == ['wasser']
-    assert node.window == 1800
+    assert node.samples == 10
 
 
 def test_apply_updates_alert_conditions_and_derives_receives(client, users, bus, app):

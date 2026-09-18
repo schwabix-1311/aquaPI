@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-""" Tests for machineroom/aux_nodes.py: StdDevAux, the rolling-standard-
-    deviation node used to flag reduced water flow via increased
-    temperature volatility (see ROADMAP.md).
+""" Tests for machineroom/aux_nodes.py: StdDevAux, the sample-count
+    standard-deviation node used to flag reduced water flow via
+    increased temperature volatility (see ROADMAP.md).
 """
 
 import statistics
@@ -20,76 +20,49 @@ def _io_registry():
     create_io_registry()
 
 
-@pytest.fixture
-def fake_clock(monkeypatch):
-    """ control the monotonic() clock seen by aux_nodes.py, so window
-        eviction can be tested deterministically
-    """
-    state = {'now': 1000.0}
-
-    def _monotonic():
-        return state['now']
-
-    import aquaPi.machineroom.aux_nodes as aux_nodes_mod
-    monkeypatch.setattr(aux_nodes_mod, 'monotonic', _monotonic)
-
-    def advance(seconds):
-        state['now'] += seconds
-
-    return advance
-
-
-def _feed(node, values, advance=None, step=0):
+def _feed(node, values):
     for v in values:
-        if advance and step:
-            advance(step)
         node.listen(MsgData('sensor', v))
 
 
-def test_no_output_before_min_samples(fake_clock):
-    node = StdDevAux('StdDev', 'sensor')
-    for v in (25.0, 25.1, 25.0, 24.9):  # one short of _MIN_SAMPLES (5)
-        node.listen(MsgData('sensor', v))
+def test_no_output_before_enough_samples():
+    node = StdDevAux('StdDev', 'sensor', samples=5)
+    _feed(node, [25.0, 25.1, 25.0, 24.9])   # one short of 5
     assert node.data == -1
 
 
-def test_output_matches_pstdev_of_window(fake_clock):
-    node = StdDevAux('StdDev', 'sensor', window=3600)
-    values = [25.0, 25.1, 25.0, 24.9, 25.05, 24.95]
-    _feed(node, values, fake_clock, step=10)
+def test_output_matches_pstdev_of_last_n_samples():
+    node = StdDevAux('StdDev', 'sensor', samples=5)
+    values = [25.0, 25.1, 25.0, 24.9, 25.05]
+    _feed(node, values)
     assert node.data == round(statistics.pstdev(values), 4)
 
 
-def test_old_samples_are_evicted_from_window(fake_clock):
-    node = StdDevAux('StdDev', 'sensor', window=100)
+def test_older_samples_drop_out_once_full():
+    node = StdDevAux('StdDev', 'sensor', samples=3)
 
-    # 5 samples, 10s apart, well within the 100s window
-    _feed(node, [25.0, 25.0, 25.0, 25.0, 25.0], fake_clock, step=10)
+    _feed(node, [25.0, 25.0, 25.0])
     assert node.data == 0.0
 
-    # advance well past the window, then feed a single noisy burst -
-    # only the burst should remain in the window
-    fake_clock(200)
-    burst = [24.0, 26.0, 24.0, 26.0, 24.0]
-    _feed(node, burst, fake_clock, step=1)
+    # 3 more, very different values - only the last 3 of the 6 fed total
+    # should count, not all 6
+    burst = [10.0, 20.0, 30.0]
+    _feed(node, burst)
     assert node.data == round(statistics.pstdev(burst), 4)
 
 
-def test_low_stddev_stays_after_high_variance_leaves_window(fake_clock):
-    node = StdDevAux('StdDev', 'sensor', window=60)
+def test_low_stddev_after_high_variance_scrolls_out():
+    node = StdDevAux('StdDev', 'sensor', samples=5)
 
-    # noisy burst, all inside the window at first
-    _feed(node, [20.0, 30.0, 20.0, 30.0, 20.0], fake_clock, step=1)
+    _feed(node, [20.0, 30.0, 20.0, 30.0, 20.0])
     assert node.data > 1.0
 
-    # let the noisy burst fully age out, then feed a quiet run
-    fake_clock(120)
     quiet = [25.0, 25.0, 25.0, 25.0, 25.0]
-    _feed(node, quiet, fake_clock, step=1)
+    _feed(node, quiet)
     assert node.data == 0.0
 
 
-def test_ignores_non_data_messages(fake_clock):
+def test_ignores_non_data_messages():
     from aquaPi.machineroom.msg_types import MsgHello
 
     node = StdDevAux('StdDev', 'sensor')
@@ -97,15 +70,44 @@ def test_ignores_non_data_messages(fake_clock):
     assert node.data == -1
 
 
-def test_state_round_trip_preserves_window(fake_clock):
-    node = StdDevAux('StdDev', 'sensor', window=1800)
+def test_reader_speed_never_blocks_output():
+    # the bug that prompted switching from a time window to a sample
+    # count: a source polling slower than the old time window allowed
+    # could never accumulate enough samples before the oldest aged back
+    # out - permanently, not just slower. A sample count has no such
+    # failure mode: feeding samples one at a time (however far apart in
+    # real time, which this test doesn't even need to simulate) always
+    # eventually reaches `samples`.
+    node = StdDevAux('StdDev', 'sensor', samples=5)
+    values = [24.9, 25.0, 25.1, 25.0, 24.95]
+    for v in values:
+        node.listen(MsgData('sensor', v))
+    assert node.data == round(statistics.pstdev(values), 4)
+
+
+def test_state_round_trip_preserves_samples():
+    node = StdDevAux('StdDev', 'sensor', samples=10)
     state = node.__getstate__()
-    assert state['window'] == 1800
+    assert state['samples'] == 10
 
     restored = StdDevAux.__new__(StdDevAux)
     restored.__setstate__(state)
-    assert restored.window == 1800
+    assert restored.samples == 10
     assert restored.receives == ['sensor']
+
+
+def test_state_round_trip_defaults_samples_for_pre_migration_saved_nodes():
+    # a node saved before 'samples' existed (the old time-windowed
+    # 'window' Setting) has no 'samples' key at all - must fall back to
+    # the schema default, not error or misinterpret the old value
+    node = StdDevAux('StdDev', 'sensor')
+    state = node.__getstate__()
+    del state['samples']
+    state['window'] = 3600   # what an old saved node's state looked like
+
+    restored = StdDevAux.__new__(StdDevAux)
+    restored.__setstate__(state)
+    assert restored.samples == 30
 
 
 def test_data_range_is_analog_without_receiving_data():
@@ -130,10 +132,10 @@ def test_produces_its_source_unit():
     bus.teardown()
 
 
-def test_scale_multiplies_output(fake_clock):
-    node = StdDevAux('StdDev', 'sensor', window=3600, scale=100)
-    values = [25.0, 25.1, 25.0, 24.9, 25.05, 24.95]
-    _feed(node, values, fake_clock, step=10)
+def test_scale_multiplies_output():
+    node = StdDevAux('StdDev', 'sensor', samples=5, scale=100)
+    values = [25.0, 25.1, 25.0, 24.9, 25.05]
+    _feed(node, values)
     assert node.data == round(statistics.pstdev(values) * 100, 4)
 
 
@@ -156,7 +158,7 @@ def test_scale_other_than_one_reports_percent_unit():
     bus.teardown()
 
 
-def test_state_round_trip_preserves_scale(fake_clock):
+def test_state_round_trip_preserves_scale():
     node = StdDevAux('StdDev', 'sensor', scale=50)
     state = node.__getstate__()
     assert state['scale'] == 50
@@ -166,7 +168,7 @@ def test_state_round_trip_preserves_scale(fake_clock):
     assert restored.scale == 50
 
 
-def test_state_round_trip_defaults_scale_for_pre_existing_saved_nodes(fake_clock):
+def test_state_round_trip_defaults_scale_for_pre_existing_saved_nodes():
     # a node saved before 'scale' existed has no such key in its state
     node = StdDevAux('StdDev', 'sensor')
     state = node.__getstate__()
@@ -175,3 +177,64 @@ def test_state_round_trip_defaults_scale_for_pre_existing_saved_nodes(fake_clock
     restored = StdDevAux.__new__(StdDevAux)
     restored.__setstate__(state)
     assert restored.scale == 1.0
+
+
+def test_auto_scale_calibrates_once_from_first_window():
+    node = StdDevAux('StdDev', 'sensor', samples=5, auto_scale=True)
+    values = [24.9, 25.0, 25.1, 25.0, 24.95]
+    _feed(node, values)
+
+    raw = statistics.pstdev(values)
+    assert node.scale == round(StdDevAux._AUTO_SCALE_TARGET / raw, 4)
+    assert node.data == round(raw * node.scale, 4)
+
+
+def test_auto_scale_does_not_recalibrate_on_later_windows():
+    node = StdDevAux('StdDev', 'sensor', samples=3, auto_scale=True)
+    _feed(node, [24.9, 25.0, 25.1])
+    calibrated_scale = node.scale
+
+    # a much noisier later window must NOT shift the scale again - a
+    # continuously-adapting scale would silently normalize away exactly
+    # the kind of change this node exists to surface
+    _feed(node, [10.0, 40.0, 10.0])
+    assert node.scale == calibrated_scale
+
+
+def test_auto_scale_retries_after_a_perfectly_flat_first_window():
+    node = StdDevAux('StdDev', 'sensor', samples=3, auto_scale=True)
+
+    _feed(node, [25.0, 25.0, 25.0])   # raw stddev 0.0 - can't calibrate from
+    assert node.scale == 1.0
+    assert node._calibrated is False
+
+    _feed(node, [24.0, 26.0, 24.0])   # next window has real variance
+    assert node.scale != 1.0
+    assert node._calibrated is True
+
+
+def test_auto_scale_off_leaves_scale_at_whatever_was_set():
+    node = StdDevAux('StdDev', 'sensor', samples=3, scale=42, auto_scale=False)
+    _feed(node, [24.9, 25.0, 25.1])
+    assert node.scale == 42
+
+
+def test_state_round_trip_preserves_auto_scale():
+    node = StdDevAux('StdDev', 'sensor', auto_scale=True)
+    state = node.__getstate__()
+    assert state['auto_scale'] is True
+
+    restored = StdDevAux.__new__(StdDevAux)
+    restored.__setstate__(state)
+    assert restored.auto_scale is True
+
+
+def test_state_round_trip_defaults_auto_scale_for_pre_existing_saved_nodes():
+    # a node saved before 'auto_scale' existed has no such key in its state
+    node = StdDevAux('StdDev', 'sensor')
+    state = node.__getstate__()
+    del state['auto_scale']
+
+    restored = StdDevAux.__new__(StdDevAux)
+    restored.__setstate__(state)
+    assert restored.auto_scale is False

@@ -818,7 +818,9 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
                               {'nodes': [n for n, _ in missing]}, items=items)
 
     # --- everything about this diff has been validated: apply it for
-    #     real, deletes first, then updates, then creates ---
+    #     real, deletes first (freeing ports a create/update may reclaim
+    #     below), then build every create, then updates, then plugin the
+    #     built creates onto the bus ---
     for del_id in deleted_ids:
         node = live_nodes[del_id]
         prune_dangling_references(bus, del_id)
@@ -832,6 +834,29 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
         new_port = upd.get('_fields', {}).get('port')
         if new_port is not None and new_port != (getattr(node, 'port', '') or ''):
             node.port = ''
+
+    # build (but do not yet plugin()) every create now, straight after
+    # the port releases above - deletes/updates have only released ports
+    # at this point, nothing else about the live bus has been touched
+    # yet, so a create failing here (an unanticipated DriverError, or -
+    # the bug that prompted this comment - a NODE_FACTORY entry with no
+    # matching build_node() branch) can't leave some *other* node's
+    # receives/fields half-applied. A sibling create built earlier in
+    # this same loop may have already claimed a real port though (no
+    # node exists yet to .pullout() it from) - release those explicitly
+    # so a later create's failure can't leak a claimed-but-unused port.
+    built_creates: list[tuple[dict[str, Any], BusNode]] = []
+    try:
+        for prep in prepared_creates:
+            entry = prep['entry']
+            node = build_node(entry['type'], entry.get('name', '').strip(),
+                              prep['resolved_receives'], prep['fields'])
+            built_creates.append((entry, node))
+    except Exception:
+        for _, node in built_creates:
+            if getattr(node, 'port', None):
+                node.port = ''
+        raise
 
     # Step 28: calibration history - mirrors api.py's api_set_node_settings,
     # which already logs ScaleAux points changes made through
@@ -859,10 +884,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
     for node_id, (old_points, new_points) in calibration_changes.items():
         log_calibration_event(node_id, old_points, new_points)
 
-    for prep in prepared_creates:
-        entry = prep['entry']
-        node = build_node(entry['type'], entry.get('name', '').strip(),
-                          prep['resolved_receives'], prep['fields'])
+    for entry, node in built_creates:
         node.group = str(entry.get('group', '') or '')
         try:
             node.pos_x = float(entry.get('pos_x', 0.0) or 0.0)

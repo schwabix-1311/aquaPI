@@ -822,6 +822,41 @@ def test_apply_localizes_an_unexpected_post_validation_failure(client, users, bu
     assert body['error_params'] == {'detail': "Unknown or non-creatable node type: 'Bogus'"}
 
 
+def test_apply_leaves_bus_untouched_when_a_later_create_fails(client, users, bus, app,
+                                                               monkeypatch):
+    """ regression test for the exact live-bus corruption this reordering
+        prevents: build every create before mutating any existing node's
+        receives/fields, so a create that fails past validation (build_node()
+        raising for an unanticipated reason) can't leave an update from the
+        same diff already committed on the live bus with no way back - the
+        in-memory corruption an actual missing NODE_FACTORY/build_node()
+        branch caused in production before this fix.
+    """
+    _login(client, 'admin1', 'adminPass123')
+
+    real_build_node = db.build_node
+
+    def _flaky_build_node(type_name, name, receives, fields):
+        if type_name == 'AvgAux':
+            raise ValueError('boom')
+        return real_build_node(type_name, name, receives, fields)
+
+    monkeypatch.setattr(db, 'build_node', _flaky_build_node)
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'warnungen', 'fields': {'conditions': [
+            {'class': 'AlertBelow', 'node_id': 'wasser', 'limit': 5.0, 'duration': 2},
+        ]}}],
+        'creates': [{'temp_id': 'a', 'type': 'AvgAux', 'name': 'Mittel',
+                     'receives': ['wasser'], 'fields': {'unfair_avg': 0}}],
+    })
+    assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+
+    node = bus.get_node('warnungen')
+    assert [type(c).__name__ for c in node.conditions] == ['AlertAbove']   # untouched
+    assert bus.get_node('mittel') is None   # never created
+
+
 def test_apply_allows_alert_with_no_port_and_no_conditions(client, users, bus, app):
     """ both of Alert's exemptions hold: no escalation channel and no
         watched conditions are both legitimate (dashboard-only alert).

@@ -1006,18 +1006,29 @@ const HistoryChart = {
 
 					if (this.cd.data.datasets[dsIdx] === undefined) {
 						this.cd.data.datasets[dsIdx] = {
-							label: node.name + ' [' + node.unit + ']', // ' %',
 							data: [],
 						}
+					}
 
-						if (node.data_range === 'ANALOG' && node.unit != '%') {
-							this.cd.data.datasets[dsIdx].stepped = false
-							this.cd.data.datasets[dsIdx].yAxisID = 'yAnalog'
-						}
-						if (node.data_range === 'BINARY') {
-							this.cd.data.datasets[dsIdx].stepped = true
-							this.cd.data.datasets[dsIdx].label = '⏻ ' + node.name
-						}
+					// re-evaluate every refresh, not just on first creation -
+					// a node's unit/data_range can change at runtime (e.g.
+					// StdDevAux's auto_scale flipping unit from its source's
+					// unit to '%' once it calibrates), and the chosen axis/
+					// label must track that instead of freezing at whatever
+					// was true when this dataset object was first created
+					this.cd.data.datasets[dsIdx].label = node.name + ' [' + node.unit + ']'
+					if (node.data_range === 'ANALOG' && node.unit != '%') {
+						this.cd.data.datasets[dsIdx].stepped = false
+						this.cd.data.datasets[dsIdx].yAxisID = 'yAnalog'
+					} else {
+						// a %-unit series belongs on the default (fixed
+						// 0-100) axis - clear a stale 'yAnalog' assignment
+						// from before the unit changed, don't leave it set
+						delete this.cd.data.datasets[dsIdx].yAxisID
+					}
+					if (node.data_range === 'BINARY') {
+						this.cd.data.datasets[dsIdx].stepped = true
+						this.cd.data.datasets[dsIdx].label = '⏻ ' + node.name
 					}
 					dsIdx++;
 				}

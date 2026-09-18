@@ -8,8 +8,16 @@ import statistics
 
 import pytest
 
+from aquaPi.driver import create_io_registry
 from aquaPi.machineroom.aux_nodes import StdDevAux
+from aquaPi.machineroom.in_nodes import AnalogInput
+from aquaPi.machineroom.msg_bus import MsgBus
 from aquaPi.machineroom.msg_types import MsgData
+
+
+@pytest.fixture(autouse=True, scope='session')
+def _io_registry():
+    create_io_registry()
 
 
 @pytest.fixture
@@ -106,3 +114,64 @@ def test_data_range_is_analog_without_receiving_data():
     # selectable as an AlertCond target in an unsaved /wiring draft
     from aquaPi.machineroom.msg_bus import DataRange
     assert StdDevAux.data_range == DataRange.ANALOG
+
+
+def test_produces_its_source_unit():
+    # a standard deviation of a °C signal is itself in °C - inherit the
+    # source's unit rather than leaving it unitless (BusNode's default)
+    bus = MsgBus(threaded=False)
+    sensor = AnalogInput('Wasser', '', 25.0, '°C')
+    sensor.plugin(bus)
+
+    node = StdDevAux('StdDev', sensor.id)
+    node.plugin(bus)
+
+    assert node.__getstate__()['unit'] == '°C'
+    bus.teardown()
+
+
+def test_scale_multiplies_output(fake_clock):
+    node = StdDevAux('StdDev', 'sensor', window=3600, scale=100)
+    values = [25.0, 25.1, 25.0, 24.9, 25.05, 24.95]
+    _feed(node, values, fake_clock, step=10)
+    assert node.data == round(statistics.pstdev(values) * 100, 4)
+
+
+def test_scale_other_than_one_reports_percent_unit():
+    # not a rigorous percentage (no fixed 0-100 denominator) - just what
+    # routes it onto the dashboard's dedicated axis instead of the one
+    # shared (and auto-scaled) with its much-larger-magnitude source
+    bus = MsgBus(threaded=False)
+    sensor = AnalogInput('Wasser', '', 25.0, '°C')
+    sensor.plugin(bus)
+
+    default_scale = StdDevAux('StdDev', sensor.id)
+    default_scale.plugin(bus)
+    assert default_scale.__getstate__()['unit'] == '°C'
+
+    scaled = StdDevAux('StdDevScaled', sensor.id, scale=100)
+    scaled.plugin(bus)
+    assert scaled.__getstate__()['unit'] == '%'
+
+    bus.teardown()
+
+
+def test_state_round_trip_preserves_scale(fake_clock):
+    node = StdDevAux('StdDev', 'sensor', scale=50)
+    state = node.__getstate__()
+    assert state['scale'] == 50
+
+    restored = StdDevAux.__new__(StdDevAux)
+    restored.__setstate__(state)
+    assert restored.scale == 50
+
+
+def test_state_round_trip_defaults_scale_for_pre_existing_saved_nodes(fake_clock):
+    # a node saved before 'scale' existed has no such key in its state
+    node = StdDevAux('StdDev', 'sensor')
+    state = node.__getstate__()
+    del state['scale']
+
+    restored = StdDevAux.__new__(StdDevAux)
+    restored.__setstate__(state)
+    assert restored.scale == 1.0

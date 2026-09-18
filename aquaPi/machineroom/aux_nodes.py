@@ -184,6 +184,23 @@ class StdDevAux(SingleInAux):
         Options:
             window - trailing time window (seconds) the standard
                      deviation is computed over
+            scale  - plain output multiplier, default 1.0 (no rescaling).
+                     Charted next to its source, a source-unit stddev is
+                     usually tiny next to the source's own magnitude (e.g.
+                     0.05 °C next to a 25 °C reading) and lands on the same
+                     auto-scaling chart axis as that source, so it reads as
+                     a flat line near zero. A scale > 1 (e.g. 100) both
+                     spreads it back into a visible range and - since the
+                     result is no longer literally in the source's unit -
+                     switches the reported unit to '%', which routes it
+                     onto the dashboard's separate, fixed 0-100 axis
+                     instead (see dashboard/comps.js's yAxisID logic).
+                     Deliberately a plain multiplier, not a percentage of
+                     the window's mean (coefficient of variation) - that
+                     would divide by a value that can sit at/near zero for
+                     some sources (e.g. a duty-cycle output at 0%, or a
+                     sensor whose range straddles zero), blowing up for
+                     reasons unrelated to actual variability.
     """
     data_range = DataRange.ANALOG
 
@@ -192,20 +209,34 @@ class StdDevAux(SingleInAux):
     _MIN_SAMPLES = 5
 
     def __init__(self, name: str, receives: str, window: float = 3600,
-                 _cont: bool = False):
+                 scale: float = 1.0, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.window: float = window
+        self.scale: float = scale
         self._samples: deque[tuple[float, float]] = deque()
 
     def __getstate__(self) -> dict[str, Any]:
+        # a standard deviation carries its source's unit (a °C signal's
+        # stddev is itself in °C) - unless rescaled, in which case it's no
+        # longer literally in that unit, so report '%' instead (also what
+        # routes it onto the dashboard's dedicated 0-100 axis, see class
+        # docstring). Update self.unit before calling super(), since
+        # BusNode.__getstate__() snapshots it into the returned state
+        # (same pattern as MultiInAux.__getstate__, minus data_range: that
+        # one stays statically ANALOG, see class docstring)
+        for rcv in self.get_receives():
+            self.unit = rcv.unit if self.scale == 1.0 else '%'
+            break
         state = super().__getstate__()
         state["window"] = self.window
+        state["scale"] = self.scale
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.data = state['data']
         StdDevAux.__init__(self, state['name'], state['receives'],
-                           window=state['window'], _cont=True)
+                           window=state['window'], scale=state.get('scale', 1.0),
+                           _cont=True)
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
@@ -214,7 +245,7 @@ class StdDevAux(SingleInAux):
             while self._samples and self._samples[0][0] < now - self.window:
                 self._samples.popleft()
             if len(self._samples) >= self._MIN_SAMPLES:
-                self.data = round(statistics.pstdev(v for _, v in self._samples), 4)
+                self.data = round(statistics.pstdev(v for _, v in self._samples) * self.scale, 4)
                 log.verbose('StdDevAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
 
@@ -224,6 +255,7 @@ class StdDevAux(SingleInAux):
         settings = super().get_settings()
         schema = {s.key: s for s in type(self).get_settings_schema()}
         settings.append(self._fill_setting(schema['window']))
+        settings.append(self._fill_setting(schema['scale']))
         return settings
 
     @classmethod
@@ -232,6 +264,7 @@ class StdDevAux(SingleInAux):
         schema.append(Setting('window', 'stdDevWindow', 3600,
                               type='duration', min=300, max=24 * 60 * 60,
                               step=60))
+        schema.append(Setting('scale', 'stdDevScale', 1.0, type='number', min=0))
         return schema
 
 

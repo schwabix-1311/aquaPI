@@ -47,7 +47,7 @@ export default
 				calibrationPoints: 'Kalibrierung',
 				unfairAvg: 'Ungewichteter Mittelwert [0=aus]',
 				stdDevWindow: 'Mittelungsfenster',
-				stdDevScale: 'Skalierungsfaktor',
+				stdDevScale: 'Skalierungsfaktor (≈ 10 ÷ Normalwert)',
 				inputPort: 'Eingangsport',
 				outputPort: 'Ausgangsport',
 				alertPort: 'Sende an',

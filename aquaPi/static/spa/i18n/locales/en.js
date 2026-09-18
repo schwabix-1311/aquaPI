@@ -47,7 +47,7 @@ export default
 				calibrationPoints: 'Calibration',
 				unfairAvg: 'Unweighted average [0=off]',
 				stdDevWindow: 'Averaging window',
-				stdDevScale: 'Output scaling factor',
+				stdDevScale: 'Scaling factor (≈ 10 ÷ normal reading)',
 				inputPort: 'Input port',
 				outputPort: 'Output port',
 				alertPort: 'Send to',

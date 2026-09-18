@@ -180,12 +180,23 @@ fine, sort/dedupe later.
   e.g. BINARY-only) set `node_filter_by_class` on the `node_id`
   sub-field. The record-list widget + validator pick it up automatically.
   **Priority: medium.**
-- New `AuxNode` descendant computing a running standard deviation of
-  received data, triggering when it leaves a defined range - a
-  concrete approach for recommending filter cleaning based on reduced
-  water flow (which increases temperature volatility), merging the
-  earlier vague "filter cleaning heuristics" idea into this one.
-  **Priority: medium.**
+- `StdDevAux` (running standard deviation of a source's last N readings,
+  flags reduced water flow via increased temperature volatility) - DONE,
+  shipped to `main`+`aquapi2` 2026-09-18. Sample-count window (not
+  time-based - a too-short time window relative to a slow reader could
+  never accumulate enough samples, permanently, not just slower; a plain
+  count always eventually fills for any source cadence). `scale` output
+  multiplier + one-time `auto_scale` calibration (target ≈10, folded into
+  the field's own label) so it's visible on the dashboard's dedicated
+  0-100 axis instead of squashed flat next to its much-larger-magnitude
+  source. Also surfaced and fixed along the way: `apply_config_diff`
+  wasn't actually atomic (a late create failure left earlier updates
+  committed with no rollback), `load_wiring` never pruned dangling
+  references to a node that failed to restore, and every numeric
+  Setting field in the app could be blanked into a confusing backend
+  error (now reverts client-side instead). JBL's aging-probe automated
+  check (see the calibration UI entry above) remains a possible
+  follow-up, unrelated to this.
 - A node to send predefined messages (distinct from Alerts) when
   triggered - for reminders, statistics, and similar notifications that
   aren't really "alerts". **Priority: medium.**

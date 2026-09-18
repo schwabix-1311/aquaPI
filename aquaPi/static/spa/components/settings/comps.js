@@ -62,7 +62,16 @@ const SettingNumber = {
 	},
 	methods: {
 		onChange: function() {
-			this.$emit('update', parseFloat(this.localValue))
+			// an emptied field parses to NaN, which JSON-serializes to
+			// null and always fails the backend's numeric validation
+			// with a confusing round-trip error - just revert instead of
+			// ever submitting it, for every field using this widget
+			const parsed = parseFloat(this.localValue)
+			if (Number.isNaN(parsed)) {
+				this.localValue = this.item.value
+				return
+			}
+			this.$emit('update', parsed)
 		}
 	}
 }
@@ -131,7 +140,16 @@ const SettingSlider = {
 			this.$emit('update', val)
 		},
 		onChange: function() {
-			this.$emit('update', parseFloat(this.localValue))
+			// see SettingNumber's identical guard - an emptied field
+			// parses to NaN, which JSON-serializes to null and always
+			// fails the backend's numeric validation with a confusing
+			// round-trip error
+			const parsed = parseFloat(this.localValue)
+			if (Number.isNaN(parsed)) {
+				this.localValue = this.item.value
+				return
+			}
+			this.$emit('update', parsed)
 		},
 	}
 }
@@ -318,7 +336,16 @@ const SettingDuration = {
 			this.$emit('update', val * this.factor)
 		},
 		onChange: function() {
-			this.$emit('update', parseFloat(this.localValue) * this.factor)
+			// see SettingNumber's identical guard - an emptied field
+			// parses to NaN, which JSON-serializes to null and always
+			// fails the backend's numeric validation with a confusing
+			// round-trip error
+			const parsed = parseFloat(this.localValue)
+			if (Number.isNaN(parsed)) {
+				this.localValue = roundDuration(this.item.value / this.factor)
+				return
+			}
+			this.$emit('update', parsed * this.factor)
 		},
 	}
 }

@@ -46,6 +46,7 @@ export default
 				unit: 'Einheit',
 				calibrationPoints: 'Kalibrierung',
 				unfairAvg: 'Ungewichteter Mittelwert [0=aus]',
+				stdDevWindow: 'Mittelungsfenster',
 				inputPort: 'Eingangsport',
 				outputPort: 'Ausgangsport',
 				alertPort: 'Sende an',

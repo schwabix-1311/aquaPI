@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
 from abc import ABC
+from collections import deque
 import logging
+import statistics
+from time import monotonic
 from typing import (Callable, Iterable, Any)
 
 from .msg_types import (Msg, MsgData)
@@ -165,6 +168,70 @@ class ScaleAux(SingleInAux):
         schema.append(Setting('points', 'calibrationPoints', None,
                               type='calibration-points', required=True,
                               custom_widget=True))
+        return schema
+
+
+class StdDevAux(SingleInAux):
+    """ Rolling standard deviation of a received signal over a trailing
+        time window - e.g. flags reduced water flow via increased
+        temperature volatility (heater cycling not mixed away fast
+        enough when circulation is weak). Pair with an AlertAbove
+        watching this node's output; its `duration` field should be
+        sized well beyond any normal settling transient (e.g. a PID
+        walking off drift after a disturbance), so only variance that
+        stays elevated for longer than that trips the alert.
+
+        Options:
+            window - trailing time window (seconds) the standard
+                     deviation is computed over
+    """
+    data_range = DataRange.ANALOG
+
+    # guards against a misleadingly-confident stddev (0.0, or a fluke)
+    # right after start or with a too-short window
+    _MIN_SAMPLES = 5
+
+    def __init__(self, name: str, receives: str, window: float = 3600,
+                 _cont: bool = False):
+        super().__init__(name, receives, _cont=_cont)
+        self.window: float = window
+        self._samples: deque[tuple[float, float]] = deque()
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = super().__getstate__()
+        state["window"] = self.window
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.data = state['data']
+        StdDevAux.__init__(self, state['name'], state['receives'],
+                           window=state['window'], _cont=True)
+
+    def listen(self, msg: Msg) -> None:
+        if isinstance(msg, MsgData):
+            now = monotonic()
+            self._samples.append((now, float(msg.data)))
+            while self._samples and self._samples[0][0] < now - self.window:
+                self._samples.popleft()
+            if len(self._samples) >= self._MIN_SAMPLES:
+                self.data = round(statistics.pstdev(v for _, v in self._samples), 4)
+                log.verbose('StdDevAux %s: output %f', self.id, self.data)
+                self.post(MsgData(self.id, self.data))
+
+        super().listen(msg)
+
+    def get_settings(self) -> list[Setting]:
+        settings = super().get_settings()
+        schema = {s.key: s for s in type(self).get_settings_schema()}
+        settings.append(self._fill_setting(schema['window']))
+        return settings
+
+    @classmethod
+    def get_settings_schema(cls) -> list[Setting]:
+        schema = super().get_settings_schema()
+        schema.append(Setting('window', 'stdDevWindow', 3600,
+                              type='duration', min=300, max=24 * 60 * 60,
+                              step=60))
         return schema
 
 

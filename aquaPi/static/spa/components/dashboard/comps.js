@@ -516,6 +516,11 @@ const MaxAux = {
 }
 registerGlobalComponent('MaxAux', MaxAux)
 
+const StdDevAux = {
+	extends: AuxNode,
+}
+registerGlobalComponent('StdDevAux', StdDevAux)
+
 // no aggregation/math - just a flat, read-only name/value row per
 // received node (not each source's own full widget, which would
 // nest recursively for anything with receives of its own, and would

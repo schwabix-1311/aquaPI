@@ -46,6 +46,7 @@ export default
 				unit: 'Unit',
 				calibrationPoints: 'Calibration',
 				unfairAvg: 'Unweighted average [0=off]',
+				stdDevWindow: 'Averaging window',
 				inputPort: 'Input port',
 				outputPort: 'Output port',
 				alertPort: 'Send to',

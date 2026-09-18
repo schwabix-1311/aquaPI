@@ -41,7 +41,7 @@ from .passphrase import generate_aquatic_passphrase, generate_url_token
 from .machineroom.in_nodes import (AnalogInput, SwitchInput, TextInput, ScheduleInput,
                                    UiSwitchInput, UiAnalogInput)
 from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
-from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, UiDisplay)
+from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, StdDevAux, UiDisplay)
 from .machineroom.hist_nodes import History, log_calibration_event
 from .machineroom.alert_nodes import (Alert, AlertAbove, AlertBelow)
 from .driver.base import DriverError
@@ -75,7 +75,7 @@ NODE_FACTORY: dict[str, type[BusNode]] = {
         AnalogInput, SwitchInput, TextInput, ScheduleInput,
         UiSwitchInput, UiAnalogInput,
         AnalogDevice, SlowPwmDevice, SwitchDevice,
-        AvgAux, MaxAux, MinAux, ScaleAux, UiDisplay,
+        AvgAux, MaxAux, MinAux, ScaleAux, StdDevAux, UiDisplay,
         History,
         Alert,
     )

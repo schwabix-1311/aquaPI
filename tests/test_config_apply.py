@@ -17,6 +17,7 @@ from aquaPi.machineroom.msg_bus import MsgBus
 from aquaPi.machineroom.in_nodes import AnalogInput
 from aquaPi.machineroom.out_nodes import SwitchDevice
 from aquaPi.machineroom.ctrl_nodes import MinimumCtrl
+from aquaPi.machineroom.aux_nodes import StdDevAux
 from aquaPi.machineroom.alert_nodes import Alert, AlertAbove
 
 
@@ -283,6 +284,29 @@ def test_apply_creates_stddev_aux_node(client, users, bus, app):
     assert node is not None
     assert node.receives == ['wasser']
     assert node.samples == 10
+
+
+def test_apply_update_clears_scale_on_a_real_auto_scale_retoggle(client, users, bus, app):
+    # end-to-end version of aux_nodes.py's own auto_scale property test -
+    # a /wiring "Apply" resubmits a node's *entire* fields set (not just
+    # the one field the user actually changed), so this confirms the
+    # real request shape (both 'scale' and 'auto_scale' in one update)
+    # still ends up with scale cleared, not silently reapplied to its
+    # old value depending on dict/field ordering somewhere in the
+    # validate/apply pipeline
+    _login(client, 'admin1', 'adminPass123')
+
+    node = StdDevAux('Schwankung', 'wasser', scale=42, auto_scale=False)
+    node.plugin(bus)
+
+    resp = client.post('/api/config/apply', json={
+        'updates': [{'id': 'schwankung',
+                     'fields': {'samples': 30, 'scale': 42, 'auto_scale': True}}],
+    })
+    assert resp.status_code == HTTPStatus.OK, resp.get_json()
+
+    assert bus.get_node('schwankung').scale == 1.0
+    assert bus.get_node('schwankung')._calibrated is False
 
 
 def test_apply_updates_alert_conditions_and_derives_receives(client, users, bus, app):

@@ -259,7 +259,6 @@ class StdDevAux(SingleInAux):
         # restoring a node must NOT clear an already-calibrated (or
         # user-set) scale, only a live re-toggle should (see the setter)
         self._auto_scale: bool = auto_scale
-        self._values: deque[float] = deque(maxlen=self.samples)
 
     @property
     def samples(self) -> int:
@@ -275,7 +274,21 @@ class StdDevAux(SingleInAux):
         # restoring it crashed deque(maxlen=<float>) in production. Coerce
         # unconditionally here instead of only at the few call sites that
         # happened to remember to.
-        self._samples = int(round(value))
+        #
+        # Also rebuild self._values at the new maxlen every time - deque
+        # .maxlen is fixed at construction, so a live edit that only
+        # updated self._samples left a too-small deque in place: GROWING
+        # samples this way made len(self._values) >= self.samples
+        # permanently unsatisfiable (the deque can never hold more than
+        # its original, smaller maxlen), silently killing the node until
+        # a full process restart - observed in production, StdDevAux
+        # stopped posting for 22+ hours after exactly this kind of edit.
+        # deque(iterable, maxlen=N) keeps only the last N items for free,
+        # correctly handling both directions (and __init__ calling this
+        # before self._values exists yet, via the getattr fallback).
+        new_samples = int(round(value))
+        self._values = deque(getattr(self, '_values', ()), maxlen=new_samples)
+        self._samples = new_samples
 
     @property
     def auto_scale(self) -> bool:

@@ -126,6 +126,46 @@ def test_samples_coerces_a_float_to_int():
     assert isinstance(node.samples, int)
 
 
+def test_growing_samples_live_does_not_permanently_stop_output():
+    # regression test for the exact production incident: deque.maxlen is
+    # fixed at construction, so a live edit that only updated the stored
+    # count (not the deque) left a too-small deque in place - growing
+    # 'samples' this way made len(self._values) >= self.samples
+    # permanently unsatisfiable, silently killing the node forever
+    # (observed: StdDevAux stopped posting for 22+ hours after exactly
+    # this kind of edit, until the process was restarted)
+    node = StdDevAux('StdDev', 'sensor', samples=5)
+    values = [24.9, 25.0, 25.1, 25.0, 24.95]
+    _feed(node, values)
+    assert node.data == round(statistics.pstdev(values), 4)   # ready
+
+    node.samples = 10   # live edit, growing past the original maxlen=5
+    assert node._values.maxlen == 10
+
+    # without the fix, len(self._values) could never reach 10 again -
+    # feed exactly enough new readings to prove it actually can now
+    more = [24.9, 25.05, 25.1, 24.95, 25.0]
+    _feed(node, more)
+    all_ten = values + more
+    assert node.data == round(statistics.pstdev(all_ten), 4)
+
+
+def test_shrinking_samples_live_takes_effect_immediately():
+    node = StdDevAux('StdDev', 'sensor', samples=10)
+    values = [24.9, 25.0, 25.1, 25.0, 24.95, 25.05, 24.85, 25.15, 25.0, 24.9]
+    _feed(node, values)
+    assert node._values.maxlen == 10
+
+    node.samples = 5   # live edit, shrinking
+    assert node._values.maxlen == 5
+    # the shrink itself trims to the last 5 items already held - the
+    # very next reading should reflect a 5-sample window, not wait for
+    # 5 brand new readings to arrive
+    node.listen(MsgData('sensor', 24.7))
+    expected = values[-4:] + [24.7]
+    assert node.data == round(statistics.pstdev(expected), 4)
+
+
 def test_state_round_trip_survives_a_float_samples_value():
     # simulates a node that was live-edited (setattr with a float, see
     # above) then saved - its persisted state has samples as a float

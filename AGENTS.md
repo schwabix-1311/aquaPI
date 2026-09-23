@@ -106,8 +106,9 @@ und Vuetify verdrahtet und global mountet (`app.mount('#app')`).
     werden gemeinsame Module (z. B. `EventBus`, Pinia-Stores, `loadSfc` selbst) über `moduleCache` in
     `loadSfc.js` unter virtuellen Modulnamen wie `app/EventBus`, `store/ui`, `sfc/loadSfc` bereitgestellt,
     die SFCs dann importieren können.
-- **Routing**: `aquaPi/static/spa/router/index.js` nutzt `vue-router` mit `createWebHashHistory()`
-  (Hash-basierte URLs, `/#/...`). Seiten (`Home.vue`, `Settings.vue`, `Config.vue`, `About.vue`,
+- **Routing**: `aquaPi/static/spa/router/index.js` nutzt `vue-router` mit `createWebHistory()`
+  (saubere URLs ohne `#`; `aquaPi/pages/spa.py` liefert per Catch-all-Route die SPA-Shell auch für
+  direkt aufgerufene/refreshte Client-Routen wie `/wiring` aus). Seiten (`Home.vue`, `Settings.vue`, `Config.vue`, `About.vue`,
   `Users.vue`) liegen unter `aquaPi/static/spa/pages/` und werden lazy per `loadSfc()` geladen; das
   Layout `layouts/Default.vue` ist die gemeinsame Route-Wurzel. Die `users`-Route hat einen
   `beforeEnter`-Guard, der nur Admins zulässt (sonst Redirect auf `home`).

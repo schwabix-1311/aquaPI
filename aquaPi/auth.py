@@ -17,7 +17,8 @@ from os import path
 
 from http import HTTPStatus
 
-from flask import Blueprint, abort, current_app, jsonify, redirect, request, url_for
+from flask import (Blueprint, abort, current_app, jsonify, redirect,
+                   render_template, request, url_for)
 from flask_login import (LoginManager, UserMixin, current_user,
                          login_required, login_user, logout_user)
 from werkzeug.security import check_password_hash
@@ -236,15 +237,15 @@ def request_password_reset():
 def confirm_password_reset(token: str):
     """ self-service password reset, step 2. GET is reached two ways:
         the SPA checking token validity via fetch() (JSON), or a real
-        browser navigation from the emailed link - the latter bridges
-        into the SPA's hash-routed 'reset-password' route, since Flask
-        never sees anything after a '#' (see router/index.js).
+        browser navigation from the emailed link - the latter is already
+        at the SPA's 'reset-password' client-side route path (history-mode
+        routing, see router/index.js), so just render the shell directly.
     """
     if request.method == 'GET':
         if _wants_json():
             row = db.get_password_reset_token(_users_db_path(), token)
             return jsonify(valid=row is not None)
-        return redirect(url_for('spa.spa') + '#/reset-password/' + token)
+        return render_template('pages/spa.html.jinja2')
 
     password = request.form.get('password', '')
     password2 = request.form.get('password2', '')

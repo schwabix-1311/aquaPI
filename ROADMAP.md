@@ -197,11 +197,41 @@ fine, sort/dedupe later.
   error (now reverts client-side instead). JBL's aging-probe automated
   check (see the calibration UI entry above) remains a possible
   follow-up, unrelated to this.
+- Actual blocked-flow *alerting* (distinct from the `StdDevAux` node
+  above, which just computes/displays the metric) - not designed yet,
+  not started. Three live filter-off runs on the real tank (2026-09-19,
+  2x 2026-09-22) validated the signal and produced concrete design
+  input: a duration-gated `temperaturheuristik` threshold (not a
+  momentary one) is the recommended base, since it resolves both known
+  false-positive sources (baseline sensor/PID noise - real 8h baseline
+  never exceeded ~8.3%, always in short blips; and deliberate water
+  changes - self-correcting, so a sustained-elevation requirement should
+  pass them through) without needing an optional ambient-temperature
+  sensor. Open items before this could become a real feature: the
+  `samples` window size measurably changes the *peak* reported value
+  (30-sample window peaked ~37% vs. 10-sample's ~24% for a comparable
+  event - a longer window is not simply "smoothed", it can span more of
+  a disturbance in one calculation and read higher), stddev alone can
+  go quiet mid-event if the water temperature briefly plateaus even
+  while the heater is still winding up, and the duration-gate's safety
+  margin against real water-change transients is still unmeasured (time
+  one to confirm). Also unaddressed: gradual/chronic flow degradation
+  (a slowly clogging filter) is a different failure shape than the
+  abrupt full-block these runs tested, and may need a separate
+  long-window baseline-trend check rather than an event/duration
+  threshold. **Priority: medium** - full design discussion + all three
+  runs' data preserved in `project_flow_blockage_pid_experiment` memory.
 - A node to send predefined messages (distinct from Alerts) when
   triggered - for reminders, statistics, and similar notifications that
   aren't really "alerts". **Priority: medium.**
-- Remove hash-based (`/#/`) routing, now that Jinja removal is done and
-  no longer blocks it. **Priority: high.**
+- Remove hash-based (`/#/`) routing - DONE, 2026-09-23. `vue-router` now
+  uses `createWebHistory()`; `aquaPi/pages/spa.py` gained a catch-all
+  route (same `spa.spa` endpoint, via Flask's `defaults` trick) serving
+  the SPA shell for direct-loaded/refreshed client-side paths like
+  `/wiring`, guarded so an unmatched `/api/...` path still 404s instead
+  of being swallowed. The emailed password-reset link
+  (`auth.confirm_password_reset`) no longer needs to hash-redirect -
+  its Flask route already *is* the SPA's target path in history mode.
 - Explore how sub-data could be allowed, i.e. nodes posting more than
   one datum on the bus, and listeners to listen to specific sub-data -
   RGB light support (below) is a concrete motivating case for this.

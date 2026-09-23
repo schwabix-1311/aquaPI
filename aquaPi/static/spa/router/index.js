@@ -18,7 +18,7 @@ import {useUiStore} from '../store/modules/ui.js'
 const routes = [
 	{
 		// TODO: maybe change /app to / when 'old app' is not used any longer
-		// partly DONE: old app is now /home, and / redirects to /#/
+		// partly DONE: old app is now /home
 		path: '/',
 		// name: 'app',
 		component: () => loadSfc('/static/spa/layouts/Default.vue'),
@@ -112,8 +112,7 @@ const routes = [
 ];
 
 const router = VueRouter.createRouter({
-	// TODO: maybe switch to createWebHistory(), when we do not need old URL paths any longer
-	history: VueRouter.createWebHashHistory(),
+	history: VueRouter.createWebHistory(),
 	routes,
 	scrollBehavior(to, from, savedPosition) {
 		// Vuetify 3 no longer renders a `.v-main__wrap` child div (that was

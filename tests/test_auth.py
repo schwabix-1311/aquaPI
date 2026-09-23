@@ -538,11 +538,12 @@ def test_request_password_reset_page_loads(client):
 
 def test_request_password_reset_bridges_emailed_link_into_the_spa(client):
     # a real (non-XHR) browser navigation from the emailed link must not
-    # be validated/consumed server-side - just redirected into the SPA's
-    # hash-routed 'reset-password' route, which re-validates client-side
+    # be validated/consumed server-side - it's already at the SPA's
+    # 'reset-password' client-side route path (history-mode routing), so
+    # the shell is rendered directly and re-validates the token client-side
     resp = client.get('/reset-password/some-token')
-    assert resp.status_code == 302
-    assert resp.headers['Location'] == '/#/reset-password/some-token'
+    assert resp.status_code == 200
+    assert b'id="app"' in resp.data
 
 
 def test_request_password_reset_shows_generic_confirmation_for_unknown_user(client):

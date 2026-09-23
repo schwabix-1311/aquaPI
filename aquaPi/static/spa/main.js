@@ -20,7 +20,7 @@ const vuetify = Vuetify.createVuetify({
 				colors: {
 					primary: '#1976D2',
 					secondary: '#424242',
-					accent: '#82B1FF',
+					accent: '#BF360C',
 					error: '#FF5252',
 					info: '#2196F3',
 					success: '#4CAF50',
@@ -32,7 +32,7 @@ const vuetify = Vuetify.createVuetify({
 				colors: {
 					primary: '#1976D2',
 					secondary: '#424242',
-					accent: '#82B1FF',
+					accent: '#FFB300',
 					error: '#FF5252',
 					info: '#2196F3',
 					success: '#4CAF50',

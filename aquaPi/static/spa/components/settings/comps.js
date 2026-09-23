@@ -1013,7 +1013,7 @@ const NodeSettingsCard = {
 	template: `
 		<v-card variant="outlined" elevation="3" tile class="mb-3" style="border-color: rgba(0,0,0,0.3);">
 			<v-card-title class="text-subtitle-1 py-2">
-				{{ anchor.name }}<span v-if="isHistOrAlert(anchor)" class="text-body-2 text--secondary"> ({{ $t('misc.nodeTypes.' + anchor.role.toLowerCase()) }})</span>
+				<span class="aquapi-chain-tree__anchor-badge" :class="anchorBadgeClass">{{ anchor.name }}</span><span v-if="isHistOrAlert(anchor)" class="text-body-2 text--secondary"> ({{ $t('misc.nodeTypes.' + anchor.role.toLowerCase()) }})</span>
 			</v-card-title>
 			<v-card-text>
 				<template v-if="anchor.role === 'ALERTS'">
@@ -1027,9 +1027,6 @@ const NodeSettingsCard = {
 					</template>
 					<template v-else>
 						<node-settings-tree v-if="inputs.length" :entries="inputs" :depth="1" flat></node-settings-tree>
-						<div v-if="anchor.role === 'CTRL'" class="aquapi-chain-tree__anchor-badge aquapi-chain-tree__anchor-badge--ctrl">
-							{{ anchor.name }}
-						</div>
 						<node-settings-fields :node="anchor"></node-settings-fields>
 						<node-settings-tree v-if="outputs.length" :entries="outputs" :depth="1" flat></node-settings-tree>
 					</template>
@@ -1071,6 +1068,15 @@ const NodeSettingsCard = {
 		// CTRL, so there's no spine left to subtract.
 		outputs: function() {
 			return dedupeFanIn(descendants(this.anchor, this.dashboardStore.nodes))
+		},
+		// the anchor is the chain's own root, not a fan-out branch point
+		// within it - so unlike badgeClass() in NodeSettingsTree, there's
+		// no "--soft" (branch missing a controller) case to consider here,
+		// just "is this itself a controller" vs. everything else.
+		anchorBadgeClass: function() {
+			return this.anchor.role === 'CTRL'
+				? 'aquapi-chain-tree__anchor-badge--ctrl'
+				: 'aquapi-chain-tree__anchor-badge--plain'
 		},
 	},
 	methods: {

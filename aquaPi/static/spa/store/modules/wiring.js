@@ -112,11 +112,28 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 		async insertTemplate(payload) {
 			const {id} = payload
 			const lang = i18n.global.locale.value
+			if (!this.draft) {
+				this.initDraft()
+			}
+			// 'existing' is everything the backend needs to keep the
+			// inserted nodes collision/overlap-free - the draft's own id/
+			// position, not just the live bus', since the draft may
+			// already hold other not-yet-saved nodes (manual adds, or an
+			// earlier template insert in the same draft)
+			const existing = Object.values(this.draft).map(n => (
+				{id: n.id, pos_x: n.pos_x, pos_y: n.pos_y}
+			))
 			const res = await apiRequest('post', '/api/templates/'
-				+ encodeURIComponent(id) + '/insert?lang=' + encodeURIComponent(lang))
+				+ encodeURIComponent(id) + '/insert?lang=' + encodeURIComponent(lang),
+				{existing})
 			if (res.ok) {
-				await useDashboardStore().fetchNodes()
-				await this.fetchNodeTypes(true)   // node set changed -> free-port lists moved
+				// fold straight into the draft - nothing was persisted, so
+				// there's nothing to (re)fetch; same _tempId convention
+				// draftCreateNode() uses, so saveDraft()'s wiringDiff()
+				// picks these up as ordinary creates
+				res.data.forEach(node => {
+					this.setDraftNode(Object.assign({}, node, {_tempId: node.id}))
+				})
 				return {ok: true, nodes: res.data}
 			}
 			return {ok: false, error: res.error}
@@ -157,8 +174,24 @@ export const useWiringStore = Pinia.defineStore('wiring', {
 			const res = await apiRequest('post',
 				'/api/config/snapshots/' + encodeURIComponent(name) + '/restore')
 			if (res.ok) {
-				await useDashboardStore().fetchNodes()
-				await this.fetchNodeTypes(true)   // whole bus replaced -> free-port lists moved
+				if (!this.draftBaseline) {
+					// no draft was open yet - seed the baseline from the
+					// live bus, same as initDraft(), so the eventual diff
+					// still knows what's actually live vs. what the
+					// snapshot adds/changes/removes
+					this.draftBaseline = clone(useDashboardStore().nodes)
+				}
+				// replace the whole WORKING draft with the snapshot's node
+				// set, but deliberately leave draftBaseline as the live
+				// bus it already was - wiringDiff(baseline, draft, ...)
+				// then derives the full replace (creates/updates/deletes)
+				// on its own once the user saves, no bespoke snapshot-diff
+				// logic needed
+				const newDraft = {}
+				res.data.forEach(node => {
+					newDraft[node.id] = Object.assign({}, node, {_tempId: node.id})
+				})
+				this.draft = newDraft
 				return {ok: true, nodes: res.data}
 			}
 			return {ok: false, error: res.error}

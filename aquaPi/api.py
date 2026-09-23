@@ -1000,34 +1000,39 @@ def api_delete_template(name: str) -> Response:
 @bp.route('/api/templates/<name>/insert', methods=['POST'])
 @roles_required('admin')
 def api_insert_template(name: str) -> Response:
-    """ insert a template's nodes (localised for ?lang=, default 'de')
-        into the live bus with fresh, collision-free ids, wire them up
-        and persist the wiring.
+    """ build a template's nodes (localised for ?lang=, default 'de')
+        with fresh, collision-free ids, for previewing into the /wiring
+        draft - nothing is persisted or attached to the live bus here,
+        the draft only becomes real once the user saves it (see
+        api_config_apply()). 'existing' in the request body is the
+        caller's current draft (id/pos_x/pos_y of every node it already
+        has, live or itself still unsaved) - used for collision/overlap
+        avoidance instead of the live bus, so inserting into an already
+        -edited draft doesn't collide with the live bus after all.
     """
-    bus = the_bus()
-    if not bus:
-        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
-
     lang = request.args.get('lang') or 'de'
     template = db.get_template(current_app.config['INSTANCE_PATH'], name, lang)
     if not template:
         return Response(status=HTTPStatus.NOT_FOUND)
 
+    body = request.get_json(silent=True) or {}
+    existing = body.get('existing') or []
+    taken_ids = {e['id'] for e in existing}
+    existing_positions = [
+        (float(e.get('pos_x', 0.0) or 0.0), float(e.get('pos_y', 0.0) or 0.0))
+        for e in existing
+    ]
+
     try:
-        new_nodes = db.instantiate_template(bus, template['data'])
+        new_nodes = db.instantiate_template(template['data'], taken_ids, existing_positions)
     except (ValueError, KeyError, TypeError, DriverError) as ex:
         log.exception('api_insert_template: failed to instantiate template %r', name)
         return jsonify(error=f'Could not insert template: {ex}'), HTTPStatus.BAD_REQUEST
 
-    mr: MachineRoom = current_app.extensions['machineroom']
-    mr.save_nodes(bus)
-
-    log.verbose('User %r inserted template %r (%d new nodes)',
+    log.verbose('User %r previewed template %r for insert (%d node(s))',
                 current_user.username, name, len(new_nodes))
-    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
-                           'insert_template', name, {'node_count': len(new_nodes)})
 
-    return jsonify([_node_to_dict(n) for n in new_nodes]), HTTPStatus.CREATED
+    return jsonify([_node_to_dict(n) for n in new_nodes])
 
 
 # --- /config: wiring snapshots (Step 13) ------------------------------
@@ -1087,28 +1092,27 @@ def api_delete_snapshot(name: str) -> Response:
 @bp.route('/api/config/snapshots/<name>/restore', methods=['POST'])
 @roles_required('admin')
 def api_restore_snapshot(name: str) -> Response:
-    """ replace the entire live wiring with the one stored in a
-        snapshot, then persist it as the new current wiring.
+    """ build the node set stored in a snapshot, for previewing into the
+        /wiring draft as a full replacement - nothing is persisted or
+        attached to the live bus here, the draft only becomes real once
+        the user saves it (see api_config_apply()).
     """
-    bus = the_bus()
-    if not bus:
-        return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
-
     snapshot = db.get_snapshot(_wiring_db_path(), name)
     if not snapshot:
         return Response(status=HTTPStatus.NOT_FOUND)
 
-    db.restore_snapshot_into_bus(bus, snapshot['data'])
+    new_nodes, failures = db.preview_snapshot_nodes(snapshot['data'])
+    if failures:
+        log.warning('api_restore_snapshot: %d node(s) from snapshot %r could not be '
+                    'previewed: %s', len(failures), name, '; '.join(failures))
 
-    mr: MachineRoom = current_app.extensions['machineroom']
-    mr.save_nodes(bus)
+    log.verbose('User %r previewed snapshot %r for restore (%d node(s))',
+                current_user.username, name, len(new_nodes))
 
-    log.verbose('User %r restored snapshot %r (%d nodes)',
-                current_user.username, name, len(bus.nodes))
-    db.add_audit_log_entry(_users_db_path(), current_user.id, current_user.username,
-                           'restore_snapshot', name, {'node_count': len(bus.nodes)})
-
-    return jsonify([_node_to_dict(n) for n in bus.get_nodes()])
+    # preview_snapshot_nodes() already returns the REST-shaped dicts
+    # directly (no node objects were constructed), unlike
+    # instantiate_template()'s list[BusNode] elsewhere in this file
+    return jsonify(new_nodes)
 
 
 # --- audit log (Step 23) ------------------------------------------------

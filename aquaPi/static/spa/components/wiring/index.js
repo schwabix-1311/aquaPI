@@ -261,11 +261,6 @@ const AquapiWiring = {
 			this.$toast.success(this.$t('pages.wiring.changesDiscarded'))
 		},
 
-		async reinitDraft() {
-			this.selectedIds = []
-			this.wiringStore.initDraft()
-		},
-
 		openAddDialog: function() {
 			this.connectDrag = null
 			this.editingNode = null
@@ -288,7 +283,12 @@ const AquapiWiring = {
 		},
 
 		onTemplateSaved: function() {
-			this.reinitDraft()
+			// insertTemplate()/restoreSnapshot() already folded their new
+			// nodes straight into the draft (and the dialog closes
+			// itself on success) - re-initializing the draft here would
+			// wipe exactly what was just added, plus anything else still
+			// unsaved. Just drop the selection.
+			this.selectedIds = []
 		},
 
 		// a single click / tap on a node toggles it in the selection set

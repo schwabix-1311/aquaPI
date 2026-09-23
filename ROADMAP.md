@@ -75,17 +75,25 @@ fine, sort/dedupe later.
   environmental, not reproduced in isolation, not investigated further.
   **Priority: high** - possibly already gone (not seen recently), worth
   a quick recheck before investing further.
-- Template insert / snapshot restore should be *draft* operations. Today
-  they commit to the live bus immediately (`instantiate_template` +
-  `save_nodes`), then `reinitDraft()` rebuilds the draft from the fresh
-  bus - silently dropping unsaved editor changes, and (with a personal
-  default graph present) resurrecting nodes the user deleted in the draft
-  but hadn't saved, ports and all. Interim fix shipped: block both while
-  `draftDirty` (commit 8a9a2db). Proper fix: API returns the new nodes
-  without persisting; `instantiate_template` takes an explicit id-set for
-  its collision check (not `bus.nodes`); the frontend folds the nodes
-  into `state.draft` as `_new`; nothing hits the bus until Save.
-  **Priority: high.**
+- Template insert / snapshot restore as *draft* operations - DONE,
+  2026-09-23. Both now return a preview instead of persisting:
+  `instantiate_template()` builds nodes without `.plugin()`, taking an
+  explicit `taken_ids`/`existing_positions` from the frontend's current
+  draft (not `bus.nodes`) for collision/overlap avoidance.
+  `restore_snapshot_into_bus()` (destructive, `bus.teardown()`-based) is
+  gone entirely, replaced by `preview_snapshot_nodes()` - a real finding
+  during this work: a node's `__init__`/`__setstate__` claims its port in
+  the *live*, global `IoRegistry` immediately (not just at `plugin()`
+  time), so a snapshot's real (non-blanked) ports meant even "just
+  constructing" a node for preview wasn't side-effect-free; the fix was
+  to stop constructing real node objects at all for snapshot preview and
+  reshape the stored dicts directly instead. The frontend folds returned
+  nodes straight into `state.draft` (same `_tempId` convention
+  `draftCreateNode()` already used - `state.draft`/`draftBaseline` no
+  longer have a `_new` flag at all, superseded earlier by a pure
+  baseline-vs-working diff, `wiringDiff.js`), and no longer calls
+  `reinitDraft()` afterward. `draftDirty` no longer blocks Insert/Restore
+  (only `saveTemplate()`'s own, differently-reasoned guard remains).
 - Macro/scene architecture - a scheduled/triggered sender of messages
   on the bus, possibly needing affected nodes to suspend their own
   listening to avoid conflicts (a "MsgControl" with suspend/overrule/

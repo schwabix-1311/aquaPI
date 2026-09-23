@@ -1360,18 +1360,23 @@ def delete_template(instance_path: str, tid: str) -> str:
     return 'not_found'
 
 
-def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
-    """ insert a template's nodes into the live bus, assigning fresh,
-        collision-free names/ids (the stored name, with a ' (2)',
+def instantiate_template(data: dict[str, Any], taken_ids: set[str],
+                         existing_positions: list[tuple[float, float]]) -> list[BusNode]:
+    """ build a template's nodes (NOT plugged into any bus - pure
+        construction, for previewing into the /wiring draft), assigning
+        fresh, collision-free names/ids (the stored name, with a ' (2)',
         ' (3)', ... suffix appended if it - or its derived id - is
-        already taken) and remapping the internal 'receives' wiring to
-        the new ids. Nodes are reconstructed via the same whitelisted
-        NODE_FACTORY used everywhere else in this module (never
-        pickle/eval). Returns the list of newly created, plugged-in
-        nodes.
+        already in 'taken_ids') and remapping the internal 'receives'
+        wiring to the new ids. Nodes are reconstructed via the same
+        whitelisted NODE_FACTORY used everywhere else in this module
+        (never pickle/eval). 'taken_ids'/'existing_positions' are supplied
+        by the caller (the frontend's current draft, live bus + anything
+        already added since) rather than read from a bus directly, so a
+        template can be inserted into a draft that already differs from
+        the live bus. Returns the list of newly constructed nodes.
     """
     entries = data.get('nodes', [])
-    used_ids = {node.id for node in bus.nodes}
+    used_ids = set(taken_ids)
     id_map: dict[str, str] = {}
     new_names: dict[str, str] = {}
 
@@ -1397,9 +1402,6 @@ def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
     NODE_BOX_WIDTH = 190
     NODE_BOX_HEIGHT = 76
     OFFSET_STEP = 40.0
-    existing_positions = [
-        (float(node.pos_x or 0.0), float(node.pos_y or 0.0)) for node in bus.nodes
-    ]
     offset_x = offset_y = 0.0
     for _ in range(50):
         collision = any(
@@ -1438,9 +1440,6 @@ def instantiate_template(bus: MsgBus, data: dict[str, Any]) -> list[BusNode]:
             # insert with a 'port already in use' error either
             state['port'] = ''
         new_nodes.append(_deserialize_node(entry['type'], state))
-
-    for node in new_nodes:
-        node.plugin(bus)
 
     return new_nodes
 
@@ -1506,46 +1505,40 @@ def delete_snapshot(db_path: str, name: str) -> bool:
         conn.close()
 
 
-def restore_snapshot_into_bus(bus: MsgBus, snapshot_rows: list[dict[str, Any]]) -> None:
-    """ replace the live bus' entire node set with the nodes stored in
-        a snapshot: tears down every currently plugged-in node first,
-        then reconstructs and plugs in every snapshot node (whitelisted
-        NODE_FACTORY only, never pickle/eval). A node that fails to
-        restore or to plug in (e.g. an unknown type from a foreign
-        export, or a driver/port error) is skipped with a log entry
-        rather than aborting the whole restore - once teardown() has
-        run, aborting would leave the live bus permanently empty
-        instead of just missing the one problematic node.
+def preview_snapshot_nodes(snapshot_rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """ reshape a snapshot's stored rows into the same dict shape the
+        REST API returns for a live node (see api._node_to_dict()), for
+        previewing into the /wiring draft. Deliberately does NOT
+        construct real node objects: a row's 'params' is already exactly
+        serialize_node()'s own output - that's how it got into the
+        snapshot in the first place, via save_wiring()/create_snapshot()
+        - so this is pure reshaping, not deserialization. This matters
+        for more than style: a real node's __init__/__setstate__ assigns
+        self.port eagerly (see PortDriverMixin._apply_port()), which
+        claims the port in the *live*, global IoRegistry immediately,
+        with no bus/plugin() involved at all - construction is not the
+        side-effect-free operation it looks like whenever a stored port
+        is non-blank (unlike a template's entries, which always are -
+        see instantiate_template()). Building plain dicts instead avoids
+        that entirely: nothing here can claim/leak a port. A row naming
+        an unknown node type (e.g. from a foreign export) is skipped and
+        reported rather than aborting the whole preview. Returns
+        (node dicts, failure messages).
     """
-    bus.teardown()
     nodes = []
     failures: list[str] = []
     for row in snapshot_rows:
-        try:
-            nodes.append(_deserialize_node(row['type'], row['params']))
-        except DriverError as ex:
-            log.error(
-                'restore_snapshot_into_bus: failed to restore node %r (type %r), skipping: %s',
-                row.get('id'), row.get('type'), ex.msg)
-            failures.append(f"{row.get('id')!r} ({row.get('type')}): {ex.msg}")
-        except (ValueError, KeyError, TypeError) as ex:
-            log.exception(
-                'restore_snapshot_into_bus: failed to restore node %r (type %r), skipping',
-                row.get('id'), row.get('type'))
-            failures.append(f"{row.get('id')!r} ({row.get('type')}): {ex}")
-    for node in nodes:
-        try:
-            node.plugin(bus)
-        except DriverError as ex:
-            log.error('restore_snapshot_into_bus: failed to plug in node %r, skipping: %s',
-                      getattr(node, 'id', '?'), ex.msg)
-            failures.append(f"{getattr(node, 'id', '?')!r}: {ex.msg}")
-        except (ValueError, KeyError, TypeError) as ex:
-            log.exception('restore_snapshot_into_bus: failed to plug in node %r, skipping',
-                          getattr(node, 'id', '?'))
-            failures.append(f"{getattr(node, 'id', '?')!r}: {ex}")
-
-    _notify_startup_failures(failures)
+        cls = NODE_FACTORY.get(row['type'])
+        if not cls:
+            log.error('preview_snapshot_nodes: unknown node type %r for %r, skipping',
+                      row.get('type'), row.get('id'))
+            failures.append(f"{row.get('id')!r}: unknown node type {row.get('type')!r}")
+            continue
+        item = dict(row['params'])
+        item['type'] = row['type']
+        item['role'] = str(cls.ROLE).rsplit('.', 1)[1]
+        nodes.append(item)
+    return nodes, failures
 
 
 # --- users / authentication -------------------------------------------

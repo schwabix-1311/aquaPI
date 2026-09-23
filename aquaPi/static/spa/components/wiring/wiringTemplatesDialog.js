@@ -42,7 +42,7 @@ const WiringTemplatesDialog = {
         <v-btn v-if="tpl.source !== 'predefined'" icon variant="text" color="grey-darken-1" @click="deleteTemplate(tpl)" :title="$t('misc.actions.delete')">
 											<v-icon>mdi-delete</v-icon>
 										</v-btn>
-        <v-btn icon variant="text" color="grey-darken-1" :disabled="draftDirty" @click="insertTemplate(tpl)" :title="$t('pages.wiring.insert')">
+        <v-btn icon variant="text" color="grey-darken-1" @click="insertTemplate(tpl)" :title="$t('pages.wiring.insert')">
 											<v-icon>mdi-tray-arrow-down</v-icon>
 										</v-btn>
 									</template>
@@ -93,7 +93,7 @@ const WiringTemplatesDialog = {
 									<v-list-item-title>{{ snap.name }}</v-list-item-title>
 									<v-list-item-subtitle>{{ snap.created_at }}</v-list-item-subtitle>
 									<template #append>
-        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring || draftDirty" @click="restoreSnapshot(snap)" :title="$t('pages.wiring.restore')">
+        <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="restoreSnapshot(snap)" :title="$t('pages.wiring.restore')">
 											<v-icon>mdi-restore</v-icon>
 										</v-btn>
         <v-btn icon variant="text" color="grey-darken-1" :disabled="restoring" @click="deleteSnapshot(snap)" :title="$t('misc.actions.delete')">
@@ -157,8 +157,10 @@ const WiringTemplatesDialog = {
 			// temp_id (e.g. 'draft-1') - capture_node_template() only
 			// knows about live, persisted nodes, so selecting one and
 			// saving as a template would otherwise reach the backend and
-			// fail with a raw "Unknown node id: draft-1". Same guard
-			// insertTemplate() already has, for the same reason.
+			// fail with a raw "Unknown node id: draft-1". Unlike
+			// insertTemplate()/restoreSnapshot() (which only ever fold
+			// nodes INTO the draft, no live ids involved), this action
+			// genuinely can't run against a dirty draft yet.
 			if (this.draftDirty) {
 				this.error = this.$t('pages.wiring.draftDirtyBlocksTemplates')
 				this.$toast.error(this.error)
@@ -183,11 +185,6 @@ const WiringTemplatesDialog = {
 			}
 		},
 		async insertTemplate(tpl) {
-			if (this.draftDirty) {
-				this.error = this.$t('pages.wiring.draftDirtyBlocksTemplates')
-				this.$toast.error(this.error)
-				return
-			}
 			const result = await this.wiringStore.insertTemplate({id: tpl.id})
 			if (!result.ok) {
 				this.error = result.error
@@ -230,11 +227,6 @@ const WiringTemplatesDialog = {
 			}
 		},
 		async restoreSnapshot(snap) {
-			if (this.draftDirty) {
-				this.error = this.$t('pages.wiring.draftDirtyBlocksTemplates')
-				this.$toast.error(this.error)
-				return
-			}
 			const ok = await this.$confirm(this.$t('pages.wiring.confirmRestoreSnapshot', {name: snap.name}), {
 				confirmLabel: this.$t('pages.wiring.restore'),
 				confirmColor: 'error',

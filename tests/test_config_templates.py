@@ -97,6 +97,16 @@ def _login(client, username, password):
                        follow_redirects=False)
 
 
+def _existing_from_bus(bus):
+    """ build the '/api/templates/<name>/insert' 'existing' payload a
+        real frontend draft would send - id + position of every node it
+        currently has, live or itself still unsaved - so template-insert
+        collision/overlap avoidance has something to avoid.
+    """
+    return [{'id': n.id, 'pos_x': getattr(n, 'pos_x', 0.0) or 0.0,
+             'pos_y': getattr(n, 'pos_y', 0.0) or 0.0} for n in bus.nodes]
+
+
 # --- templates: capture/list/get/delete ---------------------------------
 
 
@@ -350,7 +360,7 @@ def test_insert_localises_the_new_node_names(client, users, bus, template_lib):
     _login(client, 'admin1', 'adminPass123')
 
     resp = client.post('/api/templates/temp-heater/insert?lang=en')
-    assert resp.status_code == HTTPStatus.CREATED
+    assert resp.status_code == HTTPStatus.OK
     assert sorted(n['name'] for n in resp.get_json()) == ['Heater ctrl', 'Water']
 
 
@@ -364,8 +374,9 @@ def test_insert_template_creates_new_ids_and_wiring(client, users, bus):
         'node_ids': ['wasser', 'heizen', 'heizstab'],
     })
 
-    resp = client.post('/api/templates/pH-Regelung/insert')
-    assert resp.status_code == HTTPStatus.CREATED
+    resp = client.post('/api/templates/pH-Regelung/insert',
+                       json={'existing': _existing_from_bus(bus)})
+    assert resp.status_code == HTTPStatus.OK
     new_nodes = resp.get_json()
     assert len(new_nodes) == 3
 
@@ -374,12 +385,16 @@ def test_insert_template_creates_new_ids_and_wiring(client, users, bus):
     assert bus.get_node('heizen') is not None
     assert bus.get_node('heizstab') is not None
 
-    # new nodes got fresh, non-colliding ids (suffix ' (2)')
+    # new nodes got fresh, non-colliding ids (suffix ' (2)') - and were
+    # only ever built, never actually attached to the live bus
     new_ids = {n['id'] for n in new_nodes}
     assert 'wasser' not in new_ids
     assert 'heizen' not in new_ids
     assert 'heizstab' not in new_ids
     assert len(new_ids) == 3
+    assert len(bus.nodes) == 4
+    for new_id in new_ids:
+        assert bus.get_node(new_id) is None
 
     # internal wiring must have been remapped to the new ids, not the
     # original ones
@@ -429,30 +444,42 @@ def test_insert_template_with_hw_port_does_not_conflict(tmp_path):
         # the captured template must not carry the live, still-used port
         assert resp.get_json()['data']['nodes'][0]['state']['port'] == ''
 
-        resp = client.post('/api/templates/Sensor/insert')
-        assert resp.status_code == HTTPStatus.CREATED
+        resp = client.post('/api/templates/Sensor/insert',
+                           json={'existing': _existing_from_bus(bus)})
+        assert resp.status_code == HTTPStatus.OK
         new_nodes = resp.get_json()
         assert len(new_nodes) == 1
         assert new_nodes[0]['port'] == ''
 
-        # original node must still be untouched and still own its port
+        # original node must still be untouched and still own its port -
+        # and the preview must not have attached anything to the bus
         assert bus.get_node('temperatur') is not None
         assert bus.get_node('temperatur').port == 'DS1820 #1'
+        assert len(bus.nodes) == 1
     finally:
         bus.teardown()
 
 
-def test_insert_template_twice_avoids_collision(client, users):
+def test_insert_template_twice_avoids_collision(client, users, bus):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/templates/', json={'name': 'X', 'node_ids': ['wasser']})
 
-    resp1 = client.post('/api/templates/X/insert')
-    resp2 = client.post('/api/templates/X/insert')
-    assert resp1.status_code == HTTPStatus.CREATED
-    assert resp2.status_code == HTTPStatus.CREATED
-
+    resp1 = client.post('/api/templates/X/insert', json={'existing': _existing_from_bus(bus)})
+    assert resp1.status_code == HTTPStatus.OK
     id1 = resp1.get_json()[0]['id']
+
+    # nothing persisted, so a second insert only avoids colliding with
+    # the first if the caller's draft (now also holding resp1's still-
+    # unsaved node) is passed as 'existing' again - exactly what the
+    # frontend does when inserting a second template into the same draft
+    existing2 = _existing_from_bus(bus) + [
+        {'id': n['id'], 'pos_x': n.get('pos_x', 0.0), 'pos_y': n.get('pos_y', 0.0)}
+        for n in resp1.get_json()
+    ]
+    resp2 = client.post('/api/templates/X/insert', json={'existing': existing2})
+    assert resp2.status_code == HTTPStatus.OK
     id2 = resp2.get_json()[0]['id']
+
     assert id1 != id2
 
 
@@ -482,7 +509,7 @@ def test_instantiate_template_remaps_alert_condition_node_id_on_collision(bus):
     ]}
     tmp_bus.teardown()
 
-    new_nodes = db.instantiate_template(bus, data)
+    new_nodes = db.instantiate_template(data, {n.id for n in bus.nodes}, [])
     new_sensor = next(n for n in new_nodes if isinstance(n, AnalogInput))
     new_alert = next(n for n in new_nodes if isinstance(n, Alert))
     assert new_sensor.id != 'wasser'
@@ -507,13 +534,16 @@ def test_insert_template_unknown_returns_404(client, users):
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_insert_template_persists_wiring(client, users, app):
+def test_insert_template_does_not_persist_wiring(client, users, app, bus):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/templates/', json={'name': 'X', 'node_ids': ['wasser']})
     saved_before = app.extensions['machineroom'].saved
+    nodes_before = len(bus.nodes)
 
-    client.post('/api/templates/X/insert')
-    assert app.extensions['machineroom'].saved == saved_before + 1
+    resp = client.post('/api/templates/X/insert', json={'existing': _existing_from_bus(bus)})
+    assert resp.status_code == HTTPStatus.OK
+    assert app.extensions['machineroom'].saved == saved_before
+    assert len(bus.nodes) == nodes_before
 
 
 # --- snapshots: save/list/get/delete ------------------------------------
@@ -575,7 +605,7 @@ def test_delete_snapshot_unknown_returns_404(client, users):
 # --- snapshots: restore (identity round-trip) ---------------------------
 
 
-def test_restore_snapshot_round_trip(client, users, bus):
+def test_restore_snapshot_preview_reflects_snapshot_not_live_bus(client, users, bus):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/config/snapshots', json={'name': 'backup1'})
 
@@ -592,12 +622,18 @@ def test_restore_snapshot_round_trip(client, users, bus):
     restored = resp.get_json()
     assert len(restored) == 4
 
+    # the preview reflects the snapshot as captured, unaffected by the
+    # live mutations made since
     ids = {n['id'] for n in restored}
     assert ids == {'wasser', 'heizen', 'heizstab', 'warnungen'}
     assert 'luft' not in ids
 
     heizen = next(n for n in restored if n['id'] == 'heizen')
     assert heizen['setpoint'] == 24.0
+
+    # ...but it's only a preview - the live bus itself is untouched
+    assert bus.get_node('luft') is not None
+    assert bus.get_node('heizen').setpoint == 99.0
 
 
 def test_restore_snapshot_requires_admin(client, users):
@@ -610,28 +646,30 @@ def test_restore_snapshot_requires_admin(client, users):
     assert resp.status_code == HTTPStatus.FORBIDDEN
 
 
-def test_restore_snapshot_persists_wiring(client, users, app):
+def test_restore_snapshot_does_not_persist_wiring(client, users, app):
     _login(client, 'admin1', 'adminPass123')
     client.post('/api/config/snapshots', json={'name': 'backup1'})
     saved_before = app.extensions['machineroom'].saved
 
-    client.post('/api/config/snapshots/backup1/restore')
-    assert app.extensions['machineroom'].saved == saved_before + 1
+    resp = client.post('/api/config/snapshots/backup1/restore')
+    assert resp.status_code == HTTPStatus.OK
+    assert app.extensions['machineroom'].saved == saved_before
 
 
-def test_restore_snapshot_skips_conflicting_port_instead_of_emptying_bus():
+def test_preview_snapshot_nodes_never_touches_ports():
     """ regression test: a snapshot containing two nodes that (e.g. due
         to a previous bug, or a manually edited export) claim the same
         hardware/driver port used to raise an uncaught
-        DriverPortInuseError, which aborted restore_snapshot_into_bus()
-        *after* it had already torn down the live bus - leaving it
-        permanently empty (GET /api/nodes/ then 500s forever). The
-        conflicting node must now be skipped instead, so the rest of
-        the wiring (and therefore the live bus) survives the restore.
+        DriverPortInuseError when the old restore_snapshot_into_bus()
+        constructed/plugged them both into the live bus (port claiming
+        happens eagerly in a node's own __init__/__setstate__, not just
+        at plugin() time - see PortDriverMixin._apply_port()).
+        preview_snapshot_nodes() never constructs real node objects at
+        all (pure dict reshaping), so both nodes must come back intact,
+        still carrying their (conflicting) port, with no exception
+        raised and nothing claimed in the real IoRegistry.
     """
-    bus = MsgBus(threaded=False)
     sensor = AnalogInput('Temperatur', 'DS1820 #1', 25.0, '°C')
-    sensor.plugin(bus)
     try:
         snapshot_rows = [
             {'id': 'temperatur', 'type': 'AnalogInput',
@@ -640,13 +678,12 @@ def test_restore_snapshot_skips_conflicting_port_instead_of_emptying_bus():
              'params': dict(sensor.__getstate__(), name='Temperatur 2')},
         ]
 
-        # must not raise, even though both entries claim 'DS1820 #1'
-        db.restore_snapshot_into_bus(bus, snapshot_rows)
+        nodes, failures = db.preview_snapshot_nodes(snapshot_rows)
 
-        # at least the first node must have survived the restore -
-        # the bus must not be left permanently empty
-        assert len(bus.nodes) == 1
-        assert bus.get_node('temperatur') is not None
-        assert bus.get_node('temperatur').port == 'DS1820 #1'
+        assert failures == []
+        assert len(nodes) == 2
+        assert {n['port'] for n in nodes} == {'DS1820 #1'}
+        assert {n['type'] for n in nodes} == {'AnalogInput'}
+        assert {n['role'] for n in nodes} == {'IN_ENDP'}
     finally:
-        bus.teardown()
+        sensor.port = ''

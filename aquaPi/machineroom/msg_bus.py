@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace as dataclass_replace
 from queue import Queue, Empty
 from enum import (Enum, Flag, auto)
 from typing import (Iterable, Any)
-from threading import (Event, Lock, Thread)
+from threading import (Event, Lock, RLock, Thread)
 
 from .msg_types import (Msg, MsgInfra, MsgHello, MsgData, MsgBye)
 
@@ -469,6 +469,17 @@ class MsgBus:
         # first actually consume each change, starving the others
         self._change_subscribers: list[Queue] = []
         self._subscribers_lock = Lock()
+        # guards self.nodes only - NOT anything that can block on another
+        # thread (a listener's .listen() can legitimately do that, e.g.
+        # SunCtrl/FadeCtrl joining their own fader thread, which itself
+        # posts back onto this bus - holding this lock across such a call
+        # deadlocks the instant that other thread also needs the lock to
+        # make progress; caught exactly that way while first writing this
+        # fix). So this only ever wraps a quick, non-blocking read/mutation
+        # of self.nodes itself - never the n.listen(msg) loop. RLock, not
+        # Lock: still reentrant-safe if register()/unregister() are ever
+        # called from within a dispatch in the future.
+        self._dispatch_lock = RLock()
         self._queue: Queue | None = None
 
         if threaded:
@@ -499,9 +510,13 @@ class MsgBus:
             raise Exception(f'Duplicate node: name {node.name}, id {node.id}')
 
         if self._queue:
-            # empty the queue before nodes change
+            # empty the queue before nodes change - outside the lock
+            # below: draining only happens via _dispatch()'s worker
+            # thread, which itself needs that same lock per message, so
+            # holding it here while waiting would deadlock
             self._queue.join()
-        self.nodes.add(node)
+        with self._dispatch_lock:
+            self.nodes.add(node)
 
     def unregister(self, node: BusNode):
         """ Remove BusNode from bus. Do not call directly,
@@ -509,9 +524,10 @@ class MsgBus:
         """
         if node:
             if self._queue:
-                # empty the queue before nodes change
+                # empty the queue before nodes change (see register())
                 self._queue.join()
-            self.nodes.remove(node)
+            with self._dispatch_lock:
+                self.nodes.remove(node)
 
     def post(self, msg: Msg) -> None:
         """ Put message into the queue or dispatch in a
@@ -538,14 +554,18 @@ class MsgBus:
         """
         # dispatch the message
         log.verbose('%s =>', str(msg))
-        rcv_nodes: set[BusNode] = set()
 
-        # broadcast message: all but sender
-        rcv_nodes = {n for n in self.nodes if n.id != msg.sender}
-        # ... and apply each node's filter for non-Infra msgs
-        if not isinstance(msg, MsgInfra):
-            rcv_nodes = {n for n in rcv_nodes
-                         if {msg.sender, '*'}.intersection(n.receives)}
+        # snapshot self.nodes under the lock (register()/unregister()
+        # mutate it from other threads) - released again immediately
+        # after, on purpose: n.listen(msg) below can legitimately block
+        # on another thread (e.g. SunCtrl/FadeCtrl joining their own
+        # fader thread), which must never happen while holding this lock
+        with self._dispatch_lock:
+            rcv_nodes: set[BusNode] = {n for n in self.nodes if n.id != msg.sender}
+            # ... and apply each node's filter for non-Infra msgs
+            if not isinstance(msg, MsgInfra):
+                rcv_nodes = {n for n in rcv_nodes
+                             if {msg.sender, '*'}.intersection(n.receives)}
 
         log.debug('===== %s to be received by: %s', str(msg), str(rcv_nodes))
 

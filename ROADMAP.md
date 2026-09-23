@@ -71,10 +71,21 @@ fine, sort/dedupe later.
   **Priority: medium** - grouped with the other Shelly-input work
   (buttons, see the momentary-push-button entry in the hardware
   coverage section below) as "finish off remaining Shelly input types."
-- Rare `SunCtrl` fader thread "join before start" flake - confirmed
-  environmental, not reproduced in isolation, not investigated further.
-  **Priority: high** - possibly already gone (not seen recently), worth
-  a quick recheck before investing further.
+- `SunCtrl`/`FadeCtrl` fader thread "join before start" flake - DONE,
+  2026-09-23. Was actually a genuine `MsgBus` concurrency bug, not the
+  "environmental" flake first assumed (confirmed via CI history: recurred
+  3x on idle GitHub-hosted runners since 2026-08-13, no concurrent load
+  involved). `_dispatch_one()`'s default unthreaded dispatch runs on
+  whatever thread calls `post()`, including a node's own background
+  thread - `SunCtrl`/`FadeCtrl`'s fader thread posting progress updates
+  could race the main thread's `load_wiring()` replay cascade inside the
+  same node's `listen()`. Fixed with a per-node lock around just the
+  join-old/create-new/start-new fader-thread sequence (not a bus-wide
+  lock around dispatch - a first attempt at that deadlocked immediately,
+  since a listener blocking on `.join()` while holding a lock its own
+  background thread needs to post progress is a guaranteed circular
+  wait; caught before shipping, see `project_sunctrl_fader_thread_flake`
+  memory for the full story).
 - Template insert / snapshot restore as *draft* operations - DONE,
   2026-09-23. Both now return a preview instead of persisting:
   `instantiate_template()` builds nodes without `.plugin()`, taking an

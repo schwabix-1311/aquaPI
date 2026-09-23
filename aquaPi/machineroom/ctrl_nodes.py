@@ -8,7 +8,7 @@ from time import (time, sleep)
 import math
 import random
 from datetime import timedelta
-from threading import Thread
+from threading import RLock, Thread
 
 from .msg_bus import (Msg, MsgData)
 from .msg_bus import (BusListener, BusRole, DataRange, HeartbeatMixin, MsgBus, Setting)
@@ -367,6 +367,19 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
                 self.fade_out = fade_out
         self._fader_thread: Thread | None = None
         self._fader_stop: bool = False
+        # serializes the join-old/create-and-start-new sequence in
+        # listen() below against itself - without it, two concurrent
+        # listen() calls (e.g. during load_wiring()'s replay cascade) can
+        # both read _fader_thread as the same not-yet-started Thread and
+        # one of them .join()s it before the other's .start() ran
+        # ("cannot join thread before it is started"). Never held across
+        # anything that can block on the fader thread itself making
+        # progress - _fader() below doesn't need this lock at all, so
+        # .join()ing it while holding this is safe. RLock (not Lock): the
+        # block also calls self.post(), which - if it ever cascaded back
+        # into this same node's listen() on the same thread - must not
+        # deadlock on its own lock.
+        self._fader_lock = RLock()
         if not _cont:
             self.data = 0.0
         self.target: float = self.data
@@ -396,21 +409,22 @@ class FadeCtrl(HeartbeatMixin, ControllerNode):
             log.verbose('FadeCtrl: got %f', msg.data)
             self.target = float(msg.data)
             if self.data != self.target:
-                if self._fader_thread:
-                    self._fader_stop = True
-                    self._fader_thread.join()
-                    self.post(MsgData(self.id, round(self.data, 4)))  # start of new ramp
+                with self._fader_lock:
+                    if self._fader_thread:
+                        self._fader_stop = True
+                        self._fader_thread.join()
+                        self.post(MsgData(self.id, round(self.data, 4)))  # start of new ramp
 
-                # fade_time or fade_out can be 0 -> switch to target
-                if (self.data < self.target and not self.fade_time) \
-                        or (self.data > self.target and not self.fade_out):
-                    self.data = self.target
-                    log.info('FadeCtrl %s: output %f', self.id, self.data)
-                    self.post(MsgData(self.id, self.data))
-                else:
-                    log.debug('_fader %f -> %f', self.data, self.target)
-                    self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
-                    self._fader_thread.start()
+                    # fade_time or fade_out can be 0 -> switch to target
+                    if (self.data < self.target and not self.fade_time) \
+                            or (self.data > self.target and not self.fade_out):
+                        self.data = self.target
+                        log.info('FadeCtrl %s: output %f', self.id, self.data)
+                        self.post(MsgData(self.id, self.data))
+                    else:
+                        log.debug('_fader %f -> %f', self.data, self.target)
+                        self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
+                        self._fader_thread.start()
 
         super().listen(msg)
 
@@ -537,6 +551,8 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
             self.xscend = xscend.total_seconds() / 60 / 60
         self._fader_thread: Thread | None = None
         self._fader_stop: bool = False
+        # see FadeCtrl._fader_lock's comment - same reasoning, same fix
+        self._fader_lock = RLock()
         self._high: float = 0.0
         self.clouds: list[Cloud] = []
         self.cloudiness: int = 0
@@ -568,19 +584,20 @@ class SunCtrl(HeartbeatMixin, ControllerNode):
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             log.verbose('SunCtrl: got %f', msg.data)
-            if self._fader_thread:
-                self._fader_stop = True
-                self._fader_thread.join()
-            self.target = float(msg.data)
-            if self.target:
-                self._high = self.target
-                self.cloudiness = int(random.random() * 7.5)
-                log.info('SunCtrl: cloudiness %d', self.cloudiness)
+            with self._fader_lock:
+                if self._fader_thread:
+                    self._fader_stop = True
+                    self._fader_thread.join()
+                self.target = float(msg.data)
+                if self.target:
+                    self._high = self.target
+                    self.cloudiness = int(random.random() * 7.5)
+                    log.info('SunCtrl: cloudiness %d', self.cloudiness)
 
-            if self.target != self.data:
-                log.debug('_fader %f -> %f', self.data, self.target)
-                self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
-                self._fader_thread.start()
+                if self.target != self.data:
+                    log.debug('_fader %f -> %f', self.data, self.target)
+                    self._fader_thread = Thread(name=self.id, target=self._fader, daemon=True)
+                    self._fader_thread.start()
 
         super().listen(msg)
 

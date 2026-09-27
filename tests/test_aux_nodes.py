@@ -354,6 +354,40 @@ def test_auto_scale_does_not_calibrate_before_duration_elapses():
     assert len(node._calib_samples) > 0   # accumulating, just not finished
 
 
+def test_calib_remaining_seconds_counts_down_while_calibrating():
+    node = VolatilityAux('StdDev', 'sensor', samples=3, auto_scale=True)
+    node._calib_start = time.time() - 3600   # 1h into the 24h window
+    _feed(node, [24.9, 25.0, 25.1])
+    state = node.__getstate__()
+    assert state['calibrating'] is True
+    remaining = state['calib_remaining_seconds']
+    # ~23h left - generous bounds against test-run timing jitter
+    assert 23 * 3600 - 5 < remaining < 23 * 3600 + 5
+
+
+def test_calib_remaining_seconds_is_none_once_calibrated():
+    node = VolatilityAux('StdDev', 'sensor', samples=3, auto_scale=True)
+    _feed(node, [24.9, 25.0, 25.1])
+    node._calib_start = time.time() - VolatilityAux._AUTO_SCALE_DURATION - 1
+    node.listen(MsgData('sensor', 25.05))   # completes calibration
+    assert node._calibrated is True
+
+    state = node.__getstate__()
+    assert state['calibrating'] is False
+    assert state['calib_remaining_seconds'] is None
+
+
+def test_calib_remaining_seconds_is_none_before_the_clock_starts():
+    # e.g. right after loading an old pre-24h-design save with auto_scale
+    # on but no persisted calib_start (see the setstate default-for-pre-
+    # existing-saved-nodes tests below) - nothing to count down from yet
+    node = VolatilityAux('StdDev', 'sensor', auto_scale=True)
+    node._calib_start = None
+    state = node.__getstate__()
+    assert state['calibrating'] is True
+    assert state['calib_remaining_seconds'] is None
+
+
 def test_auto_scale_calibrates_from_p90_once_duration_elapses():
     node = VolatilityAux('StdDev', 'sensor', samples=2, auto_scale=True)
     # samples=2 makes each window's raw stddev = |a-b|/2 - feeding this

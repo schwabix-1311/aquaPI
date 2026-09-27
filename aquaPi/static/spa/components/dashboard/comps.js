@@ -63,8 +63,19 @@ const AnyNode = {
 			// VolatilityAux's auto_scale calibration now takes up to 24h (was a
 			// single instant) - node.calibrating (only ever set by that node
 			// type) says so instead of showing the meaningless -1 sentinel
-			// every not-yet-primed AuxNode starts at
+			// every not-yet-primed AuxNode starts at. calib_remaining_seconds
+			// is null right after arming (the clock hasn't started yet) or
+			// once calibrated - falls back to the plain message then.
 			if (node.calibrating) {
+				if (node.calib_remaining_seconds != null) {
+					// humanPeriod() doesn't round - feed it a clean whole-hour
+					// ms value (ceil, not round: never show "0 h" while still
+					// genuinely counting down) instead of the raw fractional
+					// seconds, which would otherwise print as e.g. "23.0002 h"
+					const hoursLeft = Math.ceil(node.calib_remaining_seconds / 3600)
+					return this.$t('dashboard.widget.stdDevAux.calibratingWithRemaining',
+						{remaining: this.humanPeriod(hoursLeft * 3600 * 1000)})
+				}
 				return this.$t('dashboard.widget.stdDevAux.calibrating')
 			}
 			switch (node.data_range) {

@@ -435,8 +435,16 @@ class VolatilityAux(SingleInAux):
         state["calib_samples"] = self._calib_samples
         # frontend-facing: /wiring and the dashboard show "still
         # calibrating..." instead of a (still meaningless) data value
-        # while this is true, see comps.js's AnyNode.value()
+        # while this is true, see comps.js's AnyNode.value(). Computed
+        # here (not left to the frontend) so the frontend doesn't need
+        # to know _AUTO_SCALE_DURATION - None whenever there's nothing
+        # to show yet (not calibrating, or calibrating but the clock
+        # hasn't started - e.g. right after loading an old pre-24h-
+        # design save with no persisted calib_start, see __setstate__)
         state["calibrating"] = self.auto_scale and not self._calibrated
+        state["calib_remaining_seconds"] = (
+            max(0.0, self._AUTO_SCALE_DURATION - (time.time() - self._calib_start))
+            if state["calibrating"] and self._calib_start is not None else None)
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:

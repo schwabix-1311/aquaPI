@@ -288,6 +288,7 @@ export default
 			},
 			stdDevAux: {
 				calibrating: 'Kalibriere noch...',
+				calibratingWithRemaining: 'Kalibriere, noch {remaining} ...',
 			},
 			sunCtrl: {
 				// odd cloudiness -> shorter, darker clouds (Cloud class,

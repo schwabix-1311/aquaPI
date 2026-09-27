@@ -4,6 +4,7 @@ from abc import ABC
 from collections import deque
 import logging
 import statistics
+import time
 from typing import (Callable, Iterable, Any)
 
 from .msg_types import (Msg, MsgData)
@@ -170,15 +171,15 @@ class ScaleAux(SingleInAux):
         return schema
 
 
-class StdDevAux(SingleInAux):
-    """ Standard deviation of a signal's N most recent readings - e.g.
-        flags reduced water flow via increased temperature volatility
-        (heater cycling not mixed away fast enough when circulation is
-        weak). Pair with an AlertAbove watching this node's output; its
-        `duration` field should be sized well beyond any normal settling
-        transient (e.g. a PID walking off drift after a disturbance), so
-        only variance that stays elevated for longer than that trips the
-        alert.
+class VolatilityAux(SingleInAux):
+    """ Standard deviation or variance (see `metric`) of a signal's N most
+        recent readings - e.g. flags reduced water flow via increased
+        temperature volatility (heater cycling not mixed away fast enough
+        when circulation is weak). Pair with an AlertAbove watching this
+        node's output; its `duration` field should be sized well beyond
+        any normal settling transient (e.g. a PID walking off drift after
+        a disturbance), so only volatility that stays elevated for longer
+        than that trips the alert.
 
         Options:
             samples - number of most recent readings the standard
@@ -219,42 +220,109 @@ class StdDevAux(SingleInAux):
                      sensor whose range straddles zero), blowing up for
                      reasons unrelated to actual variability.
             auto_scale - if set, `scale` is computed once (not
-                     continuously - see below) from the first raw stddev
-                     this node ever computes, targeting `_AUTO_SCALE_TARGET`,
-                     then left alone; disable to set `scale` by hand
-                     instead. Deliberately a *one-time* calibration, not
-                     a continuously-adapting one: if `scale` kept being
-                     recomputed from a recent/current value, the display
-                     would auto-normalize toward a constant target
-                     regardless of whether things are actually fine or
-                     bad right now - exactly the kind of change this node
-                     exists to surface, silently masked by the very
-                     mechanism meant to make it visible. A one-time
+                     continuously - see below) from the 90th percentile of
+                     every raw stddev this node computes over the first
+                     `_AUTO_SCALE_DURATION` of real time, targeting
+                     `_AUTO_SCALE_TARGET`, then left alone; disable to set
+                     `scale` by hand instead. Deliberately a *one-time*
+                     calibration, not a continuously-adapting one: if
+                     `scale` kept being recomputed from a recent/current
+                     value, the display would auto-normalize toward a
+                     constant target regardless of whether things are
+                     actually fine or bad right now - exactly the kind of
+                     change this node exists to surface, silently masked
+                     by the very mechanism meant to make it visible.
+                     Originally captured from a single instant (the very
+                     first raw stddev) rather than a window - dropped
+                     after real tank telemetry showed that instant landing
+                     anywhere from the 0th to ~100th percentile of a
+                     normal day's variation depending purely on luck, once
+                     inflating `scale` ~2.7x and making entirely ordinary
+                     readings look alarming. A 24h window was chosen
+                     specifically because it's the shortest span that
+                     can't be biased by *which half of the day* it starts
+                     in - anything shorter (checked empirically down to 1h)
+                     still swings 1.5x-3x+ depending on start time, and a
+                     window that happens to land exactly on half a day is
+                     *worse* than a somewhat shorter one because it always
+                     captures either the day or the night half, never a
+                     mix. The 90th percentile (not the mean) targets the
+                     same intent as the original single-sample capture -
+                     "a representative ceiling of ordinary variation", not
+                     "the middle of it" - a plain mean sits at the
+                     distribution's median, which would put roughly half
+                     of all ordinary quiet-tank readings above the
+                     `_AUTO_SCALE_TARGET` reference line, defeating the
+                     point of having a stable reference at all. A
                      calibration risks only its *starting* assumption (the
-                     first window happens to be representative/"sane") -
+                     first day happens to be representative/"sane") -
                      accepted deliberately: if it isn't, the monitored
                      signal still has to get *worse than that* to raise
                      the flag, which is a materially smaller problem than
                      an alert that can never fire because it keeps
                      rescaling itself back to "normal".
+            metric  - which statistic to compute over the window:
+                     'stddev' (population standard deviation, the
+                     original/default) or 'variance' (population
+                     variance, i.e. stddev²). Added after checking both
+                     against real tank telemetry from an actual ~3h
+                     flow-blockage event: variance separated that event
+                     from ordinary quiet-tank noise by ~17.8x (its
+                     quiet-period p90 vs. its peak during the event),
+                     vs. stddev's ~4.2x - squaring punishes a large,
+                     sustained excursion much harder than ordinary small
+                     jitter, whereas stddev's square root partly undoes
+                     that emphasis. Shares the same `scale`/`auto_scale`
+                     machinery unchanged; variance's raw values are just
+                     much smaller (squared units), so its calibrated
+                     `scale` ends up correspondingly larger for the same
+                     `_AUTO_SCALE_TARGET` - no special-casing needed.
+                     Switching `metric` on a live, already-calibrated
+                     node re-arms auto_scale (see the property setter) -
+                     a scale tuned for stddev is meaningless for
+                     variance's very different numeric range, and vice
+                     versa.
     """
     data_range = DataRange.ANALOG
+
+    _METRICS = ('stddev', 'variance')
 
     # the same rule of thumb folded into the 'scale' field's own label
     # (i18n/locales/*.js's stdDevScale) - see that field's docstring bullet
     _AUTO_SCALE_TARGET = 10
+    # real (wall-clock) seconds to accumulate raw metric readings over
+    # before freezing `scale` from their 90th percentile - see
+    # auto_scale's docstring bullet for why 24h and not shorter
+    _AUTO_SCALE_DURATION = 24 * 60 * 60
 
     def __init__(self, name: str, receives: str, samples: int = 30,
-                 scale: float = 1.0, auto_scale: bool = False,
-                 _cont: bool = False):
+                 metric: str = 'stddev', scale: float = 1.0,
+                 auto_scale: bool = False, _cont: bool = False):
         super().__init__(name, receives, _cont=_cont)
         self.samples = samples   # via the property below - always int
+        # bypass the metric property setter here - see its docstring,
+        # same "construction must not re-arm" reasoning as auto_scale
+        self._metric: str = metric
         self.scale: float = scale
         # only ever transitions False -> True, once, for this node
-        # instance's lifetime (see auto_scale's docstring) - a process
-        # restart (a fresh __init__ via __setstate__) is the only way to
-        # re-arm it, deliberately not persisted
+        # instance's lifetime (see auto_scale's docstring). Unlike the
+        # single-instant design this replaced, calibration is no longer
+        # cheap (up to 24h of real time), so - unlike that design's
+        # comment used to say - a process restart must NOT re-arm it:
+        # __setstate__ below restores _calibrated/_calib_start/
+        # _calib_samples exactly as they were, so an ordinary service
+        # restart during normal operation (a deploy, an update) neither
+        # throws away a completed calibration nor loses progress on one
+        # still running. Only a live False->True re-toggle of auto_scale
+        # (the setter below) re-arms it.
         self._calibrated: bool = False
+        # wall-clock (time.time(), NOT monotonic - must survive a
+        # restart's clock reset) timestamp of when the current
+        # calibration attempt armed; None while auto_scale is off
+        self._calib_start: float | None = time.time() if auto_scale else None
+        # raw stddev readings accumulated since _calib_start; p90'd and
+        # discarded once _AUTO_SCALE_DURATION elapses (_finish_calibration)
+        self._calib_samples: list[float] = []
         # bypass the auto_scale property setter here - constructing/
         # restoring a node must NOT clear an already-calibrated (or
         # user-set) scale, only a live re-toggle should (see the setter)
@@ -281,7 +349,7 @@ class StdDevAux(SingleInAux):
         # samples this way made len(self._values) >= self.samples
         # permanently unsatisfiable (the deque can never hold more than
         # its original, smaller maxlen), silently killing the node until
-        # a full process restart - observed in production, StdDevAux
+        # a full process restart - observed in production, VolatilityAux
         # stopped posting for 22+ hours after exactly this kind of edit.
         # deque(iterable, maxlen=N) keeps only the last N items for free,
         # correctly handling both directions (and __init__ calling this
@@ -300,28 +368,75 @@ class StdDevAux(SingleInAux):
         # __init__ above sets self._auto_scale directly and never reaches
         # here) re-arms calibration and clears whatever scale currently
         # holds, so the dashboard doesn't keep showing a stale pre-toggle
-        # value until the next reading happens to recalibrate it
+        # value until calibration completes again
         if value and not self._auto_scale:
-            self._calibrated = False
-            self.scale = 1.0
+            self._rearm_calibration()
         self._auto_scale = value
 
+    @property
+    def metric(self) -> str:
+        return self._metric
+
+    @metric.setter
+    def metric(self, value: str) -> None:
+        # a live edit (e.g. via /wiring, on an already-running node -
+        # __init__ above sets self._metric directly and never reaches
+        # here) re-arms auto_scale exactly like re-enabling it does - a
+        # scale calibrated for stddev is meaningless for variance's very
+        # different numeric range (and vice versa), so keeping it would
+        # silently misapply an old scale to a metric it was never tuned
+        # for. Manual (non-auto_scale) scale is left alone, same as any
+        # other setting change while auto_scale is off - the user is in
+        # charge of it then.
+        if value != self._metric and self.auto_scale:
+            self._rearm_calibration()
+        self._metric = value
+
+    def _rearm_calibration(self) -> None:
+        """ reset to "just armed, nothing calibrated yet" - shared by
+            auto_scale's and metric's setters, see their docstrings
+        """
+        self._calibrated = False
+        self._calib_start = time.time()
+        self._calib_samples = []
+        self.scale = 1.0
+
     def __getstate__(self) -> dict[str, Any]:
-        # a standard deviation carries its source's unit (a °C signal's
-        # stddev is itself in °C) - unless rescaled, in which case it's no
-        # longer literally in that unit, so report '%' instead (also what
-        # routes it onto the dashboard's dedicated 0-100 axis, see class
-        # docstring). Update self.unit before calling super(), since
-        # BusNode.__getstate__() snapshots it into the returned state
-        # (same pattern as MultiInAux.__getstate__, minus data_range: that
-        # one stays statically ANALOG, see class docstring)
+        # a standard deviation (or variance) carries its source's unit (a
+        # °C signal's stddev is itself in °C, its variance in °C²) -
+        # unless rescaled, in which case it's no longer literally in that
+        # unit, so report '%' instead (also what routes it onto the
+        # dashboard's dedicated 0-100 axis, see class docstring). Update
+        # self.unit before calling super(), since BusNode.__getstate__()
+        # snapshots it into the returned state (same pattern as
+        # MultiInAux.__getstate__, minus data_range: that one stays
+        # statically ANALOG, see class docstring)
         for rcv in self.get_receives():
-            self.unit = rcv.unit if self.scale == 1.0 else '%'
+            if self.scale != 1.0:
+                self.unit = '%'
+            else:
+                self.unit = rcv.unit + '²' if self.metric == 'variance' else rcv.unit
             break
         state = super().__getstate__()
         state["samples"] = self.samples
+        state["metric"] = self.metric
         state["scale"] = self.scale
         state["auto_scale"] = self.auto_scale
+        # internal calibration bookkeeping, persisted (via the same
+        # save_wiring()/REST-API state dict as everything else - this
+        # node has no separate private-state channel) so a restart mid-
+        # calibration resumes instead of restarting, see __init__'s
+        # comment. calib_samples can grow to a few hundred/thousand
+        # floats over the run - accepted, this is a low-traffic local
+        # controller, not worth a bespoke streaming-percentile structure
+        # just to shave that off.
+        state["calibrated"] = self._calibrated
+        state["calib_start"] = self._calib_start
+        state["calib_samples"] = self._calib_samples
+        # frontend-facing: /wiring and the dashboard show "still
+        # calibrating..." instead of a (still meaningless) data value
+        # while this is true, see comps.js's AnyNode.value()
+        state["calibrating"] = self.auto_scale and not self._calibrated
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
@@ -330,28 +445,56 @@ class StdDevAux(SingleInAux):
         # time-windowed 'window' Setting) has no such keys - fall back to
         # the schema defaults rather than reinterpret an old seconds
         # value as a sample count (nonsensical, e.g. "3600 samples")
-        StdDevAux.__init__(self, state['name'], state['receives'],
+        VolatilityAux.__init__(self, state['name'], state['receives'],
                            samples=state.get('samples', 30),
+                           metric=state.get('metric', 'stddev'),
                            scale=state.get('scale', 1.0),
                            auto_scale=state.get('auto_scale', False),
                            _cont=True)
+        # restore calibration progress exactly as it was (see __init__'s
+        # comment) - overrides the fresh defaults __init__ just set
+        self._calibrated = state.get('calibrated', False)
+        self._calib_start = state.get('calib_start')
+        self._calib_samples = list(state.get('calib_samples', []))
+
+    def _finish_calibration(self) -> None:
+        """ freeze `scale` from the 90th percentile of every raw metric
+            (stddev or variance) value accumulated since auto_scale
+            armed - see auto_scale's docstring bullet for why
+            p90-over-24h, not mean or a shorter window.
+        """
+        samples = sorted(self._calib_samples)
+        if len(samples) < 2:
+            return  # essentially can't happen (24h at any real read
+                     # interval), but don't divide by nothing if it does
+        idx = 0.90 * (len(samples) - 1)
+        lo = int(idx)
+        hi = min(lo + 1, len(samples) - 1)
+        p90 = samples[lo] + (samples[hi] - samples[lo]) * (idx - lo)
+        if p90 > 0:
+            self.scale = round(self._AUTO_SCALE_TARGET / p90, 4)
+            self._calibrated = True
+            self._calib_samples = []  # done with these, don't keep them around
+            log.verbose('VolatilityAux %s: auto-calibrated scale to %f from %d samples',
+                       self.id, self.scale, len(samples))
+        # else: the whole window was perfectly flat (p90 == 0) - can't
+        # calibrate from that, keep accumulating and retry on the next
+        # reading (same reasoning as the old single-instant raw>0 guard)
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
             self._values.append(float(msg.data))
             if len(self._values) >= self.samples:
-                raw = statistics.pstdev(self._values)
+                raw = (statistics.pvariance(self._values) if self.metric == 'variance'
+                       else statistics.pstdev(self._values))
                 if self.auto_scale and not self._calibrated:
-                    # a perfectly flat first window (raw == 0) can't
-                    # calibrate a scale from - retry on the next reading
-                    # rather than lock in a divide-by-zero/nonsense value
-                    if raw > 0:
-                        self.scale = round(self._AUTO_SCALE_TARGET / raw, 4)
-                        self._calibrated = True
-                        log.verbose('StdDevAux %s: auto-calibrated scale to %f',
-                                   self.id, self.scale)
+                    self._calib_samples.append(raw)
+                    if self._calib_start is None:
+                        self._calib_start = time.time()
+                    elif time.time() - self._calib_start >= self._AUTO_SCALE_DURATION:
+                        self._finish_calibration()
                 self.data = round(raw * self.scale, 4)
-                log.verbose('StdDevAux %s: output %f', self.id, self.data)
+                log.verbose('VolatilityAux %s: output %f', self.id, self.data)
                 self.post(MsgData(self.id, self.data))
 
         super().listen(msg)
@@ -360,6 +503,7 @@ class StdDevAux(SingleInAux):
         settings = super().get_settings()
         schema = {s.key: s for s in type(self).get_settings_schema()}
         settings.append(self._fill_setting(schema['samples']))
+        settings.append(self._fill_setting(schema['metric']))
         settings.append(self._fill_setting(schema['scale']))
         settings.append(self._fill_setting(schema['auto_scale']))
         return settings
@@ -368,6 +512,9 @@ class StdDevAux(SingleInAux):
     def get_settings_schema(cls) -> list[Setting]:
         schema = super().get_settings_schema()
         schema.append(Setting('samples', 'stdDevSamples', 30, type='number', min=2))
+        schema.append(Setting('metric', 'stdDevMetric', 'stddev', type='select',
+                               options=list(cls._METRICS),
+                               option_label_prefix='misc.stdDevMetric.'))
         schema.append(Setting('scale', 'stdDevScale', 1.0, type='number', min=0))
         schema.append(Setting('auto_scale', 'stdDevAutoScale', False, type='checkbox'))
         return schema

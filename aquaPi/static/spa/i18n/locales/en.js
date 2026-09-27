@@ -47,8 +47,9 @@ export default
 				calibrationPoints: 'Calibration',
 				unfairAvg: 'Unweighted average [0=off]',
 				stdDevSamples: 'Number of samples',
+				stdDevMetric: 'Metric',
 				stdDevScale: 'Scaling factor (≈ 10 ÷ normal reading)',
-				stdDevAutoScale: 'Auto-calibrate scale (once)',
+				stdDevAutoScale: 'Auto-calibrate scale (once, over 24h)',
 				inputPort: 'Input port',
 				outputPort: 'Output port',
 				alertPort: 'Send to',
@@ -285,6 +286,9 @@ export default
 				unweighted: 'Unweighted',
 				movingAvg: 'Moving average ({n})',
 			},
+			stdDevAux: {
+				calibrating: 'Still calibrating...',
+			},
 			sunCtrl: {
 				// odd cloudiness -> shorter, darker clouds (Cloud class,
 				// ctrl_nodes.py's `cloudiness & 1` check); even -> longer,
@@ -403,6 +407,10 @@ export default
 		alertConds: {
 			AlertAbove: 'Above',
 			AlertBelow: 'Below',
+		},
+		stdDevMetric: {
+			stddev: 'Standard deviation',
+			variance: 'Variance',
 		},
 		weekday: {
 			0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun',

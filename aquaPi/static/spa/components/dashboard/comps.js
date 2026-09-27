@@ -60,6 +60,13 @@ const AnyNode = {
 		},
 		value() {
 			let node = this.node
+			// VolatilityAux's auto_scale calibration now takes up to 24h (was a
+			// single instant) - node.calibrating (only ever set by that node
+			// type) says so instead of showing the meaningless -1 sentinel
+			// every not-yet-primed AuxNode starts at
+			if (node.calibrating) {
+				return this.$t('dashboard.widget.stdDevAux.calibrating')
+			}
 			switch (node.data_range) {
 				case 'ANALOG':
 				case 'PERCENT':
@@ -516,10 +523,10 @@ const MaxAux = {
 }
 registerGlobalComponent('MaxAux', MaxAux)
 
-const StdDevAux = {
+const VolatilityAux = {
 	extends: AuxNode,
 }
-registerGlobalComponent('StdDevAux', StdDevAux)
+registerGlobalComponent('VolatilityAux', VolatilityAux)
 
 // no aggregation/math - just a flat, read-only name/value row per
 // received node (not each source's own full widget, which would
@@ -1012,7 +1019,7 @@ const HistoryChart = {
 
 					// re-evaluate every refresh, not just on first creation -
 					// a node's unit/data_range can change at runtime (e.g.
-					// StdDevAux's auto_scale flipping unit from its source's
+					// VolatilityAux's auto_scale flipping unit from its source's
 					// unit to '%' once it calibrates), and the chosen axis/
 					// label must track that instead of freezing at whatever
 					// was true when this dataset object was first created

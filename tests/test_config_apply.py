@@ -17,7 +17,7 @@ from aquaPi.machineroom.msg_bus import MsgBus
 from aquaPi.machineroom.in_nodes import AnalogInput
 from aquaPi.machineroom.out_nodes import SwitchDevice
 from aquaPi.machineroom.ctrl_nodes import MinimumCtrl
-from aquaPi.machineroom.aux_nodes import StdDevAux
+from aquaPi.machineroom.aux_nodes import VolatilityAux
 from aquaPi.machineroom.alert_nodes import Alert, AlertAbove
 
 
@@ -271,7 +271,7 @@ def test_apply_creates_stddev_aux_node(client, users, bus, app):
 
     resp = client.post('/api/config/apply', json={
         'creates': [{
-            'temp_id': 'tmp-sd', 'type': 'StdDevAux', 'name': 'Schwankung',
+            'temp_id': 'tmp-sd', 'type': 'VolatilityAux', 'name': 'Schwankung',
             'receives': ['wasser'], 'fields': {'samples': 10},
         }],
     })
@@ -296,7 +296,7 @@ def test_apply_update_clears_scale_on_a_real_auto_scale_retoggle(client, users, 
     # validate/apply pipeline
     _login(client, 'admin1', 'adminPass123')
 
-    node = StdDevAux('Schwankung', 'wasser', scale=42, auto_scale=False)
+    node = VolatilityAux('Schwankung', 'wasser', scale=42, auto_scale=False)
     node.plugin(bus)
 
     resp = client.post('/api/config/apply', json={

@@ -41,7 +41,7 @@ from .passphrase import generate_aquatic_passphrase, generate_url_token
 from .machineroom.in_nodes import (AnalogInput, SwitchInput, TextInput, ScheduleInput,
                                    UiSwitchInput, UiAnalogInput)
 from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
-from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, StdDevAux, UiDisplay)
+from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, VolatilityAux, UiDisplay)
 from .machineroom.hist_nodes import History, log_calibration_event
 from .machineroom.alert_nodes import (Alert, AlertAbove, AlertBelow)
 from .driver.base import DriverError
@@ -75,10 +75,25 @@ NODE_FACTORY: dict[str, type[BusNode]] = {
         AnalogInput, SwitchInput, TextInput, ScheduleInput,
         UiSwitchInput, UiAnalogInput,
         AnalogDevice, SlowPwmDevice, SwitchDevice,
-        AvgAux, MaxAux, MinAux, ScaleAux, StdDevAux, UiDisplay,
+        AvgAux, MaxAux, MinAux, ScaleAux, VolatilityAux, UiDisplay,
         History,
         Alert,
     )
+}
+# read-compatibility for renamed node types: a wiring.sqlite row saved
+# under an old class name still has that literal string in its 'type'
+# column - _deserialize_node() resolves it via this table before the
+# NODE_FACTORY lookup, rather than failing with "Unknown node type in
+# database". Deliberately kept OUT of NODE_FACTORY itself: that dict also
+# drives get_node_type_schema() (the /wiring "add node" list), which must
+# only ever offer the current name, not a stale duplicate. No migration
+# step needed beyond this: serialize_node() always reports
+# type(node).__name__, so any such node re-persists under the new name
+# the moment it's next saved (an ordinary /wiring edit, or the atexit
+# shutdown save every process restart already does) - this table only
+# matters for reading an as-yet-unresaved old row.
+LEGACY_TYPE_ALIASES: dict[str, str] = {
+    'StdDevAux': 'VolatilityAux',
 }
 
 # Same idea for the small helper objects used inside Alert.conditions
@@ -256,9 +271,10 @@ def build_node(type_name: str, name: str, receives: list[str],
         return UiDisplay(name, rcv)
     if type_name == 'ScaleAux':
         return ScaleAux(name, rcv, fields['unit'], points=fields['points'])
-    if type_name == 'StdDevAux':
-        return StdDevAux(name, rcv, samples=fields['samples'], scale=fields['scale'],
-                         auto_scale=fields['auto_scale'])
+    if type_name == 'VolatilityAux':
+        return VolatilityAux(name, rcv, samples=fields['samples'],
+                             metric=fields.get('metric', 'stddev'), scale=fields['scale'],
+                             auto_scale=fields['auto_scale'])
     if type_name == 'History':
         return History(name, rcv, capacity=int(fields['capacity']))
 
@@ -989,6 +1005,7 @@ def _deserialize_node(type_name: str, state: dict[str, Any]) -> BusNode:
     """ reconstruct a single node from its stored type name and state,
         using only the whitelisted NODE_FACTORY - never pickle/eval
     """
+    type_name = LEGACY_TYPE_ALIASES.get(type_name, type_name)
     cls = NODE_FACTORY.get(type_name)
     if not cls:
         raise ValueError(f'Unknown node type in database: {type_name!r}')

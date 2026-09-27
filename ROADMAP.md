@@ -199,7 +199,7 @@ fine, sort/dedupe later.
   e.g. BINARY-only) set `node_filter_by_class` on the `node_id`
   sub-field. The record-list widget + validator pick it up automatically.
   **Priority: medium.**
-- `StdDevAux` (running standard deviation of a source's last N readings,
+- `VolatilityAux` (running standard deviation of a source's last N readings,
   flags reduced water flow via increased temperature volatility) - DONE,
   shipped to `main`+`aquapi2` 2026-09-18. Sample-count window (not
   time-based - a too-short time window relative to a slow reader could
@@ -216,7 +216,7 @@ fine, sort/dedupe later.
   error (now reverts client-side instead). JBL's aging-probe automated
   check (see the calibration UI entry above) remains a possible
   follow-up, unrelated to this.
-- Actual blocked-flow *alerting* (distinct from the `StdDevAux` node
+- Actual blocked-flow *alerting* (distinct from the `VolatilityAux` node
   above, which just computes/displays the metric) - not designed yet,
   not started. Three live filter-off runs on the real tank (2026-09-19,
   2x 2026-09-22) validated the signal and produced concrete design

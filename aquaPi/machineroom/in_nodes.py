@@ -79,6 +79,18 @@ class InputNode(PortDriverMixin, BusNode, ABC):
     def pullout(self) -> bool:
         if self._reader_thread:
             self._reader_stop = True
+            # wake a sleeping reader immediately - same reasoning as the
+            # interval setter above (and ScheduleInput.pullout()'s
+            # existing self._wake.set(), the correct sibling pattern this
+            # was missing). Without this, teardown silently waited out
+            # whatever was left of the *current* interval (up to 10s by
+            # default) before the loop's next check of _reader_stop even
+            # ran - measured adding several real seconds to every test
+            # that builds a bus with a couple of input nodes and tears
+            # it down. join()'s timeout is now just a defensive backstop
+            # (the wake should make it return almost immediately), not
+            # the primary mechanism.
+            self._reader_wake.set()
             self._reader_thread.join(timeout=5)
             self._reader_thread = None
         self.port = ''

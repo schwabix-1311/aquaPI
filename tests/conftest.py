@@ -14,12 +14,44 @@ from flask import Flask
 
 import aquaPi
 from aquaPi import auth
-from aquaPi.driver import create_io_registry
+from aquaPi.driver import create_io_registry, driver_config
 
 
 _TEMPLATE_FOLDER = os.path.join(os.path.dirname(aquaPi.__file__), 'templates')
 
 # the 'questdb' marker itself is registered in pytest.ini
+
+
+def pytest_configure(config):
+    """ force the one real driver-discovery pass here, at the very start
+        of the session (one per xdist worker process), before any
+        fixture or test runs - guarantees DriverShelly's real mDNS
+        network scan (_ShellyBase.find_ports(), shared by all 3 Shelly
+        driver classes - genuine network I/O, 2 passes x 1.5s,
+        regardless of simulation mode, since there's no local/hardware
+        distinction for a network device) is skipped. No test needs it:
+        test_driver_shelly.py tests DriverShellyInput.read()/_identify()
+        directly, mocking requests.get, never touching find_ports()/
+        create_io_registry() at all.
+
+        Must happen here, not inside a fixture: MachineRoom.__init__
+        unconditionally resets driver_config['DRIVER_BLACKLIST'] from
+        its own (test) globals (empty, for every test fixture) before
+        its own create_io_registry() call - setting the blacklist
+        anywhere but before the very first call in the whole session
+        risks losing that race against whichever test's MachineRoom
+        happens to construct first. create_io_registry() is idempotent
+        (a later call, from any test's own session fixture or from
+        MachineRoom.__init__ itself, is then just a no-op regardless of
+        what the blacklist becomes afterward), so doing the real pass
+        right here, with the blacklist already correct, is sufficient
+        for the whole session. Found while investigating overall pytest
+        runtime.
+    """
+    driver_config['DRIVER_BLACKLIST'] = [
+        'DriverShellyRelay', 'DriverShellyDimmer', 'DriverShellyInput',
+    ]
+    create_io_registry()
 
 
 @pytest.fixture(autouse=True, scope='session')

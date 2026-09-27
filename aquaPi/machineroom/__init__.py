@@ -4,6 +4,8 @@ import logging
 from os import (environ, path)
 import json
 import atexit
+import signal
+import threading
 from threading import Timer
 
 from .. import db
@@ -17,6 +19,15 @@ from ..driver import (driver_config, create_io_registry, DriverError)
 
 
 log = logging.getLogger('machineroom')
+
+
+def _sigterm_to_exit(signum, frame) -> None:
+    """ turn SIGTERM into a normal Python exit (see the comment at its
+        registration in MachineRoom.__init__ for why) - a plain function,
+        not a method: it never needs to know which MachineRoom instance
+        is live, atexit's own registration already handles that.
+    """
+    raise SystemExit(0)
 
 
 class MachineRoom:
@@ -137,6 +148,23 @@ class MachineRoom:
 
         # Our __del__ would not be called after Ctrl-C.
         atexit.register(self.shutdown)
+        # SIGTERM (a plain `kill`, systemd stop, or the standard aquapi2
+        # deploy restart's `pkill flask`) does NOT run atexit handlers by
+        # default - only a normal interpreter exit (a return, or the
+        # KeyboardInterrupt an uncaught SIGINT raises) does. Confirmed the
+        # hard way: `pkill flask` was found to skip shutdown()/
+        # save_nodes() entirely (no "Preparing shutdown ..." log line),
+        # silently discarding any live state that was never separately
+        # saved via an explicit settings/config change - e.g. a
+        # VolatilityAux auto_scale calibration in progress. Converting
+        # SIGTERM into a raised SystemExit makes Python perform a normal
+        # clean shutdown, which does run atexit handlers - the same
+        # effect Ctrl-C's SIGINT already has today, just for SIGTERM too.
+        # signal.signal() only works from the main thread - harmless to
+        # skip elsewhere (e.g. a test fixture built off-thread), atexit
+        # above still covers a normal exit either way.
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGTERM, _sigterm_to_exit)
 
         self._schedule_backup()
 

@@ -342,10 +342,24 @@ from .base import *  # noqa: F403 allow import * for the runtime-imports
 
 def create_io_registry():
     """ Create the singleton _io_registry, which is accessible as
-        IoRegistry.get()
+        IoRegistry.get(). Idempotent: a second call is a no-op.
+
+        The set of drivers/ports present doesn't change within a
+        process's lifetime, so a second discovery pass finds nothing new
+        - but some drivers do real, slow I/O in find_ports() (e.g.
+        DriverShelly's mDNS scan, ~3s: 2 passes x 1.5s, see
+        DriverShelly.py), and MachineRoom.__init__ calls this
+        unconditionally on every construction. Without this guard, every
+        test building more than one MachineRoom (or the suite building
+        many across many test files) repeated that full cost each time -
+        several real seconds per redundant call, found while
+        investigating overall pytest runtime.
     """
     # pylint: disable-next=W0603
     global _io_reg
+
+    if '_io_reg' in globals():
+        return
 
     DRIVER_FILE_PREFIX = 'Driver'
     CUSTOM_DRIVERS = 'CustomDrivers'

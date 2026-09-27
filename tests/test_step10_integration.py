@@ -10,6 +10,7 @@
 
 import json
 import os
+import signal
 from http import HTTPStatus
 
 import pytest
@@ -18,7 +19,7 @@ from flask import Flask
 import aquaPi
 from aquaPi import auth, db, api
 from aquaPi.driver import create_io_registry
-from aquaPi.machineroom import MachineRoom
+from aquaPi.machineroom import MachineRoom, _sigterm_to_exit
 from aquaPi.machineroom.msg_bus import MsgBus
 from aquaPi.machineroom.in_nodes import AnalogInput
 from aquaPi.machineroom.ctrl_nodes import MinimumCtrl
@@ -131,6 +132,31 @@ def test_restart_reloads_existing_sqlite_wiring_unchanged(tmp_path):
         assert {n.id for n in mr2.bus.nodes} == node_ids
     finally:
         mr2.bus.teardown()
+
+
+def test_sigterm_handler_raises_system_exit():
+    # the whole fix in one line: SIGTERM's default OS action skips
+    # atexit entirely (confirmed the hard way - aquapi2's standard
+    # deploy restart, `pkill flask`, was found to silently skip
+    # shutdown()/save_nodes()). Converting it into a SystemExit makes
+    # Python perform a normal clean shutdown, which does run atexit
+    # handlers - same effect Ctrl-C's SIGINT already has.
+    with pytest.raises(SystemExit):
+        _sigterm_to_exit(signal.SIGTERM, None)
+
+
+def test_machineroom_registers_the_sigterm_handler(tmp_path):
+    previous = signal.getsignal(signal.SIGTERM)
+    try:
+        mr = MachineRoom({'INSTANCE_PATH': str(tmp_path), 'DEFAULT_CONFIG': 'pytest'})
+        try:
+            assert signal.getsignal(signal.SIGTERM) is _sigterm_to_exit
+        finally:
+            mr.bus.teardown()
+    finally:
+        # don't leak this into whatever pytest/other test modules expect
+        # of the process-wide SIGTERM handler afterward
+        signal.signal(signal.SIGTERM, previous)
 
 
 # --- Scenario 2 & 3: two users, separate dashboards/alert channels, -------

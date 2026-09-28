@@ -203,6 +203,17 @@ fine, sort/dedupe later.
 
 ## New ideas
 
+- Remove all one-shot migration code once it's had time to actually run
+  everywhere it needs to (raised while planning the v1.0 customer release -
+  a fresh customer install never had the old state to migrate from in the
+  first place, so this is dead weight for that audience specifically, not
+  just general cleanup). Candidates to check: `db.py`'s
+  `migrate_notification_config_from_json()` (config.json Email/Telegram ->
+  users DB), and anything matching the `./dbg` one-time-migration-block
+  pattern (`project_dbg_onetime_migration_pattern` in project memory) that
+  hasn't been stripped out yet. Needs an actual audit pass, not done here -
+  don't remove anything until confirmed it already ran on `aquapi2`.
+  **Priority: low.**
 - Split bus - either a headless sub-bus running on a different
   system/location, coupled through bridge nodes; or two full-blown
   aquaPi systems sharing some or all of their bus traffic.

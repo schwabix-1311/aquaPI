@@ -360,4 +360,8 @@ def service_unit(host, port, install, uninstall, yes):
 
 
 if __name__ == '__main__':
-    cli(prog_name='./manage')  # nicer --help/usage output than "python -m aquaPi.cli"
+    # nicer --help/usage output than "python -m aquaPi.cli". cli is a
+    # click.Group (see the decorators above), not the raw function - Click's
+    # own __call__ parses argv and supplies ctx/instance_path itself, so
+    # pylint's no-value-for-parameter here is a false positive.
+    cli(prog_name='./manage')  # pylint: disable=no-value-for-parameter

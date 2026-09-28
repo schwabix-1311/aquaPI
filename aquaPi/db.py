@@ -29,7 +29,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from os import path, makedirs, remove, listdir
+from os import path, makedirs, remove, listdir, stat, environ, replace
 from typing import Any
 
 from werkzeug.security import generate_password_hash
@@ -2423,3 +2423,115 @@ def create_scheduled_backup(wiring_db_path: str, users_db_path: str,
     archive_path = create_backup_archive(wiring_db_path, users_db_path, backup_dir)
     rotate_backups(backup_dir, keep=keep)
     return archive_path
+
+
+def list_backups(backup_dir: str) -> list[dict[str, Any]]:
+    """ existing backup archives in 'backup_dir' (same
+        BACKUP_FILENAME_PREFIX/'.zip' matching as rotate_backups()),
+        newest first. Each entry: {'filename', 'path', 'created_at'
+        (datetime, from mtime - same basis rotate_backups() itself sorts
+        by, so "newest"/"oldest" agree across both), 'size' (bytes)}.
+        [] if 'backup_dir' doesn't exist yet or has no backups - normal
+        on a fresh install, not an error.
+    """
+    if not path.isdir(backup_dir):
+        return []
+    backups = []
+    for f in listdir(backup_dir):
+        if f.startswith(BACKUP_FILENAME_PREFIX) and f.endswith('.zip'):
+            full_path = path.join(backup_dir, f)
+            st = stat(full_path)
+            backups.append({
+                'filename': f,
+                'path': full_path,
+                'created_at': datetime.fromtimestamp(st.st_mtime),
+                'size': st.st_size,
+            })
+    backups.sort(key=lambda b: b['created_at'], reverse=True)
+    return backups
+
+
+def restore_backup_archive(archive_path: str, dest_dir: str,
+                           only: str | None = None) -> list[str]:
+    """ restore one or both SQLite databases from a backup .zip archive
+        (as produced by create_backup_archive()/create_scheduled_backup())
+        into 'dest_dir' (normally the instance/ directory) - OVERWRITES
+        any existing file(s) there with the same name.
+
+        Each archive member is restored under its own original basename
+        (whatever wiring-db name was active when the backup was taken) -
+        this does NOT try to rename it to match today's active
+        AQUAPI_WIRING/DEFAULT_CONFIG; if that has since changed, the
+        restored file lands under its old name and the caller may need
+        to repoint AQUAPI_WIRING/config.json's DEFAULT_CONFIG at it (or
+        rename the file) afterward.
+
+        'only' filters which member(s) to restore: 'users' matches only
+        DEFAULT_USERS_DB_FILENAME; 'wiring' matches every OTHER member
+        (there is normally exactly one). None (default) restores every
+        member present in the archive.
+
+        Extracts each member to a temp file in 'dest_dir' first, then
+        os.replace()s it into place (atomic same-filesystem move), so a
+        failure/interruption mid-restore cannot leave a half-written
+        destination file.
+
+        Returns the list of destination paths actually restored.
+        Raises FileNotFoundError if 'archive_path' does not exist,
+        ValueError if 'only' matches no member in the archive.
+    """
+    if not path.exists(archive_path):
+        raise FileNotFoundError(f'Backup archive not found: {archive_path!r}')
+
+    makedirs(dest_dir, exist_ok=True)
+    restored = []
+    with zipfile.ZipFile(archive_path) as zf:
+        members = zf.namelist()
+        if only == 'users':
+            members = [m for m in members if m == DEFAULT_USERS_DB_FILENAME]
+        elif only == 'wiring':
+            members = [m for m in members if m != DEFAULT_USERS_DB_FILENAME]
+        elif only is not None:
+            raise ValueError(f"'only' must be 'users', 'wiring', or None, got {only!r}")
+
+        if not members:
+            raise ValueError(
+                f'No matching member for only={only!r} in archive {archive_path!r} '
+                f'(archive contains: {zf.namelist()!r})')
+
+        with tempfile.TemporaryDirectory(dir=dest_dir) as tmp_dir:
+            for member in members:
+                tmp_path = zf.extract(member, path=tmp_dir)
+                dest_path = path.join(dest_dir, member)
+                replace(tmp_path, dest_path)
+                restored.append(dest_path)
+
+    return restored
+
+
+def resolve_wiring_db_path(instance_path: str, default_config: str = 'wiring') -> str:
+    """ resolve the path of the currently-active wiring SQLite database,
+        applying the same config.json (DEFAULT_CONFIG) / AQUAPI_CFG /
+        AQUAPI_WIRING resolution MachineRoom.__init__ uses - lets tooling
+        (aquaPi/cli.py) find "the" wiring db without booting a whole
+        MachineRoom/Bus. MachineRoom.__init__ calls this instead of
+        inlining the same steps, so the two never drift apart.
+
+        'default_config' is the fallback used when neither config.json
+        nor AQUAPI_WIRING name one - MachineRoom.__init__ passes its own
+        already-merged self.globals.get('DEFAULT_CONFIG', 'wiring') here,
+        since a caller can supply DEFAULT_CONFIG directly in the dict
+        passed to MachineRoom() (e.g. every test fixture does, to avoid
+        touching the real 'wiring' instance) without it ever touching a
+        config.json file at all - this function has no other way to see
+        that value. Plain callers (aquaPi/cli.py) just use the 'wiring'
+        default.
+    """
+    cfg_file = path.join(instance_path, environ.get('AQUAPI_CFG', 'config.json'))
+    wiring_base = default_config
+    if path.exists(cfg_file):
+        with open(cfg_file, 'r', encoding='utf8') as f_in:
+            wiring_base = json.load(f_in).get('DEFAULT_CONFIG', wiring_base)
+    wiring_base = environ.get('AQUAPI_WIRING', wiring_base)
+    wiring_base, _ = path.splitext(wiring_base)
+    return path.join(instance_path, wiring_base + '.sqlite')

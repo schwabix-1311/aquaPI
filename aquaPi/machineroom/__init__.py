@@ -77,13 +77,20 @@ class MachineRoom:
         # see create_default_nodes(). This replaces the old TEST_BUS/
         # REAL_CONFIG constants that used to live (and had to be kept out
         # of commits) in create_default_nodes() itself.
-        wiring_base = self.globals.get('DEFAULT_CONFIG', 'wiring')
-        if 'AQUAPI_WIRING' in environ:
-            wiring_base = environ['AQUAPI_WIRING']
-        wiring_base, _ = path.splitext(wiring_base)
+        #
+        # db.resolve_wiring_db_path() re-derives the same config.json/
+        # AQUAPI_WIRING resolution independently, kept as the single
+        # source of truth so aquaPi/cli.py's backup/restore tooling can
+        # find "the" wiring db without booting a MachineRoom. Pass our
+        # own already-merged self.globals value as its fallback - a
+        # caller can supply DEFAULT_CONFIG directly in the dict passed to
+        # MachineRoom() (every test fixture does, to avoid touching the
+        # real 'wiring' instance) without it ever touching a config.json
+        # file, which the function has no other way to see.
+        wiring_file = db.resolve_wiring_db_path(
+            instance_path, self.globals.get('DEFAULT_CONFIG', 'wiring'))
+        wiring_base, _ = path.splitext(path.basename(wiring_file))
         self.globals['DEFAULT_CONFIG'] = wiring_base
-
-        wiring_file = path.join(instance_path, wiring_base + '.sqlite')
 
         self.globals['CUSTOM_CFG'] = cfg_file
         self.globals['BUS_WIRING'] = wiring_file

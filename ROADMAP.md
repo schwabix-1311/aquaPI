@@ -22,11 +22,14 @@ fine, sort/dedupe later.
 - Interrupt-driven IO instead of polling (`in_nodes.py`) - driver/
   architecture-level change, likely hardware-dependent. **Priority: low.**
 - Systemverwaltung page (global/system-wide app preferences - driver
-  accounts, blacklist) - name agreed, page not built; `config.json`
-  hand-edited for now. **Priority: high** - intended to be part of the
-  shell-based deployment script (see Packaging/deployment below),
-  covering driver accounts, blacklist, Email/Telegram config etc. as one
-  scripted setup surface rather than two separate features.
+  accounts, blacklist) - name agreed, page still not built; `config.json`
+  hand-edited for now. **Priority: high.** The Email/Telegram config part
+  of this idea shipped as `./manage reconfig` instead (see Packaging/
+  deployment below, DONE) - a shell-scripted surface rather than a web
+  page, per the already-agreed "not a forced web-UI wizard" decision.
+  Remaining scope for an eventual web page: driver accounts/blacklist
+  only, plus (if still wanted) a non-forced web *editor* for the same
+  Email/Telegram data `./manage reconfig` already covers via shell.
 - Profil page (personal per-user preferences: language, theme) - name
   agreed, deliberately not built while it's only 2 settings.
   **Priority: low.**
@@ -124,10 +127,13 @@ fine, sort/dedupe later.
   (most recently `ScheduleInput`), so this would now touch a lot of code.
   **Priority: medium.**
 - Logging to the systemd journal (see
-  https://trstringer.com/systemd-logging-in-python/) - notably, the
-  real production Pi (`aquapi2`) doesn't run as a systemd service at
-  all today (a `./run` process kept alive in a long-lived interactive
-  shell) - this idea would want that as a prerequisite. **Priority: low.**
+  https://trstringer.com/systemd-logging-in-python/) - the specific idea of
+  structured journal fields via a custom Python logging handler is still
+  not done, but its stated prerequisite (`aquapi2` running as a systemd
+  service at all) now is - see Packaging/deployment below (`./manage
+  service-unit`); plain stdout/stderr already lands in `journalctl -u
+  aquapi` for free once installed, without the custom handler. **Priority:
+  low.**
 - A `/log` route/page to view logs, warnings, and configured events -
   no such route exists yet. **Priority: medium.**
 - Allow (re-)configuring the app via a command-line JSON option, for
@@ -166,15 +172,26 @@ fine, sort/dedupe later.
   item first before treating this as new work. **Priority: high, but
   blocked** on the external PEP 541 name-claim process before the
   worktree can be unparked.
-- Packaging/deployment: look at how `ReefSpy`/`ReefberryPi` (GitHub)
-  freeze dependencies and package for one-file deployment (PyInstaller),
-  service creation, etc. - today's deployment is a manually-run
-  `./run` script in a kept-open shell, not a packaged/serviced install.
-  **Priority: high** - this is the pre-ship v1.0 deployment-script item
-  (`--reconfig`/`--backup`/`--restore`/`--list-backups`); see also
-  Systemverwaltung above (intended to ride along with it) and the guided
-  setup wizard above (same first-time-configuration topic, UI-driven
-  instead of scripted).
+- Packaging/deployment - DONE: `./manage` (`aquaPi/cli.py`, a `click`-based
+  CLI, invoked via the `./manage` wrapper at the repo root) covers
+  `reconfig` (interactive Email/Telegram setup), `backup`, `list-backups`,
+  `restore` (new `db.py` functions `list_backups()`/
+  `restore_backup_archive()`, none of this existed before - `restore` was
+  the one capability with zero prior backend support), and, folded in
+  during planning, `service-unit` - generates and (`--install`) installs a
+  systemd unit, making `aquapi2` finally runnable as a real service
+  (start/stop/restart/enable/auto-restart-on-failure) instead of a `./run`
+  process kept alive in a shell. `./run`/`./dbg` are now explicitly
+  development-only; `./manage service-unit --install` is the intended
+  production path. Not a PyInstaller one-file freeze or a ReefSpy/
+  ReefberryPi-style installer - a plain CLI + systemd unit, which covers
+  the actual pre-ship need (a real service, backup/restore, first-run
+  notification setup) without that extra packaging complexity; revisit if
+  a genuinely different distribution model is ever wanted. See also
+  Systemverwaltung above (still open - driver accounts/blacklist web page;
+  the Email/Telegram config piece it would have covered is now handled by
+  `./manage reconfig` instead) and the guided setup wizard above (still
+  open, UI-driven version of the same first-time-configuration problem).
 - Less common feature ideas, not designed yet (**Priority: low** for
   all of the below):
   - Over-temperature dimming the light or spinning up a fan, e.g.

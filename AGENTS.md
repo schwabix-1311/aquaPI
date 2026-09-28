@@ -27,12 +27,34 @@ Entwicklung kein echter Raspberry Pi nötig ist.
 `init` erkennt Debian- vs. Arch-basierte Systeme und installiert bei Bedarf `python3-venv`/`python3-dev`.
 Beim ersten Aufruf werden zusätzlich Git-Submodule initialisiert (u. a. `aquaPi/driver/tc420`).
 
-`run` setzt `FLASK_APP=aquaPi` und startet `flask run`. Optionen:
-- `-t TOPO`: verwendet `instance/TOPO.pickle` zum Speichern der Regelketten-Topologie (Default: `topo`).
-- `-r`: setzt die Topologie zurück (löscht die Pickle-Datei vor dem Start).
+**`run` und `dbg` (Debug-Variante mit `FLASK_DEBUG=1`) sind ausschließlich für die Entwicklung gedacht,
+nicht für den produktiven Betrieb** - dafür ist `./manage service-unit` da (siehe unten). Beide Skripte
+setzen `FLASK_APP=aquaPi` und starten `flask run`; Optionen (beide Skripte identisch):
+- `-w NAME`: verwendet/erstellt `instance/NAME.sqlite` für Wiring+Konfiguration (Default: `wiring` = die
+  echte/produktive Konfiguration; jeder andere Name bootstrapt stattdessen ein simuliertes Dev-/Test-
+  Node-Set in einer eigenen `instance/NAME.sqlite` - siehe `instance/config.json`s `DEFAULT_CONFIG` für
+  einen dauerhaften Default statt `-w` bei jedem Aufruf).
+- `-r`: setzt das gewählte Wiring zurück (löscht die zugehörige `.sqlite`-Datei vor dem Start).
+
+`./manage` ist das Deployment-/Verwaltungswerkzeug (`aquaPi/cli.py`, `click`-basiert):
+
+```bash
+./manage --help                    # Übersicht aller Subcommands
+./manage backup                     # Backup-Archiv jetzt erstellen
+./manage list-backups               # vorhandene Backups auflisten
+./manage restore <ARCHIV>           # Backup zurückspielen (überschreibt laufende Datenbanken!)
+./manage reconfig                   # Email-/Telegram-Benachrichtigungen interaktiv einrichten
+./manage service-unit --install     # systemd-Service anlegen, aktivieren und starten (braucht sudo)
+```
+
+`./manage service-unit --install` ist der vorgesehene Weg, aquaPi produktiv zu betreiben (statt `./run` in
+einer offengehaltenen Shell): der erzeugte systemd-Service startet automatisch beim Boot, startet nach
+einem Absturz neu (`Restart=on-failure`) und fährt beim Stoppen sauber herunter (SIGTERM löst denselben
+`atexit`-Shutdown-Pfad wie Ctrl-C aus). Ohne `--install` zeigt `service-unit` die generierte Unit-Datei
+nur an, ohne etwas zu verändern; `--uninstall` entfernt einen installierten Service wieder.
 
 Abhängigkeiten stehen in `requirements.txt` (u. a. Flask, Flask-Login, RPi.GPIO, Adafruit-Blinka/ADS1x15
-für den ADC); `requirements-dev.txt` ergänzt `pytest`/`pytest-mock`/`pytest-xdist`
+für den ADC, `click` für `./manage`); `requirements-dev.txt` ergänzt `pytest`/`pytest-mock`/`pytest-xdist`
 (parallele Testläufe, `pytest -n auto`) und `psycopg` (für die gemockten QuestDB-Codepfade) für die
 Testsuite und referenziert `requirements.txt` per `-r`.
 

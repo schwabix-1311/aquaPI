@@ -1599,8 +1599,8 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
         # NOT per-user (aquaPi's "users" are shared roles, not individual
         # people; see commit 16a0f3f, which made this same call for the
         # primary notification channel). Replaces the old per-user table
-        # 'user_notification_prefs' (kept in the DB, unused, for the
-        # one-time ./dbg migration to read from - see its delimited block)
+        # 'user_notification_prefs' (long gone - its one-time ./dbg
+        # migration into this table already ran and was stripped)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS alert_escalation_config (
                 alert_node_id            TEXT PRIMARY KEY,
@@ -2184,38 +2184,14 @@ def set_notification_config(db_path: str, channel: str,
         conn.close()
 
 
-def migrate_notification_config_from_json(globals_cfg: dict[str, Any],
-                                          db_path: str) -> bool:
-    """ one-time migration of Email/Telegram credentials, previously read
-        directly from config.json into MachineRoom.globals, into the
-        notification_config table. Idempotent: does nothing once any
-        channel is already present in the DB.
-        Returns True if anything was migrated.
-    """
-    migrated = False
-    for channel in NOTIFICATION_CHANNELS:
-        if channel not in globals_cfg:
-            continue
-        if get_notification_config(db_path, channel) is not None:
-            continue
-        configs = globals_cfg[channel]
-        if not isinstance(configs, list):
-            configs = [configs]
-        set_notification_config(db_path, channel, configs)
-        log.info('Migrated %s notification config from config.json to %s',
-                 channel, db_path)
-        migrated = True
-    return migrated
-
-
 # --- shared, admin-configured per-alert escalation config ---------------
 #
 # One row per Alert node, not per user - aquaPi's "users" are shared roles
 # (admin/operator/viewer), not individual people, so a personal escalation
 # preference has no real audience. Admins configure this once per Alert
 # node; operators may view it read-only. Replaced the old per-user table
-# 'user_notification_prefs' (see the one-time ./dbg migration block that
-# copies any real per-user rows into here).
+# 'user_notification_prefs' (long gone - its one-time ./dbg migration into
+# this table already ran and was stripped).
 
 def set_escalation_config(db_path: str, alert_node_id: str,
                           escalation_channel: str = 'none',

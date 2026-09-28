@@ -46,12 +46,14 @@ class MachineRoom:
         self.globals = global_cfg
         instance_path = global_cfg['INSTANCE_PATH']
 
-        # merge customized global config from this file - unlike the
-        # Email/Telegram sub-migration below (which moves out of config.json
-        # once and for all, into the users DB, since that already has a
-        # /settings editor), there's no editor yet for the rest of this
-        # file's keys (DEFAULT_CONFIG, backup settings, ...), so it stays a
-        # live merge, re-read on every start, not a one-time migration.
+        # merge customized global config from this file - unlike Email/
+        # Telegram credentials (which moved out of config.json once and for
+        # all, into the users DB, since that already has a /settings
+        # editor - see ROADMAP.md for the now-removed one-time migration
+        # that used to handle that move), there's no editor yet for the
+        # rest of this file's keys (DEFAULT_CONFIG, backup settings, ...),
+        # so it stays a live merge, re-read on every start, not a one-time
+        # migration.
         cfg_file = 'config.json'
         if 'AQUAPI_CFG' in environ:
             cfg_file = environ['AQUAPI_CFG']
@@ -95,15 +97,13 @@ class MachineRoom:
         self.globals['CUSTOM_CFG'] = cfg_file
         self.globals['BUS_WIRING'] = wiring_file
 
-        # Email/Telegram credentials now live in the users SQLite DB
-        # (table 'notification_config'), not in config.json anymore.
-        # A config.json still present is migrated once, then ignored.
+        # Email/Telegram credentials live in the users SQLite DB (table
+        # 'notification_config'), not in config.json - a config.json
+        # holding them was a one-time migration source in earlier
+        # versions; that migration already ran everywhere that mattered
+        # and has been removed (see ROADMAP.md).
         users_db_path = db.get_users_db_path(instance_path)
         self.globals['USERS_DB'] = users_db_path
-
-        if db.migrate_notification_config_from_json(self.globals, users_db_path):
-            log.info("=== Migrated notification config (Email/Telegram) from "
-                     "%s to %s", cfg_file, users_db_path)
 
         for channel in db.NOTIFICATION_CHANNELS:
             cfg_list = db.get_notification_config(users_db_path, channel)

@@ -41,42 +41,13 @@ def _io_registry():
 # --- Scenario 1: legacy config.json migration -----------------------------
 
 
-def test_legacy_config_json_migration_starts_simulation_cleanly(tmp_path):
-    instance_path = str(tmp_path)
-
-    # legacy config.json with Email/Telegram credentials
-    legacy_cfg = {
-        'Email': {'server': 'smtp.example.com', 'login': 'me', 'pwd': 'secret',
-                  'from': 'me@example.com', 'to': 'you@example.com'},
-        'Telegram': [{'bot_token': 'tok123', 'chat_name': 'aquaPi', 'chat_id': 42}],
-    }
-    with open(os.path.join(instance_path, 'config.json'), 'w', encoding='utf8') as f:
-        json.dump(legacy_cfg, f)
-
-    # DEFAULT_CONFIG must be anything other than 'wiring' (the maintainer's own
-    # real/production hardware setup) or this would build that instead of a
-    # simulated wiring - see test_fresh_start_without_any_legacy_files_
-    # creates_default_wiring below for why that matters.
-    mr = MachineRoom({'INSTANCE_PATH': instance_path, 'DEFAULT_CONFIG': 'pytest'})
-    try:
-        # no wiring to migrate, so a fresh default one is created
-        assert len(mr.bus.nodes) > 0
-        assert db.wiring_exists(mr.globals['BUS_WIRING'])
-
-        # notification config was migrated into the users DB
-        users_db = mr.globals['USERS_DB']
-        assert db.get_notification_config(users_db, 'Email')[0]['login'] == 'me'
-        assert db.get_notification_config(users_db, 'Telegram')[0]['bot_token'] == 'tok123'
-    finally:
-        mr.bus.teardown()
-
-
 def test_config_json_global_keys_are_reimported_every_start(tmp_path):
-    """ unlike the Email/Telegram sub-migration above (which moves out of
-        config.json once and for all, into the users DB), the rest of
-        config.json has no editor yet - it must stay a live merge into
+    """ config.json has no editor yet - it must stay a live merge into
         self.globals on every start, not a one-time import, so an admin
         can still hand-edit it and have the change take effect on restart
+        (unlike Email/Telegram credentials, which moved out of config.json
+        once and for all, into the users DB, via a one-time migration that
+        already ran everywhere it needed to and has since been removed)
     """
     instance_path = str(tmp_path)
     cfg_path = os.path.join(instance_path, 'config.json')

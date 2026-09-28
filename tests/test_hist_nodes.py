@@ -39,8 +39,9 @@ def test_insert_creates_a_new_row_for_a_timestamp_after_start():
 
 
 def test_insert_does_not_mutate_the_shared_valuelst_type_alias():
-    # regression check for the fixed typo (`result[start] = TimeDb.ValueLst
-    # = [...]`), which used to clobber this class attribute on every query
+    # guards against a chained-assignment typo (`result[start] =
+    # TimeDb.ValueLst = [...]`) that would clobber this class attribute
+    # on every query
     before = TimeDb.ValueLst
     result = {0: ['a'], 5: [None]}
     TimeDb._insert(result, start=5, ts=5, idx=0, val=1.0)

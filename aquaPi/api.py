@@ -170,8 +170,7 @@ def api_nodes() -> Response:
         return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
     # an empty wiring (e.g. right after a fresh start, or if every
-    # node failed to restore) is a valid state, not a server error -
-    # this used to answer with 500 whenever node_ids was empty.
+    # node failed to restore) is a valid state, not a server error.
     # Sorted by display name so every consumer (the /wiring & /parameters
     # 'receives'/conditions pickers especially) gets a sensible order
     # without each re-sorting.

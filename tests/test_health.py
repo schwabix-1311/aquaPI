@@ -154,7 +154,7 @@ def test_check_questdb_reachable_true_on_success(monkeypatch):
 
 class _BrokenDriver(Driver):
     """ a fake driver whose find_ports() always fails, simulating a
-        misconfigured Email/Telegram account that used to crash the
+        misconfigured Email/Telegram account, which must not crash the
         whole app at startup
     """
     @staticmethod

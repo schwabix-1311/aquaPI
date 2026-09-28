@@ -852,9 +852,9 @@ def test_apply_leaves_bus_untouched_when_a_later_create_fails(client, users, bus
         prevents: build every create before mutating any existing node's
         receives/fields, so a create that fails past validation (build_node()
         raising for an unanticipated reason) can't leave an update from the
-        same diff already committed on the live bus with no way back - the
-        in-memory corruption an actual missing NODE_FACTORY/build_node()
-        branch caused in production before this fix.
+        same diff already committed on the live bus with no way back - a
+        missing NODE_FACTORY/build_node() branch would corrupt the live bus
+        in memory otherwise.
     """
     _login(client, 'admin1', 'adminPass123')
 

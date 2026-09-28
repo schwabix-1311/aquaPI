@@ -9,8 +9,8 @@
 // time, and main.js calls installGlobalComponents(app) once, after
 // Vue.createApp(), to actually register them all on the app instance.
 
-// Since Step 20, page/layout SFCs (`Home.vue`, `Wiring.vue`, `Settings.vue`,
-// `Default.vue`, ...) are loaded lazily via `loadSfc()`, which means the
+// Because page/layout SFCs (`Home.vue`, `Wiring.vue`, `Settings.vue`,
+// `Default.vue`, ...) are loaded lazily via `loadSfc()`, the
 // `.js` modules that register their child components (e.g.
 // `components/dashboard/index.js`) may only get imported (and thus only
 // call `registerGlobalComponent`) *after* `installGlobalComponents(app)`

@@ -90,8 +90,7 @@ log_default = {
     "werkzeug": {
       "comment": ("werkzeug is noisy, reduce to >=WARNING, INFO shows all https requests. "
                   "propagate must stay True, else even WARNING+ never reaches any handler "
-                  "(root's) - found 2026-08-09 while diagnosing a dbg startup hang, where "
-                  "this had silenced werkzeug completely"),
+                  "(root's)"),
       "level": "WARNING",
       "propagate": True
     }

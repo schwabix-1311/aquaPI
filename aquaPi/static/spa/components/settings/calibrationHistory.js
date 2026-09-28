@@ -1,8 +1,8 @@
 // Compact calibration-history readout for a ScaleAux node: surfaces the
-// existing, previously-unused GET /api/nodes/<id>/calibration-log
-// (aquaPi/machineroom/hist_nodes.py's "Step 28" mechanism, auto-recorded
-// whenever ScaleAux.points changes via PUT /api/nodes/<id>/settings or
-// /wiring's save path). Read-only, no chart in this pass - just enough
+// existing GET /api/nodes/<id>/calibration-log (aquaPi/machineroom/
+// hist_nodes.py, auto-recorded whenever ScaleAux.points changes via PUT
+// /api/nodes/<id>/settings or /wiring's save path). Read-only, no chart
+// in this pass - just enough
 // to see when this node was last recalibrated and by how much, since
 // probes drift gradually rather than jumping between known points.
 //

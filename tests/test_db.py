@@ -164,8 +164,7 @@ def test_load_wiring_prunes_dangling_references_to_a_node_that_failed_to_restore
     bus.teardown()
 
     # corrupt 'avg's saved params so _deserialize_node raises (KeyError on
-    # the missing 'receives') - simulates any real deserialize failure,
-    # not the specific float/int bug that originally triggered this
+    # the missing 'receives') - simulates any real deserialize failure
     conn = db.get_connection(db_path)
     try:
         row = conn.execute("SELECT params FROM nodes WHERE id='mittel'").fetchone()

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """ Tests for machineroom/aux_nodes.py: VolatilityAux, the sample-count
     standard-deviation/variance node used to flag reduced water flow via
-    increased temperature volatility (see ROADMAP.md). Renamed from
-    StdDevAux once it grew a 'metric' choice beyond just stddev.
+    increased temperature volatility (see ROADMAP.md).
 """
 
 import statistics

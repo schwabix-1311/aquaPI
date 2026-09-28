@@ -190,7 +190,7 @@ class SlowPwmDevice(DeviceNode):
         # startup, node.plugin()'s MsgHello cascades can re-enter set()
         # for this same device several times in quick succession, racing
         # unguarded self._thread/self._thread_stop access and deadlocking
-        # in .join() (found 2026-08-09 via a py-spy stack dump)
+        # in .join()
         self._set_lock = Lock()
         self.set(self.data)
         log.verbose('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)

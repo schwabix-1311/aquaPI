@@ -659,11 +659,11 @@ def test_restore_snapshot_does_not_persist_wiring(client, users, app):
 def test_preview_snapshot_nodes_never_touches_ports():
     """ regression test: a snapshot containing two nodes that (e.g. due
         to a previous bug, or a manually edited export) claim the same
-        hardware/driver port used to raise an uncaught
-        DriverPortInuseError when the old restore_snapshot_into_bus()
-        constructed/plugged them both into the live bus (port claiming
-        happens eagerly in a node's own __init__/__setstate__, not just
-        at plugin() time - see PortDriverMixin._apply_port()).
+        hardware/driver port must not raise DriverPortInuseError here -
+        port claiming happens eagerly in a node's own
+        __init__/__setstate__, not just at plugin() time (see
+        PortDriverMixin._apply_port()), so constructing real node
+        objects during preview would risk exactly that crash.
         preview_snapshot_nodes() never constructs real node objects at
         all (pure dict reshaping), so both nodes must come back intact,
         still carrying their (conflicting) port, with no exception

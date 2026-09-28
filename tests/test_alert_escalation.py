@@ -77,8 +77,7 @@ def test_get_escalation_config_includes_escalation_fields(users_db_path):
 
 def test_set_escalation_config_upserts_not_duplicates(users_db_path):
     """ setting the same alert node's config twice must update the single
-        shared row, not add a 2nd one - this is the DB-layer guarantee
-        that used to require deduping across multiple per-user rows
+        shared row, not add a 2nd one
     """
     db.set_escalation_config(users_db_path, 'warnungen',
                              escalation_channel='Telegram #1', escalation_after_minutes=5)
@@ -289,10 +288,7 @@ def test_alert_escalation_reaches_port_claimed_as_another_alerts_primary(
     """ Email/Telegram ports are shareable (see fake_text_ports): one
         Alert node's escalation_channel targeting 'Telegram #1' must
         still be delivered even while a 2nd, independent Alert node
-        holds 'Telegram #1' as its own permanently-claimed primary
-        port - previously this raised DriverPortInuseError and the
-        escalation was silently dropped, see
-        project_escalation_port_exclusivity memory
+        holds 'Telegram #1' as its own permanently-claimed primary port
     """
     db.set_current_users_db_path(users_db_path)
     try:

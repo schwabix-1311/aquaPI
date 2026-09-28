@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-""" Tests for the "silent-when-settled" fix: FadeCtrl/SunCtrl/UiInput
-    periodically re-post their current value via the HeartbeatMixin mixin
-    once settled, and SwitchDevice/AnalogDevice now post to the bus
-    even when the incoming value is unchanged (previously only the
-    hardware write was gated on change, silently dropping the post too).
+""" Tests for FadeCtrl/SunCtrl/UiInput periodically re-posting their
+    current value via the HeartbeatMixin mixin once settled, and for
+    SwitchDevice/AnalogDevice posting to the bus even when the incoming
+    value is unchanged (only the hardware write is gated on change).
 """
 
 import time

@@ -45,9 +45,7 @@ def test_config_json_global_keys_are_reimported_every_start(tmp_path):
     """ config.json has no editor yet - it must stay a live merge into
         self.globals on every start, not a one-time import, so an admin
         can still hand-edit it and have the change take effect on restart
-        (unlike Email/Telegram credentials, which moved out of config.json
-        once and for all, into the users DB, via a one-time migration that
-        already ran everywhere it needed to and has since been removed)
+        (unlike Email/Telegram credentials, which live in the users DB)
     """
     instance_path = str(tmp_path)
     cfg_path = os.path.join(instance_path, 'config.json')

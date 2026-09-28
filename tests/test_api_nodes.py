@@ -3,10 +3,9 @@
     - aquaPi/api.py: GET /api/nodes/ and GET /api/nodes/<id> return plain
       JSON (via json.dumps + db.serialize_node), with no jsonpickle
       object-introspection artifacts (no 'py/object' keys etc.).
-    - Alert.conditions (previously a set of custom AlertCond objects) is
-      normalized to a list of plain dicts, reusing aquaPi/db.py's
-      serialize_node()/_cond_to_dict(), the same logic used for SQLite
-      persistence.
+    - Alert.conditions is normalized to a list of plain dicts, reusing
+      aquaPi/db.py's serialize_node()/_cond_to_dict(), the same logic
+      used for SQLite persistence.
 """
 
 import json

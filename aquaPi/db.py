@@ -141,8 +141,7 @@ def source_data_range_ok(source_range: str) -> bool:
         The one incompatibility today is a STRING source (Alert,
         TextInput): every consumer either compares the value numerically
         (Ctrl setpoints, AlertCond limits, Aux math) or stores it in a
-        numeric column (History) - none handles a string, and wiring one
-        in used to crash the app on the next restart. Keyed on
+        numeric column (History) - none handles a string. Keyed on
         data_range, not node type or role, so a new node variant needs
         no change here; widen this when a consumer that genuinely
         accepts STRING appears.
@@ -1452,9 +1451,9 @@ def instantiate_template(data: dict[str, Any], taken_ids: set[str],
         state['pos_y'] = float(state.get('pos_y', 0.0) or 0.0) + offset_y
         if 'port' in state:
             # defense in depth: also blank ports here, not just in
-            # capture_node_template(), so templates saved before this
-            # fix (which may still carry a real port) don't crash the
-            # insert with a 'port already in use' error either
+            # capture_node_template(), so an already-persisted template
+            # that still carries a real port doesn't crash the insert
+            # with a 'port already in use' error either
             state['port'] = ''
         new_nodes.append(_deserialize_node(entry['type'], state))
 
@@ -1584,8 +1583,8 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
                 created_at    TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
-        # 'email' was added in Step 22 (password reset delivery) - migrate
-        # existing DBs that were created before this column existed
+        # 'email' isn't in the CREATE TABLE above - add it here for any
+        # DB from before this column existed
         user_cols = {row['name'] for row in conn.execute('PRAGMA table_info(users)')}
         if 'email' not in user_cols:
             conn.execute('ALTER TABLE users ADD COLUMN email TEXT')
@@ -1597,10 +1596,7 @@ def get_users_connection(db_path: str) -> sqlite3.Connection:
         """)
         # a single, admin-configured escalation config per Alert node -
         # NOT per-user (aquaPi's "users" are shared roles, not individual
-        # people; see commit 16a0f3f, which made this same call for the
-        # primary notification channel). Replaces the old per-user table
-        # 'user_notification_prefs' (long gone - its one-time ./dbg
-        # migration into this table already ran and was stripped)
+        # people)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS alert_escalation_config (
                 alert_node_id            TEXT PRIMARY KEY,
@@ -2189,9 +2185,7 @@ def set_notification_config(db_path: str, channel: str,
 # One row per Alert node, not per user - aquaPi's "users" are shared roles
 # (admin/operator/viewer), not individual people, so a personal escalation
 # preference has no real audience. Admins configure this once per Alert
-# node; operators may view it read-only. Replaced the old per-user table
-# 'user_notification_prefs' (long gone - its one-time ./dbg migration into
-# this table already ran and was stripped).
+# node; operators may view it read-only.
 
 def set_escalation_config(db_path: str, alert_node_id: str,
                           escalation_channel: str = 'none',
@@ -2199,8 +2193,8 @@ def set_escalation_config(db_path: str, alert_node_id: str,
     """ set (create or replace) the shared escalation config for a given
         Alert node: escalation_channel is an IoRegistry port name (e.g.
         'Telegram #2'), or 'none' to disable. Additionally notified once
-        the alert has stayed active for at least 'escalation_after_minutes'
-        (Step 28), 0 disables escalation.
+        the alert has stayed active for at least 'escalation_after_minutes',
+        0 disables escalation.
     """
     if not escalation_channel:
         raise ValueError(f'Invalid escalation channel: {escalation_channel!r}')

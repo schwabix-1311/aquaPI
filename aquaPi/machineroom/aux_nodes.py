@@ -305,16 +305,15 @@ class VolatilityAux(SingleInAux):
         self._metric: str = metric
         self.scale: float = scale
         # only ever transitions False -> True, once, for this node
-        # instance's lifetime (see auto_scale's docstring). Unlike the
-        # single-instant design this replaced, calibration is no longer
-        # cheap (up to 24h of real time), so - unlike that design's
-        # comment used to say - a process restart must NOT re-arm it:
-        # __setstate__ below restores _calibrated/_calib_start/
-        # _calib_samples exactly as they were, so an ordinary service
-        # restart during normal operation (a deploy, an update) neither
-        # throws away a completed calibration nor loses progress on one
-        # still running. Only a live False->True re-toggle of auto_scale
-        # (the setter below) re-arms it.
+        # instance's lifetime (see auto_scale's docstring). Calibration
+        # is not cheap (up to 24h of real time), so a process restart
+        # must NOT re-arm it: __setstate__ below restores
+        # _calibrated/_calib_start/_calib_samples exactly as they were,
+        # so an ordinary service restart during normal operation (a
+        # deploy, an update) neither throws away a completed calibration
+        # nor loses progress on one still running. Only a live
+        # False->True re-toggle of auto_scale (the setter below) re-arms
+        # it.
         self._calibrated: bool = False
         # wall-clock (time.time(), NOT monotonic - must survive a
         # restart's clock reset) timestamp of when the current

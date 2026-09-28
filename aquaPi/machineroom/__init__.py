@@ -47,10 +47,8 @@ class MachineRoom:
         instance_path = global_cfg['INSTANCE_PATH']
 
         # merge customized global config from this file - unlike Email/
-        # Telegram credentials (which moved out of config.json once and for
-        # all, into the users DB, since that already has a /settings
-        # editor - see ROADMAP.md for the now-removed one-time migration
-        # that used to handle that move), there's no editor yet for the
+        # Telegram credentials (which live in the users DB, since that
+        # already has a /settings editor), there's no editor yet for the
         # rest of this file's keys (DEFAULT_CONFIG, backup settings, ...),
         # so it stays a live merge, re-read on every start, not a one-time
         # migration.
@@ -64,10 +62,8 @@ class MachineRoom:
                 custom_cfg = json.load(f_in)
             self.globals.update(custom_cfg)
 
-        # AQUAPI_WIRING used to name the pickle file directly (e.g.
-        # 'wiring.pickle' or, via `run -w nodes`, 'nodes.pickle'). It now
-        # names the *base* wiring, stored in an equally named '.sqlite'
-        # database.
+        # AQUAPI_WIRING names the *base* wiring, stored in a '.sqlite'
+        # database of the same name.
         #
         # This name doubles as the default-config selector: 'wiring' (the
         # default, no config.json entry needed) is the real/production
@@ -76,9 +72,7 @@ class MachineRoom:
         # other name (e.g. 'dev', set via config.json's "DEFAULT_CONFIG"
         # or a one-off '-w NAME') bootstraps a small simulated dev/test
         # node set instead, in its own separate instance/<name>.sqlite -
-        # see create_default_nodes(). This replaces the old TEST_BUS/
-        # REAL_CONFIG constants that used to live (and had to be kept out
-        # of commits) in create_default_nodes() itself.
+        # see create_default_nodes().
         #
         # db.resolve_wiring_db_path() re-derives the same config.json/
         # AQUAPI_WIRING resolution independently, kept as the single
@@ -98,10 +92,7 @@ class MachineRoom:
         self.globals['BUS_WIRING'] = wiring_file
 
         # Email/Telegram credentials live in the users SQLite DB (table
-        # 'notification_config'), not in config.json - a config.json
-        # holding them was a one-time migration source in earlier
-        # versions; that migration already ran everywhere that mattered
-        # and has been removed (see ROADMAP.md).
+        # 'notification_config'), not in config.json.
         users_db_path = db.get_users_db_path(instance_path)
         self.globals['USERS_DB'] = users_db_path
 

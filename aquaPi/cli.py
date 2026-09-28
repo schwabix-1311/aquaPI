@@ -202,45 +202,54 @@ def reconfig(ctx):
         entered here - if a channel already has multiple accounts
         configured, running this collapses it down to one.
     """
+    # Prompts/messages here are German-only, deliberately - this command is
+    # what a (German-speaking, non-technical) customer hits during the
+    # guided install.sh flow. Everything else in this CLI (--help text,
+    # other commands) stays English, aimed at the maintainer. See
+    # ROADMAP.md if English support is ever needed here too.
     users_db = ctx.obj['users_db']
     changed = False
 
     for channel in db.NOTIFICATION_CHANNELS:
         existing = db.get_notification_config(users_db, channel)
-        status = f'{len(existing)} account(s) configured' if existing else 'not configured'
+        if existing:
+            n = len(existing)
+            status = f'{n} Konto eingerichtet' if n == 1 else f'{n} Konten eingerichtet'
+        else:
+            status = 'nicht eingerichtet'
         click.echo(f'\n{channel}: {status}')
 
-        if not click.confirm(f'Configure {channel} now?', default=False):
+        if not click.confirm(f'{channel} jetzt einrichten?', default=False):
             continue
 
         if channel == 'Email':
             account = {
-                'server': click.prompt('SMTP server'),
-                'login': click.prompt('Login'),
-                'pwd': click.prompt('Password', hide_input=True),
-                'from': click.prompt('From address'),
-                'to': click.prompt('To address'),
+                'server': click.prompt('SMTP-Server (z.B. smtp.gmail.com)'),
+                'login': click.prompt('Benutzername'),
+                'pwd': click.prompt('Passwort', hide_input=True),
+                'from': click.prompt('Absenderadresse'),
+                'to': click.prompt('Empfängeradresse'),
             }
         else:  # 'Telegram'
             account = {
-                'bot_token': click.prompt('Bot token', hide_input=True),
-                'chat_name': click.prompt('Chat name'),
+                'bot_token': click.prompt('Bot-Token', hide_input=True),
+                'chat_name': click.prompt('Chat-Name'),
             }
             # a blank chat_id is omitted entirely (not stored as '') -
             # DriverTelegram.find_ports() already auto-detects a missing
             # chat_id on next app start, no need to reimplement that here
             chat_id = click.prompt(
-                'Chat ID (leave blank to auto-detect on next app start)',
+                'Chat-ID (leer lassen, um sie beim nächsten Start automatisch zu ermitteln)',
                 default='', show_default=False)
             if chat_id:
                 account['chat_id'] = chat_id
 
         db.set_notification_config(users_db, channel, [account])
-        click.echo(f'{channel} configuration saved.')
+        click.echo(f'{channel}-Konfiguration gespeichert.')
         changed = True
 
     if not changed:
-        click.echo('\nNo changes made.')
+        click.echo('\nKeine Änderungen vorgenommen.')
         return
 
     # MachineRoom.__init__ reads notification config once at construction,
@@ -250,18 +259,20 @@ def reconfig(ctx):
     # config actually takes effect instead of silently sitting unused
     # until whenever the next restart happens to occur.
     if _systemd_service_active():
-        click.echo(f'\nRestarting {_SERVICE_NAME}.service so the new configuration '
-                  'takes effect ...')
+        click.echo(f'\n{_SERVICE_NAME}.service wird neu gestartet, damit die neue '
+                  'Konfiguration wirksam wird ...')
         try:
             subprocess.run(['sudo', 'systemctl', 'restart', _SERVICE_NAME], check=True)
         except subprocess.CalledProcessError:
             click.secho(
-                f'Failed to restart {_SERVICE_NAME}.service automatically - restart it '
-                f'yourself (`sudo systemctl restart {_SERVICE_NAME}`).', fg='yellow')
+                f'{_SERVICE_NAME}.service konnte nicht automatisch neu gestartet werden - '
+                f'starten Sie ihn manuell neu (`sudo systemctl restart {_SERVICE_NAME}`).',
+                fg='yellow')
         else:
-            click.echo(f'{_SERVICE_NAME}.service restarted.')
+            click.echo(f'{_SERVICE_NAME}.service neu gestartet.')
     else:
-        click.echo('\nRestart aquaPi for the new notification config to take effect.')
+        click.echo('\nStarten Sie aquaPi neu, damit die neue Benachrichtigungs-Konfiguration '
+                  'wirksam wird.')
 
 
 _SERVICE_UNIT_PATH = '/etc/systemd/system/aquapi.service'

@@ -287,8 +287,8 @@ def test_reconfig_declining_a_channel_leaves_existing_config_untouched(runner, i
 def test_reconfig_declining_everything_reports_no_changes_and_skips_restart(runner, instance_dir):
     result = _invoke(runner, instance_dir, ['reconfig'], input='n\nn\n')
     assert result.exit_code == 0
-    assert 'No changes made.' in result.output
-    assert 'Restart' not in result.output
+    assert 'Keine Änderungen vorgenommen.' in result.output
+    assert 'neu gestartet' not in result.output
 
 
 def test_reconfig_restarts_an_active_systemd_service_after_a_real_change(runner, instance_dir, monkeypatch):
@@ -299,7 +299,7 @@ def test_reconfig_restarts_an_active_systemd_service_after_a_real_change(runner,
     stdin = 'y\nsmtp.example.com\nme@example.com\nsecret\nme@example.com\nyou@example.com\nn\n'
     result = _invoke(runner, instance_dir, ['reconfig'], input=stdin)
     assert result.exit_code == 0
-    assert f'{cli_module._SERVICE_NAME}.service restarted.' in result.output
+    assert f'{cli_module._SERVICE_NAME}.service neu gestartet.' in result.output
     assert any(f'systemctl restart {cli_module._SERVICE_NAME}' in ' '.join(c) for c in calls)
 
 
@@ -311,7 +311,7 @@ def test_reconfig_no_restart_attempted_when_nothing_changed_even_if_service_acti
 
     result = _invoke(runner, instance_dir, ['reconfig'], input='n\nn\n')
     assert result.exit_code == 0
-    assert 'No changes made.' in result.output
+    assert 'Keine Änderungen vorgenommen.' in result.output
     assert calls == []  # no systemctl call at all - nothing to take effect
 
 
@@ -322,7 +322,7 @@ def test_reconfig_warns_but_does_not_fail_if_restart_itself_fails(runner, instan
     stdin = 'n\ny\n12345:token\nMy Chat\n\n'
     result = _invoke(runner, instance_dir, ['reconfig'], input=stdin)
     assert result.exit_code == 0  # the config was still saved successfully
-    assert 'Failed to restart' in result.output
+    assert 'konnte nicht automatisch neu gestartet werden' in result.output
     # the actual save must not have been rolled back just because the
     # follow-up restart failed
     telegram_cfg = db.get_notification_config(str(instance_dir / 'users.sqlite'), 'Telegram')

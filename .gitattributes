@@ -1,0 +1,21 @@
+# Paths excluded from `git archive` output (and therefore from GitHub's
+# auto-generated release source tarballs, which are built via `git
+# archive`) - a customer release should carry runtime code and
+# customer-facing docs only, not this project's own development tooling.
+# Has NO effect on a plain `git clone` - a normal dev checkout still gets
+# everything, as it always has.
+tests/ export-ignore
+.github/ export-ignore
+.junie/ export-ignore
+tools/ export-ignore
+.flake8 export-ignore
+.pylintrc export-ignore
+pytest.ini export-ignore
+.mcp.json export-ignore
+requirements-dev.txt export-ignore
+ToDo export-ignore
+ROADMAP.md export-ignore
+AGENTS.md export-ignore
+dbg export-ignore
+run export-ignore
+.gitattributes export-ignore

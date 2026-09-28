@@ -1,0 +1,56 @@
+name: Release
+
+# Triggered by pushing a version tag (e.g. `git tag v1.0.0 && git push
+# origin v1.0.0`). Builds a customer-facing release bundle - not the same
+# as GitHub's own auto-generated "Source code" archive for the tag, which
+# (a) is fine re: excluding dev-only paths (.gitattributes' export-ignore
+# already handles that) but (b) never includes submodule content, so it
+# would silently ship without the tc420 driver. This workflow builds its
+# own tarball instead, with tc420's real files copied in.
+#
+# Tip: make sure the pytest/pylint/js-tests workflows are green on the
+# commit you're about to tag before pushing the tag - this workflow does
+# not itself gate on them.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Build customer release bundle
+        run: |
+          set -euo pipefail
+          mkdir dist
+          # export-ignore-respecting tree (excludes tests/, dbg, ToDo, etc.
+          # - see .gitattributes) - but this alone leaves
+          # dist/aquaPi/driver/tc420/ empty, since git archive treats a
+          # submodule path as a bare gitlink, never its real content.
+          git archive --format=tar HEAD | tar -x -C dist
+          rm -rf dist/aquaPi/driver/tc420
+          cp -r aquaPi/driver/tc420 dist/aquaPi/driver/tc420
+          rm -rf dist/aquaPi/driver/tc420/.git dist/aquaPi/driver/tc420/.claude
+          tar czf "aquapi-${GITHUB_REF_NAME}.tar.gz" -C dist .
+          cp "aquapi-${GITHUB_REF_NAME}.tar.gz" aquapi-latest.tar.gz
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "aquapi-${GITHUB_REF_NAME}.tar.gz" \
+            aquapi-latest.tar.gz \
+            install.sh \
+            --title "aquaPi ${GITHUB_REF_NAME}" \
+            --generate-notes

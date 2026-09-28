@@ -99,6 +99,20 @@ log_default = {
 }
 
 
+def _read_app_version(repo_root: str | None = None) -> str:
+    """ a release build writes a VERSION file next to this package (see
+        .github/workflows/release.yml); a dev checkout has none, so
+        callers see 'dev' instead of a stale or guessed version number
+    """
+    if repo_root is None:
+        repo_root = path.dirname(path.dirname(__file__))
+    try:
+        with open(path.join(repo_root, 'VERSION'), encoding='utf8') as f:
+            return f.read().strip()
+    except OSError:
+        return 'dev'
+
+
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
@@ -111,6 +125,7 @@ def create_app() -> Flask:
         SECRET_KEY=secrets.token_hex(32),
         INSTANCE_PATH=app.instance_path,
         APP_NAME='aquaPi',
+        APP_VERSION=_read_app_version(),
     )
 
     # in debug mode, app starts a 2nd instance and thus we

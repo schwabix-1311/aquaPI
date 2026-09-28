@@ -41,6 +41,9 @@ jobs:
           rm -rf dist/aquaPi/driver/tc420
           cp -r aquaPi/driver/tc420 dist/aquaPi/driver/tc420
           rm -rf dist/aquaPi/driver/tc420/.git dist/aquaPi/driver/tc420/.claude
+          # read by aquaPi/__init__.py::_read_app_version() at startup, shown
+          # on /about - not part of the git tree, a dev checkout has none
+          echo "${GITHUB_REF_NAME}" > dist/VERSION
           tar czf "aquapi-${GITHUB_REF_NAME}.tar.gz" -C dist .
           cp "aquapi-${GITHUB_REF_NAME}.tar.gz" aquapi-latest.tar.gz
 

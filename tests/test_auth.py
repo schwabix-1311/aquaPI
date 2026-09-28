@@ -27,6 +27,7 @@ def app(tmp_path):
     app.config['INSTANCE_PATH'] = str(tmp_path)
     app.config['TESTING'] = True
     app.config['APP_NAME'] = 'aquaPi'
+    app.config['APP_VERSION'] = 'test'
 
     auth.init_app(app)
     app.register_blueprint(auth.bp)

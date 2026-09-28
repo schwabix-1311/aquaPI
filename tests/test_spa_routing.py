@@ -25,6 +25,7 @@ def app():
     app = Flask(__name__, template_folder=_TEMPLATE_FOLDER)
     app.config['TESTING'] = True
     app.config['APP_NAME'] = 'aquaPi'
+    app.config['APP_VERSION'] = 'test'
     app.register_blueprint(spa.bp)
     return app
 

@@ -156,8 +156,9 @@ export default
 			label: 'About',
 			heading: 'About',
 			copyright: 'Copyright',
+			version: 'Version',
 			donateMessage: 'Please send praise to tkuhn, you may keep the bugs.',
-			hintPlaceholder: 'Someday this page will show version, copyright, system state, etc.<br>... and a link to REST API documentation.',
+			apiDocsHint: 'Looking for the REST API? Browse it at',
 		},
 		users: {
 			label: 'Users',

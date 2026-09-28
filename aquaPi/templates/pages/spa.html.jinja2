@@ -65,6 +65,7 @@
 		<script src="{{ url_for('static', filename='libs/sortablejs.1.8.4.js') }}"></script>
 
 		<script>window.__APP_NAME__ = {{ config.APP_NAME | tojson }};</script>
+		<script>window.__APP_VERSION__ = {{ config.APP_VERSION | tojson }};</script>
 		<script type="module" src="{{ url_for('static', filename='spa/main.js') }}"></script>
 	</body>
 </html>

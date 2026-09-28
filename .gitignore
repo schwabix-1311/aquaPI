@@ -145,6 +145,10 @@ logs/
 questdb-*/
 questdb-*.tar.gz
 
+# written into release tarballs by .github/workflows/release.yml, a dev
+# checkout has none (see aquaPi/__init__.py::_read_app_version())
+/VERSION
+
 # local MCP server config (per-machine, not shared)
 .mcp.json
 

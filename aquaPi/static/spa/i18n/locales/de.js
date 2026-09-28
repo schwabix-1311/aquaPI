@@ -156,8 +156,9 @@ export default
 			label: 'Über @:app.name',
 			heading: 'Über @:app.name',
 			copyright: 'Copyright',
+			version: 'Version',
 			donateMessage: 'Lob bitte an tkuhn, Bugs darfst du behalten.',
-			hintPlaceholder: 'Diese Seite wird irgendwann Version, Copyright, Systemstatus etc. anzeigen.<br>... und einen Link zur REST-API-Dokumentation.',
+			apiDocsHint: 'Auf der Suche nach der REST-API? Du findest sie unter',
 		},
 		users: {
 			label: 'Benutzer',

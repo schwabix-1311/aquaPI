@@ -9,18 +9,17 @@
 			<v-row justify="start">
 				<v-col :cols="12">
 					<v-alert
-						dismissible
+						closable
 						border="left"
 						elevation="3"
 						type="info"
-						YYtext
-						:icon="'mdi-clock'"
-						YYcolor="'orange'"
-						v-html="$t('pages.about.hintPlaceholder')"
 					>
+						{{ $t('pages.about.apiDocsHint') }}
+						<a href="/api/" target="_blank">/api/</a>
 					</v-alert>
 				</v-col>
 			</v-row>
+			<p>{{ $t('pages.about.version') }}: {{ appVersion }}</p>
 			<p><div class="text-h5">{{ $t('pages.about.copyright') }}</div></p>
 			<p>This software is released under GNU GPL v.3</br>
 				(c) 2023 Markus Kuhn, released under GNU GPL v.3</p>
@@ -31,5 +30,11 @@
 </template>
 
 <script>
-export default {}
+export default {
+	data() {
+		return {
+			appVersion: window.__APP_VERSION__ || 'dev',
+		}
+	},
+}
 </script>

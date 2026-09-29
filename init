@@ -41,6 +41,22 @@ then
     git submodule update
     fi
 
+  # a dev box routinely SSHes into whatever hardware you're working on
+  # (a Pi over Wi-Fi, say) - without a keepalive, a dropped connection can
+  # hang silently for hours before anything notices. Host-agnostic ("Host
+  # *"), since this repo has no way to know your actual target(s); only
+  # added if nothing already sets a catch-all block, so an existing
+  # customization is never touched.
+  if [ ! -f ~/.ssh/config ] || ! grep -q "^Host \*$" ~/.ssh/config
+  then
+    echo "===== adding resilient SSH defaults for any host (~/.ssh/config)"
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+    { echo ""; echo "Host *"; echo "    ServerAliveInterval 15"; \
+      echo "    ServerAliveCountMax 3"; echo "    ConnectTimeout 10"; } >> ~/.ssh/config
+    chmod 600 ~/.ssh/config
+    fi
+
   # Debian derivatives don't come with py3 venv by default
   grep -i debian /usr/lib/os-release && sudo apt-get install python3-venv
   # ... likewise python3-dev, which is needed for "pip install --use-pep517 .."

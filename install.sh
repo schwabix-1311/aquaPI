@@ -85,6 +85,20 @@ sudo cp aquaPi/driver/tc420/etc/udev/rules.d/99-tc420.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 sudo usermod -aG plugdev "$(whoami)"
 
+# --- SSH-Verbindungen robuster gegen Netzwerkaussetzer machen ---------------
+# Ein Pi läuft oft über WLAN; ohne diese Einstellung kann eine SSH-Sitzung
+# nach einem kurzen Netzwerkaussetzer stundenlang unbemerkt offen hängen,
+# statt zügig als abgebrochen erkannt zu werden.
+
+if [ -f /etc/ssh/sshd_config ] && ! grep -q '^ClientAliveInterval' /etc/ssh/sshd_config; then
+  echo
+  echo "Richte SSH so ein, dass unterbrochene Verbindungen (z.B. nach einem"
+  echo "WLAN-Aussetzer) innerhalb weniger Sekunden erkannt werden."
+  printf '\n# von aquaPi install.sh ergaenzt: haengende SSH-Sitzungen zuegig erkennen\nClientAliveInterval 15\nClientAliveCountMax 3\n' \
+    | sudo tee -a /etc/ssh/sshd_config >/dev/null
+  sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
+fi
+
 # --- Benachrichtigungen einrichten ------------------------------------------
 
 echo

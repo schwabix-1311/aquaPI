@@ -1,0 +1,554 @@
+#!/usr/bin/env python3
+"""
+pid-autotune - a throwaway helper for improving a PidCtrl node's gains
+against a *live* aquaPi instance, without ever taking the controller out
+of the loop.
+
+Design, in one paragraph: the existing PID stays in full closed-loop
+control the entire time - this tool only perturbs the *setpoint* by a
+small, safe step and watches how the (already-working) controller
+responds, under whichever gains happen to be live at the time. That
+response is how a candidate gain set gets judged. A single polling loop
+(the Recorder below) is the one thing that talks to the sensor: it logs
+every reading AND is the safety backstop - the instant the sensor leaves
+[--temp-min, --temp-max], it reverts the node to the last-known-good
+("proven") gains and aborts, regardless of what the rest of the script
+is doing. Losing sensor visibility for several consecutive polls is
+treated the same as an out-of-bounds reading (can't claim "it's safe" if
+you can't see the sensor).
+
+This intentionally never does open-loop identification (no disabling the
+PID to inject a raw step into the heater output) - that would be the
+more "textbook" way to identify a plant model, but it also means nothing
+is correcting temperature for however long that takes, which is a worse
+risk trade for a tank with live fish than a slightly less rigorous
+closed-loop estimate.
+
+Subcommands:
+    status    - print current gains + live sensor reading, no changes
+    baseline  - step the setpoint by --step-delta under the CURRENT
+                (assumed-proven) gains, record the response, save a
+                report (incl. a suggested starting point for a candidate
+                d_fact) to --out-dir for `trial` to load
+    trial     - apply a candidate gain set, repeat the same step+measure
+                against a saved baseline, compare, and either keep the
+                candidate (if it's a clear improvement) or explicitly
+                revert to the baseline's proven gains
+    revert    - unconditionally write a given (or a saved baseline's)
+                gains back right now, no measurement
+
+Needs only `requests` (already an aquaPi dependency). Run it from the
+dev machine against the real host, e.g.:
+
+    venv/bin/python3 tools/pid-autotune status \\
+        --base-url http://aquapi2:5000 --node Heizleistung
+
+You'll be prompted for your own aquaPi login (operator/admin) - this
+tool never stores or hardcodes any credential.
+"""
+
+import argparse
+import getpass
+import json
+import os
+import statistics
+import sys
+import threading
+import time
+from datetime import datetime
+
+import requests
+
+
+# --- small helpers ----------------------------------------------------
+
+def log_line(msg: str) -> None:
+    print(f'[{datetime.now().strftime("%H:%M:%S")}] {msg}', flush=True)
+
+
+def die(msg: str, code: int = 1) -> None:
+    log_line(f'FATAL: {msg}')
+    sys.exit(code)
+
+
+# --- API client ---------------------------------------------------------
+
+class ApiClient:
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip('/')
+        self.session = requests.Session()
+        self.session.headers['X-Requested-With'] = 'XMLHttpRequest'
+
+    def login(self) -> None:
+        username = input('aquaPi username: ').strip()
+        password = getpass.getpass('aquaPi password: ')
+        resp = self.session.post(f'{self.base_url}/login',
+                                 data={'username': username, 'password': password},
+                                 timeout=10)
+        body = resp.json() if resp.content else {}
+        if resp.status_code != 200 or body.get('result') != 'SUCCESS':
+            die(f'login failed: {body.get("message", resp.text)}')
+        log_line(f'Logged in as {username!r}.')
+
+    def list_node_ids(self) -> list:
+        resp = self.session.get(f'{self.base_url}/api/nodes/', timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_node(self, node_id: str) -> dict:
+        resp = self.session.get(f'{self.base_url}/api/nodes/{node_id}', timeout=10)
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get('result') != 'SUCCESS':
+            raise RuntimeError(f'unexpected response for node {node_id!r}: {body}')
+        return body['data']
+
+    def set_node_settings(self, node_id: str, **fields) -> dict:
+        resp = self.session.put(f'{self.base_url}/api/nodes/{node_id}/settings',
+                                json=fields, timeout=10)
+        if resp.status_code != 200:
+            raise RuntimeError(f'PUT settings on {node_id!r} failed: {resp.status_code} {resp.text}')
+        return resp.json()
+
+    def find_node_by_name(self, name: str) -> dict:
+        for node_id in self.list_node_ids():
+            data = self.get_node(node_id)
+            if data.get('name') == name:
+                return data
+        raise RuntimeError(f'no node named {name!r} found')
+
+
+# --- the one polling loop: records samples AND enforces the safety bound -
+
+class Recorder(threading.Thread):
+    def __init__(self, api: ApiClient, sensor_id: str, heater_id: str,
+                 temp_min: float, temp_max: float, proven: dict,
+                 poll_interval: float, max_consec_errors: int = 5):
+        super().__init__(daemon=True)
+        self.api = api
+        self.sensor_id = sensor_id
+        self.heater_id = heater_id
+        self.temp_min = temp_min
+        self.temp_max = temp_max
+        self.proven = proven
+        self.poll_interval = poll_interval
+        self.max_consec_errors = max_consec_errors
+
+        self._t0 = time.monotonic()
+        self._log = []  # [(elapsed_s, temp, heater_output_pct), ...]
+        self._lock = threading.Lock()
+        self.abort_event = threading.Event()
+        self.stop_event = threading.Event()
+        self.abort_reason = None
+
+    def run(self) -> None:
+        consec_errors = 0
+        while not self.stop_event.is_set():
+            try:
+                temp = float(self.api.get_node(self.sensor_id)['data'])
+                output = float(self.api.get_node(self.heater_id)['data'])
+                consec_errors = 0
+            except Exception as ex:  # noqa: BLE001 - deliberately broad: any read failure is unsafe
+                consec_errors += 1
+                log_line(f'WARN: sensor/heater read failed ({ex}); '
+                        f'{consec_errors}/{self.max_consec_errors} consecutive')
+                if consec_errors >= self.max_consec_errors:
+                    self._trip(f'lost sensor visibility '
+                              f'({consec_errors} consecutive read failures)')
+                    return
+                self.stop_event.wait(self.poll_interval)
+                continue
+
+            with self._lock:
+                self._log.append((time.monotonic() - self._t0, temp, output))
+
+            if not (self.temp_min <= temp <= self.temp_max):
+                self._trip(f'temperature {temp:.3f}\xb0C outside '
+                          f'[{self.temp_min}, {self.temp_max}]')
+                return
+
+            self.stop_event.wait(self.poll_interval)
+
+    def _trip(self, reason: str) -> None:
+        self.abort_reason = reason
+        log_line(f'!!! SAFETY ABORT: {reason} - reverting to proven settings {self.proven} !!!')
+        try:
+            self.api.set_node_settings(self.heater_id, **self.proven)
+            log_line('Reverted successfully.')
+        except Exception as ex:  # noqa: BLE001
+            log_line(f'CRITICAL: the revert itself failed ({ex}) - '
+                    f'fix the live gains by hand right now via /parameters')
+        self.abort_event.set()
+
+    def snapshot(self) -> list:
+        with self._lock:
+            return list(self._log)
+
+    def since(self, t0: float) -> list:
+        return [(t - t0, temp, out) for t, temp, out in self.snapshot() if t >= t0]
+
+    def elapsed_now(self) -> float:
+        return time.monotonic() - self._t0
+
+
+# --- step-response measurement -----------------------------------------
+
+def wait_for_phase(recorder: Recorder, start_t: float, target: float,
+                   settle_band: float, min_settle_window_s: float,
+                   min_phase_s: float, max_phase_s: float) -> list:
+    """ blocks until the response (since start_t) looks settled around
+        `target` (every sample in a trailing window of min_settle_window_s
+        stays within settle_band of it, after at least min_phase_s has
+        elapsed), or max_phase_s has elapsed, or the recorder aborts.
+        Returns the recorded (elapsed, temp, output) slice for this phase.
+    """
+    while True:
+        if recorder.abort_event.is_set():
+            return recorder.since(start_t)
+        rows = recorder.since(start_t)
+        if rows:
+            elapsed = rows[-1][0]
+            if elapsed >= min_phase_s:
+                window = [r for r in rows if r[0] >= elapsed - min_settle_window_s]
+                window_span = elapsed - window[0][0] if window else 0.0
+                spans_enough = window_span >= min_settle_window_s - recorder.poll_interval
+                if spans_enough and all(abs(temp - target) <= settle_band for _, temp, _ in window):
+                    log_line(f'Settled within \xb1{settle_band}\xb0C of {target}\xb0C '
+                            f'after {elapsed:.0f}s.')
+                    return rows
+            if elapsed >= max_phase_s:
+                log_line(f'Timed out after {elapsed:.0f}s without settling - using what we have.')
+                return rows
+        time.sleep(2)
+
+
+def compute_metrics(rows: list, start_value: float, target: float) -> dict:
+    if not rows:
+        return {}
+    direction = 1.0 if target >= start_value else -1.0
+    delta = abs(target - start_value)
+    final_temp = rows[-1][1]
+
+    peak = max((temp for _, temp, _ in rows), default=start_value) if direction > 0 \
+        else min((temp for _, temp, _ in rows), default=start_value)
+    overshoot = max(0.0, direction * (peak - target))
+
+    rise_time = None
+    threshold = start_value + direction * 0.9 * delta
+    for t, temp, _ in rows:
+        if direction * (temp - start_value) >= direction * (threshold - start_value):
+            rise_time = t
+            break
+
+    settle_tol = max(0.03, 0.05 * delta)
+    settling_time = None
+    for i, (t, _, _) in enumerate(rows):
+        if all(abs(temp - target) <= settle_tol for _, temp, _ in rows[i:]):
+            settling_time = t
+            break
+
+    iae = 0.0
+    for i in range(1, len(rows)):
+        dt = rows[i][0] - rows[i - 1][0]
+        iae += abs(rows[i][1] - target) * dt
+
+    derivs = []
+    for i in range(1, len(rows)):
+        dt = rows[i][0] - rows[i - 1][0]
+        if dt > 0:
+            derivs.append(abs(rows[i][1] - rows[i - 1][1]) / dt)
+
+    return {
+        'final_temp': final_temp,
+        'steady_state_error': abs(final_temp - target),
+        'overshoot': overshoot,
+        'rise_time_s': rise_time,
+        'settling_time_s': settling_time,
+        'iae': iae,
+        'max_abs_deriv': max(derivs) if derivs else 0.0,
+        'median_sample_interval_s': statistics.median(
+            rows[i][0] - rows[i - 1][0] for i in range(1, len(rows))) if len(rows) > 1 else None,
+        'n_samples': len(rows),
+        'duration_s': rows[-1][0] if rows else 0.0,
+    }
+
+
+def print_metrics(label: str, m: dict) -> None:
+    if not m:
+        log_line(f'{label}: no data recorded')
+        return
+    log_line(f'{label}:')
+    log_line(f'  samples           : {m["n_samples"]} over {m["duration_s"]:.0f}s '
+            f'(median interval {m["median_sample_interval_s"]:.1f}s)')
+    log_line(f'  final temp        : {m["final_temp"]:.3f}\xb0C '
+            f'(steady-state error {m["steady_state_error"]:.3f}\xb0C)')
+    log_line(f'  overshoot         : {m["overshoot"]:.3f}\xb0C')
+    log_line(f'  rise time (90%)   : {m["rise_time_s"]}s'
+            if m["rise_time_s"] is not None else '  rise time (90%)   : never reached')
+    log_line(f'  settling time     : {m["settling_time_s"]}s'
+            if m["settling_time_s"] is not None else '  settling time     : never settled')
+    log_line(f'  IAE               : {m["iae"]:.4f} (\xb0C\xb7s, lower is better)')
+    log_line(f'  max |d(temp)/dt|  : {m["max_abs_deriv"]:.5f} \xb0C/s')
+
+
+# --- shared setup --------------------------------------------------------
+
+def resolve_nodes(api: ApiClient, heater_name: str) -> tuple:
+    heater = api.find_node_by_name(heater_name)
+    if heater['type'] != 'PidCtrl':
+        die(f'{heater_name!r} is a {heater["type"]}, not a PidCtrl')
+    # BusNode.receives is always a list (even for a single-input node like
+    # PidCtrl, which only ever has one entry - see msg_bus.py)
+    sensor_id = heater['receives'][0]
+    sensor = api.get_node(sensor_id)
+    log_line(f'Heater node {heater_name!r} (id={heater["id"]}) '
+            f'receives from sensor {sensor["name"]!r} (id={sensor_id}).')
+    return heater, sensor
+
+
+def check_live_gains_match(heater: dict, proven: dict, force: bool) -> None:
+    live = {k: heater[k] for k in ('setpoint', 'p_fact', 'i_fact', 'd_fact')}
+    mismatched = {k: (live[k], proven[k]) for k in live if abs(live[k] - proven[k]) > 1e-6}
+    if mismatched and not force:
+        log_line(f'Live gains {live} do not match the proven values {proven}: {mismatched}')
+        die('refusing to start from an unexpected state - fix it (or pass --force) first')
+    if mismatched:
+        log_line(f'WARNING (--force): proceeding despite mismatch {mismatched}')
+
+
+def make_recorder(args, api, heater_id, sensor_id, proven) -> Recorder:
+    rec = Recorder(api, sensor_id, heater_id, args.temp_min, args.temp_max,
+                   proven, args.poll_interval)
+    rec.start()
+    return rec
+
+
+def finish_recorder(rec: Recorder) -> None:
+    rec.stop_event.set()
+    rec.join(timeout=5)
+
+
+# --- subcommands ----------------------------------------------------------
+
+def cmd_status(args, api: ApiClient) -> None:
+    heater, sensor = resolve_nodes(api, args.node)
+    log_line(f'Sensor {sensor["name"]!r}: {sensor["data"]}{sensor.get("unit", "")}')
+    log_line(f'Heater {heater["name"]!r}: output={heater["data"]}%, '
+            f'setpoint={heater["setpoint"]}, p_fact={heater["p_fact"]}, '
+            f'i_fact={heater["i_fact"]}, d_fact={heater["d_fact"]}')
+
+
+def cmd_revert(args, api: ApiClient) -> None:
+    heater, _ = resolve_nodes(api, args.node)
+    proven = {'setpoint': args.proven_setpoint, 'p_fact': args.proven_p,
+             'i_fact': args.proven_i, 'd_fact': args.proven_d}
+    api.set_node_settings(heater['id'], **proven)
+    log_line(f'Reverted {args.node!r} to {proven}.')
+
+
+def cmd_baseline(args, api: ApiClient) -> None:
+    heater, sensor = resolve_nodes(api, args.node)
+    proven = {'setpoint': args.proven_setpoint, 'p_fact': args.proven_p,
+             'i_fact': args.proven_i, 'd_fact': args.proven_d}
+    check_live_gains_match(heater, proven, args.force)
+
+    rec = make_recorder(args, api, heater['id'], sensor['id'], proven)
+    interrupted = False
+    rows = []
+    target = args.proven_setpoint + args.step_delta
+    try:
+        log_line(f'Stepping setpoint {args.proven_setpoint}\xb0C -> {target}\xb0C ...')
+        log_line('(press Ctrl-C any time to abort - setpoint will be restored)')
+        t0 = rec.elapsed_now()
+        api.set_node_settings(heater['id'], setpoint=target)
+        rows = wait_for_phase(rec, t0, target, args.settle_band,
+                              args.min_settle_window, args.min_phase_minutes * 60,
+                              args.max_phase_minutes * 60)
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        log_line(f'Returning setpoint to {args.proven_setpoint}\xb0C.')
+        try:
+            api.set_node_settings(heater['id'], setpoint=args.proven_setpoint)
+        except Exception as ex:  # noqa: BLE001
+            log_line(f'WARN: could not restore setpoint ({ex}) - check /parameters by hand')
+        finish_recorder(rec)
+
+    if interrupted:
+        log_line('Baseline interrupted by user - setpoint restored, gains were never '
+                'touched by this command. Just re-run `baseline` from scratch tomorrow; '
+                'nothing partial was saved.')
+        sys.exit(130)
+
+    if rec.abort_event.is_set():
+        die(f'baseline aborted: {rec.abort_reason}')
+
+    metrics = compute_metrics(rows, args.proven_setpoint, target)
+    print_metrics('Baseline response', metrics)
+
+    if metrics.get('max_abs_deriv'):
+        suggested_d = round(args.d_probe_contribution / (100 * metrics['max_abs_deriv']), 2)
+        log_line(f'For reference: a d_fact of about {suggested_d} would add roughly '
+                f'{args.d_probe_contribution:.0f} percentage points of output at the '
+                f'steepest observed rate of change - a conservative starting point to '
+                f'review before trying it with `trial`, not an auto-applied value.')
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    out_path = os.path.join(args.out_dir, f'baseline_{int(time.time())}.json')
+    with open(out_path, 'w', encoding='utf8') as f:
+        json.dump({
+            'node': args.node, 'proven': proven, 'step_delta': args.step_delta,
+            'temp_min': args.temp_min, 'temp_max': args.temp_max,
+            'metrics': metrics, 'rows': rows,
+        }, f, indent=1)
+    log_line(f'Saved baseline to {out_path}')
+    log_line(f'Next: tools/pid-autotune trial --base-url {args.base_url} --node {args.node} '
+            f'--baseline-file {out_path} --p-fact ... --i-fact ... --d-fact ...')
+
+
+def cmd_trial(args, api: ApiClient) -> None:
+    with open(args.baseline_file, encoding='utf8') as f:
+        baseline = json.load(f)
+    proven = baseline['proven']
+    base_metrics = baseline['metrics']
+    target = proven['setpoint'] + baseline['step_delta']
+
+    heater, sensor = resolve_nodes(api, args.node)
+    check_live_gains_match(heater, proven, args.force)
+
+    candidate = {
+        'p_fact': args.p_fact if args.p_fact is not None else proven['p_fact'],
+        'i_fact': args.i_fact if args.i_fact is not None else proven['i_fact'],
+        'd_fact': args.d_fact if args.d_fact is not None else proven['d_fact'],
+    }
+
+    rec = make_recorder(args, api, heater['id'], sensor['id'], proven)
+    interrupted = False
+    rows = []
+    try:
+        log_line(f'Applying candidate gains: {candidate} (proven was {proven})')
+        api.set_node_settings(heater['id'], **candidate)
+        log_line(f'Stepping setpoint {proven["setpoint"]}\xb0C -> {target}\xb0C ...')
+        log_line('(press Ctrl-C any time to abort - gains and setpoint will be restored)')
+        t0 = rec.elapsed_now()
+        api.set_node_settings(heater['id'], setpoint=target)
+        rows = wait_for_phase(rec, t0, target, args.settle_band,
+                              args.min_settle_window, args.min_phase_minutes * 60,
+                              args.max_phase_minutes * 60)
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        finish_recorder(rec)
+        if interrupted or rec.abort_event.is_set():
+            log_line(f'Reverting gains and setpoint to proven values: {proven}')
+            try:
+                api.set_node_settings(heater['id'], **proven)
+            except Exception as ex:  # noqa: BLE001
+                log_line(f'WARN: revert failed ({ex}) - check /parameters by hand immediately')
+        else:
+            log_line(f'Returning setpoint to {proven["setpoint"]}\xb0C.')
+            try:
+                api.set_node_settings(heater['id'], setpoint=proven['setpoint'])
+            except Exception as ex:  # noqa: BLE001
+                log_line(f'WARN: could not restore setpoint ({ex}) - check /parameters by hand')
+
+    if interrupted:
+        log_line('Trial interrupted by user - reverted to proven gains/setpoint. '
+                'Just re-run `trial` from scratch tomorrow; nothing partial was saved.')
+        sys.exit(130)
+
+    if rec.abort_event.is_set():
+        die(f'trial aborted: {rec.abort_reason} (gains already reverted to {proven})')
+
+    trial_metrics = compute_metrics(rows, proven['setpoint'], target)
+    print_metrics('Baseline response (saved)', base_metrics)
+    print_metrics('Trial response', trial_metrics)
+
+    improved = (trial_metrics['iae'] <= base_metrics['iae'] * (1 - args.min_improvement)
+               and trial_metrics['overshoot'] <= base_metrics['overshoot'] + args.overshoot_tolerance)
+
+    if improved:
+        log_line(f'=> KEEPING candidate gains {candidate} - '
+                f'IAE {trial_metrics["iae"]:.4f} vs baseline {base_metrics["iae"]:.4f}, '
+                f'overshoot {trial_metrics["overshoot"]:.3f}\xb0C vs '
+                f'{base_metrics["overshoot"]:.3f}\xb0C.')
+        log_line(f'Live gains on {args.node!r} are now: {candidate}')
+    else:
+        log_line(f'=> NOT a clear improvement (IAE {trial_metrics["iae"]:.4f} vs '
+                f'{base_metrics["iae"]:.4f}, overshoot {trial_metrics["overshoot"]:.3f}\xb0C vs '
+                f'{base_metrics["overshoot"]:.3f}\xb0C) - reverting to proven gains {proven}.')
+        api.set_node_settings(heater['id'], p_fact=proven['p_fact'],
+                              i_fact=proven['i_fact'], d_fact=proven['d_fact'])
+
+
+# --- CLI ------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--base-url', required=True, help="e.g. http://aquapi2:5000")
+    p.add_argument('--node', default='Heizleistung', help="the PidCtrl node's display name")
+    p.add_argument('--temp-min', type=float, default=23.0)
+    p.add_argument('--temp-max', type=float, default=27.0)
+    p.add_argument('--poll-interval', type=float, default=10.0,
+                   help="seconds between safety-watchdog/sample reads")
+    p.add_argument('--proven-setpoint', type=float, default=25.0)
+    p.add_argument('--proven-p', type=float, default=110.0)
+    p.add_argument('--proven-i', type=float, default=0.07)
+    p.add_argument('--proven-d', type=float, default=0.0)
+    p.add_argument('--force', action='store_true',
+                   help="proceed even if live gains don't match --proven-*")
+
+    sub = p.add_subparsers(dest='cmd', required=True)
+
+    sub.add_parser('status')
+
+    sub.add_parser('revert')
+
+    base = sub.add_parser('baseline')
+    base.add_argument('--step-delta', type=float, default=0.8,
+                      help="°C added to --proven-setpoint for the test step")
+    base.add_argument('--settle-band', type=float, default=0.05)
+    base.add_argument('--min-settle-window', type=float, default=600.0,
+                      help="seconds a reading must stay within --settle-band to count as settled")
+    base.add_argument('--min-phase-minutes', type=float, default=10.0)
+    base.add_argument('--max-phase-minutes', type=float, default=90.0)
+    base.add_argument('--d-probe-contribution', type=float, default=5.0,
+                      help="percentage points used to size the suggested d_fact")
+    base.add_argument('--out-dir', default='pid_autotune_runs')
+
+    trial = sub.add_parser('trial')
+    trial.add_argument('--baseline-file', required=True)
+    trial.add_argument('--p-fact', type=float, default=None)
+    trial.add_argument('--i-fact', type=float, default=None)
+    trial.add_argument('--d-fact', type=float, default=None)
+    trial.add_argument('--settle-band', type=float, default=0.05)
+    trial.add_argument('--min-settle-window', type=float, default=600.0)
+    trial.add_argument('--min-phase-minutes', type=float, default=10.0)
+    trial.add_argument('--max-phase-minutes', type=float, default=90.0)
+    trial.add_argument('--min-improvement', type=float, default=0.05,
+                       help="required fractional IAE reduction vs baseline, e.g. 0.05 = 5%%")
+    trial.add_argument('--overshoot-tolerance', type=float, default=0.05,
+                       help="°C of extra overshoot still tolerated as 'no worse'")
+
+    return p
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    if args.temp_min >= args.temp_max:
+        die('--temp-min must be < --temp-max')
+
+    api = ApiClient(args.base_url)
+    api.login()
+
+    {
+        'status': cmd_status,
+        'revert': cmd_revert,
+        'baseline': cmd_baseline,
+        'trial': cmd_trial,
+    }[args.cmd](args, api)
+
+
+if __name__ == '__main__':
+    main()

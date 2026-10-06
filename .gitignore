@@ -149,6 +149,9 @@ questdb-*.tar.gz
 # checkout has none (see aquaPi/__init__.py::_read_app_version())
 /VERSION
 
+# tools/pid-autotune's saved run data (per-machine experiment logs)
+/pid_autotune_runs/
+
 # local MCP server config (per-machine, not shared)
 .mcp.json
 

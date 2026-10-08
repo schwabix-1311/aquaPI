@@ -40,9 +40,9 @@
      "pos_x": 0.0,
      "pos_y": 0.0,
      "port": "",
-     "interval": 120.0,
+     "interval": 60.0,
      "initval": 25.0,
-     "avg": 1
+     "avg": 3
     }
    },
    {
@@ -63,8 +63,8 @@
      "pos_x": 310.0,
      "pos_y": 0.0,
      "setpoint": 25.0,
-     "p_fact": 105.0,
-     "i_fact": 0.07,
+     "p_fact": 180.0,
+     "i_fact": 0.05,
      "d_fact": 0.0
     }
    },

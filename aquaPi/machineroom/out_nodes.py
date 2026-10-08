@@ -184,13 +184,12 @@ class SlowPwmDevice(DeviceNode):
         self.data: float = 50.0
         self.cycle = float(cycle)
         self._inverted = inverted
+        self._on = False
         self._thread = None
         self._thread_stop = False
-        # protects the stop-old/start-new sequence in set() below - during
+        # protects starting the pulse thread in set() below - during
         # startup, node.plugin()'s MsgHello cascades can re-enter set()
-        # for this same device several times in quick succession, racing
-        # unguarded self._thread/self._thread_stop access and deadlocking
-        # in .join()
+        # for this same device several times in quick succession
         self._set_lock = Lock()
         self.set(self.data)
         log.verbose('%s init to %f|%r|%r s', self.name, self.data, inverted, cycle)
@@ -214,7 +213,8 @@ class SlowPwmDevice(DeviceNode):
     @inverted.setter
     def inverted(self, inverted: bool) -> None:
         self._inverted = inverted
-        self.set(self.data)
+        if self._driver:   # re-drive the current state with the new polarity
+            self._driver.write(self._on if not inverted else not self._on)
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
@@ -223,45 +223,63 @@ class SlowPwmDevice(DeviceNode):
 
         super().listen(msg)
 
-    def _pulse(self, hi_sec: float, cycle: float) -> None:
-        def toggle_and_wait(state: bool, end: float) -> bool:
-            start = time.time()
-            if self._driver:
-                self._driver.write(state  if not self._inverted else not state)
-            log.debug('%s: ======= posts %d', self.id, 100 if state else 0)
-            self.post(MsgData(self.id, 100  if state else 0))
-            # avoid error accumulation by exact final sleep()
-            while time.time() < end - .1:
-                if self._thread_stop:
-                    self._thread_stop = False
-                    return False
-                time.sleep(.1)
-            time.sleep(max(0, end - time.time()))
-            log.debug('  _pulse needed %f instead of %f',
-                      time.time() - start, end - start)
-            return True
+    def _write(self, state: bool) -> None:
+        self._on = state
+        if self._driver:
+            self._driver.write(state if not self._inverted else not state)
+        log.debug('%s: ======= posts %d', self.id, 100 if state else 0)
+        self.post(MsgData(self.id, 100 if state else 0))
 
-        while True:
-            lead_edge = time.time()
-            if hi_sec > 0.1:
-                if not toggle_and_wait(True, lead_edge + hi_sec):
-                    return
-            if hi_sec < cycle:
-                if not toggle_and_wait(False, lead_edge + cycle):
-                    return
+    def _pulse(self) -> None:
+        """ PWM on a fixed cycle grid that never restarts. Restarting the
+            cycle on every new input value (as this used to) cut any cycle
+            longer than the input's update interval short after its on-phase:
+            30% with a 120s cycle and a 60s sensor read interval ran the
+            heater 36s of every 60s, i.e. at 60%. Within a cycle the output
+            is on while the elapsed time is below the *current* value's
+            on-time - a lower value ends the on-phase early (a switch-off
+            never waits for the cycle to end), a higher one extends it while
+            still on - and it turns on at most once per cycle.
+        """
+        lead_edge = time.time()
+        while not self._thread_stop:
+            cycle = self.cycle
+            end = lead_edge + cycle
+            if self.data / 100 * cycle > 0.1:
+                self._write(True)
+            elif self._on:
+                self._write(False)
+            while not self._thread_stop:
+                now = time.time()
+                if now >= end:
+                    break
+                on_until = lead_edge + self.data / 100 * cycle
+                if self._on and now >= on_until and self.data < 100:
+                    self._write(False)
+                    continue
+                target = on_until if self._on else end
+                time.sleep(max(0.0, min(.1, target - now)))
+            # stay on the grid; only skip ahead if we fell a whole cycle behind
+            lead_edge = end if time.time() - end < cycle else time.time()
 
     def set(self, perc: float) -> None:
+        """ takes effect within the running cycle (see _pulse), the pulse
+            thread is started once and keeps running
+        """
         log.verbose('SlowPwmDevice %s: sets %.1f %%  (%.3f of %f s)',
                     self.id, perc, self.cycle * perc/100, self.cycle)
         with self._set_lock:
-            if self._thread:
-                self._thread_stop = True
-                self._thread.join()
             self.data = perc
-            self._thread = Thread(name='PIDpulse', target=self._pulse,
-                                  args=[perc / 100 * self.cycle, self.cycle],
-                                  daemon=True)
-            self._thread.start()
+            if not (self._thread and self._thread.is_alive()):
+                self._thread_stop = False
+                self._thread = Thread(name='PIDpulse', target=self._pulse, daemon=True)
+                self._thread.start()
+
+    def pullout(self) -> bool:
+        # no join(): the thread notices within 0.1s, and joining here could
+        # block on a bus post from that same thread
+        self._thread_stop = True
+        return super().pullout()
 
     def get_settings(self) -> list[Setting]:
         settings = super().get_settings()

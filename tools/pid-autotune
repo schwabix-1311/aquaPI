@@ -26,14 +26,16 @@ closed-loop estimate.
 
 Subcommands:
     status    - print current gains + live sensor reading, no changes
-    baseline  - step the setpoint by --step-delta under the CURRENT
-                (assumed-proven) gains, record the response, save a
-                report (incl. a suggested starting point for a candidate
-                d_fact) to --out-dir for `trial` to load
-    trial     - apply a candidate gain set, repeat the same step+measure
-                against a saved baseline, compare, and either keep the
-                candidate (if it's a clear improvement) or explicitly
-                revert to the baseline's proven gains
+    baseline  - step the setpoint up by --step-delta and back down again
+                under the CURRENT (assumed-proven) gains, recording each
+                phase for a fixed --horizon-minutes, save a report (incl.
+                a suggested starting point for a candidate d_fact) to
+                --out-dir for `trial` to load
+    trial     - apply a candidate gain set, repeat the same up+down test
+                with the baseline's horizon, compare (ITAE, overshoot,
+                number of swings, residual error per phase), and either
+                keep the candidate (if it's a clear improvement) or
+                explicitly revert to the baseline's proven gains
     revert    - unconditionally write a given (or a saved baseline's)
                 gains back right now, no measurement
 
@@ -193,84 +195,150 @@ class Recorder(threading.Thread):
 
 # --- step-response measurement -----------------------------------------
 
-def wait_for_phase(recorder: Recorder, start_t: float, target: float,
-                   settle_band: float, min_settle_window_s: float,
-                   min_phase_s: float, max_phase_s: float) -> list:
-    """ blocks until the response (since start_t) looks settled around
-        `target` (every sample in a trailing window of min_settle_window_s
-        stays within settle_band of it, after at least min_phase_s has
-        elapsed), or max_phase_s has elapsed, or the recorder aborts.
-        Returns the recorded (elapsed, temp, output) slice for this phase.
+def record_phase(recorder: Recorder, start_t: float, horizon_s: float, label: str) -> list:
+    """ blocks for a FIXED horizon_s (or until the recorder aborts) and
+        returns the recorded (elapsed, temp, output) slice since start_t.
+        Deliberately no early exit on "looks settled": a slow thermal
+        response can sit inside any settle band for minutes while it's
+        still creeping towards its first peak, and stopping there hides
+        every later overshoot/oscillation. A fixed horizon also makes IAE/
+        ITAE of different runs directly comparable.
     """
+    next_report = 15 * 60
     while True:
-        if recorder.abort_event.is_set():
-            return recorder.since(start_t)
         rows = recorder.since(start_t)
-        if rows:
-            elapsed = rows[-1][0]
-            if elapsed >= min_phase_s:
-                window = [r for r in rows if r[0] >= elapsed - min_settle_window_s]
-                window_span = elapsed - window[0][0] if window else 0.0
-                spans_enough = window_span >= min_settle_window_s - recorder.poll_interval
-                if spans_enough and all(abs(temp - target) <= settle_band for _, temp, _ in window):
-                    log_line(f'Settled within \xb1{settle_band}\xb0C of {target}\xb0C '
-                            f'after {elapsed:.0f}s.')
-                    return rows
-            if elapsed >= max_phase_s:
-                log_line(f'Timed out after {elapsed:.0f}s without settling - using what we have.')
-                return rows
+        if recorder.abort_event.is_set():
+            return rows
+        elapsed = recorder.elapsed_now() - start_t
+        if elapsed >= horizon_s:
+            return rows
+        if elapsed >= next_report and rows:
+            log_line(f'{label}: {elapsed / 60:.0f}/{horizon_s / 60:.0f} min, '
+                    f'temp {rows[-1][1]:.3f}\xb0C, output {rows[-1][2]:.1f}%')
+            next_report += 15 * 60
         time.sleep(2)
 
 
-def compute_metrics(rows: list, start_value: float, target: float) -> dict:
+def find_extrema(rows: list, target: float, direction: float, hysteresis: float) -> list:
+    """ confirmed local extrema of the normalized error
+        e = direction * (temp - target), i.e. e > 0 means "past the target"
+        (overshoot) for both step directions. A turning point only counts
+        once e has moved back by more than `hysteresis`, so sensor
+        quantization flicker (DS18B20: 0.0625\xb0C steps) never registers
+        as an oscillation. Returns [(t, e, 'max'|'min'), ...]; the first
+        entry, if any, is the first overshoot peak.
+    """
+    if not rows:
+        return []
+    extrema = []
+    looking_for_max = True      # every step starts below its target (e = -delta)
+    best_t, best_e = rows[0][0], direction * (rows[0][1] - target)
+    for t, temp, _ in rows[1:]:
+        e = direction * (temp - target)
+        if looking_for_max:
+            if e > best_e:
+                best_t, best_e = t, e
+            elif e < best_e - hysteresis:
+                extrema.append((best_t, best_e, 'max'))
+                looking_for_max = False
+                best_t, best_e = t, e
+        else:
+            if e < best_e:
+                best_t, best_e = t, e
+            elif e > best_e + hysteresis:
+                extrema.append((best_t, best_e, 'min'))
+                looking_for_max = True
+                best_t, best_e = t, e
+    return extrema
+
+
+def compute_metrics(rows: list, start_value: float, target: float,
+                    hysteresis: float, settle_band: float) -> dict:
     if not rows:
         return {}
     direction = 1.0 if target >= start_value else -1.0
     delta = abs(target - start_value)
-    final_temp = rows[-1][1]
-
-    peak = max((temp for _, temp, _ in rows), default=start_value) if direction > 0 \
-        else min((temp for _, temp, _ in rows), default=start_value)
-    overshoot = max(0.0, direction * (peak - target))
+    duration = rows[-1][0]
+    errs = [(t, direction * (temp - target)) for t, temp, _ in rows]
 
     rise_time = None
-    threshold = start_value + direction * 0.9 * delta
-    for t, temp, _ in rows:
-        if direction * (temp - start_value) >= direction * (threshold - start_value):
+    for t, e in errs:
+        if e >= -0.1 * delta:
             rise_time = t
             break
 
-    settle_tol = max(0.03, 0.05 * delta)
-    settling_time = None
-    for i, (t, _, _) in enumerate(rows):
-        if all(abs(temp - target) <= settle_tol for _, temp, _ in rows[i:]):
+    # the step's own overshoot: only the peak within as long again as it
+    # took to first reach the target - a single high reading hours later
+    # is a disturbance (lights, mixing), not part of the step response,
+    # and already shows up in the turning points/residual error
+    t_cross = next((t for t, e in errs if e >= 0), None)
+    overshoot = 0.0 if t_cross is None else \
+        max(0.0, max(e for t, e in errs if t <= 2 * t_cross))
+
+    # time of the last sample outside the band; None if the run ENDS outside it
+    settling_time = 0.0
+    for t, e in errs:
+        if abs(e) > settle_band:
             settling_time = t
-            break
+    if abs(errs[-1][1]) > settle_band:
+        settling_time = None
 
-    iae = 0.0
-    for i in range(1, len(rows)):
-        dt = rows[i][0] - rows[i - 1][0]
-        iae += abs(rows[i][1] - target) * dt
+    iae = itae = 0.0
+    for i in range(1, len(errs)):
+        dt = errs[i][0] - errs[i - 1][0]
+        iae += abs(errs[i][1]) * dt
+        itae += errs[i][0] * abs(errs[i][1]) * dt
 
-    derivs = []
-    for i in range(1, len(rows)):
-        dt = rows[i][0] - rows[i - 1][0]
-        if dt > 0:
-            derivs.append(abs(rows[i][1] - rows[i - 1][1]) / dt)
+    tail = [abs(e) for t, e in errs if t >= 0.8 * duration]
+    residual = statistics.mean(tail) if tail else None
+
+    extrema = find_extrema(rows, target, direction, hysteresis)
+    maxima = [(t, e) for t, e, kind in extrema if kind == 'max']
+    if len(maxima) >= 2 and maxima[0][1] > 0:
+        decay_ratio = max(0.0, maxima[1][1]) / maxima[0][1]
+        period = statistics.mean(maxima[k + 1][0] - maxima[k][0] for k in range(len(maxima) - 1))
+    else:
+        decay_ratio = 0.0 if maxima else None
+        period = None
+
+    out_tv = sum(abs(rows[i][2] - rows[i - 1][2]) for i in range(1, len(rows)))
+    out_saturated = sum(rows[i][0] - rows[i - 1][0] for i in range(1, len(rows))
+                        if rows[i - 1][2] <= 0.5 or rows[i - 1][2] >= 99.5)
+
+    # a horizon that ends while the response is still moving or swinging
+    # makes every metric above a truncated, optimistic view
+    horizon_too_short = (settling_time is None or settling_time > 0.8 * duration
+                         or (extrema and extrema[-1][0] > 0.8 * duration))
 
     return {
-        'final_temp': final_temp,
-        'steady_state_error': abs(final_temp - target),
+        'final_temp': rows[-1][1],
+        'residual_error': residual,
         'overshoot': overshoot,
         'rise_time_s': rise_time,
         'settling_time_s': settling_time,
         'iae': iae,
-        'max_abs_deriv': max(derivs) if derivs else 0.0,
+        'itae': itae,
+        'extrema': [[round(t), round(e, 4), kind] for t, e, kind in extrema],
+        'n_extrema': len(extrema),
+        'decay_ratio': decay_ratio,
+        'period_s': period,
+        'output_total_variation': out_tv,
+        'output_saturated_s': out_saturated,
+        # neighbour-to-neighbour on purpose: that's what PidCtrl's D term
+        # sees too, sensor quantization steps included
+        'max_abs_deriv': max((abs(rows[i][1] - rows[i - 1][1]) / (rows[i][0] - rows[i - 1][0])
+                              for i in range(1, len(rows)) if rows[i][0] > rows[i - 1][0]),
+                             default=0.0),
+        'horizon_too_short': bool(horizon_too_short),
         'median_sample_interval_s': statistics.median(
             rows[i][0] - rows[i - 1][0] for i in range(1, len(rows))) if len(rows) > 1 else None,
         'n_samples': len(rows),
-        'duration_s': rows[-1][0] if rows else 0.0,
+        'duration_s': duration,
     }
+
+
+def _fmt_s(v) -> str:
+    return 'n/a' if v is None else f'{v / 60:.1f} min'
 
 
 def print_metrics(label: str, m: dict) -> None:
@@ -278,17 +346,52 @@ def print_metrics(label: str, m: dict) -> None:
         log_line(f'{label}: no data recorded')
         return
     log_line(f'{label}:')
-    log_line(f'  samples           : {m["n_samples"]} over {m["duration_s"]:.0f}s '
+    log_line(f'  samples           : {m["n_samples"]} over {_fmt_s(m["duration_s"])} '
             f'(median interval {m["median_sample_interval_s"]:.1f}s)')
     log_line(f'  final temp        : {m["final_temp"]:.3f}\xb0C '
-            f'(steady-state error {m["steady_state_error"]:.3f}\xb0C)')
+            f'(mean |error| over last 20%: {m["residual_error"]:.3f}\xb0C)')
     log_line(f'  overshoot         : {m["overshoot"]:.3f}\xb0C')
-    log_line(f'  rise time (90%)   : {m["rise_time_s"]}s'
-            if m["rise_time_s"] is not None else '  rise time (90%)   : never reached')
-    log_line(f'  settling time     : {m["settling_time_s"]}s'
+    log_line(f'  rise time (90%)   : {_fmt_s(m["rise_time_s"])}')
+    log_line(f'  settling time     : {_fmt_s(m["settling_time_s"])}'
             if m["settling_time_s"] is not None else '  settling time     : never settled')
-    log_line(f'  IAE               : {m["iae"]:.4f} (\xb0C\xb7s, lower is better)')
-    log_line(f'  max |d(temp)/dt|  : {m["max_abs_deriv"]:.5f} \xb0C/s')
+    swings = ', '.join(f'{e:+.3f}@{t / 60:.0f}min' for t, e, _ in m['extrema']) or 'none'
+    log_line(f'  turning points    : {m["n_extrema"]} ({swings})')
+    log_line(f'  decay ratio       : '
+            + ('n/a (no overshoot peak)' if m['decay_ratio'] is None
+               else f'{m["decay_ratio"]:.2f} (2nd/1st overshoot peak, 0 = single overshoot)'))
+    log_line(f'  oscillation period: {_fmt_s(m["period_s"])}')
+    log_line(f'  IAE / ITAE        : {m["iae"]:.1f} / {m["itae"]:.0f} (lower is better)')
+    log_line(f'  output            : total variation {m["output_total_variation"]:.0f} pp, '
+            f'saturated (0/100%) {_fmt_s(m["output_saturated_s"])}')
+    if m['horizon_too_short']:
+        log_line('  WARNING           : still moving/swinging near the end of the horizon - '
+                'metrics are truncated, consider a longer --horizon-minutes')
+
+
+def run_step_test(api: ApiClient, rec: Recorder, heater_id: str, setpoint: float,
+                  target: float, horizon_s: float) -> dict:
+    """ the full test: step up to target for horizon_s, then back down to
+        setpoint for horizon_s. Returns {'up': rows, 'down': rows}; 'down'
+        is missing if the recorder aborted during the up phase. Both
+        directions matter for a heat-only plant: up is driven by the
+        heater, down only by passive heat loss (and is where integrator
+        windup would show).
+    """
+    phases = {}
+    for name, sp in (('up', target), ('down', setpoint)):
+        log_line(f'Phase {name}: setpoint -> {sp}\xb0C for {horizon_s / 60:.0f} min ...')
+        t0 = rec.elapsed_now()
+        api.set_node_settings(heater_id, setpoint=sp)
+        phases[name] = record_phase(rec, t0, horizon_s, f'phase {name}')
+        if rec.abort_event.is_set():
+            break
+    return phases
+
+
+def phase_metrics(phases: dict, setpoint: float, target: float, cfg: dict) -> dict:
+    ends = {'up': (setpoint, target), 'down': (target, setpoint)}
+    return {name: compute_metrics(rows, *ends[name], cfg['peak_hysteresis'], cfg['settle_band'])
+            for name, rows in phases.items()}
 
 
 # --- shared setup --------------------------------------------------------
@@ -351,19 +454,27 @@ def cmd_baseline(args, api: ApiClient) -> None:
     proven = {'setpoint': args.proven_setpoint, 'p_fact': args.proven_p,
              'i_fact': args.proven_i, 'd_fact': args.proven_d}
     check_live_gains_match(heater, proven, args.force)
+    # stored with the baseline so every later trial is evaluated identically
+    cfg = {'horizon_s': args.horizon_minutes * 60, 'poll_interval': args.poll_interval,
+           'peak_hysteresis': args.peak_hysteresis, 'settle_band': args.settle_band}
+    target = args.proven_setpoint + args.step_delta
+    # a target between two sensor steps can never read as zero error, so
+    # the controller keeps seeing a small offset in one direction
+    for name, val in (('--proven-setpoint', args.proven_setpoint), ('step target', target)):
+        steps = val / args.sensor_step
+        if abs(steps - round(steps)) > 1e-6:
+            log_line(f'WARNING: {name} {val}\xb0C is not a multiple of the sensor step '
+                    f'{args.sensor_step}\xb0C (nearest: {round(steps) * args.sensor_step}\xb0C)')
 
     rec = make_recorder(args, api, heater['id'], sensor['id'], proven)
     interrupted = False
-    rows = []
-    target = args.proven_setpoint + args.step_delta
+    phases = {}
     try:
-        log_line(f'Stepping setpoint {args.proven_setpoint}\xb0C -> {target}\xb0C ...')
+        log_line(f'Step test {args.proven_setpoint}\xb0C -> {target}\xb0C -> '
+                f'{args.proven_setpoint}\xb0C, {2 * args.horizon_minutes:.0f} min in total.')
         log_line('(press Ctrl-C any time to abort - setpoint will be restored)')
-        t0 = rec.elapsed_now()
-        api.set_node_settings(heater['id'], setpoint=target)
-        rows = wait_for_phase(rec, t0, target, args.settle_band,
-                              args.min_settle_window, args.min_phase_minutes * 60,
-                              args.max_phase_minutes * 60)
+        phases = run_step_test(api, rec, heater['id'], args.proven_setpoint, target,
+                               cfg['horizon_s'])
     except KeyboardInterrupt:
         interrupted = True
     finally:
@@ -383,11 +494,12 @@ def cmd_baseline(args, api: ApiClient) -> None:
     if rec.abort_event.is_set():
         die(f'baseline aborted: {rec.abort_reason}')
 
-    metrics = compute_metrics(rows, args.proven_setpoint, target)
-    print_metrics('Baseline response', metrics)
+    metrics = phase_metrics(phases, args.proven_setpoint, target, cfg)
+    print_metrics('Baseline, step up', metrics['up'])
+    print_metrics('Baseline, step down', metrics['down'])
 
-    if metrics.get('max_abs_deriv'):
-        suggested_d = round(args.d_probe_contribution / (100 * metrics['max_abs_deriv']), 2)
+    if metrics['up'].get('max_abs_deriv'):
+        suggested_d = round(args.d_probe_contribution / (100 * metrics['up']['max_abs_deriv']), 2)
         log_line(f'For reference: a d_fact of about {suggested_d} would add roughly '
                 f'{args.d_probe_contribution:.0f} percentage points of output at the '
                 f'steepest observed rate of change - a conservative starting point to '
@@ -397,21 +509,60 @@ def cmd_baseline(args, api: ApiClient) -> None:
     out_path = os.path.join(args.out_dir, f'baseline_{int(time.time())}.json')
     with open(out_path, 'w', encoding='utf8') as f:
         json.dump({
+            'version': 2,
             'node': args.node, 'proven': proven, 'step_delta': args.step_delta,
-            'temp_min': args.temp_min, 'temp_max': args.temp_max,
-            'metrics': metrics, 'rows': rows,
+            'temp_min': args.temp_min, 'temp_max': args.temp_max, 'config': cfg,
+            'metrics': metrics, 'rows': phases,
         }, f, indent=1)
     log_line(f'Saved baseline to {out_path}')
-    log_line(f'Next: tools/pid-autotune trial --base-url {args.base_url} --node {args.node} '
-            f'--baseline-file {out_path} --p-fact ... --i-fact ... --d-fact ...')
+    log_line(f'Next: tools/pid-autotune --base-url {args.base_url} --node {args.node} '
+            f'trial --baseline-file {out_path} --p-fact ... --i-fact ... --d-fact ...')
+
+
+def judge(base: dict, trial: dict, args) -> bool:
+    """ keep a candidate only if it is clearly better overall (ITAE over both
+        phases - time-weighted, so lingering oscillation and slow creep are
+        penalized more than a quick initial error) AND not worse in any
+        phase on overshoot, number of swings, or residual error at the end
+    """
+    checks = []
+    b_itae = sum(m['itae'] for m in base.values())
+    t_itae = sum(m['itae'] for m in trial.values())
+    checks.append((f'ITAE (both phases) {t_itae:.0f} <= {1 - args.min_improvement:.2f} '
+                   f'x baseline {b_itae:.0f}',
+                   t_itae <= b_itae * (1 - args.min_improvement)))
+    for name in ('up', 'down'):
+        b, t = base[name], trial[name]
+        checks.append((f'{name}: overshoot {t["overshoot"]:.3f} <= {b["overshoot"]:.3f} '
+                       f'+ {args.overshoot_tolerance}',
+                       t['overshoot'] <= b['overshoot'] + args.overshoot_tolerance))
+        checks.append((f'{name}: turning points {t["n_extrema"]} <= {b["n_extrema"]}',
+                       t['n_extrema'] <= b['n_extrema']))
+        checks.append((f'{name}: residual error {t["residual_error"]:.3f} <= '
+                       f'{b["residual_error"]:.3f} + {args.residual_tolerance}',
+                       t['residual_error'] <= b['residual_error'] + args.residual_tolerance))
+    for text, ok in checks:
+        log_line(f'  [{"PASS" if ok else "FAIL"}] {text}')
+    return all(ok for _, ok in checks)
 
 
 def cmd_trial(args, api: ApiClient) -> None:
     with open(args.baseline_file, encoding='utf8') as f:
         baseline = json.load(f)
+    if baseline.get('version') != 2:
+        die(f'{args.baseline_file} is from an older pid-autotune (single-phase, '
+            f'early-stopping measurement) - re-run `baseline` first')
     proven = baseline['proven']
-    base_metrics = baseline['metrics']
+    # recomputed from the saved samples rather than taken from the file,
+    # so baseline and trial are always judged by the same metric code
+    base_metrics = phase_metrics(baseline['rows'], proven['setpoint'],
+                                 proven['setpoint'] + baseline['step_delta'], baseline['config'])
+    cfg = baseline['config']
     target = proven['setpoint'] + baseline['step_delta']
+    if args.poll_interval != cfg['poll_interval']:
+        log_line(f'Using the baseline\'s --poll-interval {cfg["poll_interval"]}s '
+                f'instead of {args.poll_interval}s, to keep both runs comparable.')
+        args.poll_interval = cfg['poll_interval']
 
     heater, sensor = resolve_nodes(api, args.node)
     check_live_gains_match(heater, proven, args.force)
@@ -424,17 +575,16 @@ def cmd_trial(args, api: ApiClient) -> None:
 
     rec = make_recorder(args, api, heater['id'], sensor['id'], proven)
     interrupted = False
-    rows = []
+    phases = {}
     try:
         log_line(f'Applying candidate gains: {candidate} (proven was {proven})')
         api.set_node_settings(heater['id'], **candidate)
-        log_line(f'Stepping setpoint {proven["setpoint"]}\xb0C -> {target}\xb0C ...')
+        log_line(f'Step test {proven["setpoint"]}\xb0C -> {target}\xb0C -> '
+                f'{proven["setpoint"]}\xb0C, {2 * cfg["horizon_s"] / 60:.0f} min in total '
+                f'(same horizon as the baseline).')
         log_line('(press Ctrl-C any time to abort - gains and setpoint will be restored)')
-        t0 = rec.elapsed_now()
-        api.set_node_settings(heater['id'], setpoint=target)
-        rows = wait_for_phase(rec, t0, target, args.settle_band,
-                              args.min_settle_window, args.min_phase_minutes * 60,
-                              args.max_phase_minutes * 60)
+        phases = run_step_test(api, rec, heater['id'], proven['setpoint'], target,
+                               cfg['horizon_s'])
     except KeyboardInterrupt:
         interrupted = True
     finally:
@@ -460,23 +610,24 @@ def cmd_trial(args, api: ApiClient) -> None:
     if rec.abort_event.is_set():
         die(f'trial aborted: {rec.abort_reason} (gains already reverted to {proven})')
 
-    trial_metrics = compute_metrics(rows, proven['setpoint'], target)
-    print_metrics('Baseline response (saved)', base_metrics)
-    print_metrics('Trial response', trial_metrics)
+    trial_metrics = phase_metrics(phases, proven['setpoint'], target, cfg)
+    for name in ('up', 'down'):
+        print_metrics(f'Baseline, step {name} (saved)', base_metrics[name])
+        print_metrics(f'Trial, step {name}', trial_metrics[name])
 
-    improved = (trial_metrics['iae'] <= base_metrics['iae'] * (1 - args.min_improvement)
-               and trial_metrics['overshoot'] <= base_metrics['overshoot'] + args.overshoot_tolerance)
+    out_path = os.path.join(os.path.dirname(args.baseline_file) or '.',
+                            f'trial_{int(time.time())}.json')
+    with open(out_path, 'w', encoding='utf8') as f:
+        json.dump({'version': 2, 'node': args.node, 'baseline_file': args.baseline_file,
+                   'candidate': candidate, 'metrics': trial_metrics, 'rows': phases}, f, indent=1)
+    log_line(f'Saved trial to {out_path}')
 
-    if improved:
-        log_line(f'=> KEEPING candidate gains {candidate} - '
-                f'IAE {trial_metrics["iae"]:.4f} vs baseline {base_metrics["iae"]:.4f}, '
-                f'overshoot {trial_metrics["overshoot"]:.3f}\xb0C vs '
-                f'{base_metrics["overshoot"]:.3f}\xb0C.')
+    log_line('Comparison:')
+    if judge(base_metrics, trial_metrics, args):
+        log_line(f'=> KEEPING candidate gains {candidate}.')
         log_line(f'Live gains on {args.node!r} are now: {candidate}')
     else:
-        log_line(f'=> NOT a clear improvement (IAE {trial_metrics["iae"]:.4f} vs '
-                f'{base_metrics["iae"]:.4f}, overshoot {trial_metrics["overshoot"]:.3f}\xb0C vs '
-                f'{base_metrics["overshoot"]:.3f}\xb0C) - reverting to proven gains {proven}.')
+        log_line(f'=> NOT a clear improvement - reverting to proven gains {proven}.')
         api.set_node_settings(heater['id'], p_fact=proven['p_fact'],
                               i_fact=proven['i_fact'], d_fact=proven['d_fact'])
 
@@ -506,13 +657,20 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser('revert')
 
     base = sub.add_parser('baseline')
-    base.add_argument('--step-delta', type=float, default=0.8,
-                      help="°C added to --proven-setpoint for the test step")
-    base.add_argument('--settle-band', type=float, default=0.05)
-    base.add_argument('--min-settle-window', type=float, default=600.0,
-                      help="seconds a reading must stay within --settle-band to count as settled")
-    base.add_argument('--min-phase-minutes', type=float, default=10.0)
-    base.add_argument('--max-phase-minutes', type=float, default=90.0)
+    base.add_argument('--step-delta', type=float, default=0.75,
+                      help="°C added to --proven-setpoint for the test step; keep the "
+                           "target a multiple of --sensor-step")
+    base.add_argument('--sensor-step', type=float, default=0.0625,
+                      help="sensor resolution in °C (DS18B20: 0.0625), only used to warn "
+                           "about a step target between two readable values")
+    base.add_argument('--horizon-minutes', type=float, default=180.0,
+                      help="fixed recording time per phase (step up, then step down); "
+                           "trials reuse the baseline's value")
+    base.add_argument('--peak-hysteresis', type=float, default=0.1,
+                      help="°C a reading must move back before it counts as a turning "
+                           "point - keep it above the sensor resolution (DS18B20: 0.0625)")
+    base.add_argument('--settle-band', type=float, default=0.1,
+                      help="°C around the target that counts as settled")
     base.add_argument('--d-probe-contribution', type=float, default=5.0,
                       help="percentage points used to size the suggested d_fact")
     base.add_argument('--out-dir', default='pid_autotune_runs')
@@ -522,14 +680,13 @@ def build_parser() -> argparse.ArgumentParser:
     trial.add_argument('--p-fact', type=float, default=None)
     trial.add_argument('--i-fact', type=float, default=None)
     trial.add_argument('--d-fact', type=float, default=None)
-    trial.add_argument('--settle-band', type=float, default=0.05)
-    trial.add_argument('--min-settle-window', type=float, default=600.0)
-    trial.add_argument('--min-phase-minutes', type=float, default=10.0)
-    trial.add_argument('--max-phase-minutes', type=float, default=90.0)
     trial.add_argument('--min-improvement', type=float, default=0.05,
-                       help="required fractional IAE reduction vs baseline, e.g. 0.05 = 5%%")
+                       help="required fractional ITAE reduction vs baseline, e.g. 0.05 = 5%%")
     trial.add_argument('--overshoot-tolerance', type=float, default=0.05,
                        help="°C of extra overshoot still tolerated as 'no worse'")
+    trial.add_argument('--residual-tolerance', type=float, default=0.03,
+                       help="°C of extra residual error (last 20%% of each phase) "
+                            "still tolerated as 'no worse'")
 
     return p
 

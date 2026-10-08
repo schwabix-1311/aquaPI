@@ -644,8 +644,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--poll-interval', type=float, default=10.0,
                    help="seconds between safety-watchdog/sample reads")
     p.add_argument('--proven-setpoint', type=float, default=25.0)
-    p.add_argument('--proven-p', type=float, default=110.0)
-    p.add_argument('--proven-i', type=float, default=0.07)
+    p.add_argument('--proven-p', type=float, default=180.0)
+    p.add_argument('--proven-i', type=float, default=0.05)
     p.add_argument('--proven-d', type=float, default=0.0)
     p.add_argument('--force', action='store_true',
                    help="proceed even if live gains don't match --proven-*")

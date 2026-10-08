@@ -241,6 +241,7 @@ class PidCtrl(ControllerNode):
         self._err_sum: float = 0
         self._err_old: float = 0
         self._tm_old: float = 0
+        self._resume_output: float | None = None
         self.data: float = 50.
 
     def __getstate__(self) -> dict[str, Any]:
@@ -253,10 +254,17 @@ class PidCtrl(ControllerNode):
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         log.debug('__SETstate__ %r', state)
-        self.data = state['data']
         PidCtrl.__init__(self, state['name'], state['receives'], state['setpoint'],
                          p_fact=state['p_fact'], i_fact=state['i_fact'], d_fact=state['d_fact'],
                          _cont=True)
+        # bumpless restart: the integral isn't persisted, and restarting
+        # it at 0 would put the output back at the neutral 50% - for a
+        # heater that holds at ~20% that means hours of overtemperature
+        # until the integral has unwound again. Instead, the first
+        # measurement seeds the integral so the output continues at the
+        # persisted value.
+        self.data = min(max(0., float(state['data'])), 100.)
+        self._resume_output = self.data
 
     def listen(self, msg: Msg) -> None:
         if isinstance(msg, MsgData):
@@ -302,6 +310,10 @@ class PidCtrl(ControllerNode):
                 self.data = min(max(0., 50. - val*100.), 100.)
                 log.info('PID -> %f (%+.1f)', self.data, -val * 100)
                 self.post(MsgData(self.id, round(self.data, 4)))
+            elif self._resume_output is not None and self.i_fact:
+                # solve 50 - p*err - i*err_sum == resume_output for err_sum
+                self._err_sum = (50. - self._resume_output - self.p_fact * err) / self.i_fact
+            self._resume_output = None
             self._err_old = err
             self._tm_old = now
 

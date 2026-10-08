@@ -30,7 +30,7 @@ Subcommands:
                 under the CURRENT (assumed-proven) gains, recording each
                 phase for a fixed --horizon-minutes, save a report (incl.
                 a suggested starting point for a candidate d_fact) to
-                --out-dir for `trial` to load
+                pid_autotune_runs/ for `trial` and `recommend` to load
     trial     - apply a candidate gain set, repeat the same up+down test
                 with the baseline's horizon, compare (ITAE, overshoot,
                 number of swings, residual error per phase), and either
@@ -38,12 +38,28 @@ Subcommands:
                 explicitly revert to the baseline's proven gains
     revert    - unconditionally write a given (or a saved baseline's)
                 gains back right now, no measurement
+    recommend - offline, no login: fit a model of the tank to a saved
+                baseline (or trial) run, check it replays that run, then
+                simulate read interval x averaging x P x I and recommend
+                the combination to confirm with `trial`
 
-Needs only `requests` (already an aquaPi dependency). Run it from the
-dev machine against the real host, e.g.:
+`baseline` doubles as the tank profiling run for `recommend`; `trial` can
+also try a sensor read interval/averaging together with the gains (and
+reverts them together).
 
-    venv/bin/python3 tools/pid-autotune status \\
-        --base-url http://aquapi2:5000 --node Heizleistung
+Needs only `requests` (already an aquaPi dependency). Meant to run on
+the aquaPi host itself (--base-url defaults to localhost:5000), from the
+repo root:
+
+    venv/bin/python3 tools/pid-autotune status
+    venv/bin/python3 tools/pid-autotune baseline      # at night, ~6h
+    venv/bin/python3 tools/pid-autotune recommend     # offline, newest baseline
+    venv/bin/python3 tools/pid-autotune trial --p-fact ... --i-fact ...
+
+Runs are saved in pid_autotune_runs/ in the repo. `trial` picks the newest
+baseline matching the live gains and sensor settings; each new baseline
+moves the ones that no longer match (and their trials) into
+pid_autotune_runs/archive_<gains>_<sensor settings>.zip.
 
 You'll be prompted for your own aquaPi login (operator/admin) - this
 tool never stores or hardcodes any credential.
@@ -52,23 +68,39 @@ tool never stores or hardcodes any credential.
 import argparse
 import getpass
 import json
+import math
 import os
+import random
 import statistics
 import sys
 import threading
 import time
+import zipfile
+from collections import deque
 from datetime import datetime
+from typing import NoReturn
 
 import requests
 
 
 # --- small helpers ----------------------------------------------------
 
+# saved runs live next to the repo, independent of the working directory
+DEFAULT_OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               'pid_autotune_runs')
+GAIN_KEYS = ('setpoint', 'p_fact', 'i_fact', 'd_fact')
+
+# output change per PID tick (percentage points) above which holding at
+# setpoint counts as "jumpy" - sensor-step flicker through P shows up as
+# exactly such jumps
+JUMP_PP = 3.0
+
+
 def log_line(msg: str) -> None:
     print(f'[{datetime.now().strftime("%H:%M:%S")}] {msg}', flush=True)
 
 
-def die(msg: str, code: int = 1) -> None:
+def die(msg: str, code: int = 1) -> NoReturn:
     log_line(f'FATAL: {msg}')
     sys.exit(code)
 
@@ -124,15 +156,15 @@ class ApiClient:
 
 class Recorder(threading.Thread):
     def __init__(self, api: ApiClient, sensor_id: str, heater_id: str,
-                 temp_min: float, temp_max: float, proven: dict,
-                 poll_interval: float, max_consec_errors: int = 5):
+                 temp_min: float, temp_max: float, revert, poll_interval: float,
+                 max_consec_errors: int = 5):
         super().__init__(daemon=True)
         self.api = api
         self.sensor_id = sensor_id
         self.heater_id = heater_id
         self.temp_min = temp_min
         self.temp_max = temp_max
-        self.proven = proven
+        self.revert = revert    # restores every proven setting, both nodes
         self.poll_interval = poll_interval
         self.max_consec_errors = max_consec_errors
 
@@ -173,13 +205,13 @@ class Recorder(threading.Thread):
 
     def _trip(self, reason: str) -> None:
         self.abort_reason = reason
-        log_line(f'!!! SAFETY ABORT: {reason} - reverting to proven settings {self.proven} !!!')
+        log_line(f'!!! SAFETY ABORT: {reason} - reverting to proven settings !!!')
         try:
-            self.api.set_node_settings(self.heater_id, **self.proven)
+            self.revert()
             log_line('Reverted successfully.')
         except Exception as ex:  # noqa: BLE001
             log_line(f'CRITICAL: the revert itself failed ({ex}) - '
-                    f'fix the live gains by hand right now via /parameters')
+                    f'fix the live gains/sensor settings by hand right now via /parameters')
         self.abort_event.set()
 
     def snapshot(self) -> list:
@@ -291,6 +323,9 @@ def compute_metrics(rows: list, start_value: float, target: float,
 
     tail = [abs(e) for t, e in errs if t >= 0.8 * duration]
     residual = statistics.mean(tail) if tail else None
+    tail_rows = [r for r in rows if r[0] >= 0.8 * duration]
+    tail_jumps = [abs(b[2] - a[2]) for a, b in zip(tail_rows, tail_rows[1:])]
+    tail_hours = max(1e-9, (tail_rows[-1][0] - tail_rows[0][0]) / 3600) if tail_rows else 1e-9
 
     extrema = find_extrema(rows, target, direction, hysteresis)
     maxima = [(t, e) for t, e, kind in extrema if kind == 'max']
@@ -324,6 +359,9 @@ def compute_metrics(rows: list, start_value: float, target: float,
         'period_s': period,
         'output_total_variation': out_tv,
         'output_saturated_s': out_saturated,
+        # how jumpy the output is while (roughly) holding, last 20% of the phase
+        'tail_max_jump': max(tail_jumps, default=0.0),
+        'tail_jumps_per_h': sum(j > JUMP_PP for j in tail_jumps) / tail_hours,
         # neighbour-to-neighbour on purpose: that's what PidCtrl's D term
         # sees too, sensor quantization steps included
         'max_abs_deriv': max((abs(rows[i][1] - rows[i - 1][1]) / (rows[i][0] - rows[i - 1][0])
@@ -356,13 +394,15 @@ def print_metrics(label: str, m: dict) -> None:
             if m["settling_time_s"] is not None else '  settling time     : never settled')
     swings = ', '.join(f'{e:+.3f}@{t / 60:.0f}min' for t, e, _ in m['extrema']) or 'none'
     log_line(f'  turning points    : {m["n_extrema"]} ({swings})')
-    log_line(f'  decay ratio       : '
+    log_line('  decay ratio       : '
             + ('n/a (no overshoot peak)' if m['decay_ratio'] is None
                else f'{m["decay_ratio"]:.2f} (2nd/1st overshoot peak, 0 = single overshoot)'))
     log_line(f'  oscillation period: {_fmt_s(m["period_s"])}')
     log_line(f'  IAE / ITAE        : {m["iae"]:.1f} / {m["itae"]:.0f} (lower is better)')
     log_line(f'  output            : total variation {m["output_total_variation"]:.0f} pp, '
             f'saturated (0/100%) {_fmt_s(m["output_saturated_s"])}')
+    log_line(f'  output near target: largest jump {m["tail_max_jump"]:.1f} pp, '
+            f'{m["tail_jumps_per_h"]:.1f} jumps > {JUMP_PP:.0f} pp per hour (last 20%)')
     if m['horizon_too_short']:
         log_line('  WARNING           : still moving/swinging near the end of the horizon - '
                 'metrics are truncated, consider a longer --horizon-minutes')
@@ -388,10 +428,267 @@ def run_step_test(api: ApiClient, rec: Recorder, heater_id: str, setpoint: float
     return phases
 
 
-def phase_metrics(phases: dict, setpoint: float, target: float, cfg: dict) -> dict:
+def deaverage(rows: list, avg: int) -> list:
+    """ undo AnalogInput's floating average: each reading is
+        y = (x + (avg-1) * y_prev) / avg, so the raw sensor value is
+        x = avg * y - (avg-1) * y_prev. An unchanged reading means x was
+        y_prev, so polling faster than the sensor's read interval loses
+        nothing. Judging the raw values keeps runs with different averaging
+        comparable - the averaged readings lag the water, so ITAE would
+        penalize averaging and the flattened peaks would flatter it.
+    """
+    if avg <= 1 or not rows:
+        return rows
+    out = []
+    y_prev = raw = rows[0][1]
+    for t, y, o in rows:
+        if y != y_prev:
+            raw = round(avg * y - (avg - 1) * y_prev, 4)
+            y_prev = y
+        out.append((t, raw, o))
+    return out
+
+
+def phase_metrics(phases: dict, setpoint: float, target: float, cfg: dict,
+                  avg: int = 1) -> dict:
     ends = {'up': (setpoint, target), 'down': (target, setpoint)}
-    return {name: compute_metrics(rows, *ends[name], cfg['peak_hysteresis'], cfg['settle_band'])
+    return {name: compute_metrics(deaverage(rows, avg), *ends[name], cfg['peak_hysteresis'],
+                                  cfg['settle_band'])
             for name, rows in phases.items()}
+
+
+# --- tank model: fitted from a recorded run, used by `recommend` ---------
+
+def ema_lag_s(interval: float, avg: int) -> float:
+    """ time constant AnalogInput's floating average adds: it mixes each
+        reading in at 1/avg weight, i.e. an exponential filter
+    """
+    return 0.0 if avg <= 1 else -interval / math.log(1 - 1 / avg)
+
+
+def _resample(rows: list, dt: float) -> tuple:
+    """ step-hold (temp, output) onto a uniform dt grid """
+    temps, outs = [], []
+    j = 0
+    t = 0.0
+    while t <= rows[-1][0]:
+        while j + 1 < len(rows) and rows[j + 1][0] <= t:
+            j += 1
+        temps.append(rows[j][1])
+        outs.append(rows[j][2])
+        t += dt
+    return temps, outs
+
+
+def _lstsq3(xs: list, ys: list) -> tuple:
+    """ least squares for y = c0 + c1*x1 + c2*x2 via the 3x3 normal
+        equations (keeps the tool free of numpy). Returns (c, mse) or
+        (None, inf) if singular.
+    """
+    rows = [(1.0, x1, x2) for x1, x2 in xs]
+    a = [[sum(r[i] * r[j] for r in rows) for j in range(3)] for i in range(3)]
+    b = [sum(r[i] * y for r, y in zip(rows, ys)) for i in range(3)]
+    for col in range(3):
+        piv = max(range(col, 3), key=lambda r, c=col: abs(a[r][c]))
+        if abs(a[piv][col]) < 1e-12:
+            return None, math.inf
+        a[col], a[piv], b[col], b[piv] = a[piv], a[col], b[piv], b[col]
+        for r in range(3):
+            if r != col:
+                f = a[r][col] / a[col][col]
+                a[r] = [x - f * y for x, y in zip(a[r], a[col])]
+                b[r] -= f * b[col]
+    c = [b[i] / a[i][i] for i in range(3)]
+    mse = statistics.mean((y - (c[0] + c[1] * x1 + c[2] * x2)) ** 2
+                          for (x1, x2), y in zip(xs, ys))
+    return c, mse
+
+
+def _lowpass(values: list, tau_s: float, dt: float) -> list:
+    if tau_s <= 0:
+        return list(values)
+    out, y = [], values[0]
+    for v in values:
+        y += dt / tau_s * (v - y)
+        out.append(y)
+    return out
+
+
+def _regress_plant(temps: list, outs: list, setpoint: float, lag_s: float,
+                   dt: float, window_s: float):
+    """ k/hold/loss for one assumed total heater->reading lag, from slopes
+        over window_s (not neighbouring samples, so sensor quantization
+        doesn't dominate them). None if no physically sensible fit.
+    """
+    w = int(window_s / dt)
+    d = int(round(lag_s / dt))
+    u_cum = [0.0]
+    for u in outs:
+        u_cum.append(u_cum[-1] + u)
+    t_cum = [0.0]
+    for t in temps:
+        t_cum.append(t_cum[-1] + t)
+    xs, ys = [], []
+    for j in range(d, len(temps) - w, max(1, int(60 / dt))):
+        ys.append((temps[j + w] - temps[j]) / window_s)
+        xs.append(((u_cum[j - d + w] - u_cum[j - d]) / w, (t_cum[j + w] - t_cum[j]) / w))
+    if len(ys) < 20:
+        return None
+    c, _ = _lstsq3(xs, ys)
+    if not c or c[1] <= 0:
+        return None
+    return {'k': c[1], 'hold': -(c[0] + c[2] * setpoint) / c[1],
+            'loss': max(0.0, -c[2] / c[1]), 'setpoint': setpoint}
+
+
+def replay_rms(plant: dict, run: dict, sensor: dict, sensor_step: float) -> dict:
+    """ re-run the recorded step test on the model (same gains, sensor
+        setup, horizon) and return the rms gap to the real readings per phase
+    """
+    sp = run['gains']['setpoint']
+    sim = simulate(plant, run['gains'], sensor['interval'], sensor['avg'],
+                   sp + run['step_delta'], run['config']['horizon_s'], 0, 0.0, 1,
+                   sensor_step, 0.0)
+    rms = {}
+    for name in ('up', 'down'):
+        simr = sim[name]
+        rms[name] = math.sqrt(statistics.mean(
+            (temp - simr[min(int(t / 10), len(simr) - 1)][3]) ** 2
+            for t, temp, _ in run['rows'][name]))
+    rms['sim'] = sim
+    return rms
+
+
+def fit_plant(run: dict, sensor: dict, sensor_step: float,
+              dt: float = 10.0, window_s: float = 600.0) -> dict:
+    """ identify a first-order tank model from a closed-loop step test:
+
+            h' = (u(t - dead) - h) / lag          heater element + nearby water
+            dT/dt = k * (h - (hold + loss * (T - setpoint)))
+
+        k     - heating rate per percentage point of output above "hold"
+        hold  - output that just keeps the tank at setpoint
+        loss  - extra output needed per degree above setpoint (heat loss)
+        dead  - heater -> water dead time
+        lag   - heat stored in the heater/nearby water that keeps flowing
+                after the output drops (0 if the run shows none)
+
+        k/hold/loss come from a regression for each candidate dead time and
+        lag; the pair kept is the one whose model best REPLAYS the recorded
+        run in closed loop - picking by regression residual alone came out
+        too short and the model too optimistic about overshoot.
+    """
+    sp = run['gains']['setpoint']
+    temps, outs = [], []
+    for name in ('up', 'down'):
+        t_, u_ = _resample(run['rows'][name], dt)
+        temps += t_
+        outs += u_
+    # the readings lag the water by half a read interval plus the
+    # averaging - the simulation adds that itself, so the regression
+    # has to see it but the plant's dead time must not include it
+    sensor_delay = sensor['interval'] / 2 + ema_lag_s(sensor['interval'], sensor['avg'])
+    best, best_rms = None, math.inf
+    for lag_s in (0, 120, 300, 600, 900, 1200, 1800):
+        filtered = _lowpass(outs, lag_s, dt)
+        for dead_s in range(0, 601, 60):
+            plant = _regress_plant(temps, filtered, sp, dead_s + sensor_delay, dt, window_s)
+            if not plant:
+                continue
+            plant['dead_s'], plant['lag_s'] = float(dead_s), float(lag_s)
+            rms = replay_rms(plant, run, sensor, sensor_step)
+            if rms['up'] + rms['down'] < best_rms:
+                best, best_rms = plant, rms['up'] + rms['down']
+    if best is None:
+        die('could not identify the tank from this run (no consistent heating response) - '
+            'is it a complete baseline?')
+    best['sensor_delay_s'] = sensor_delay
+    return best
+
+
+def simulate(plant: dict, gains: dict, interval: float, avg: int, target: float,
+             horizon_s: float, hold_s: float, noise: float, seed: int, sensor_step: float,
+             disturbance_pp: float, dt: float = 5.0) -> dict:
+    """ the same up/down step test as `baseline`, plus a `hold` phase at
+        setpoint with a slow sinusoidal heat-demand disturbance (lights,
+        room) that walks the water across sensor steps. Mirrors PidCtrl's
+        arithmetic (incl. its anti-windup) and AnalogInput's averaging and
+        rounding. Returns {phase: [(t, true_temp, output, reading), ...]}
+        sampled every 10s.
+    """
+    rnd = random.Random(seed)
+    sp0 = plant['setpoint']
+    p, i, d = gains['p_fact'], gains['i_fact'], gains['d_fact']
+
+    def demand(temp):
+        return plant['hold'] + plant['loss'] * (temp - sp0)
+
+    temp = sp0
+    out = min(max(demand(temp), 0.0), 100.0)
+    element = out
+    err_sum = (50.0 - out) / i if i else 0.0
+    reading = round(temp / sensor_step) * sensor_step
+    err_old = 0.0
+    delay = deque([out] * int(round(plant['dead_s'] / dt)))
+    tick_every = max(1, int(round(interval / dt)))
+    rec_every = max(1, int(round(10 / dt)))
+    n = 0
+    result = {}
+    for name, sp, dur in (('up', target, horizon_s), ('down', sp0, horizon_s),
+                          ('hold', sp0, hold_s)):
+        rows = []
+        for s in range(int(dur / dt)):
+            t = s * dt
+            delay.append(out)
+            u = delay.popleft()
+            dist = disturbance_pp * math.sin(2 * math.pi * t / (3 * 3600)) if name == 'hold' else 0.0
+            lag = plant.get('lag_s', 0.0)
+            element = u if lag <= 0 else element + dt / lag * (u - element)
+            temp += dt * plant['k'] * (element - demand(temp) - dist)
+            if n % tick_every == 0:
+                raw = round((temp + rnd.gauss(0, noise)) / sensor_step) * sensor_step
+                reading = round((raw + reading * (avg - 1)) / avg, 4)
+                err = reading - sp
+                if not ((out >= 100 and err < 0) or (out <= 0 and err > 0)):
+                    err_sum += err * interval
+                out = min(max(50 - p * err - i * err_sum - 100 * d * (err - err_old) / interval,
+                              0.0), 100.0)
+                err_old = err
+            n += 1
+            if s % rec_every == 0:
+                rows.append((t, temp, out, reading))
+        result[name] = rows
+    return result
+
+
+def evaluate(plant: dict, gains: dict, interval: float, avg: int, ctx: dict) -> dict:
+    """ worst case over ctx['noise'] levels x 2 seeds, judged on the TRUE
+        water temperature (the averaged reading would flatter heavy
+        averaging) - ITAE of up+down, overshoot and turning points per
+        step, and how much the output jumps while just holding
+    """
+    worst = {}
+    sp, target = plant['setpoint'], plant['setpoint'] + ctx['step_delta']
+    for noise in ctx['noise']:
+        for seed in (1, 2):
+            sim = simulate(plant, gains, interval, avg, target, ctx['horizon_s'],
+                           ctx['hold_s'], noise, seed, ctx['sensor_step'], ctx['disturbance_pp'])
+            true = {k: [(t, temp, out) for t, temp, out, _ in v] for k, v in sim.items()}
+            up = compute_metrics(true['up'], sp, target, ctx['hysteresis'], ctx['settle_band'])
+            dn = compute_metrics(true['down'], target, sp, ctx['hysteresis'], ctx['settle_band'])
+            hold = true['hold']
+            jumps = [abs(b[2] - a[2]) for a, b in zip(hold, hold[1:])]
+            vals = {
+                'itae': up['itae'] + dn['itae'],
+                'overshoot': max(up['overshoot'], dn['overshoot']),
+                'turns': max(up['n_extrema'], dn['n_extrema']),
+                'max_jump': max(jumps),
+                'jumps_per_h': sum(j > ctx['max_output_jump'] for j in jumps) / (ctx['hold_s'] / 3600),
+                'hold_dev': max(abs(r[1] - sp) for r in hold),
+            }
+            for key, val in vals.items():
+                worst[key] = max(worst.get(key, val), val)
+    return worst
 
 
 # --- shared setup --------------------------------------------------------
@@ -419,9 +716,101 @@ def check_live_gains_match(heater: dict, proven: dict, force: bool) -> None:
         log_line(f'WARNING (--force): proceeding despite mismatch {mismatched}')
 
 
-def make_recorder(args, api, heater_id, sensor_id, proven) -> Recorder:
+def _runs(out_dir: str, prefix: str) -> list:
+    """ [(path, data), ...] of saved runs of one kind, newest first """
+    found = []
+    for name in (os.listdir(out_dir) if os.path.isdir(out_dir) else []):
+        if name.startswith(prefix + '_') and name.endswith('.json'):
+            path = os.path.join(out_dir, name)
+            try:
+                with open(path, encoding='utf8') as f:
+                    found.append((path, json.load(f)))
+            except (OSError, ValueError):
+                continue
+    # names carry a fixed-width unix timestamp
+    return sorted(found, key=lambda r: os.path.basename(r[0]), reverse=True)
+
+
+def baseline_matches(data: dict, gains: dict, sensor: dict) -> bool:
+    """ usable for a trial on this setup: current format, same gains, and
+        the same, recorded sensor settings
+    """
+    return (data.get('version') == 2 and data.get('sensor') == sensor
+            and all(abs(data['proven'][k] - gains[k]) <= 1e-6 for k in GAIN_KEYS))
+
+
+def find_baseline(out_dir: str, gains: dict, sensor: dict):
+    return next((path for path, data in _runs(out_dir, 'baseline')
+                 if baseline_matches(data, gains, sensor)), None)
+
+
+def settings_tag(data: dict) -> str:
+    """ filename-safe summary of the setup a baseline ran under """
+    proven = data.get('proven') or {}
+    gains = '_'.join(f'{short}{proven[k]:g}' for short, k in
+                     (('sp', 'setpoint'), ('p', 'p_fact'), ('i', 'i_fact'), ('d', 'd_fact'))
+                     if k in proven) or 'gains-unknown'
+    sensor = data.get('sensor') or {}
+    if 'interval' in sensor and 'avg' in sensor:
+        return f'{gains}_{sensor["interval"]:g}s-avg{sensor["avg"]}'
+    return f'{gains}_sensor-unknown'
+
+
+def archive_stale_runs(out_dir: str, gains: dict, sensor: dict) -> None:
+    """ move baselines that no longer match the live setup, and every trial
+        made against one of them (or against a baseline that is gone), out
+        of the way into one out_dir/archive_<settings>.zip per setup - still
+        retrievable, and the name says what's inside. The originals are only
+        removed once their archive verifies.
+    """
+    baselines = _runs(out_dir, 'baseline')
+    tags = {os.path.basename(path): settings_tag(data) for path, data in baselines}
+    stale = {path: tags[os.path.basename(path)] for path, data in baselines
+             if not baseline_matches(data, gains, sensor)}
+    kept = set(tags) - {os.path.basename(p) for p in stale}
+    for path, data in _runs(out_dir, 'trial'):
+        base_name = os.path.basename(data.get('baseline_file', ''))
+        if base_name not in kept:
+            stale[path] = tags.get(base_name, 'unknown-baseline')
+    moved = 0
+    for tag in sorted(set(stale.values())):
+        paths = [p for p, t in stale.items() if t == tag]
+        archive = os.path.join(out_dir, f'archive_{tag}.zip')
+        with zipfile.ZipFile(archive, 'a', zipfile.ZIP_DEFLATED) as zf:
+            present = set(zf.namelist())
+            for path in paths:
+                if os.path.basename(path) not in present:
+                    zf.write(path, os.path.basename(path))
+        with zipfile.ZipFile(archive) as zf:
+            if zf.testzip() is not None:
+                log_line(f'WARN: {archive} did not verify - left its runs where they are')
+                continue
+            present = set(zf.namelist())
+        for path in paths:
+            if os.path.basename(path) in present:
+                os.remove(path)
+                moved += 1
+        log_line(f'Archived {len(paths)} run(s) into {archive}.')
+    if moved:
+        log_line(f'({moved} run(s) no longer matching the live setup moved out of the way.)')
+
+
+def sensor_settings(sensor: dict) -> dict:
+    """ the sensor's read interval/averaging, as far as its node type has them """
+    return {k: sensor[k] for k in ('interval', 'avg') if k in sensor}
+
+
+def make_revert(api, heater_id: str, sensor_id: str, proven: dict, proven_sensor: dict):
+    def revert():
+        api.set_node_settings(heater_id, **proven)
+        if proven_sensor:
+            api.set_node_settings(sensor_id, **proven_sensor)
+    return revert
+
+
+def make_recorder(args, api, heater_id, sensor_id, revert) -> Recorder:
     rec = Recorder(api, sensor_id, heater_id, args.temp_min, args.temp_max,
-                   proven, args.poll_interval)
+                   revert, args.poll_interval)
     rec.start()
     return rec
 
@@ -439,14 +828,24 @@ def cmd_status(args, api: ApiClient) -> None:
     log_line(f'Heater {heater["name"]!r}: output={heater["data"]}%, '
             f'setpoint={heater["setpoint"]}, p_fact={heater["p_fact"]}, '
             f'i_fact={heater["i_fact"]}, d_fact={heater["d_fact"]}')
+    log_line(f'Sensor settings: {sensor_settings(sensor)}')
+    usable = find_baseline(args.out_dir, {k: heater[k] for k in GAIN_KEYS}, sensor_settings(sensor))
+    log_line(f'Baseline usable for `trial`: {usable}' if usable else
+             'No baseline matches the live gains and sensor settings - run `baseline` '
+             '(at night) before any `trial`.')
 
 
 def cmd_revert(args, api: ApiClient) -> None:
-    heater, _ = resolve_nodes(api, args.node)
+    heater, sensor = resolve_nodes(api, args.node)
     proven = {'setpoint': args.proven_setpoint, 'p_fact': args.proven_p,
              'i_fact': args.proven_i, 'd_fact': args.proven_d}
     api.set_node_settings(heater['id'], **proven)
     log_line(f'Reverted {args.node!r} to {proven}.')
+    proven_sensor = {k: v for k, v in (('interval', args.proven_interval),
+                                       ('avg', args.proven_avg)) if v is not None}
+    if proven_sensor:
+        api.set_node_settings(sensor['id'], **proven_sensor)
+        log_line(f'Reverted sensor {sensor["name"]!r} to {proven_sensor}.')
 
 
 def cmd_baseline(args, api: ApiClient) -> None:
@@ -466,7 +865,9 @@ def cmd_baseline(args, api: ApiClient) -> None:
             log_line(f'WARNING: {name} {val}\xb0C is not a multiple of the sensor step '
                     f'{args.sensor_step}\xb0C (nearest: {round(steps) * args.sensor_step}\xb0C)')
 
-    rec = make_recorder(args, api, heater['id'], sensor['id'], proven)
+    started_at = datetime.now().isoformat(timespec='minutes')
+    rec = make_recorder(args, api, heater['id'], sensor['id'],
+                        make_revert(api, heater['id'], sensor['id'], proven, {}))
     interrupted = False
     phases = {}
     try:
@@ -494,7 +895,8 @@ def cmd_baseline(args, api: ApiClient) -> None:
     if rec.abort_event.is_set():
         die(f'baseline aborted: {rec.abort_reason}')
 
-    metrics = phase_metrics(phases, args.proven_setpoint, target, cfg)
+    metrics = phase_metrics(phases, args.proven_setpoint, target, cfg,
+                            sensor_settings(sensor).get('avg', 1))
     print_metrics('Baseline, step up', metrics['up'])
     print_metrics('Baseline, step down', metrics['down'])
 
@@ -510,27 +912,37 @@ def cmd_baseline(args, api: ApiClient) -> None:
     with open(out_path, 'w', encoding='utf8') as f:
         json.dump({
             'version': 2,
-            'node': args.node, 'proven': proven, 'step_delta': args.step_delta,
+            'node': args.node, 'proven': proven, 'sensor': sensor_settings(sensor),
+            'started_at': started_at, 'step_delta': args.step_delta,
             'temp_min': args.temp_min, 'temp_max': args.temp_max, 'config': cfg,
             'metrics': metrics, 'rows': phases,
         }, f, indent=1)
     log_line(f'Saved baseline to {out_path}')
-    log_line(f'Next: tools/pid-autotune --base-url {args.base_url} --node {args.node} '
-            f'trial --baseline-file {out_path} --p-fact ... --i-fact ... --d-fact ...')
+    archive_stale_runs(args.out_dir, proven, sensor_settings(sensor))
+    log_line('Next: tools/pid-autotune recommend')
 
 
 def judge(base: dict, trial: dict, args) -> bool:
-    """ keep a candidate only if it is clearly better overall (ITAE over both
-        phases - time-weighted, so lingering oscillation and slow creep are
-        penalized more than a quick initial error) AND not worse in any
-        phase on overshoot, number of swings, or residual error at the end
+    """ keep a candidate only if it is clearly better overall AND not worse
+        in any phase on overshoot, number of swings, or residual error at
+        the end. "Better" is either a clearly lower ITAE over both phases
+        (time-weighted, so lingering oscillation and slow creep count more
+        than a quick initial error), or - what sensor averaging is for - a
+        much calmer output near target at a not-worse ITAE.
     """
     checks = []
     b_itae = sum(m['itae'] for m in base.values())
     t_itae = sum(m['itae'] for m in trial.values())
-    checks.append((f'ITAE (both phases) {t_itae:.0f} <= {1 - args.min_improvement:.2f} '
-                   f'x baseline {b_itae:.0f}',
-                   t_itae <= b_itae * (1 - args.min_improvement)))
+    b_jumps = sum(m['tail_jumps_per_h'] for m in base.values())
+    t_jumps = sum(m['tail_jumps_per_h'] for m in trial.values())
+    faster = t_itae <= b_itae * (1 - args.min_improvement)
+    calmer = (t_itae <= b_itae * (1 + args.itae_tolerance)
+              and b_jumps > 0 and t_jumps <= 0.5 * b_jumps)
+    checks.append((f'better: ITAE {t_itae / 1e6:.2f}M <= {1 - args.min_improvement:.2f} x '
+                   f'baseline {b_itae / 1e6:.2f}M, or output jumps near target '
+                   f'{t_jumps:.1f}/h <= half of {b_jumps:.1f}/h at ITAE <= '
+                   f'{1 + args.itae_tolerance:.2f} x baseline',
+                   faster or calmer))
     for name in ('up', 'down'):
         b, t = base[name], trial[name]
         checks.append((f'{name}: overshoot {t["overshoot"]:.3f} <= {b["overshoot"]:.3f} '
@@ -547,6 +959,15 @@ def judge(base: dict, trial: dict, args) -> bool:
 
 
 def cmd_trial(args, api: ApiClient) -> None:
+    heater, sensor = resolve_nodes(api, args.node)
+    live_sensor = sensor_settings(sensor)
+    if args.baseline_file is None:
+        live_gains = {k: heater[k] for k in GAIN_KEYS}
+        args.baseline_file = find_baseline(args.out_dir, live_gains, live_sensor)
+        if not args.baseline_file:
+            die(f'no baseline in {args.out_dir} matches the live gains {live_gains} and '
+                f'sensor settings {live_sensor} - run `baseline` (at night) first')
+        log_line(f'Using {args.baseline_file} (newest baseline matching the live setup).')
     with open(args.baseline_file, encoding='utf8') as f:
         baseline = json.load(f)
     if baseline.get('version') != 2:
@@ -556,7 +977,8 @@ def cmd_trial(args, api: ApiClient) -> None:
     # recomputed from the saved samples rather than taken from the file,
     # so baseline and trial are always judged by the same metric code
     base_metrics = phase_metrics(baseline['rows'], proven['setpoint'],
-                                 proven['setpoint'] + baseline['step_delta'], baseline['config'])
+                                 proven['setpoint'] + baseline['step_delta'], baseline['config'],
+                                 (baseline.get('sensor') or {}).get('avg', 1))
     cfg = baseline['config']
     target = proven['setpoint'] + baseline['step_delta']
     if args.poll_interval != cfg['poll_interval']:
@@ -564,8 +986,41 @@ def cmd_trial(args, api: ApiClient) -> None:
                 f'instead of {args.poll_interval}s, to keep both runs comparable.')
         args.poll_interval = cfg['poll_interval']
 
-    heater, sensor = resolve_nodes(api, args.node)
     check_live_gains_match(heater, proven, args.force)
+    # the sensor setup is part of what the baseline measured - comparing
+    # against a different (or unrecorded) one would credit/blame the gains
+    # for it
+    proven_sensor = baseline.get('sensor')
+    if proven_sensor is None:
+        msg = (f'{args.baseline_file} predates recording the sensor settings, so it can\'t be '
+               f'shown to match the live ones - run a new `baseline`')
+        if not args.force:
+            die(msg)
+        log_line(f'WARNING (--force): {msg}')
+        proven_sensor = live_sensor
+    if live_sensor != proven_sensor:
+        msg = (f'sensor settings {live_sensor} differ from the baseline\'s {proven_sensor} - '
+               f'run a new `baseline` with the current sensor setup')
+        if not args.force:
+            die(msg)
+        log_line(f'WARNING (--force): {msg}')
+    # day and night differ in heat demand (lights, room), which shows up
+    # mostly in the passive step down - compare runs at similar hours
+    if 'started_at' in baseline:
+        b_min = datetime.fromisoformat(baseline['started_at'])
+        b_min = b_min.hour * 60 + b_min.minute
+        now = datetime.now()
+        diff = abs(now.hour * 60 + now.minute - b_min)
+        if min(diff, 24 * 60 - diff) > 120:
+            log_line(f'WARNING: the baseline started at {baseline["started_at"][11:]}, this trial '
+                    f'at {now.strftime("%H:%M")} - day/night conditions can decide the comparison')
+
+    candidate_sensor = {k: v for k, v in (('interval', args.sensor_interval),
+                                          ('avg', args.sensor_avg)) if v is not None}
+    if candidate_sensor and not live_sensor:
+        die(f'sensor {sensor["name"]!r} ({sensor["type"]}) has no interval/avg settings to try')
+    revert = make_revert(api, heater['id'], sensor['id'], proven,
+                         proven_sensor if candidate_sensor else {})
 
     candidate = {
         'p_fact': args.p_fact if args.p_fact is not None else proven['p_fact'],
@@ -573,12 +1028,16 @@ def cmd_trial(args, api: ApiClient) -> None:
         'd_fact': args.d_fact if args.d_fact is not None else proven['d_fact'],
     }
 
-    rec = make_recorder(args, api, heater['id'], sensor['id'], proven)
+    rec = make_recorder(args, api, heater['id'], sensor['id'], revert)
     interrupted = False
     phases = {}
     try:
         log_line(f'Applying candidate gains: {candidate} (proven was {proven})')
         api.set_node_settings(heater['id'], **candidate)
+        if candidate_sensor:
+            log_line(f'Applying candidate sensor settings: {candidate_sensor} '
+                    f'(proven was {proven_sensor})')
+            api.set_node_settings(sensor['id'], **candidate_sensor)
         log_line(f'Step test {proven["setpoint"]}\xb0C -> {target}\xb0C -> '
                 f'{proven["setpoint"]}\xb0C, {2 * cfg["horizon_s"] / 60:.0f} min in total '
                 f'(same horizon as the baseline).')
@@ -590,9 +1049,10 @@ def cmd_trial(args, api: ApiClient) -> None:
     finally:
         finish_recorder(rec)
         if interrupted or rec.abort_event.is_set():
-            log_line(f'Reverting gains and setpoint to proven values: {proven}')
+            log_line(f'Reverting gains and setpoint to proven values: {proven}'
+                    + (f', sensor to {proven_sensor}' if candidate_sensor else ''))
             try:
-                api.set_node_settings(heater['id'], **proven)
+                revert()
             except Exception as ex:  # noqa: BLE001
                 log_line(f'WARN: revert failed ({ex}) - check /parameters by hand immediately')
         else:
@@ -610,7 +1070,8 @@ def cmd_trial(args, api: ApiClient) -> None:
     if rec.abort_event.is_set():
         die(f'trial aborted: {rec.abort_reason} (gains already reverted to {proven})')
 
-    trial_metrics = phase_metrics(phases, proven['setpoint'], target, cfg)
+    trial_metrics = phase_metrics(phases, proven['setpoint'], target, cfg,
+                                  dict(live_sensor, **candidate_sensor).get('avg', 1))
     for name in ('up', 'down'):
         print_metrics(f'Baseline, step {name} (saved)', base_metrics[name])
         print_metrics(f'Trial, step {name}', trial_metrics[name])
@@ -619,17 +1080,166 @@ def cmd_trial(args, api: ApiClient) -> None:
                             f'trial_{int(time.time())}.json')
     with open(out_path, 'w', encoding='utf8') as f:
         json.dump({'version': 2, 'node': args.node, 'baseline_file': args.baseline_file,
-                   'candidate': candidate, 'metrics': trial_metrics, 'rows': phases}, f, indent=1)
+                   'candidate': candidate, 'sensor': dict(live_sensor, **candidate_sensor),
+                   'started_at': datetime.now().isoformat(timespec='minutes'),
+                   'metrics': trial_metrics, 'rows': phases}, f, indent=1)
     log_line(f'Saved trial to {out_path}')
 
     log_line('Comparison:')
     if judge(base_metrics, trial_metrics, args):
-        log_line(f'=> KEEPING candidate gains {candidate}.')
-        log_line(f'Live gains on {args.node!r} are now: {candidate}')
+        log_line(f'=> KEEPING candidate gains {candidate}'
+                + (f' and sensor settings {candidate_sensor}.' if candidate_sensor else '.'))
+        log_line(f'Live gains on {args.node!r} are now: {candidate} - pass them as --proven-* '
+                f'(or update the defaults) for the next run')
     else:
-        log_line(f'=> NOT a clear improvement - reverting to proven gains {proven}.')
+        log_line(f'=> NOT a clear improvement - reverting to proven gains {proven}'
+                + (f' and sensor settings {proven_sensor}.' if candidate_sensor else '.'))
         api.set_node_settings(heater['id'], p_fact=proven['p_fact'],
                               i_fact=proven['i_fact'], d_fact=proven['d_fact'])
+        if candidate_sensor:
+            api.set_node_settings(sensor['id'], **proven_sensor)
+
+
+def load_run(path: str) -> dict:
+    """ a baseline or trial file, normalized to what `recommend` needs:
+        the samples, the PID gains and sensor settings they ran under
+    """
+    with open(path, encoding='utf8') as f:
+        run = json.load(f)
+    if run.get('version') != 2:
+        die(f'{path} is from an older pid-autotune - re-run `baseline` first')
+    if 'candidate' in run:  # a trial: setpoint/step/config live in its baseline
+        with open(run['baseline_file'], encoding='utf8') as f:
+            base = json.load(f)
+        gains = dict(base['proven'], **run['candidate'])
+        return {'rows': run['rows'], 'gains': gains, 'step_delta': base['step_delta'],
+                'config': base['config'], 'sensor': run.get('sensor'),
+                'baseline_file': run['baseline_file']}
+    return {'rows': run['rows'], 'gains': run['proven'], 'step_delta': run['step_delta'],
+            'config': run['config'], 'sensor': run.get('sensor'), 'baseline_file': path}
+
+
+def _fmt_cfg(c: dict) -> str:
+    return (f'read {c["interval"]:3.0f}s avg {c["avg"]}  p {c["p_fact"]:5.0f} '
+            f'i {c["i_fact"]:.3f} (Ti {c["p_fact"] / c["i_fact"] / 60:4.0f}min)')
+
+
+def _fmt_eval(e: dict) -> str:
+    return (f'ITAE {e["itae"] / 1e6:5.2f}M  overshoot {e["overshoot"]:.3f}\xb0C  '
+            f'turns {e["turns"]}  hold: \xb1{e["hold_dev"]:.3f}\xb0C, largest jump '
+            f'{e["max_jump"]:4.1f}pp, {e["jumps_per_h"]:4.1f} jumps/h')
+
+
+def cmd_recommend(args, _api) -> None:
+    if args.run_file is None:
+        args.run_file = next((path for path, data in _runs(args.out_dir, 'baseline')
+                              if data.get('version') == 2), None)
+        if not args.run_file:
+            die(f'no baseline in {args.out_dir} - run `baseline` first')
+        log_line(f'Using {args.run_file} (newest baseline).')
+    run = load_run(args.run_file)
+    sensor = dict(run['sensor'] or {})
+    if args.sensor_interval is not None:
+        sensor['interval'] = args.sensor_interval
+    if args.sensor_avg is not None:
+        sensor['avg'] = args.sensor_avg
+    if 'interval' not in sensor or 'avg' not in sensor:
+        die(f'{args.run_file} predates recording the sensor settings - pass the read '
+            f'interval and averaging it ran with via --sensor-interval/--sensor-avg')
+    gains = run['gains']
+    sp = gains['setpoint']
+    step = args.sensor_step
+
+    plant = fit_plant(run, sensor, step)
+    log_line('Tank model fitted from the run:')
+    log_line(f'  holding power at {sp}\xb0C : {plant["hold"]:.1f}%')
+    log_line(f'  heat loss                : +{plant["loss"]:.1f} pp per \xb0C above setpoint')
+    log_line(f'  heating rate             : {plant["k"] * 3600 * 10:.3f} \xb0C/h per 10 pp '
+            f'above holding power')
+    log_line(f'  dead time heater->water  : {plant["dead_s"] / 60:.1f} min '
+            f'(+{plant["sensor_delay_s"] / 60:.1f} min sensor read interval/averaging)')
+    log_line(f'  heater heat storage lag  : {plant["lag_s"] / 60:.1f} min')
+
+    # if the model can't reproduce what was measured, nothing it predicts
+    # about other settings is worth much
+    target = sp + run['step_delta']
+    rms = replay_rms(plant, run, sensor, step)
+    log_line('Model check - replaying the recorded run:')
+    for name, a, b in (('up', sp, target), ('down', target, sp)):
+        simr = [(t, rd, out) for t, _, out, rd in rms['sim'][name]]
+        m_real = compute_metrics(run['rows'][name], a, b, args.peak_hysteresis, args.settle_band)
+        m_sim = compute_metrics(simr, a, b, args.peak_hysteresis, args.settle_band)
+        log_line(f'  {name:4}: rms deviation {rms[name]:.3f}\xb0C | overshoot real '
+                f'{m_real["overshoot"]:.3f} model {m_sim["overshoot"]:.3f} | ITAE real '
+                f'{m_real["itae"] / 1e6:.2f}M model {m_sim["itae"] / 1e6:.2f}M')
+    log_line('  (real peaks read up to ~one sensor step higher: the replay has no sensor '
+            'noise, the real readings at a peak do)')
+    if max(rms['up'], rms['down']) > 2 * step:
+        log_line('  WARNING: the model misses the real run by more than two sensor steps - '
+                 'treat the recommendation below with suspicion (a disturbed run? re-profile)')
+
+    ctx = {'noise': args.noise, 'step_delta': run['step_delta'], 'sensor_step': step,
+           'horizon_s': run['config']['horizon_s'], 'hold_s': args.hold_hours * 3600,
+           'disturbance_pp': args.disturbance_pp, 'hysteresis': args.peak_hysteresis,
+           'settle_band': args.settle_band, 'max_output_jump': args.max_output_jump}
+    current = dict(gains, interval=sensor['interval'], avg=sensor['avg'])
+    cur_eval = evaluate(plant, gains, current['interval'], current['avg'], ctx)
+
+    # explored around the current settings, so no tank constants are
+    # assumed - only multiples of what is already known to work
+    ti_now = gains['p_fact'] / gains['i_fact']
+    intervals = sorted(set(args.intervals) | {sensor['interval']})
+    grid = [{'interval': iv, 'avg': avg, 'p_fact': round(gains['p_fact'] * pm),
+             'i_fact': round(gains['p_fact'] * pm / (ti_now * tm), 4), 'd_fact': 0.0,
+             'setpoint': sp}
+            for iv in intervals for avg in range(1, 6)
+            for pm in (0.6, 0.8, 1.0, 1.25, 1.5, 2.0) for tm in (0.5, 0.75, 1.0, 1.5, 2.0)]
+    log_line(f'Simulating {len(grid)} combinations (read interval x averaging x P x I), '
+            f'worst case of {len(args.noise)} noise levels x 2 seeds each ...')
+    results = []
+    for n, c in enumerate(grid, 1):
+        results.append((c, evaluate(plant, c, c['interval'], c['avg'], ctx)))
+        if n % 100 == 0:
+            log_line(f'  {n}/{len(grid)}')
+
+    def ok(e):
+        return (e['overshoot'] <= step + 1e-9 and e['turns'] <= 1
+                and e['max_jump'] <= args.max_output_jump)
+
+    feasible = sorted((r for r in results if ok(r[1])), key=lambda r: r[1]['itae'])
+    log_line(f'Current : {_fmt_cfg(current)}')
+    log_line(f'          {_fmt_eval(cur_eval)}')
+    for iv, avg, p_f, i_f in args.check:
+        c = {'interval': iv, 'avg': int(avg), 'p_fact': p_f, 'i_fact': i_f, 'd_fact': 0.0,
+             'setpoint': sp}
+        log_line(f'Checked : {_fmt_cfg(c)}')
+        log_line(f'          {_fmt_eval(evaluate(plant, c, iv, int(avg), ctx))}')
+    if not feasible:
+        log_line(f'No combination keeps overshoot <= one sensor step ({step}\xb0C), at most one '
+                f'turning point and output jumps <= {args.max_output_jump}pp. Closest by ITAE:')
+        for c, e in sorted(results, key=lambda r: r[1]['itae'])[:5]:
+            log_line(f'  {_fmt_cfg(c)}  | {_fmt_eval(e)}')
+        return
+    # anything within 5% ITAE of the best is a tie (the model is not that
+    # precise) - prefer the slower read interval (less sensor/history
+    # load), then the gentler P
+    best_itae = feasible[0][1]['itae']
+    ties = [r for r in feasible if r[1]['itae'] <= best_itae * 1.05]
+    choice = sorted(ties, key=lambda r: (-r[0]['interval'], r[0]['p_fact']))[0]
+    log_line('Best combinations meeting overshoot <= 1 sensor step, <= 1 turning point, '
+            f'output jumps <= {args.max_output_jump}pp:')
+    for c, e in feasible[:5]:
+        log_line(f'  {_fmt_cfg(c)}  | {_fmt_eval(e)}')
+    c, e = choice
+    log_line(f'RECOMMENDED: {_fmt_cfg(c)}')
+    log_line(f'             {_fmt_eval(e)}')
+    log_line('This is a model prediction, not a measurement - confirm it with a `trial` '
+            'started at the same time of day as its baseline, against a baseline taken with '
+            'the sensor settings that are live then:')
+    sensor_args = ''
+    if (c['interval'], c['avg']) != (sensor['interval'], sensor['avg']):
+        sensor_args = f' --sensor-interval {c["interval"]:.0f} --sensor-avg {c["avg"]}'
+    log_line(f'  tools/pid-autotune trial --p-fact {c["p_fact"]} --i-fact {c["i_fact"]} --d-fact 0{sensor_args}')
 
 
 # --- CLI ------------------------------------------------------------------
@@ -637,7 +1247,12 @@ def cmd_trial(args, api: ApiClient) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--base-url', required=True, help="e.g. http://aquapi2:5000")
+    p.add_argument('--base-url', default='http://localhost:5000',
+                   help="aquaPi to talk to; the default fits running on the aquaPi host itself "
+                        "(not used by `recommend`)")
+    p.add_argument('--out-dir', default=DEFAULT_OUT_DIR,
+                   help="where runs are saved and looked up (default: pid_autotune_runs/ "
+                        "in the repo)")
     p.add_argument('--node', default='Heizleistung', help="the PidCtrl node's display name")
     p.add_argument('--temp-min', type=float, default=23.0)
     p.add_argument('--temp-max', type=float, default=27.0)
@@ -654,7 +1269,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser('status')
 
-    sub.add_parser('revert')
+    rev = sub.add_parser('revert')
+    rev.add_argument('--proven-interval', type=float, default=None,
+                     help="also restore the sensor's read interval (s)")
+    rev.add_argument('--proven-avg', type=int, default=None,
+                     help="also restore the sensor's averaging depth")
 
     base = sub.add_parser('baseline')
     base.add_argument('--step-delta', type=float, default=0.75,
@@ -673,20 +1292,58 @@ def build_parser() -> argparse.ArgumentParser:
                       help="°C around the target that counts as settled")
     base.add_argument('--d-probe-contribution', type=float, default=5.0,
                       help="percentage points used to size the suggested d_fact")
-    base.add_argument('--out-dir', default='pid_autotune_runs')
 
     trial = sub.add_parser('trial')
-    trial.add_argument('--baseline-file', required=True)
+    trial.add_argument('--baseline-file', default=None,
+                       help="default: the newest baseline matching the live gains and sensor "
+                            "settings")
     trial.add_argument('--p-fact', type=float, default=None)
     trial.add_argument('--i-fact', type=float, default=None)
     trial.add_argument('--d-fact', type=float, default=None)
+    trial.add_argument('--sensor-interval', type=float, default=None,
+                       help="also try this sensor read interval (s), reverted with the gains")
+    trial.add_argument('--sensor-avg', type=int, default=None,
+                       help="also try this sensor averaging depth (1-5), reverted with the gains")
     trial.add_argument('--min-improvement', type=float, default=0.05,
                        help="required fractional ITAE reduction vs baseline, e.g. 0.05 = 5%%")
+    trial.add_argument('--itae-tolerance', type=float, default=0.05,
+                       help="ITAE increase still accepted for a candidate that halves the "
+                            "output jumps near target, e.g. 0.05 = 5%%")
     trial.add_argument('--overshoot-tolerance', type=float, default=0.05,
                        help="°C of extra overshoot still tolerated as 'no worse'")
     trial.add_argument('--residual-tolerance', type=float, default=0.03,
                        help="°C of extra residual error (last 20%% of each phase) "
                             "still tolerated as 'no worse'")
+
+    rcm = sub.add_parser('recommend')
+    rcm.add_argument('run_file', nargs='?', default=None,
+                     help="a saved baseline (or trial) run to profile the tank from "
+                          "(default: the newest baseline)")
+    rcm.add_argument('--sensor-interval', type=float, default=None,
+                     help="read interval the run used, for files that didn't record it")
+    rcm.add_argument('--sensor-avg', type=int, default=None,
+                     help="averaging the run used, for files that didn't record it")
+    rcm.add_argument('--sensor-step', type=float, default=0.0625,
+                     help="sensor resolution in °C (DS18B20: 0.0625)")
+    rcm.add_argument('--intervals', type=lambda v: [float(x) for x in v.split(',')],
+                     default=[30.0, 60.0, 120.0],
+                     help="read intervals (s) to consider, comma-separated")
+    rcm.add_argument('--noise', type=lambda v: [float(x) for x in v.split(',')],
+                     default=[0.005, 0.02],
+                     help="sensor noise levels (°C std dev) - every candidate is judged on "
+                          "its worst case across them")
+    rcm.add_argument('--hold-hours', type=float, default=4.0,
+                     help="simulated hold at setpoint used to judge output jumpiness")
+    rcm.add_argument('--disturbance-pp', type=float, default=5.0,
+                     help="amplitude of the slow heat-demand swing during the hold (pp)")
+    rcm.add_argument('--max-output-jump', type=float, default=JUMP_PP,
+                     help="largest acceptable output jump per PID tick while holding (pp)")
+    rcm.add_argument('--check', action='append', default=[],
+                     type=lambda v: [float(x) for x in v.split(':')],
+                     metavar='INTERVAL:AVG:P:I',
+                     help="also report this setup, e.g. 60:3:180:0.05 (repeatable)")
+    rcm.add_argument('--peak-hysteresis', type=float, default=0.1)
+    rcm.add_argument('--settle-band', type=float, default=0.1)
 
     return p
 
@@ -696,14 +1353,17 @@ def main() -> None:
     if args.temp_min >= args.temp_max:
         die('--temp-min must be < --temp-max')
 
-    api = ApiClient(args.base_url)
-    api.login()
+    api = None
+    if args.cmd != 'recommend':     # offline, works on a saved run only
+        api = ApiClient(args.base_url)
+        api.login()
 
     {
         'status': cmd_status,
         'revert': cmd_revert,
         'baseline': cmd_baseline,
         'trial': cmd_trial,
+        'recommend': cmd_recommend,
     }[args.cmd](args, api)
 
 

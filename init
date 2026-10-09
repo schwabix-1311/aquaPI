@@ -84,6 +84,7 @@ if [ $(getconf LONG_BIT) == 64 ]
 then
   if ( grep -i "Raspberry Pi" /proc/cpuinfo >/dev/null )
   then
+    quest_on_pi=1
     quest_sh="${MyHome}/questdb-${QuestRel}/questdb.sh"
     if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
@@ -97,37 +98,6 @@ then
       mv questdb-${QuestRel}-no-jre-bin questdb-${QuestRel}
 
       sudo apt install openjdk-${JavaRel}-jre-headless -y
-    fi
-
-    # aquaPi only ever talks to Quest DB via the Postgres wire protocol
-    # (psycopg) - ILP ingestion and the separate health-check HTTP
-    # server are never used, and a single Flask process doing light,
-    # low-frequency reads/writes doesn't need more than 1 shared worker.
-    # Written once, never overwritten, so a later hand-edit survives.
-    quest_conf="${MyHome}/questdb-${QuestRel}/conf/server.conf"
-    if [ ! -f "${quest_conf}" ]
-    then
-      echo "===== writing memory-conscious QuestDB server.conf"
-      cat > "${quest_conf}" <<'EOF'
-shared.worker.count=1
-line.tcp.enabled=false
-line.udp.enabled=false
-http.min.enabled=false
-EOF
-    fi
-
-    # aquaPi only ever talks to Quest DB via the Postgres wire protocol -
-    # nothing in this codebase uses the embedded web console/REST API,
-    # so it's a pure memory cost here. Checked line-by-line rather than
-    # gated on quest_conf's own existence (like the JVM-flags block
-    # below), so it also reaches an already-installed production
-    # QuestDB whose server.conf predates this setting. Trade-off: this
-    # also removes browser access to localhost:9000 for ad-hoc
-    # inspection - deliberately accepted, not a silent side effect.
-    if ( ! grep -q "^http.enabled" "${quest_conf}" 2>/dev/null )
-    then
-      echo "===== disabling QuestDB's unused web console/REST API"
-      echo "http.enabled=false" >> "${quest_conf}"
     fi
 
     # -Xmx alone only caps the JVM heap - off-heap direct buffers,
@@ -159,6 +129,7 @@ EOF
 
     export JAVA_HOME=/usr/lib/jvm/java-${JavaRel}-openjdk-arm64
   else
+    quest_on_pi=0
     quest_sh="${MyHome}/questdb-${QuestRel}/bin/questdb.sh"
     if [ -z "$(ls -d "${MyHome}/questdb-${QuestRel}/" 2>/dev/null)" ]
     then
@@ -171,6 +142,56 @@ EOF
       tar -xvf "${quest_tgz}"
       mv questdb-${QuestRel}-rt-linux-amd64 questdb-${QuestRel}
     fi
+  fi
+
+  # QuestDB reads its config from its root dir (questdb.sh's default
+  # -d ~/.questdb), not from the tarball's conf/. QuestDB writes its
+  # default conf files there on first start, unless they already exist.
+  quest_root_conf="${HOME}/.questdb/conf"
+
+  # At INFO, QuestDB logs several lines per Postgres-wire connection and
+  # table write - aquaPi connects per history value, which grew the log
+  # by ~1GB/month on the Pi. The stdout writer's file is never rotated.
+  if ( grep -q "^w.stdout.level=INFO" "${quest_root_conf}/log.conf" 2>/dev/null )
+  then
+    echo "===== reducing QuestDB log level to errors"
+    # (\r?: QuestDB's shipped conf files can have CRLF line ends)
+    sed -i "s/^w.stdout.level=INFO\(\r\?\)$/w.stdout.level=ERROR,CRITICAL,ADVISORY\1/" "${quest_root_conf}/log.conf"
+  fi
+
+  # server.conf keys aquaPi needs, enforced on every run: an existing
+  # key gets its value replaced, a missing one is appended. Keys not
+  # listed here stay as they are, hand-edits included.
+  quest_server_conf="${quest_root_conf}/server.conf"
+  quest_conf_set() {
+    if ( ! grep -q "^$1=$2"$'\r'"\?$" "${quest_server_conf}" 2>/dev/null )
+    then
+      echo "===== QuestDB server.conf: $1=$2"
+      if ( grep -q "^$1=" "${quest_server_conf}" 2>/dev/null )
+      then
+        sed -i "s/^$1=[^"$'\r'"]*/$1=$2/" "${quest_server_conf}"
+      else
+        echo "$1=$2" >> "${quest_server_conf}"
+      fi
+    fi
+  }
+  mkdir -p "${quest_root_conf}"
+
+  # usage events nobody reads, in tables growing ~100MB over 2 years
+  quest_conf_set telemetry.enabled false
+  if [ "${quest_on_pi}" -eq 1 ]
+  then
+    # aquaPi only talks to QuestDB via the Postgres wire protocol
+    # (psycopg) - the web console/REST API, ILP ingestion and the
+    # health-check server are unused, cost memory, and the console
+    # would accept any SQL from the whole LAN without a login. A single
+    # Flask process doing light, low-frequency reads/writes doesn't
+    # need more than 1 shared worker.
+    quest_conf_set shared.worker.count 1
+    quest_conf_set http.enabled false
+    quest_conf_set http.min.enabled false
+    quest_conf_set line.tcp.enabled false
+    quest_conf_set line.udp.enabled false
   fi
 
   if ( "${quest_sh}" status 2>/dev/null | grep -q "^PID:" )

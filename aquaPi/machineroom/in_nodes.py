@@ -222,18 +222,22 @@ class AnalogInput(InputNode):
             initval  - initial value (for faked drivers!)
             interval - delay of reader loop, conversion time adds to this!
             unit     - unit of posted data
-            avg      - floating average, 1=no average, 2..5=depth of averaging
+            avg      - exponential moving average depth, 1=no averaging,
+                       2..AVG_MAX: each new reading enters with 1/avg weight,
+                       i.e. y = (x + (avg-1) * y_prev) / avg; the averaging
+                       time is about (avg-1) * interval
 
         Output:
             float - posts each change of measurement in driver units
     """
     data_range = DataRange.ANALOG
     _port_funcs = [PortFunc.Ain]
+    AVG_MAX = 20
 
     def __init__(self, name: str, port: str, initval: float, unit: str,
                  interval: float = 10.0, avg: int = 0,
                  _cont: bool = False):
-        self.avg = min(max(1, avg), 5)
+        self.avg = min(max(1, avg), self.AVG_MAX)
         super().__init__(name, port, interval, _cont=_cont)
         self.unit = unit
         self.initval = initval
@@ -278,7 +282,7 @@ class AnalogInput(InputNode):
         # (and never did) surface it as an editable setting afterward.
         schema.insert(1, Setting('initval', 'initval', 0.0, type='number', creation_only=True))
         schema.insert(2, Setting('unit', 'unit', ''))
-        schema.append(Setting('avg', 'avg', 1, type='number', min=1, max=5, step=1))
+        schema.append(Setting('avg', 'avg', 1, type='number', min=1, max=cls.AVG_MAX, step=1))
         return schema
 
 

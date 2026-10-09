@@ -95,6 +95,10 @@ GAIN_KEYS = ('setpoint', 'p_fact', 'i_fact', 'd_fact')
 # exactly such jumps
 JUMP_PP = 3.0
 
+# AnalogInput averaging depths to try (in_nodes.AnalogInput.AVG_MAX caps
+# them) - dense where each step matters, sparse in the long tail
+AVG_GRID = (1, 2, 3, 4, 5, 8, 12, 20)
+
 
 def log_line(msg: str) -> None:
     print(f'[{datetime.now().strftime("%H:%M:%S")}] {msg}', flush=True)
@@ -1189,10 +1193,11 @@ def cmd_recommend(args, _api) -> None:
     # assumed - only multiples of what is already known to work
     ti_now = gains['p_fact'] / gains['i_fact']
     intervals = sorted(set(args.intervals) | {sensor['interval']})
+    avgs = sorted(set(AVG_GRID) | {sensor['avg']})
     grid = [{'interval': iv, 'avg': avg, 'p_fact': round(gains['p_fact'] * pm),
              'i_fact': round(gains['p_fact'] * pm / (ti_now * tm), 4), 'd_fact': 0.0,
              'setpoint': sp}
-            for iv in intervals for avg in range(1, 6)
+            for iv in intervals for avg in avgs
             for pm in (0.6, 0.8, 1.0, 1.25, 1.5, 2.0) for tm in (0.5, 0.75, 1.0, 1.5, 2.0)]
     log_line(f'Simulating {len(grid)} combinations (read interval x averaging x P x I), '
             f'worst case of {len(args.noise)} noise levels x 2 seeds each ...')

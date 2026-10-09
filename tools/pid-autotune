@@ -36,12 +36,19 @@ Subcommands:
                 number of swings, residual error per phase), and either
                 keep the candidate (if it's a clear improvement) or
                 explicitly revert to the baseline's proven gains
-    revert    - unconditionally write a given (or a saved baseline's)
-                gains back right now, no measurement
+    revert    - unconditionally write the newest saved baseline's (or a
+                given) gains and sensor settings back, no measurement
     recommend - offline, no login: fit a model of the tank to a saved
                 baseline (or trial) run, check it replays that run, then
                 simulate read interval x averaging x P x I and recommend
                 the combination to confirm with `trial`
+    suggest   - offline, no login: starting gains for a tank never tuned,
+                scaled from the reference tank by heater watts per liter
+
+Nothing about a particular tank is built in: --node is required, the
+proven gains/setpoint default to the live node's, and the safety bounds
+to that setpoint +-2\xb0C. A new tank: `suggest`, let those gains run for
+a day, then `baseline` + `recommend` + `trial`.
 
 `baseline` doubles as the tank profiling run for `recommend`; `trial` can
 also try a sensor read interval/averaging together with the gains (and
@@ -51,10 +58,11 @@ Needs only `requests` (already an aquaPi dependency). Meant to run on
 the aquaPi host itself (--base-url defaults to localhost:5000), from the
 repo root:
 
-    venv/bin/python3 tools/pid-autotune status
-    venv/bin/python3 tools/pid-autotune baseline      # at night, ~6h
+    venv/bin/python3 tools/pid-autotune suggest --watts 100 --liters 54
+    venv/bin/python3 tools/pid-autotune --node Heizleistung status
+    venv/bin/python3 tools/pid-autotune --node Heizleistung baseline   # at night, ~6h
     venv/bin/python3 tools/pid-autotune recommend     # offline, newest baseline
-    venv/bin/python3 tools/pid-autotune trial --p-fact ... --i-fact ...
+    venv/bin/python3 tools/pid-autotune --node Heizleistung trial --p-fact ... --i-fact ...
 
 Runs are saved in pid_autotune_runs/ in the repo. `trial` picks the newest
 baseline matching the live gains and sensor settings; each new baseline
@@ -94,6 +102,14 @@ GAIN_KEYS = ('setpoint', 'p_fact', 'i_fact', 'd_fact')
 # setpoint counts as "jumpy" - sensor-step flicker through P shows up as
 # exactly such jumps
 JUMP_PP = 3.0
+
+# the one setup this tool was developed and tuned on - `suggest` scales it
+# to another tank as a first guess only, `baseline` + `recommend` refine it
+REF_TANK = {'watts': 100.0, 'liters': 54.0, 'p_fact': 180.0, 'i_fact': 0.05}
+# default safety bounds: this far below/above the proven setpoint
+TEMP_MARGIN = 2.0
+PROVEN_ARGS = (('setpoint', 'proven_setpoint'), ('p_fact', 'proven_p'),
+               ('i_fact', 'proven_i'), ('d_fact', 'proven_d'))
 
 # AnalogInput averaging depths to try (in_nodes.AnalogInput.AVG_MAX caps
 # them) - dense where each step matters, sparse in the long tail
@@ -720,6 +736,23 @@ def check_live_gains_match(heater: dict, proven: dict, force: bool) -> None:
         log_line(f'WARNING (--force): proceeding despite mismatch {mismatched}')
 
 
+def proven_from(heater: dict, args) -> dict:
+    """ --proven-* as given, the live value for each one left out """
+    return {k: (getattr(args, a) if getattr(args, a) is not None else heater[k])
+            for k, a in PROVEN_ARGS}
+
+
+def set_temp_bounds(args, setpoint: float) -> None:
+    """ default the watchdog's bounds to the proven setpoint +-TEMP_MARGIN """
+    if args.temp_min is None:
+        args.temp_min = setpoint - TEMP_MARGIN
+    if args.temp_max is None:
+        args.temp_max = setpoint + TEMP_MARGIN
+    if args.temp_min >= args.temp_max:
+        die(f'--temp-min {args.temp_min} must be < --temp-max {args.temp_max}')
+    log_line(f'Safety bounds: {args.temp_min}..{args.temp_max}\xb0C')
+
+
 def _runs(out_dir: str, prefix: str) -> list:
     """ [(path, data), ...] of saved runs of one kind, newest first """
     found = []
@@ -841,12 +874,30 @@ def cmd_status(args, api: ApiClient) -> None:
 
 def cmd_revert(args, api: ApiClient) -> None:
     heater, sensor = resolve_nodes(api, args.node)
-    proven = {'setpoint': args.proven_setpoint, 'p_fact': args.proven_p,
-             'i_fact': args.proven_i, 'd_fact': args.proven_d}
+    # values to restore: the given baseline's, else the newest saved one
+    # for this node - each --proven-* overrides its value
+    base_path, base = args.baseline_file, None
+    if base_path:
+        with open(base_path, encoding='utf8') as f:
+            base = json.load(f)
+        if base.get('version') != 2 or 'proven' not in base:
+            die(f'{base_path} is not a baseline from this pid-autotune version')
+    else:
+        base_path, base = next(((path, data) for path, data in _runs(args.out_dir, 'baseline')
+                                if data.get('version') == 2 and data.get('node') == args.node),
+                               (None, None))
+    proven = dict(base['proven']) if base else {}
+    proven.update({k: getattr(args, a) for k, a in PROVEN_ARGS if getattr(args, a) is not None})
+    proven_sensor = dict(base.get('sensor') or {}) if base else {}
+    proven_sensor.update({k: v for k, v in (('interval', args.proven_interval),
+                                            ('avg', args.proven_avg)) if v is not None})
+    if not proven:
+        die(f'no saved baseline for {args.node!r} in {args.out_dir} - pass the values to '
+            f'restore as --proven-setpoint/--proven-p/--proven-i/--proven-d')
+    if base_path:
+        log_line(f'Restoring from {base_path} (overridden by any --proven-* given).')
     api.set_node_settings(heater['id'], **proven)
     log_line(f'Reverted {args.node!r} to {proven}.')
-    proven_sensor = {k: v for k, v in (('interval', args.proven_interval),
-                                       ('avg', args.proven_avg)) if v is not None}
     if proven_sensor:
         api.set_node_settings(sensor['id'], **proven_sensor)
         log_line(f'Reverted sensor {sensor["name"]!r} to {proven_sensor}.')
@@ -854,16 +905,16 @@ def cmd_revert(args, api: ApiClient) -> None:
 
 def cmd_baseline(args, api: ApiClient) -> None:
     heater, sensor = resolve_nodes(api, args.node)
-    proven = {'setpoint': args.proven_setpoint, 'p_fact': args.proven_p,
-             'i_fact': args.proven_i, 'd_fact': args.proven_d}
+    proven = proven_from(heater, args)
     check_live_gains_match(heater, proven, args.force)
+    set_temp_bounds(args, proven['setpoint'])
     # stored with the baseline so every later trial is evaluated identically
     cfg = {'horizon_s': args.horizon_minutes * 60, 'poll_interval': args.poll_interval,
            'peak_hysteresis': args.peak_hysteresis, 'settle_band': args.settle_band}
-    target = args.proven_setpoint + args.step_delta
+    target = proven['setpoint'] + args.step_delta
     # a target between two sensor steps can never read as zero error, so
     # the controller keeps seeing a small offset in one direction
-    for name, val in (('--proven-setpoint', args.proven_setpoint), ('step target', target)):
+    for name, val in (('--proven-setpoint', proven['setpoint']), ('step target', target)):
         steps = val / args.sensor_step
         if abs(steps - round(steps)) > 1e-6:
             log_line(f'WARNING: {name} {val}\xb0C is not a multiple of the sensor step '
@@ -875,17 +926,17 @@ def cmd_baseline(args, api: ApiClient) -> None:
     interrupted = False
     phases = {}
     try:
-        log_line(f'Step test {args.proven_setpoint}\xb0C -> {target}\xb0C -> '
-                f'{args.proven_setpoint}\xb0C, {2 * args.horizon_minutes:.0f} min in total.')
+        log_line(f'Step test {proven["setpoint"]}\xb0C -> {target}\xb0C -> '
+                f'{proven["setpoint"]}\xb0C, {2 * args.horizon_minutes:.0f} min in total.')
         log_line('(press Ctrl-C any time to abort - setpoint will be restored)')
-        phases = run_step_test(api, rec, heater['id'], args.proven_setpoint, target,
+        phases = run_step_test(api, rec, heater['id'], proven['setpoint'], target,
                                cfg['horizon_s'])
     except KeyboardInterrupt:
         interrupted = True
     finally:
-        log_line(f'Returning setpoint to {args.proven_setpoint}\xb0C.')
+        log_line(f'Returning setpoint to {proven["setpoint"]}\xb0C.')
         try:
-            api.set_node_settings(heater['id'], setpoint=args.proven_setpoint)
+            api.set_node_settings(heater['id'], setpoint=proven['setpoint'])
         except Exception as ex:  # noqa: BLE001
             log_line(f'WARN: could not restore setpoint ({ex}) - check /parameters by hand')
         finish_recorder(rec)
@@ -899,7 +950,7 @@ def cmd_baseline(args, api: ApiClient) -> None:
     if rec.abort_event.is_set():
         die(f'baseline aborted: {rec.abort_reason}')
 
-    metrics = phase_metrics(phases, args.proven_setpoint, target, cfg,
+    metrics = phase_metrics(phases, proven['setpoint'], target, cfg,
                             sensor_settings(sensor).get('avg', 1))
     print_metrics('Baseline, step up', metrics['up'])
     print_metrics('Baseline, step down', metrics['down'])
@@ -991,6 +1042,7 @@ def cmd_trial(args, api: ApiClient) -> None:
         args.poll_interval = cfg['poll_interval']
 
     check_live_gains_match(heater, proven, args.force)
+    set_temp_bounds(args, proven['setpoint'])
     # the sensor setup is part of what the baseline measured - comparing
     # against a different (or unrecorded) one would credit/blame the gains
     # for it
@@ -1093,8 +1145,8 @@ def cmd_trial(args, api: ApiClient) -> None:
     if judge(base_metrics, trial_metrics, args):
         log_line(f'=> KEEPING candidate gains {candidate}'
                 + (f' and sensor settings {candidate_sensor}.' if candidate_sensor else '.'))
-        log_line(f'Live gains on {args.node!r} are now: {candidate} - pass them as --proven-* '
-                f'(or update the defaults) for the next run')
+        log_line(f'Live gains on {args.node!r} are now: {candidate} - the next `baseline` '
+                f'starts from them')
     else:
         log_line(f'=> NOT a clear improvement - reverting to proven gains {proven}'
                 + (f' and sensor settings {proven_sensor}.' if candidate_sensor else '.'))
@@ -1249,6 +1301,27 @@ def cmd_recommend(args, _api) -> None:
 
 # --- CLI ------------------------------------------------------------------
 
+def cmd_suggest(args, _api) -> None:
+    """ offline first guess for a tank never tuned: keep the loop gain
+        (P x heating rate, ~ P x watts/liters) and the integral time of
+        REF_TANK. Only a starting point to let run for a day - then
+        `baseline` + `recommend`, which only search 0.6-2x these values.
+    """
+    if args.watts <= 0 or args.liters <= 0:
+        die('--watts and --liters must be > 0')
+    ref = REF_TANK
+    scale = (ref['watts'] / ref['liters']) / (args.watts / args.liters)
+    p_fact = ref['p_fact'] * scale
+    i_fact = p_fact * ref['i_fact'] / ref['p_fact']
+    log_line(f'Reference: {ref["watts"]:g} W / {ref["liters"]:g} l tuned to '
+             f'p {ref["p_fact"]:g} / i {ref["i_fact"]:g}.')
+    log_line(f'{args.watts:g} W / {args.liters:g} l -> start with p_fact {p_fact:.0f}, '
+             f'i_fact {i_fact:.3g}, d_fact 0 (scaled by {scale:.2f}).')
+    log_line('Let that run for a day, then `baseline` at night and `recommend`. Weak flow, '
+             'a sensor far from the heater or a relay heater with a long PWM cycle all slow '
+             'the loop - if it overshoots, start lower.')
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1258,15 +1331,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--out-dir', default=DEFAULT_OUT_DIR,
                    help="where runs are saved and looked up (default: pid_autotune_runs/ "
                         "in the repo)")
-    p.add_argument('--node', default='Heizleistung', help="the PidCtrl node's display name")
-    p.add_argument('--temp-min', type=float, default=23.0)
-    p.add_argument('--temp-max', type=float, default=27.0)
+    p.add_argument('--node', default=None,
+                   help="the PidCtrl node's display name (needed by all but recommend/suggest)")
+    p.add_argument('--temp-min', type=float, default=None,
+                   help=f"safety bound in \xb0C (default: proven setpoint - {TEMP_MARGIN:g})")
+    p.add_argument('--temp-max', type=float, default=None,
+                   help=f"safety bound in \xb0C (default: proven setpoint + {TEMP_MARGIN:g})")
     p.add_argument('--poll-interval', type=float, default=10.0,
                    help="seconds between safety-watchdog/sample reads")
-    p.add_argument('--proven-setpoint', type=float, default=25.0)
-    p.add_argument('--proven-p', type=float, default=180.0)
-    p.add_argument('--proven-i', type=float, default=0.05)
-    p.add_argument('--proven-d', type=float, default=0.0)
+    # baseline: default to the live value; revert: to the newest saved baseline's
+    p.add_argument('--proven-setpoint', type=float, default=None)
+    p.add_argument('--proven-p', type=float, default=None)
+    p.add_argument('--proven-i', type=float, default=None)
+    p.add_argument('--proven-d', type=float, default=None)
     p.add_argument('--force', action='store_true',
                    help="proceed even if live gains don't match --proven-*")
 
@@ -1274,7 +1351,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser('status')
 
+    sug = sub.add_parser('suggest')
+    sug.add_argument('--watts', type=float, required=True, help="heater power")
+    sug.add_argument('--liters', type=float, required=True, help="water volume")
+
     rev = sub.add_parser('revert')
+    rev.add_argument('--baseline-file', default=None,
+                     help="restore this baseline's gains + sensor settings (default: the "
+                          "newest saved baseline for --node)")
     rev.add_argument('--proven-interval', type=float, default=None,
                      help="also restore the sensor's read interval (s)")
     rev.add_argument('--proven-avg', type=int, default=None,
@@ -1355,11 +1439,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    if args.temp_min >= args.temp_max:
-        die('--temp-min must be < --temp-max')
+    offline = args.cmd in ('recommend', 'suggest')
+    if not offline and not args.node:
+        die(f'`{args.cmd}` needs --node (the PidCtrl node\'s display name)')
 
     api = None
-    if args.cmd != 'recommend':     # offline, works on a saved run only
+    if not offline:
         api = ApiClient(args.base_url)
         api.login()
 
@@ -1369,6 +1454,7 @@ def main() -> None:
         'baseline': cmd_baseline,
         'trial': cmd_trial,
         'recommend': cmd_recommend,
+        'suggest': cmd_suggest,
     }[args.cmd](args, api)
 
 

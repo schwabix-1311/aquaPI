@@ -165,11 +165,17 @@ class ApiClient:
         return resp.json()
 
     def find_node_by_name(self, name: str) -> dict:
-        for node_id in self.list_node_ids():
-            data = self.get_node(node_id)
-            if data.get('name') == name:
-                return data
-        raise RuntimeError(f'no node named {name!r} found')
+        """ by node id or display name, either ignoring case """
+        nodes = [self.get_node(node_id) for node_id in self.list_node_ids()]
+        want = name.casefold()
+        found = [n for n in nodes if want in (n.get('id', '').casefold(),
+                                              n.get('name', '').casefold())]
+        if len(found) == 1:
+            return found[0]
+        pids = ', '.join(repr(n.get('name')) for n in nodes if n.get('type') == 'PidCtrl')
+        if found:
+            die(f'{name!r} matches several nodes: {", ".join(repr(n.get("name")) for n in found)}')
+        die(f'no node named {name!r} - PidCtrl nodes: {pids or "none"}')
 
 
 # --- the one polling loop: records samples AND enforces the safety bound -
@@ -1447,6 +1453,8 @@ def main() -> None:
     if not offline:
         api = ApiClient(args.base_url)
         api.login()
+        # saved runs record the display name - store/compare it one way only
+        args.node = api.find_node_by_name(args.node)['name']
 
     {
         'status': cmd_status,

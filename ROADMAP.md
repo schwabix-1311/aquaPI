@@ -275,12 +275,12 @@ fine, sort/dedupe later.
   3. Installer asks for the board ("aquaPCB / Robo-Tank Deluxe / Basic /
      Leviathan / own wiring") instead of the three interface questions,
      and switches on exactly what the board needs (1-Wire, I²C, PWM
-     overlay, RTC overlay).
+     overlay).
   4. One starter template per board (heater on outlet 1, light on LED 1,
      temperature on sensor 1) with ports pre-selected.
-  5. Real-time clock: boards with an RTC keep schedules right after a
-     reboot without internet - the installer enables the matching
-     `dtoverlay=i2c-rtc,...` when the profile says so.
+
+  Decided 2026-10-10: no real-time clock support (neither on aquaPCB nor
+  as a board-profile feature), even though Robo-Tank has one.
 
 - Look at how reef-pi installs: a reef2reef thread describes an install.sh
   that sets up a complete Raspberry Pi OS (Trixie, 64-bit) image including
@@ -458,8 +458,8 @@ dimmer, Email/Telegram, eISCP (experimental).
   (ultrasonic JSN-SR04T, eTape, capacitive, optical IR); pulse flow
   meter (needs a counter input); light/PAR (BH1750, TSL2591 - overlaps
   the "lux meter" idea above); current/power (INA219, INA226 - pump/
-  heater failure detection); DS3231 RTC (the Pi has none, and
-  `ScheduleInput`/`SunCtrl` depend on wall-clock time).
+  heater failure detection). (A DS3231 RTC was considered and dropped,
+  decision 2026-10-10.)
 - Actuators: PCA9685 PWM expander (already listed above); GPIO/relay
   expanders (MCP23017, I2C 8-relay boards); MCP4725 DAC for true 0-10 V/
   0-5 V control (pro ballasts, chillers, DC return pumps); motor/stepper/

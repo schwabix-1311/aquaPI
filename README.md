@@ -1,5 +1,7 @@
 # aquaPi
 
+![aquaPi dashboard: charts for temperatures, lighting and pH, plus live tiles](docs/images/dashboard.png)
+
 A fish-tank controller for the Raspberry Pi.
 
 aquaPi builds the control logic for your tank from small functional blocks, so

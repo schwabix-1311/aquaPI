@@ -19,4 +19,5 @@ AGENTS.md export-ignore
 dbg export-ignore
 run export-ignore
 COMPARISON.md export-ignore
+docs/ export-ignore
 .gitattributes export-ignore

@@ -113,6 +113,10 @@ class MachineRoom:
         # for it yet, same as DEFAULT_CONFIG/backup settings)
         driver_config['DRIVER_BLACKLIST'] = self.globals.get('DRIVER_BLACKLIST', [])
 
+        # node types still under research (db.EXPERIMENTAL_NODE_TYPES) are
+        # only offered for creation with config.json's "EXPERIMENTAL_NODES"
+        db.set_experimental_nodes(bool(self.globals.get('EXPERIMENTAL_NODES', False)))
+
         # database backups (Step 24): daily rotating backup of both
         # SQLite databases into instance/backups/, in addition to the
         # on-demand GET /api/backup download (aquaPi/api.py)

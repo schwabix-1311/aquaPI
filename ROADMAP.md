@@ -8,6 +8,31 @@ there instead, see its DONE section) plus items already tracked in recent
 working notes. Some entries below may overlap/repeat each other - that's
 fine, sort/dedupe later.
 
+## Release gate v1.0.0 (tag `v1.0.0` on `release/1.0` only when all are done)
+
+- [ ] Build the release bundle locally exactly like `release.yml` and check
+  its contents: nothing from `instance/`, `logs/`, `pid_autotune_runs/`,
+  `tools/`; the tc420 driver is included; `VERSION` is written.
+- [ ] Test install on a fresh SD card / spare Pi with clean Raspberry Pi
+  OS, running `install.sh` against the local bundle: QuestDB setup and
+  config, service unit, German prompts, `./manage reconfig`.
+- [ ] First admin password: a fresh install only logs it (journalctl
+  under systemd); `install.sh` and `INSTALLATION.de.md` must show it or
+  say where to find it.
+- [ ] Decide on RoboTank / Leviathan: the README says aquaPi can drive
+  them with "a few sub-functions not supported yet". Their peripherals
+  are auto-detected like any GPIO/I²C hardware, but aquaPi has no driver
+  for the PCA9685 PWM controller (both boards: lights, dosing, 0-10V
+  ports), for an Atlas EZO pH interface (if fitted; ADS1115-based pH is
+  supported), or for an I/O expander (Robo-Tank's 16-24 relay outlets,
+  chip undocumented). Either name the gaps in the README, or add a
+  PCA9685 driver before the release.
+- [ ] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
+  against what the installer really does.
+- [ ] CI green on the commit to tag; after tagging, check the GitHub
+  release page and download `install.sh` from there once.
+- [ ] After release: /About on a release install shows `v1.0.0`.
+
 ## Carried over from recent working notes
 
 - `ScaleAux` calibration/adjustment UI - DONE, shipped to `main`+`aquapi2`
@@ -226,8 +251,13 @@ fine, sort/dedupe later.
   sub-field. The record-list widget + validator pick it up automatically.
   **Priority: medium.**
 - `VolatilityAux` (running standard deviation of a source's last N readings,
-  flags reduced water flow via increased temperature volatility) - DONE,
-  shipped to `main`+`aquapi2` 2026-09-18. Sample-count window (not
+  flags reduced water flow via increased temperature volatility) -
+  EXPERIMENTAL since 2026-10-10: needs further research, the flow-loss
+  findings predate the PID retune (180/0.05, sensor 60s/avg3) and may no
+  longer hold. Listed in `db.EXPERIMENTAL_NODE_TYPES`, so new nodes of it
+  can only be created with config.json's `"EXPERIMENTAL_NODES": true`;
+  existing ones keep working. **Priority: medium.** Built and shipped to
+  `main`+`aquapi2` 2026-09-18. Sample-count window (not
   time-based - a too-short time window relative to a slow reader could
   never accumulate enough samples, permanently, not just slower; a plain
   count always eventually fills for any source cadence). `scale` output

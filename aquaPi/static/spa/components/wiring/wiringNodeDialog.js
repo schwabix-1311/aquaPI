@@ -142,7 +142,11 @@ const WiringNodeDialog = {
 			set: function(val) { this.$emit('update:modelValue', val) },
 		},
 		typeItems: function() {
-			return Object.keys(this.nodeTypes).sort()
+			// a disabled experimental type is listed (existing nodes of it
+			// stay editable) but not offered for new ones
+			return Object.keys(this.nodeTypes)
+				.filter(t => this.nodeTypes[t].creatable !== false)
+				.sort()
 		},
 		// existing group names across all nodes, offered as combobox
 		// suggestions so a node can be added to a known group without

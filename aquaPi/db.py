@@ -96,6 +96,24 @@ LEGACY_TYPE_ALIASES: dict[str, str] = {
     'StdDevAux': 'VolatilityAux',
 }
 
+# node types still under research: an existing node of such a type loads,
+# runs and can be edited like any other, but new ones can only be created
+# when config.json sets "EXPERIMENTAL_NODES": true (set once at startup by
+# MachineRoom, see set_experimental_nodes())
+EXPERIMENTAL_NODE_TYPES: frozenset[str] = frozenset({'VolatilityAux'})
+_experimental_nodes_enabled = False
+
+
+def set_experimental_nodes(enabled: bool) -> None:
+    # pylint: disable-next=W0603
+    global _experimental_nodes_enabled
+    _experimental_nodes_enabled = enabled
+
+
+def is_creatable(type_name: str) -> bool:
+    return type_name in NODE_FACTORY and (_experimental_nodes_enabled
+                                          or type_name not in EXPERIMENTAL_NODE_TYPES)
+
 # Same idea for the small helper objects used inside Alert.conditions
 ALERT_COND_FACTORY: dict[str, type] = {
     cls.__name__: cls for cls in (AlertAbove, AlertBelow)
@@ -130,6 +148,9 @@ def get_node_type_schema() -> dict[str, dict[str, Any]]:
             # connection-type filter (wiringConnect.js) falls back to this
             'data_range': cls.data_range.name,
             'fields': [s.to_dict() for s in cls.get_settings_schema() if s.key is not None],
+            # False for a disabled experimental type: still listed, so an
+            # existing node of it stays editable, but not offered for "add"
+            'creatable': is_creatable(type_name),
         }
     return schema
 
@@ -213,7 +234,7 @@ def build_node(type_name: str, name: str, receives: list[str],
         Raises ValueError/KeyError on unknown type or missing fields.
     """
     cls = NODE_FACTORY.get(type_name)
-    if not cls:
+    if not cls or not is_creatable(type_name):
         raise ValueError(f'Unknown or non-creatable node type: {type_name!r}')
 
     rcv = _mk_receives_arg(cls.get_receives_kind(), receives)
@@ -566,7 +587,7 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
 
         type_name = entry.get('type')
         schema = node_type_schema.get(type_name)
-        if not schema:
+        if not schema or not schema['creatable']:
             raise ConfigDiffError(f'Unknown or non-creatable node type: {type_name!r}', entry,
                                  key='unknownNodeType', params={'type': type_name})
 

@@ -19,6 +19,25 @@ not supported yet).
 backend is Python / Flask, the frontend is Vuetify (Vue 3). The Pi runs
 headless; you open the interface in a browser on your phone, tablet or PC.
 
+## Installation
+
+On a Raspberry Pi with Raspberry Pi OS and SSH access, download the installer
+from the latest release and run it:
+
+```
+curl -fsSL -o install.sh https://github.com/schwabix-1311/aquaPI/releases/latest/download/install.sh
+bash install.sh
+```
+
+It downloads the current release, sets up Python, QuestDB and all
+dependencies, offers to configure email/Telegram alerts, and installs aquaPi
+as a system service that starts on boot. The installer and the step-by-step
+guide [INSTALLATION.de.md](INSTALLATION.de.md) are currently in German.
+
+Afterwards `./manage` in the install directory handles maintenance:
+`backup`, `list-backups`, `restore`, `reconfig` (alert channels) and
+`service-unit` (install/remove the system service).
+
 ## Getting started (the beginner's way)
 
 There is no fixed built-in wiring — you assemble your tank from ready-made
@@ -95,7 +114,9 @@ No hidden data traffic, no telemetry, no account anywhere.
   configuration. No Python editing needed for normal use.
 - **Control blocks** for temperature, pH/CO2 and light, including smooth
   sunrise / sunset / cloud simulation, PID heating, min/max thresholds,
-  fade and schedule inputs, averaging and calibration (scaling) blocks.
+  fade and schedule inputs, averaging and scaling blocks.
+- **Sensor calibration** with a 2-point helper (e.g. pH buffers 7 and 4)
+  that reads the live sensor value, plus a calibration history.
 - **History & charts** backed by QuestDB (64-bit Pi) with an in-memory
   fallback for 32-bit systems, selectable time span and daily-average view.
 - **Dashboard** with grouped, collapsible sections and user-arrangeable
@@ -112,6 +133,9 @@ No hidden data traffic, no telemetry, no account anywhere.
 - **Automatic daily backup** of the configuration and user databases into
   rotating archives, plus an on-demand backup download from the UI. There
   is also an unauthenticated `/api/health` endpoint for monitoring.
+- **Installer and maintenance CLI**: `install.sh` sets up a Pi from a
+  release, `./manage` backs up, restores and reconfigures it. The About page
+  shows the installed version.
 - All drivers have a **simulation mode**, so the whole system runs on a
   plain Linux PC with no Raspberry Pi and no sensors attached.
 
@@ -120,8 +144,9 @@ No hidden data traffic, no telemetry, no account anywhere.
 - More drivers: additional I²C chips, further WiFi devices, a Shelly
   temperature add-on, a PCA9685 PWM expander.
 - A log / events page in the UI.
-- 2-point pH calibration UI, interrupt-driven inputs.
-- Documentation, more tests, more translations, packaged deployment.
+- A system settings page in the UI (driver accounts, device blacklist).
+- Interrupt-driven inputs.
+- Documentation, more tests, more translations, an English installer.
 
 ## Running the automated tests
 
@@ -166,4 +191,9 @@ The target platform is Raspberry Pi OS (64- or 32-bit); development works on
 any Linux system with Python 3.10 or newer. Windows may work as a dev
 environment, but is not tested.
 
-Markus Kuhn, 2024-12-21 · rewritten 2026-09
+A git checkout also contains `tools/pid-autotune`, which profiles a tank and
+tunes a PID heater's gains against a running aquaPi without ever taking the
+controller out of the loop (`tools/pid-autotune --help`). It is not part of
+the release bundle.
+
+Markus Kuhn, 2024-12-21 · rewritten 2026-09 · updated 2026-10

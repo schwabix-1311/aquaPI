@@ -260,13 +260,14 @@ def test_apply_creates_alert_node_with_conditions(client, users, bus, app):
     assert node.receives == ['wasser']
 
 
-def test_apply_creates_stddev_aux_node(client, users, bus, app):
+def test_apply_creates_stddev_aux_node(client, users, bus, app, monkeypatch):
     # exercises apply_config_diff's own build_node() call (creates path) -
     # NODE_FACTORY alone isn't enough for a type to be creatable via
     # /api/config/apply, build_node() has its own separate type_name
     # dispatch that must also know the type, or it falls through to an
     # untranslated ValueError even though node_type_schema (built from
     # NODE_FACTORY) already listed the type as valid
+    monkeypatch.setattr(db, '_experimental_nodes_enabled', True)
     _login(client, 'admin1', 'adminPass123')
 
     resp = client.post('/api/config/apply', json={
@@ -284,6 +285,37 @@ def test_apply_creates_stddev_aux_node(client, users, bus, app):
     assert node is not None
     assert node.receives == ['wasser']
     assert node.samples == 10
+
+
+def test_experimental_type_not_creatable_by_default(client, users, bus, app):
+    # VolatilityAux is still under research (db.EXPERIMENTAL_NODE_TYPES):
+    # listed, so existing nodes stay editable, but not offered for "add",
+    # and refused by both creation paths unless config.json enables it
+    _login(client, 'admin1', 'adminPass123')
+
+    types = client.get('/api/node-types/').get_json()
+    assert types['VolatilityAux']['creatable'] is False
+    assert types['AvgAux']['creatable'] is True
+
+    resp = client.post('/api/config/apply', json={
+        'creates': [{
+            'temp_id': 'tmp-sd', 'type': 'VolatilityAux', 'name': 'Schwankung',
+            'receives': ['wasser'], 'fields': {'samples': 10},
+        }],
+    })
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert bus.get_node('schwankung') is None
+
+    with pytest.raises(ValueError):
+        db.build_node('VolatilityAux', 'Schwankung', ['wasser'], {'samples': 10})
+
+
+def test_experimental_type_creatable_when_enabled(client, users, bus, app, monkeypatch):
+    monkeypatch.setattr(db, '_experimental_nodes_enabled', True)
+    _login(client, 'admin1', 'adminPass123')
+
+    types = client.get('/api/node-types/').get_json()
+    assert types['VolatilityAux']['creatable'] is True
 
 
 def test_apply_update_clears_scale_on_a_real_auto_scale_retoggle(client, users, bus, app):

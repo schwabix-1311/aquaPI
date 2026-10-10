@@ -199,6 +199,21 @@ und Vuetify verdrahtet und global mountet (`app.mount('#app')`).
 - Größere, risikoreiche Änderungen (Refactorings, DB-Schema) nicht ungefragt committen, siehe Abschnitt
   "Nicht-Ziele".
 
+## Branches & Releases
+
+- `dev_m`: laufende Entwicklung; wird per Fast-Forward nach `main` übernommen.
+- `main`: Stand der produktiven Instanz (sie läuft direkt aus einem `main`-Checkout).
+- `release/<major>.<minor>` (z. B. `release/1.0`): entkoppelt Bugfixes von der Weiterentwicklung. Wird
+  einmalig von `main` abgezweigt; danach landen dort **nur Bugfixes**. Ein Bugfix wird auf dem
+  Release-Branch committet, dort getaggt (`v1.0.1`, ...) und anschließend nach `main` und `dev_m`
+  gemergt. Neue Features nie in einen Release-Branch mergen; ein neues Feature-Release bekommt einen
+  neuen Release-Branch von `main`.
+- Ein Tag `v*` löst `.github/workflows/release.yml` aus (Kunden-Bundle + GitHub-Release); vorher
+  müssen die CI-Workflows auf dem getaggten Commit grün sein.
+- Noch unfertige Node-Typen stehen in `db.EXPERIMENTAL_NODE_TYPES`: bestehende Nodes laufen weiter,
+  neue lassen sich nur mit `"EXPERIMENTAL_NODES": true` in `instance/config.json` anlegen. So kann
+  Experimentelles in `main` bleiben, ohne im Release als Feature zu erscheinen.
+
 ## Tests
 
 Die Backend-Testsuite (`tests/`) nutzt `pytest`, braucht keine echte Hardware - fast jeder Test baut

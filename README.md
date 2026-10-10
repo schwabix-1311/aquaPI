@@ -36,7 +36,8 @@ guide [INSTALLATION.de.md](INSTALLATION.de.md) are currently in German.
 
 Afterwards `./manage` in the install directory handles maintenance:
 `backup`, `list-backups`, `restore`, `reconfig` (alert channels) and
-`service-unit` (install/remove the system service).
+`service-unit` (install/remove the system service). At the end the installer
+shows the address and the password of the initial `admin` account.
 
 ## Getting started (the beginner's way)
 

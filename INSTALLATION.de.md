@@ -81,6 +81,12 @@ http://192.168.1.42:5000
 Ihrem Heimnetzwerk (Computer, Tablet, Smartphone) - dort finden Sie die
 aquaPi-Oberfläche.
 
+Direkt darunter zeigt das Skript Ihren **Admin-Zugang** an (Benutzername
+`admin` und ein zufällig erzeugtes Passwort). Notieren Sie das Passwort -
+es wird nur dieses eine Mal angezeigt. Ohne Anmeldung können Sie die
+Oberfläche nur ansehen; zum Einrichten melden Sie sich oben rechts an und
+ändern das Passwort danach im Menü "Benutzer".
+
 ## Hilfe
 
 Falls etwas nicht funktioniert oder Sie Fragen haben, können Sie sich gerne

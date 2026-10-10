@@ -99,6 +99,13 @@ if [ -f /etc/ssh/sshd_config ] && ! grep -q '^ClientAliveInterval' /etc/ssh/sshd
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
 fi
 
+# --- Admin-Zugang anlegen -------------------------------------------------
+# Muss vor dem ersten Start des Dienstes passieren: sonst legt aquaPi das
+# Konto selbst an und schreibt das Passwort nur ins Systemprotokoll.
+# Angezeigt wird es erst ganz am Ende, zusammen mit der Adresse.
+
+ADMIN_INFO=$(./manage init-admin)
+
 # --- Benachrichtigungen einrichten ------------------------------------------
 
 echo
@@ -132,6 +139,8 @@ echo "======================================================"
 echo
 echo " Öffnen Sie in Ihrem Webbrowser:"
 echo "   http://${IP}:5000"
+echo
+echo "${ADMIN_INFO}" | sed 's/^/ /'
 echo
 echo " Eine ausführliche Anleitung finden Sie hier:"
 echo "   https://github.com/${REPO}/blob/main/INSTALLATION.de.md"

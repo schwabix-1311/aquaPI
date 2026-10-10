@@ -10,6 +10,7 @@ import sqlite3
 
 import pytest
 from click.testing import CliRunner
+from werkzeug.security import check_password_hash
 
 import aquaPi.cli as cli_module
 from aquaPi import db
@@ -351,3 +352,37 @@ def test_service_unit_install_and_uninstall_together_is_rejected(runner):
     result = runner.invoke(cli, ['service-unit', '--install', '--uninstall'])
     assert result.exit_code != 0
     assert 'mutually exclusive' in result.output
+
+
+def test_init_admin_creates_admin_and_prints_a_working_password(runner, tmp_path):
+    # a fresh release install: no instance/ dir and no users yet
+    instance = tmp_path / 'instance'
+    result = _invoke(runner, instance, ['init-admin'])
+    assert result.exit_code == 0, result.output
+
+    password = next(line.split(':', 1)[1].strip() for line in result.output.splitlines()
+                    if 'Passwort:' in line)
+    row = db.get_user_by_username(str(instance / 'users.sqlite'), 'admin')
+    assert row['role'] == 'admin'
+    assert check_password_hash(row['password_hash'], password)
+
+
+def test_init_admin_leaves_existing_users_alone(runner, tmp_path):
+    instance = tmp_path / 'instance'
+    _invoke(runner, instance, ['init-admin'])
+    before = db.list_users(str(instance / 'users.sqlite'))
+
+    result = _invoke(runner, instance, ['init-admin'])
+    assert result.exit_code == 0
+    assert 'Passwort:' not in result.output
+    assert db.list_users(str(instance / 'users.sqlite')) == before
+
+
+def test_reconfig_works_without_an_instance_dir(runner, tmp_path):
+    # install.sh runs reconfig before the app has ever started, so before
+    # anything created instance/ - this used to fail with
+    # "unable to open database file" and abort the installer
+    instance = tmp_path / 'instance'
+    result = _invoke(runner, instance, ['reconfig'], input='n\nn\n')
+    assert result.exit_code == 0, result.output
+    assert instance.is_dir()

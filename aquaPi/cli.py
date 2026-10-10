@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-""" aquaPi deployment/maintenance CLI: reconfig / backup / list-backups /
-    restore / service-unit. Invoked via the './manage' wrapper at the repo
+""" aquaPi deployment/maintenance CLI: init-admin / reconfig / backup /
+    list-backups / restore / service-unit. Invoked via the './manage' wrapper at the repo
     root.
 
     Deliberately imports only aquaPi.db (+ stdlib + click, + Flask only to
@@ -13,7 +13,7 @@ import getpass
 import subprocess
 import zipfile
 from datetime import datetime
-from os import environ, path
+from os import environ, makedirs, path
 from pathlib import Path
 
 import click
@@ -58,6 +58,10 @@ def _default_instance_path() -> str:
 def cli(ctx, instance_path):
     """ aquaPi deployment & maintenance tool. """
     instance_path = instance_path or _default_instance_path()
+    # a fresh release install has no instance/ yet (it isn't shipped, the
+    # app creates its files on first start) - install.sh runs init-admin
+    # and reconfig before that, and SQLite can't create the directory
+    makedirs(instance_path, exist_ok=True)
     backup_dir = environ.get('AQUAPI_BACKUP_DIR', path.join(instance_path, 'backups'))
     backup_keep = int(environ.get('AQUAPI_BACKUP_KEEP', db.DEFAULT_BACKUP_KEEP))
     ctx.obj = {
@@ -191,6 +195,30 @@ def restore(ctx, archive, only, yes):
         click.echo(f'\n{_SERVICE_NAME}.service restarted with the restored data.')
     else:
         click.echo('\nRestart aquaPi for the restored data to take effect.')
+
+
+@cli.command('init-admin')
+@click.pass_context
+def init_admin(ctx):
+    """ create the initial admin account and print its password - only
+        while no user exists yet, otherwise nothing changes.
+
+        install.sh runs this before the service first starts; the app
+        would otherwise create the account itself and only log the
+        password (journalctl under systemd), where a new user never
+        finds it.
+    """
+    # German-only output, like reconfig: part of the guided install.sh flow
+    created = db.ensure_default_admin(ctx.obj['users_db'])
+    if not created:
+        click.echo('Es gibt bereits Benutzerkonten - es wurde kein neues Admin-Konto angelegt.')
+        return
+    username, password = created
+    click.echo('Ihr Admin-Zugang für die aquaPi-Oberfläche:')
+    click.echo(f'   Benutzername: {username}')
+    click.echo(f'   Passwort:     {password}')
+    click.echo('Bitte notieren Sie das Passwort und ändern Sie es nach der ersten Anmeldung')
+    click.echo('(Menü "Benutzer"). Es wird nicht noch einmal angezeigt.')
 
 
 @cli.command()

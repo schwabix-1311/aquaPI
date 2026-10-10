@@ -43,6 +43,7 @@ setzen `FLASK_APP=aquaPi` und starten `flask run`; Optionen (beide Skripte ident
 ./manage backup                     # Backup-Archiv jetzt erstellen
 ./manage list-backups               # vorhandene Backups auflisten
 ./manage restore <ARCHIV>           # Backup zurückspielen (überschreibt laufende Datenbanken!)
+./manage init-admin                 # ersten Admin-Account anlegen + Passwort anzeigen (nur ohne Benutzer)
 ./manage reconfig                   # Email-/Telegram-Benachrichtigungen interaktiv einrichten
 ./manage service-unit --install     # systemd-Service anlegen, aktivieren und starten (braucht sudo)
 ```
@@ -165,7 +166,9 @@ und Vuetify verdrahtet und global mountet (`app.mount('#app')`).
   - Alle Dateien, die auf `.gitignore` stehen, sind grundsätzlich als potenziell sensibel zu behandeln.
 - **Passwörter**: Werden ausschließlich als `werkzeug`-Passwort-Hash gespeichert (`auth.py`,
   `db.py`), nie im Klartext. Der initiale Admin-Account erhält beim ersten Start ein zufällig
-  generiertes Passwort (`db.ensure_default_admin()`), das nur einmalig geloggt wird.
+  generiertes Passwort (`db.ensure_default_admin()`): `install.sh` legt ihn per `./manage init-admin`
+  vor dem ersten Dienststart an und zeigt das Passwort am Ende einmalig an; ohne das (z. B. `./run`)
+  legt die App ihn beim ersten Start selbst an und loggt das Passwort einmalig.
 - **`SECRET_KEY`**: In `create_app()` (`aquaPi/__init__.py`) zunächst nur ein Platzhalter
   (`'ToDo during installation'`); `auth.init_app()` überschreibt ihn zur Laufzeit mit einem in
   `instance/secret_key` persistierten, zufällig generierten Wert. Dieser Wert darf niemals hartcodiert,

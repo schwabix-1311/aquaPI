@@ -240,9 +240,24 @@ fine, sort/dedupe later.
     16-channel 12-bit PWM controller (a PCA9685 per reef2reef), 2x DS18B20,
     1 I²C expansion port, battery-backed RTC; Equipment Extension adds 6 DC
     + 8 aux 0-5/0-10 V ports. Leviathan: 12 GPIO outlets, 4 light + 4
-    dosing PWM outputs, external pH over I²C. No pinouts published - get
-    them from the manufacturers' manuals or by measuring a board, never
-    guess.
+    dosing PWM outputs, external pH over I²C. No pinouts on the product
+    pages - get them from the manufacturers' manuals or by measuring a
+    board, never guess.
+    Robo-Tank **v3** (the current kit; v2 was only ~10 boards) is documented
+    in "Controller and its ports" (Dec 2021,
+    docs.google.com/document/d/157epGpa7GK-iZFIC10BRj8FDyrZ1RZr1):
+    DC ports RJ45, pin 1 GND, pins 2..8 = PCA9685 ch 9,6,7,4,3,2,1 (0-5 V
+    PWM); LED ports RJ45, pin 1 GND, pins 2..8 = PCA9685 ch
+    15,14,13,12,11,10,8; sensors RJ45, pin 1 GND, pins 2..7 = GPIO
+    23,27,18,17,15,14, pin 8 +5 V; power bars DB9 wired straight to GPIO;
+    temperature on GPIO 4 and 22; feeder on PCA9685 ch 0.
+    Consequences for aquaPi: GPIO 18 is a sensor input there, so the
+    installer's hardware-PWM question (pwm-2chan = GPIO 18/19) must be
+    answered "no" on a Robo-Tank - one more reason to ask for the board
+    instead; the second temperature port needs a second 1-Wire bus
+    (`dtoverlay=w1-gpio,gpiopin=22`); sensors on GPIO 14/15 need the serial
+    console off. aquaPCB v2 is planned to be cable-compatible with
+    Robo-Tank v3.
   - *aquaPCB as an alternative board* (`~/aquaPCB`, for new users): its
     pin map is documented in its own README, so it can be the first board
     profile without any measuring.

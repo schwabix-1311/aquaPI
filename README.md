@@ -130,7 +130,8 @@ No hidden data traffic, no telemetry, no account anywhere.
   sending host.
 - **Drivers**: GPIO in/out, on-board PWM, TC420, DS18B20 (1-Wire),
   ADS1115 ADC (pH probe), and WiFi Shelly devices — relays, dimmers and
-  switch/button inputs, auto-discovered via mDNS, Gen1 and Gen2.
+  inputs set to switch mode (momentary buttons are not supported yet),
+  auto-discovered via mDNS, Gen1 and Gen2.
 - **Users & access** with viewer / operator / admin roles, auto-generated
   passphrases for new accounts, and an anonymous read-only view.
 - **Automatic daily backup** of the configuration and user databases into

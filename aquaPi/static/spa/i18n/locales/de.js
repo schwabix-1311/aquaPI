@@ -155,10 +155,15 @@ export default
 		about: {
 			label: 'Über @:app.name',
 			heading: 'Über @:app.name',
-			copyright: 'Copyright',
+			intro: '@:app.name ist ein privates Hobbyprojekt, in der Freizeit entwickelt und kostenlos als Open Source geteilt. Markus Kuhn hat es für sein eigenes Aquarium gebaut, Thomas Kuhn hat moderne, responsive Webtechnik und Gestaltung eingebracht. Wir hoffen, dass es auch deinem Aquarium hilft. Einen kommerziellen Support gibt es nicht, aber Feedback, Fragen, Fehlerberichte und Beiträge sind auf GitHub sehr willkommen.',
 			version: 'Version',
-			donateMessage: 'Lob bitte an tkuhn, Bugs darfst du behalten.',
-			apiDocsHint: 'Auf der Suche nach der REST-API? Du findest sie unter',
+			project: 'Projekt',
+			reportIssue: 'Problem melden',
+			api: 'REST-API',
+			license: 'Lizenz',
+			disclaimer: 'Ohne jede Gewährleistung. @:app.name steuert Geräte an deinem Aquarium - prüfe dein Becken trotzdem regelmäßig.',
+			thirdParty: 'Verwendete Software',
+			tc420: 'TC420-Bibliothek',
 		},
 		users: {
 			label: 'Benutzer',

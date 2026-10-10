@@ -99,6 +99,59 @@ if [ -f /etc/ssh/sshd_config ] && ! grep -q '^ClientAliveInterval' /etc/ssh/sshd
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
 fi
 
+# --- Hardware-Schnittstellen des Raspberry Pi einschalten ------------------
+# Ein frisch installiertes Raspberry Pi OS hat 1-Wire, I²C und Hardware-PWM
+# ausgeschaltet. Ohne sie findet aquaPi keine DS18B20-Temperatursensoren,
+# keinen ADS1115 (pH) und keine PWM-Kanäle - deren Port-Auswahl bliebe
+# einfach leer. Wirksam erst nach einem Neustart, der ganz am Ende
+# angeboten wird. Bereits eingeschaltete Schnittstellen werden nicht
+# erneut gefragt.
+
+NEED_REBOOT=0
+
+frage_ja() {  # $1 = Frage; Enter bedeutet Ja
+  local antwort
+  read -r -p "$1 [J/n] " antwort
+  case "$antwort" in
+    [nN]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+if grep -qi "raspberry pi" /proc/device-tree/model 2>/dev/null \
+   && command -v raspi-config >/dev/null 2>&1; then
+  BOOT_CONFIG=/boot/firmware/config.txt
+  [ -f "$BOOT_CONFIG" ] || BOOT_CONFIG=/boot/config.txt
+
+  echo
+  echo "======================================================"
+  echo " Hardware-Anschlüsse des Raspberry Pi"
+  echo "======================================================"
+  echo "Welche Anschlüsse soll aquaPi nutzen? Im Zweifel einfach mit"
+  echo "Enter bestätigen - ungenutzte Anschlüsse schaden nicht. Die"
+  echo "genannten GPIO-Pins sind dann aber für diese Funktion reserviert."
+  echo
+
+  # raspi-config meldet bei get_* eine 0, wenn die Schnittstelle an ist
+  if [ "$(raspi-config nonint get_onewire)" != "0" ] \
+     && frage_ja "Temperatursensoren DS18B20 (1-Wire, an GPIO4) verwenden?"; then
+    sudo raspi-config nonint do_onewire 0
+    NEED_REBOOT=1
+  fi
+  if [ "$(raspi-config nonint get_i2c)" != "0" ] \
+     && frage_ja "pH-Messung/Analogeingänge über ADS1115 (I²C, an GPIO2 und GPIO3) verwenden?"; then
+    sudo raspi-config nonint do_i2c 0
+    NEED_REBOOT=1
+  fi
+  # für PWM gibt es keine raspi-config-Option
+  if ! grep -q '^dtoverlay=pwm' "$BOOT_CONFIG" \
+     && frage_ja "Hardware-PWM zum Dimmen (an GPIO18 und GPIO19; kann einen analogen Audioausgang stören) verwenden?"; then
+    printf '\n[all]\n# von aquaPi install.sh ergaenzt: Hardware-PWM fuer Dimmer\ndtoverlay=pwm-2chan\n' \
+      | sudo tee -a "$BOOT_CONFIG" >/dev/null
+    NEED_REBOOT=1
+  fi
+fi
+
 # --- Admin-Zugang anlegen -------------------------------------------------
 # Muss vor dem ersten Start des Dienstes passieren: sonst legt aquaPi das
 # Konto selbst an und schreibt das Passwort nur ins Systemprotokoll.
@@ -145,3 +198,14 @@ echo
 echo " Eine ausführliche Anleitung finden Sie hier:"
 echo "   https://github.com/${REPO}/blob/main/INSTALLATION.de.md"
 echo "======================================================"
+
+if [ "$NEED_REBOOT" -eq 1 ]; then
+  echo
+  echo "Die neu eingeschalteten Hardware-Anschlüsse sind erst nach einem"
+  echo "Neustart aktiv. Bitte notieren Sie vorher Ihr Passwort (siehe oben)."
+  if frage_ja "Raspberry Pi jetzt neu starten?"; then
+    sudo reboot
+  else
+    echo "Bitte starten Sie den Raspberry Pi später neu: sudo reboot"
+  fi
+fi

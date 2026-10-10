@@ -63,6 +63,11 @@ Geschwindigkeit Ihres Raspberry Pi).
   mit eingerichtet - das ist eine der Besonderheiten von aquaPi gegenüber
   anderen Lösungen. Besitzen Sie keinen, wird dieser Schritt einfach
   übersprungen bzw. bleibt wirkungslos.
+- Sie werden gefragt, welche **Hardware-Anschlüsse** des Raspberry Pi aquaPi
+  nutzen soll: Temperatursensoren (1-Wire), pH-Messung über einen ADS1115
+  (I²C) und Hardware-PWM zum Dimmen. Im Zweifel einfach mit Enter
+  bestätigen. Diese Anschlüsse sind erst nach einem Neustart aktiv - das
+  Skript bietet ihn ganz am Ende an.
 - Sie werden gefragt, ob Sie **Benachrichtigungen per E-Mail oder Telegram**
   einrichten möchten (z.B. für Warnungen, wenn etwas nicht stimmt). Das
   können Sie auch überspringen und später jederzeit nachholen.

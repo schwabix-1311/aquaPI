@@ -22,11 +22,10 @@ fine, sort/dedupe later.
 - [ ] Decide on RoboTank / Leviathan: the README says aquaPi can drive
   them with "a few sub-functions not supported yet". Their peripherals
   are auto-detected like any GPIO/I²C hardware, but aquaPi has no driver
-  for the PCA9685 PWM controller (both boards: lights, dosing, 0-10V
-  ports), for an Atlas EZO pH interface (if fitted; ADS1115-based pH is
-  supported), or for an I/O expander (Robo-Tank's 16-24 relay outlets,
-  chip undocumented). Either name the gaps in the README, or add a
-  PCA9685 driver before the release.
+  for the PCA9685 PWM controller (both boards: lights, DC pumps, dosing,
+  0-10V ports) - outlets, sensor inputs and DS18B20 work. Either name the
+  gap in the README for v1.0 and ship "Board support" (see New ideas) as
+  the v1.1 topic, or add the PCA9685 driver before v1.0.
 - [ ] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
   against what the installer really does.
 - [ ] CI green on the commit to tag; after tagging, check the GitHub
@@ -228,6 +227,52 @@ fine, sort/dedupe later.
 
 ## New ideas
 
+- **Board support** (proposal 2026-10-10, **Priority: high**, candidate
+  main topic for v1.1). The most frequent complaint about Pi aquarium
+  controllers is the hardware setup: wiring, and then finding the right
+  port. Today the port dropdown shows "GPIO 17", not the label printed on
+  the board. Two directions, both wanted:
+  - *aquaPi on existing boards* (easy migration for reef-pi users):
+    Robo-Tank is actively selling (robo-tank.ca: Deluxe Complete Kit
+    $209.95, DIY Kit $129.95, Basic with AC power bar $209.95, isolated
+    pH circuit $54.95). Deluxe: 2x DB9 power bar ports with 8 I/O each
+    (16 outlets, most likely direct GPIO), 7 DC + 7 LED PWM outputs from a
+    16-channel 12-bit PWM controller (a PCA9685 per reef2reef), 2x DS18B20,
+    1 I²C expansion port, battery-backed RTC; Equipment Extension adds 6 DC
+    + 8 aux 0-5/0-10 V ports. Leviathan: 12 GPIO outlets, 4 light + 4
+    dosing PWM outputs, external pH over I²C. No pinouts published - get
+    them from the manufacturers' manuals or by measuring a board, never
+    guess.
+  - *aquaPCB as an alternative board* (`~/aquaPCB`, for new users): its
+    pin map is documented in its own README, so it can be the first board
+    profile without any measuring.
+
+  Steps:
+  1. PCA9685 driver (I²C auto-detection like the ADS1115) - prerequisite
+     for lights and DC pumps on Robo-Tank and Leviathan, and for aquaPCB's
+     planned PWM/0-10 V add-on.
+  2. Board profiles: one small file per board (e.g. `boards/aquapcb-v1.json`,
+     `boards/robotank-deluxe.json`) mapping connector labels to aquaPi ports
+     ("Power bar 1 - outlet 3" -> GPIO 17, "LED 2" -> PCA9685 channel 9,
+     "Temp 1" -> 1-Wire) plus the OS interfaces the board needs. The port
+     dropdown then shows the board's labels; without a profile nothing
+     changes.
+  3. Installer asks for the board ("aquaPCB / Robo-Tank Deluxe / Basic /
+     Leviathan / own wiring") instead of the three interface questions,
+     and switches on exactly what the board needs (1-Wire, I²C, PWM
+     overlay, RTC overlay).
+  4. One starter template per board (heater on outlet 1, light on LED 1,
+     temperature on sensor 1) with ports pre-selected.
+  5. Real-time clock: boards with an RTC keep schedules right after a
+     reboot without internet - the installer enables the matching
+     `dtoverlay=i2c-rtc,...` when the profile says so.
+
+- Look at how reef-pi installs: a reef2reef thread describes an install.sh
+  that sets up a complete Raspberry Pi OS (Trixie, 64-bit) image including
+  reef-pi - https://www.reef2reef.com/threads/reefpi-update-raspberry-pi-os-trixie-64bit.1142965/
+  Could be interesting for aquaPi's own installer, e.g. a ready-to-flash
+  image instead of (or next to) `install.sh` on a fresh Pi OS.
+  **Priority: unprioritized.**
 - Remove all one-shot migration code - DONE (confirmed both had already run
   everywhere they needed to, including `aquapi2`, before removing): `db.py`'s
   `migrate_notification_config_from_json()` (config.json Email/Telegram ->

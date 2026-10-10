@@ -27,6 +27,11 @@ HTTP_TIMEOUT = 5
 MAX_RELAY_CHANNELS = 8  # probing cap, see _identify()
 MAX_LIGHT_CHANNELS = 4  # probing cap, see _identify()
 MAX_INPUT_CHANNELS = 8  # reported count is trusted, this is just a sanity cap
+# input modes that carry a stable on/off level - the only ones aquaPi's
+# level-oriented bus can use. Gen1 reports 'btn_type' ("Toggle/Edge/
+# Detached switch" in the Shelly app; momentary and action modes only
+# pulse), Gen2+ reports 'type' ('switch', vs. 'button'/'analog').
+GEN1_SWITCH_MODES = frozenset({'toggle', 'edge', 'detached'})
 
 
 class _Listener(ServiceListener):
@@ -115,6 +120,7 @@ def _identify(ip: str) -> dict | None:
 
     gen = int(info.get('gen', 1))
     name = info.get('name')
+    settings: dict = {}
     if gen < 2:
         try:
             settings = requests.get(f'http://{ip}/settings', timeout=HTTP_TIMEOUT).json()
@@ -151,9 +157,35 @@ def _identify(ip: str) -> dict | None:
         except Exception:
             return 0
 
+    def _switch_inputs(count: int) -> list[int]:
+        # only inputs configured as a switch carry a level aquaPi can use;
+        # a momentary button pulses (Gen1) or reports state=null (Gen2).
+        # Gen1 keeps the mode per input on pure-input devices (i3:
+        # settings.inputs[]), else per relay it drives (settings.relays[]);
+        # Gen2+ has Input.GetConfig, whose 'enable' may also be off.
+        # Live-verified against SHSW-1, SHSW-25, SHIX3-1, Plus i4, Plus 2PM.
+        if gen < 2:
+            if not isinstance(settings, dict):
+                return []
+            per_ch = settings.get('inputs') or settings.get('relays') or []
+            return [ch for ch in range(min(count, len(per_ch)))
+                    if per_ch[ch].get('btn_type') in GEN1_SWITCH_MODES]
+        usable = []
+        for ch in range(count):
+            try:
+                cfg = requests.get(f'http://{ip}/rpc/Input.GetConfig', params={'id': ch},
+                                   timeout=HTTP_TIMEOUT).json()
+            except Exception:
+                continue
+            # an unexpected reply only drops this input, never the device
+            if isinstance(cfg, dict) and cfg.get('type') == 'switch' and cfg.get('enable', True):
+                usable.append(ch)
+        return usable
+
     relays = _count_channels('relay', MAX_RELAY_CHANNELS)
     lights = _count_channels('light', MAX_LIGHT_CHANNELS)
     inputs = _count_inputs()
+    switch_inputs = _switch_inputs(inputs)
 
     # label priority: the user-set name, else the device's own id
     # ('<app>-<mac>', Gen2 - matches the mDNS name and the app's default
@@ -168,7 +200,8 @@ def _identify(ip: str) -> dict | None:
     return {'ip': ip, 'gen': gen,
             'type': info.get('type', info.get('model', 'unknown')),
             'name': name, 'label': label,
-            'relays': relays, 'lights': lights, 'inputs': inputs}
+            'relays': relays, 'lights': lights, 'inputs': inputs,
+            'switch_inputs': switch_inputs}
 
 
 def _find_real_ports() -> dict[str, IoPort]:
@@ -190,7 +223,8 @@ def _find_real_ports() -> dict[str, IoPort]:
     for t in threads:
         t.start()
     for t in threads:
-        t.join(timeout=HTTP_TIMEOUT * (MAX_RELAY_CHANNELS + 2))
+        # worst case: every probe of _identify() runs into its timeout
+        t.join(timeout=HTTP_TIMEOUT * (MAX_RELAY_CHANNELS + MAX_INPUT_CHANNELS + 4))
 
     for dev in devices:
         label = dev['label']
@@ -202,15 +236,14 @@ def _find_real_ports() -> dict[str, IoPort]:
             cfg = {'ip': dev['ip'], 'ch': ch}
             port_name = f'{label} dimmer' if dev['lights'] == 1 else f'{label} dimmer {ch}'
             io_ports[port_name] = IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, [])
-        # DriverShellyInput (Bin) is DISABLED for now: a Shelly input in
-        # button/momentary mode carries no stable level (Gen1 needs
-        # event/event_cnt, Gen2 reports state=null), and aquaPi's bus is
-        # level-oriented. Re-add the port loop here (and the fake port
-        # below) once that's decided.
-        #   for ch in range(dev.get('inputs', 0)):
-        #       cfg = {'ip': dev['ip'], 'ch': ch, 'gen': dev['gen']}
-        #       port_name = f'{label} input' if dev['inputs'] == 1 else f'{label} input {ch}'
-        #       io_ports[port_name] = IoPort(PortFunc.Bin, DriverShellyInput, cfg, [])
+        # inputs in switch mode only: a momentary button has no stable
+        # level for aquaPi's level-oriented bus (see _identify()'s
+        # _switch_inputs); the channel number in the name is the device's
+        # own, so it still matches the terminal when others are skipped
+        for ch in dev.get('switch_inputs', []):
+            cfg = {'ip': dev['ip'], 'ch': ch, 'gen': dev['gen']}
+            port_name = f'{label} input' if dev['inputs'] == 1 else f'{label} input {ch}'
+            io_ports[port_name] = IoPort(PortFunc.Bin, DriverShellyInput, cfg, [])
     return io_ports
 
 
@@ -219,8 +252,7 @@ def _find_fake_ports() -> dict[str, IoPort]:
     return {
         '!Shelly #1': IoPort(PortFunc.Bout, DriverShellyRelay, cfg, []),
         '!Shelly #1 dimmer': IoPort(PortFunc.Aout, DriverShellyDimmer, cfg, []),
-        # '!Shelly #1 input' disabled with the real one above - see
-        # _find_real_ports()
+        '!Shelly #1 input': IoPort(PortFunc.Bin, DriverShellyInput, cfg, []),
     }
 
 
@@ -391,8 +423,10 @@ class DriverShellyInput(_ShellyBase, InDriver):
         the Gen1 endpoints work on Gen2/3 too via the compat layer):
           Gen1  GET /status            -> inputs[<ch>].input   (0 | 1)
           Gen2+ GET /rpc/Input.GetStatus?id=<ch> -> state      (bool)
-        Gen2 'state' is null while the input is in button/detached mode
-        (no stable on/off) - treated as "keep last known". Channel count
+        Only inputs configured as a switch are offered as ports (see
+        _identify()'s _switch_inputs): a momentary button has no stable
+        level - Gen2 even reports state=null for it, which read() treats
+        as "keep last known". Channel count
         comes from _identify() (see _count_inputs there). Live-verified
         against SHIX3-1, SHSW-1, SHSW-25 and a Shelly Plus i4 - see
         _local/shelly_api.md.

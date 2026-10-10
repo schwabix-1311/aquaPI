@@ -185,17 +185,21 @@ class DriverADS1115(AInDriver):
         log.verbose('%s = %f', self.name, self._val)
         return self._val
 
-    def _increase_gain(self):
+    def _increase_gain(self) -> bool:
+        """ step to the next larger input range; False if already at the largest """
         ads = self._ads
         lower = [g for g in ads.gains if g < ads.gain]
         if lower:
             ads.gain = lower[-1]
+        return bool(lower)
 
-    def _decrease_gain(self):
+    def _decrease_gain(self) -> bool:
+        """ step to the next smaller input range; False if already at the smallest """
         ads = self._ads
         higher = [g for g in ads.gains if g > ads.gain]
         if higher:
             ads.gain = higher[0]
+        return bool(higher)
 
     def _adjust_gain(self) -> None:
         """ gain <= 0 is auto-gain.
@@ -207,12 +211,18 @@ class DriverADS1115(AInDriver):
         if self.gain <= 0:
             val = self._ana_in.value
 
+            # stop at either end of the gain table: a signal below half of
+            # the smallest range (< 128 mV) or above the largest one can't
+            # be ranged any further - without the check this looped forever
+            # and froze the reader thread for any input near 0 V
             while abs(val) > 32300:
-                self._increase_gain()
+                if not self._increase_gain():
+                    break
                 val = self._ana_in.value
 
             while abs(val) < 16000:
-                self._decrease_gain()
+                if not self._decrease_gain():
+                    break
                 val = self._ana_in.value
 
             self.gain = -ads.gain

@@ -208,8 +208,9 @@ und Vuetify verdrahtet und global mountet (`app.mount('#app')`).
 - `main`: Stand der produktiven Instanz (sie läuft direkt aus einem `main`-Checkout).
 - `release/<major>.<minor>` (z. B. `release/1.0`): entkoppelt Bugfixes von der Weiterentwicklung. Wird
   einmalig von `main` abgezweigt; danach landen dort **nur Bugfixes**. Ein Bugfix wird auf dem
-  Release-Branch committet, dort getaggt (`v1.0.1`, ...) und anschließend nach `main` und `dev_m`
-  gemergt. Neue Features nie in einen Release-Branch mergen; ein neues Feature-Release bekommt einen
+  Release-Branch committet, dort getaggt (`v1.0.1`, ...) und anschließend nach `dev_m` gemergt; `main`
+  folgt dann wie gewohnt per Fast-Forward von `dev_m` (nicht getrennt nach `main` und `dev_m` mergen -
+  zwei verschiedene Merge-Commits verhindern den nächsten Fast-Forward). Neue Features nie in einen Release-Branch mergen; ein neues Feature-Release bekommt einen
   neuen Release-Branch von `main`.
 - Ein Tag `v*` löst `.github/workflows/release.yml` aus (Kunden-Bundle + GitHub-Release); vorher
   müssen die CI-Workflows auf dem getaggten Commit grün sein.

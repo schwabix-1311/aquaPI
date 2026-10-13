@@ -99,3 +99,31 @@ def test_pullout_stops_the_pulse_thread(pwm):
     _pullout(pwm)
     thread.join(timeout=2.0)
     assert not thread.is_alive()
+
+
+class _FailingDriver(_RecordingDriver):
+    """ raises on the first `fail` writes of an 'on' state """
+    def __init__(self, fail):
+        super().__init__()
+        self.fail = fail
+
+    def write(self, state):
+        if state and self.fail > 0:
+            self.fail -= 1
+            raise OSError('simulated GPIO failure')
+        super().write(state)
+
+
+def test_pulse_thread_survives_a_failing_write(caplog):
+    node = SlowPwmDevice('Heizstab', 'pid', '', cycle=1.0)
+    node._driver = _FailingDriver(fail=1)
+    try:
+        with caplog.at_level('ERROR', logger='machineroom.out_nodes'):
+            node.set(50)
+            time.sleep(3.5)     # failure, 1 s back-off, then normal cycles
+        assert node._thread.is_alive()
+        assert 'PWM pulse failed' in caplog.text
+        # back to pulsing after the failure: there are 'on' writes again
+        assert any(state for _, state in node._driver.writes)
+    finally:
+        _pullout(node)

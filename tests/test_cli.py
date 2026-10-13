@@ -386,3 +386,49 @@ def test_reconfig_works_without_an_instance_dir(runner, tmp_path):
     result = _invoke(runner, instance, ['reconfig'], input='n\nn\n')
     assert result.exit_code == 0, result.output
     assert instance.is_dir()
+
+
+def test_service_unit_includes_questdb_and_orders_aquapi_after_it(runner, monkeypatch):
+    monkeypatch.setattr(cli_module, '_find_questdb',
+                        lambda root: ('/opt/questdb-7.4.2/questdb.sh', '/usr/lib/jvm/java-17'))
+    result = runner.invoke(cli, ['service-unit'])
+    assert result.exit_code == 0, result.output
+    assert '# /etc/systemd/system/questdb.service' in result.output
+    assert 'ExecStart=/opt/questdb-7.4.2/questdb.sh start -c' in result.output
+    assert 'Environment=JAVA_HOME=/usr/lib/jvm/java-17' in result.output
+    assert 'After=network-online.target questdb.service' in result.output
+    assert 'Wants=network-online.target questdb.service' in result.output
+
+
+def test_service_unit_without_questdb_has_no_questdb_unit(runner, monkeypatch):
+    monkeypatch.setattr(cli_module, '_find_questdb', lambda root: None)
+    result = runner.invoke(cli, ['service-unit'])
+    assert result.exit_code == 0
+    assert 'questdb' not in result.output
+    assert 'After=network-online.target\n' in result.output
+
+
+def test_find_questdb_uses_the_release_from_init(tmp_path):
+    (tmp_path / 'init').write_text('QuestRel="7.4.2"  # comment\n')
+    for rel in ('7.1.3', '7.4.2'):
+        d = tmp_path / f'questdb-{rel}' / 'bin'
+        d.mkdir(parents=True)
+        (d / 'questdb.sh').write_text('#!/bin/sh\n')
+        (d / 'java').write_text('')      # bundled JRE
+    script, java_home = cli_module._find_questdb(str(tmp_path))
+    assert script.endswith('questdb-7.4.2/bin/questdb.sh')
+    assert java_home is None
+
+
+def test_service_unit_install_writes_and_starts_both_units(runner, monkeypatch):
+    monkeypatch.setattr(cli_module, '_find_questdb', lambda root: ('/q/questdb.sh', None))
+    calls = []
+    monkeypatch.setattr(cli_module.subprocess, 'run',
+                        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    result = runner.invoke(cli, ['service-unit', '--install', '--yes'])
+    assert result.exit_code == 0, result.output
+    starts = [c[-1] for c in calls if c[:4] == ['sudo', 'systemctl', 'enable', '--now']]
+    assert starts == ['questdb', 'aquapi']
+    # a QuestDB started by hand (./init) is stopped before the unit takes over
+    assert calls.index(['/q/questdb.sh', 'stop']) < calls.index(
+        ['sudo', 'systemctl', 'enable', '--now', 'questdb'])

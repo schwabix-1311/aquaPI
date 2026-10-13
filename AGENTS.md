@@ -45,7 +45,7 @@ setzen `FLASK_APP=aquaPi` und starten `flask run`; Optionen (beide Skripte ident
 ./manage restore <ARCHIV>           # Backup zurückspielen (überschreibt laufende Datenbanken!)
 ./manage init-admin                 # ersten Admin-Account anlegen + Passwort anzeigen (nur ohne Benutzer)
 ./manage reconfig                   # Email-/Telegram-Benachrichtigungen interaktiv einrichten
-./manage service-unit --install     # systemd-Service anlegen, aktivieren und starten (braucht sudo)
+./manage service-unit --install     # systemd-Services aquapi + questdb anlegen, aktivieren, starten (sudo)
 ```
 
 `./manage service-unit --install` ist der vorgesehene Weg, aquaPi produktiv zu betreiben (statt `./run` in

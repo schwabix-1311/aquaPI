@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-exec python3 -m aquaPi.cli "$@"
+# use the project's venv even when it isn't activated in this shell
+PY=python3
+[ -x venv/bin/python3 ] && PY=venv/bin/python3
+exec "$PY" -m aquaPi.cli "$@"

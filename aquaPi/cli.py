@@ -11,6 +11,7 @@
 
 import getpass
 import glob
+import platform
 import re
 import subprocess
 import zipfile
@@ -335,6 +336,10 @@ def _find_questdb(repo_root: str) -> tuple[str, str | None] | None:
         installed next to the repo, or None without one (e.g. 32-bit Pi,
         where aquaPi keeps its history in memory)
     """
+    # QuestDB only exists for 64-bit systems (hist_nodes.py checks the same);
+    # a leftover questdb-* dir on a 32-bit Pi must not become a dead service
+    if '64' not in platform.architecture()[0]:
+        return None
     release = None
     try:
         with open(path.join(repo_root, 'init'), encoding='utf8') as f:

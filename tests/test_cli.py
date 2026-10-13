@@ -432,3 +432,11 @@ def test_service_unit_install_writes_and_starts_both_units(runner, monkeypatch):
     # a QuestDB started by hand (./init) is stopped before the unit takes over
     assert calls.index(['/q/questdb.sh', 'stop']) < calls.index(
         ['sudo', 'systemctl', 'enable', '--now', 'questdb'])
+
+
+def test_find_questdb_is_none_on_32_bit(tmp_path, monkeypatch):
+    d = tmp_path / 'questdb-7.4.2'
+    d.mkdir()
+    (d / 'questdb.sh').write_text('#!/bin/sh\n')
+    monkeypatch.setattr(cli_module.platform, 'architecture', lambda: ('32bit', 'ELF'))
+    assert cli_module._find_questdb(str(tmp_path)) is None

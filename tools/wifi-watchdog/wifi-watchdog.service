@@ -1,0 +1,6 @@
+[Unit]
+Description=WiFi watchdog: reload the WiFi driver or reboot when the chip hangs
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wifi-watchdog

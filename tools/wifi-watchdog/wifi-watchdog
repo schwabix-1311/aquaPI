@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# wifi-watchdog - brings a hung Raspberry Pi WiFi chip back without anyone
+# on site. Run every 2 minutes as root by wifi-watchdog.timer.
+#
+# Background (aquapi2, 2026-10-12): the Pi Zero 2 W's brcmfmac SDIO chip
+# crashed ("mmc1: card 0001 removed"), wlan0 vanished and never came back -
+# 29 hours unreachable while aquaPi kept regulating the tank.
+#
+#   gateway answers                    -> all fine, reset the counter
+#   no answer, RELOAD_AFTER times      -> reload the WiFi driver
+#     in a row (and again every RELOAD_AFTER failures after that)
+#   wlan0 still missing after          -> reboot, at most once per REBOOT_GAP
+#     REBOOT_AFTER failures
+#
+# A reboot is only done when the interface itself is gone (the chip is
+# dead): with the router merely down, wlan0 exists and rebooting wouldn't
+# help, so then only the driver reloads repeat.
+#
+# All settings can be overridden by environment (also used by the tests).
+
+set -u
+
+IFACE="${WIFI_IFACE:-wlan0}"
+RELOAD_AFTER="${RELOAD_AFTER:-2}"      # 2 runs x 2 min = ~4 min without network
+REBOOT_AFTER="${REBOOT_AFTER:-5}"      # ~10 min
+REBOOT_GAP="${REBOOT_GAP:-21600}"      # 6 h between watchdog reboots
+STATE_DIR="${STATE_DIR:-/run/wifi-watchdog}"            # tmpfs: resets on boot
+REBOOT_STAMP="${REBOOT_STAMP:-/var/lib/wifi-watchdog/last-reboot}"  # survives boots
+DRIVER_MODULES="${DRIVER_MODULES:-brcmfmac_wcc brcmfmac}"  # unload order
+SYS_NET="${SYS_NET:-/sys/class/net}"
+
+log() { logger -t wifi-watchdog "$*"; }
+
+mkdir -p "$STATE_DIR"
+fails_file="$STATE_DIR/fails"
+fails=$(cat "$fails_file" 2>/dev/null || echo 0)
+
+gateway=$(ip -4 route show default dev "$IFACE" 2>/dev/null | awk '{print $3; exit}')
+if [ -n "$gateway" ] && ping -c 3 -W 2 -I "$IFACE" "$gateway" >/dev/null 2>&1; then
+    if [ "$fails" -gt 0 ]; then
+        log "network back after $fails failed check(s)"
+    fi
+    echo 0 > "$fails_file"
+    exit 0
+fi
+
+fails=$((fails + 1))
+echo "$fails" > "$fails_file"
+if [ -e "$SYS_NET/$IFACE" ]; then
+    log "no answer from gateway '${gateway:-none}' via $IFACE ($fails in a row)"
+else
+    log "$IFACE is missing ($fails in a row)"
+fi
+
+if [ "$fails" -ge "$REBOOT_AFTER" ] && [ ! -e "$SYS_NET/$IFACE" ]; then
+    now=$(date +%s)
+    last=$(cat "$REBOOT_STAMP" 2>/dev/null || echo 0)
+    if [ $((now - last)) -ge "$REBOOT_GAP" ]; then
+        log "$IFACE still missing after driver reload - rebooting"
+        mkdir -p "$(dirname "$REBOOT_STAMP")"
+        echo "$now" > "$REBOOT_STAMP"
+        systemctl reboot
+        exit 0
+    fi
+    log "$IFACE still missing, but the last watchdog reboot was less than ${REBOOT_GAP}s ago - not rebooting"
+fi
+
+if [ $((fails % RELOAD_AFTER)) -eq 0 ]; then
+    log "reloading WiFi driver ($DRIVER_MODULES)"
+    for mod in $DRIVER_MODULES; do
+        modprobe -r "$mod" 2>/dev/null
+    done
+    sleep 2
+    for mod in $(echo "$DRIVER_MODULES" | awk '{for (i = NF; i > 0; i--) print $i}'); do
+        modprobe "$mod" || log "modprobe $mod failed"
+    done
+fi
+exit 0

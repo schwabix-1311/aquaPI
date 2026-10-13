@@ -265,6 +265,15 @@ Testkonfiguration: `pytest.ini` (`testpaths = tests`). Gemeinsame Fixtures liege
 - Pläne liegen unter `.junie/plans/`; das ist ein Junie-spezifisches Format, andere Tools (Claude Code,
   Cursor, ...) lesen diese Dateien nicht automatisch und müssen explizit darauf verwiesen werden.
 
+## Hardware (aquaPCB)
+
+Das Basis-Board aquaPCB liegt in einem eigenen Repository (`~/aquaPCB`,
+github.com/schwabix-1311/aquaPCB) und wird in einer eigenen Agenten-Session bearbeitet
+("Hardware-Session", startet in `~/aquaPCB`). Agenten in diesem Repository ("Software-Session")
+ändern keine Dateien in `~/aquaPCB` und führen dort keine Git-Befehle aus; Hardware-Änderungen
+(Pin-Map, README, BOM) werden als Anfrage an die Hardware-Session oder an den Nutzer gegeben. Lesen
+ist erlaubt, z. B. die Pin-Map für ein Board-Profil.
+
 ## Bekannte Stolpersteine
 
 - Im Projekt-Root liegen QuestDB-Archive/Verzeichnisse (`questdb-*`) - diese sind Laufzeit-Artefakte

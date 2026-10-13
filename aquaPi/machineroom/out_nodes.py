@@ -231,6 +231,22 @@ class SlowPwmDevice(DeviceNode):
         self.post(MsgData(self.id, 100 if state else 0))
 
     def _pulse(self) -> None:
+        """ thread body: a failure in the cycle loop (driver, bus post) is
+            logged, the output switched off - the safe state for a heater -
+            and the loop restarted, instead of the thread silently dying
+        """
+        while not self._thread_stop:
+            try:
+                self._pulse_cycles()
+            except Exception:
+                log.exception('%s: PWM pulse failed - output off, retrying', self.id)
+                try:
+                    self._write(False)
+                except Exception:
+                    log.exception('%s: could not switch the output off', self.id)
+                time.sleep(1.0)
+
+    def _pulse_cycles(self) -> None:
         """ PWM on a fixed cycle grid that never restarts. Restarting the
             cycle on every new input value (as this used to) cut any cycle
             longer than the input's update interval short after its on-phase:

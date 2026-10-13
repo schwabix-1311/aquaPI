@@ -10,6 +10,7 @@ import functools
 import json
 import logging.config
 import logging.handlers
+import threading
 # from logging.handlers import SMTPHandler
 
 
@@ -112,6 +113,18 @@ def _read_app_version(repo_root: str | None = None) -> str:
         return 'dev'
 
 
+def _log_thread_exception(args: threading.ExceptHookArgs) -> None:
+    """ threading.excepthook: an exception that ends any thread (pulse,
+        fader, heartbeat, ...) goes to the log file too - Python's default
+        only prints to stderr, which a restart of `./run` overwrites
+    """
+    if args.exc_type is SystemExit:
+        return
+    name = args.thread.name if args.thread else '?'
+    log.error('Unhandled exception in thread %s', name,
+              exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+
+
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
@@ -151,6 +164,7 @@ def create_app() -> Flask:
     else:
         log_config = log_default
     logging.config.dictConfig(log_config)
+    threading.excepthook = _log_thread_exception
 
     log.info("Press CTRL+C to quit")
 

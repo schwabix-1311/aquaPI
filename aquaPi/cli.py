@@ -10,6 +10,8 @@
 """
 
 import getpass
+import glob
+import re
 import subprocess
 import zipfile
 from datetime import datetime
@@ -305,11 +307,58 @@ def reconfig(ctx):
 
 _SERVICE_UNIT_PATH = '/etc/systemd/system/aquapi.service'
 
+_QUESTDB_SERVICE_NAME = 'questdb'
+_QUESTDB_UNIT_PATH = '/etc/systemd/system/questdb.service'
+
+# QuestDB's own `questdb.sh start -c` ("container mode") runs the JVM in the
+# foreground - what systemd wants - with the usual root ~/.questdb
+_QUESTDB_UNIT_TEMPLATE = """\
+[Unit]
+Description=QuestDB, history database for aquaPi
+After=local-fs.target
+
+[Service]
+Type=simple
+User={user}
+{java_home}ExecStart={questdb_sh} start -c
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def _find_questdb(repo_root: str) -> tuple[str, str | None] | None:
+    """ (questdb.sh path, JAVA_HOME or None) of the QuestDB that ./init
+        installed next to the repo, or None without one (e.g. 32-bit Pi,
+        where aquaPi keeps its history in memory)
+    """
+    release = None
+    try:
+        with open(path.join(repo_root, 'init'), encoding='utf8') as f:
+            m = re.search(r'^QuestRel="([^"]+)"', f.read(), re.M)
+            release = m.group(1) if m else None
+    except OSError:
+        pass
+    dirs = ([path.join(repo_root, f'questdb-{release}')] if release
+            else sorted(glob.glob(path.join(repo_root, 'questdb-*/'))))
+    for qdb_dir in reversed(dirs):
+        for script in (path.join(qdb_dir, 'questdb.sh'), path.join(qdb_dir, 'bin', 'questdb.sh')):
+            if path.isfile(script):
+                if path.exists(path.join(path.dirname(script), 'java')):
+                    return script, None     # bundled JRE (amd64 package)
+                jvms = sorted(glob.glob('/usr/lib/jvm/java-*-openjdk-*'))
+                return script, (jvms[-1] if jvms else None)
+    return None
+
+
 _SERVICE_UNIT_TEMPLATE = """\
 [Unit]
 Description=aquaPi aquarium controller
-After=network-online.target
-Wants=network-online.target
+After=network-online.target{after}
+Wants=network-online.target{after}
 
 [Service]
 Type=simple
@@ -347,36 +396,61 @@ def service_unit(host, port, install, uninstall, yes):
         raise click.ClickException('--install and --uninstall are mutually exclusive.')
 
     if uninstall:
-        click.echo(f'This will stop, disable, and remove {_SERVICE_UNIT_PATH}.')
+        click.echo(f'This will stop, disable, and remove {_SERVICE_UNIT_PATH} '
+                  f'and {_QUESTDB_UNIT_PATH} (if present).')
         if not yes and not click.confirm('Proceed?', default=False):
             click.echo('Aborted.')
             return
-        for cmd in (['sudo', 'systemctl', 'stop', _SERVICE_NAME],
-                   ['sudo', 'systemctl', 'disable', _SERVICE_NAME],
-                   ['sudo', 'rm', '-f', _SERVICE_UNIT_PATH],
-                   ['sudo', 'systemctl', 'daemon-reload']):
-            subprocess.run(cmd, check=True)
-        click.echo(f'{_SERVICE_NAME}.service removed.')
+        for name, unit_path in ((_SERVICE_NAME, _SERVICE_UNIT_PATH),
+                                (_QUESTDB_SERVICE_NAME, _QUESTDB_UNIT_PATH)):
+            if name == _QUESTDB_SERVICE_NAME and not path.exists(unit_path):
+                continue
+            for cmd in (['sudo', 'systemctl', 'stop', name],
+                       ['sudo', 'systemctl', 'disable', name],
+                       ['sudo', 'rm', '-f', unit_path]):
+                subprocess.run(cmd, check=True)
+            click.echo(f'{name}.service removed.')
+        subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
         return
 
     repo_root = str(Path(__file__).resolve().parent.parent)
-    unit_content = _SERVICE_UNIT_TEMPLATE.format(
-        user=getpass.getuser(), repo_root=repo_root, host=host, port=port)
+    user = getpass.getuser()
+    # QuestDB gets its own unit so it is up after every boot too - without
+    # it, a reboot left aquaPi running without its history database
+    questdb = _find_questdb(repo_root)
+    units = []
+    if questdb:
+        questdb_sh, java_home = questdb
+        units.append((_QUESTDB_SERVICE_NAME, _QUESTDB_UNIT_PATH, _QUESTDB_UNIT_TEMPLATE.format(
+            user=user, questdb_sh=questdb_sh,
+            java_home=f'Environment=JAVA_HOME={java_home}\n' if java_home else '')))
+    units.append((_SERVICE_NAME, _SERVICE_UNIT_PATH, _SERVICE_UNIT_TEMPLATE.format(
+        user=user, repo_root=repo_root, host=host, port=port,
+        after=f' {_QUESTDB_SERVICE_NAME}.service' if questdb else '')))
 
-    click.echo(unit_content)
+    for name, unit_path, content in units:
+        click.echo(f'# {unit_path}\n{content}')
     if not install:
         return
 
-    click.echo(f'This will write the above to {_SERVICE_UNIT_PATH}, then run '
-              f"'systemctl daemon-reload' and 'systemctl enable --now {_SERVICE_NAME}'.")
+    names = ' and '.join(f'{name}.service' for name, _, _ in units)
+    click.echo(f'This will write the above, then run \'systemctl daemon-reload\' and '
+              f'enable and start {names}.')
     if not yes and not click.confirm('Proceed?', default=False):
         click.echo('Aborted.')
         return
 
-    subprocess.run(['sudo', 'tee', _SERVICE_UNIT_PATH], input=unit_content.encode(),
-                   stdout=subprocess.DEVNULL, check=True)
+    for _, unit_path, content in units:
+        subprocess.run(['sudo', 'tee', unit_path], input=content.encode(),
+                       stdout=subprocess.DEVNULL, check=True)
     subprocess.run(['sudo', 'systemctl', 'daemon-reload'], check=True)
-    subprocess.run(['sudo', 'systemctl', 'enable', '--now', _SERVICE_NAME], check=True)
+    if questdb:
+        # ./init may have started QuestDB by hand - the unit's own start
+        # would then fail with "Already running", so hand it over
+        env = dict(environ, **({'JAVA_HOME': questdb[1]} if questdb[1] else {}))
+        subprocess.run([questdb[0], 'stop'], env=env, check=False)
+    for name, _, _ in units:
+        subprocess.run(['sudo', 'systemctl', 'enable', '--now', name], check=True)
 
     click.echo(f'\n{_SERVICE_NAME}.service installed and started.')
     subprocess.run(['systemctl', 'status', _SERVICE_NAME, '--no-pager'], check=False)

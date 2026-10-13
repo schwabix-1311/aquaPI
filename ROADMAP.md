@@ -174,12 +174,19 @@ fine, sort/dedupe later.
   Packaging/deployment below (`--reconfig` etc.): the deployment script
   covers scripted/headless setup, the wizard covers the guided/UI-driven
   version of the same first-time-configuration problem.
-- New node types: a delay controller; an analog or random-value
-  schedule input (today's `ScheduleInput` is binary-only); cloud
-  telemetry. **Priority: medium.**
+- New node types: a delay controller - a flexible one, so a chain can
+  run steps one after the other. First use case: dosing from a stirred
+  reservoir - run the stirrer, let the reservoir settle, then dose (what
+  Robo-Tank's web app offers as "dosing pump stirrer"); with the delay
+  node this needs no dosing-specific node. Not designed yet. Also an
+  analog or random-value schedule input (today's `ScheduleInput` is
+  binary-only); cloud telemetry. **Priority: medium.**
 - More input/output drivers: a generic file-based input, a Shelly
   *input* (distinct from the existing Shelly relay/output driver,
-  which is already implemented), a PCA9685 PWM driver, a file-based
+  which is already implemented), a PCA9685 PWM driver, a DC-motor
+  driver for an H-bridge (required for our own DIY doser, whose pump
+  motor runs through an H-bridge on two GPIOs - see the `"H-Bridge 1"`
+  `DriverMotor` placeholder in `aquaPi/driver/__init__.py`), a file-based
   output, and a shell-script output driver. **Priority: medium** - the
   Shelly input part is grouped with the other Shelly-input work (see
   Remote Shelly + temperature add-on above).

@@ -28,6 +28,11 @@ fine, sort/dedupe later.
   the v1.1 topic, or add the PCA9685 driver before v1.0.
 - [ ] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
   against what the installer really does.
+- [ ] WiFi watchdog on-site test on aquapi2 (needs physical/wired access, the
+  test cuts WiFi): `sudo modprobe -r brcmfmac_wcc brcmfmac` simulates a dead
+  chip; within ~10 min `journalctl -t wifi-watchdog` must show the driver
+  reload (and, as wlan0 stays gone only if the reload fails, the reboot), and
+  the Pi must be reachable again afterwards.
 - [ ] CI green on the commit to tag; after tagging, check the GitHub
   release page and download `install.sh` from there once.
 - [ ] After release: /About on a release install shows `v1.0.0`.

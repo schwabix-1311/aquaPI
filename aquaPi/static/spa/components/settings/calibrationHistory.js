@@ -22,6 +22,9 @@ import {registerGlobalComponent} from '../app/registry.js'
 import {useSettingsStore} from '../../store/modules/settings.js'
 import i18n from '../../i18n/index.js'
 
+// at most this many entries are visible at once, older ones scroll
+const VISIBLE_ENTRIES = 3
+
 const CalibrationHistory = {
 	props: {
 		nodeId: {type: String, required: true},
@@ -37,9 +40,9 @@ const CalibrationHistory = {
 			<div v-else-if="!entries.length" class="text-caption grey--text">
 				{{ $t('misc.calibration.historyEmpty') }}
 			</div>
-			<v-list v-else density="compact" class="pa-0">
+			<v-list v-else ref="list" density="compact" :lines="false" class="pa-0" :style="listStyle">
 				<v-list-item v-for="(entry, idx) in entries" :key="idx" class="px-0" min-height="28">
-					<v-list-item-title class="text-caption">
+					<v-list-item-title class="text-caption text-wrap">
 						{{ formatTs(entry.ts) }}: {{ pointsLine(entry.new_points) }}
 					</v-list-item-title>
 				</v-list-item>
@@ -49,6 +52,9 @@ const CalibrationHistory = {
 	data: function() {
 		return {
 			loading: true,
+			// summed height of the first VISIBLE_ENTRIES rows, measured
+			// after render - rows wrap on narrow screens, so no fixed value
+			maxHeight: null,
 		}
 	},
 	computed: {
@@ -58,8 +64,29 @@ const CalibrationHistory = {
 		entries: function() {
 			return this.settingsStore.calibrationLogForNode(this.nodeId)
 		},
+		listStyle: function() {
+			return this.maxHeight ? {maxHeight: this.maxHeight + 'px', overflowY: 'auto'} : {}
+		},
+	},
+	watch: {
+		entries: function() {
+			this.$nextTick(this.measure)
+		},
 	},
 	methods: {
+		measure: function() {
+			const list = this.$refs.list && this.$refs.list.$el
+			const rows = list ? list.querySelectorAll('.v-list-item') : []
+			if (rows.length <= VISIBLE_ENTRIES) {
+				this.maxHeight = null
+				return
+			}
+			let height = 0
+			for (let i = 0; i < VISIBLE_ENTRIES; i++) {
+				height += rows[i].offsetHeight
+			}
+			this.maxHeight = height
+		},
 		formatTs: function(ts) {
 			return new Date(ts).toLocaleString(i18n.global.locale.value)
 		},
@@ -74,7 +101,14 @@ const CalibrationHistory = {
 	mounted: function() {
 		this.loading = true
 		this.settingsStore.fetchCalibrationLog(this.nodeId)
-			.finally(() => { this.loading = false })
+			.finally(() => {
+				this.loading = false
+				this.$nextTick(this.measure)
+			})
+		window.addEventListener('resize', this.measure)
+	},
+	beforeUnmount: function() {
+		window.removeEventListener('resize', this.measure)
 	},
 }
 registerGlobalComponent('CalibrationHistory', CalibrationHistory)

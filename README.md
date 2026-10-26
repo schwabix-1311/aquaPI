@@ -23,6 +23,10 @@ headless; you open the interface in a browser on your phone, tablet or PC.
 
 ## Installation
 
+> **Release 1.0 is coming soon.** Until it is published, the installer below
+> has nothing to download yet. To try aquaPi now, use a git checkout as
+> described under [Contributing](#contributing).
+
 On a Raspberry Pi with Raspberry Pi OS and SSH access, download the installer
 from the latest release and run it:
 

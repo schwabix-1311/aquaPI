@@ -33,6 +33,8 @@ fine, sort/dedupe later.
   chip; within ~10 min `journalctl -t wifi-watchdog` must show the driver
   reload (and, as wlan0 stays gone only if the reload fails, the reboot), and
   the Pi must be reachable again afterwards.
+- [ ] Remove the "Release 1.0 is coming soon" note from README.md on main
+  (Installation section) - in the same push as the tag.
 - [ ] CI green on the commit to tag; after tagging, check the GitHub
   release page and download `install.sh` from there once.
 - [ ] After release: /About on a release install shows `v1.0.0`.

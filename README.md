@@ -1,5 +1,7 @@
 # aquaPi
 
+![aquaPi dashboard: charts for temperatures, lighting and pH, plus live tiles](docs/images/dashboard.png)
+
 A fish-tank controller for the Raspberry Pi.
 
 aquaPi builds the control logic for your tank from small functional blocks, so
@@ -152,52 +154,11 @@ No hidden data traffic, no telemetry, no account anywhere.
 - Interrupt-driven inputs.
 - Documentation, more tests, more translations, an English installer.
 
-## Running the automated tests
+## Feedback and help
 
-The backend test suite (`tests/`) uses `pytest`, needs no real hardware and no
-manual setup — almost every test builds its own temporary, isolated SQLite
-database and a simulation-mode node bus, with no QuestDB required. From the
-project root, with your virtual environment active:
-
-```
-pip install -r requirements-dev.txt
-pytest
-```
-
-For faster local runs, `pytest -n auto` spreads the suite across all CPU cores
-(~4x faster; every test gets its own isolated `tmp_path`, and the single test
-that touches QuestDB is self-contained via a uniquely-named throwaway node
-id). A `questdb` marker tags the (currently one) test that needs a real,
-reachable QuestDB — exclude it with `pytest -m "not questdb"` (as CI does,
-since it has none).
-
-The SPA's pure helper modules (the `/wiring` canvas layout algorithm,
-draft diffing, connection/port-picker rules, the record-list widget's row
-helpers, ...) have JavaScript unit tests under `tests/js/`, run with
-Node's built-in test runner — no `npm install`, no build step, and run in
-CI alongside `pytest`:
-
-```
-node --test "tests/js/**/*.test.js"
-```
-
-## Contributing
-
-Contributions of any kind are welcome — please leave a note in Discussions or
-Issues. If you just have a "killer feature" idea, Discussions is the place for
-that too. German is my native language, so feel free to use it there.
-
-To try aquaPi, clone the repository to e.g. `~/aquaPI` on a Raspberry Pi or
-any Linux machine, then run `. aquaPI/init`. That sets up Python and all
-dependencies and explains how to start the development instance.
-
-The target platform is Raspberry Pi OS (64- or 32-bit); development works on
-any Linux system with Python 3.10 or newer. Windows may work as a dev
-environment, but is not tested.
-
-A git checkout also contains `tools/pid-autotune`, which profiles a tank and
-tunes a PID heater's gains against a running aquaPi without ever taking the
-controller out of the loop (`tools/pid-autotune --help`). It is not part of
-the release bundle.
+Questions, ideas and bug reports are welcome in
+[Discussions](https://github.com/schwabix-1311/aquaPI/discussions) and
+[Issues](https://github.com/schwabix-1311/aquaPI/issues) on GitHub - in
+English or German.
 
 Markus Kuhn, 2024-12-21 · rewritten 2026-09 · updated 2026-10

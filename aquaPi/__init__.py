@@ -125,6 +125,17 @@ def _log_thread_exception(args: threading.ExceptHookArgs) -> None:
               exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
 
 
+def _make_log_dirs(log_config: dict) -> None:
+    """ create the directory of every file handler: logs/ is git-ignored,
+        so a fresh clone or release bundle doesn't have it, and
+        dictConfig() refuses to start without it
+    """
+    for handler in log_config.get('handlers', {}).values():
+        log_dir = path.dirname(handler.get('filename', ''))
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+
+
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
@@ -163,6 +174,7 @@ def create_app() -> Flask:
             log_config = json.load(f_in)
     else:
         log_config = log_default
+    _make_log_dirs(log_config)
     logging.config.dictConfig(log_config)
     threading.excepthook = _log_thread_exception
 

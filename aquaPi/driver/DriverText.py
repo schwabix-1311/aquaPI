@@ -62,7 +62,7 @@ class DriverEmail(DriverText):
     def find_ports() -> dict[str, IoPort]:
         io_ports = {}
         if 'Email' not in driver_config:
-            log.error('You have no Email configuration. Email delivery will not work!')
+            log.info('Email is not configured, no Email alerts (set up with ./manage reconfig)')
             return io_ports
 
         idx = 0
@@ -189,7 +189,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
         res = ''
         io_ports = {}
         if 'Telegram' not in driver_config:
-            log.error('You have no Telegram configuration. Message delivery will not work!')
+            log.info('Telegram is not configured, no Telegram alerts (set up with ./manage reconfig)')
             return io_ports
 
         idx = 0

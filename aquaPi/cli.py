@@ -322,6 +322,12 @@ After=local-fs.target
 Type=simple
 User={user}
 {java_home}ExecStart={questdb_sh} start -c
+# the JVM needs a while on a Pi Zero before it accepts connections; count as
+# started only once port 8812 answers, so aquapi.service (ordered after this
+# unit) doesn't find it unreachable and fall back to in-memory history.
+# Never fails the unit: after 90 s aquaPi starts anyway.
+ExecStartPost=/bin/bash -c 'for i in {{1..90}}; do (echo > /dev/tcp/127.0.0.1/8812) 2>/dev/null && exit 0; sleep 1; done; echo "QuestDB not reachable on port 8812 after 90 s" >&2'
+TimeoutStartSec=150
 Restart=on-failure
 RestartSec=10
 TimeoutStopSec=30

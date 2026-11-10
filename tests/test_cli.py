@@ -398,6 +398,9 @@ def test_service_unit_includes_questdb_and_orders_aquapi_after_it(runner, monkey
     assert 'Environment=JAVA_HOME=/usr/lib/jvm/java-17' in result.output
     assert 'After=network-online.target questdb.service' in result.output
     assert 'Wants=network-online.target questdb.service' in result.output
+    # aquapi.service must only start once QuestDB accepts connections
+    assert "ExecStartPost=/bin/bash -c 'for i in {1..90}; do (echo > /dev/tcp/127.0.0.1/8812)" in result.output
+    assert 'TimeoutStartSec=150' in result.output
 
 
 def test_service_unit_without_questdb_has_no_questdb_unit(runner, monkeypatch):

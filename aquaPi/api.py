@@ -352,10 +352,10 @@ def api_sse() -> Response:
     change_queue = bus.subscribe_changes()
 
     def sse_update():
-        # timeout -> None makes send_sse_events() emit a heartbeat comment,
-        # so an idle connection isn't silent forever (see MEMORY: SSE
-        # timeout needs reload - a client that resumed from sleep/hibernate
-        # can hold a zombie connection that never errors out on its own)
+        # timeout -> None makes send_sse_events() emit a 'ping' event, so
+        # an idle connection isn't silent forever - a client that resumed
+        # from suspend can hold a zombie connection that never errors out
+        # on its own; the client's watchdog reconnects when pings stop
         changed_ids = bus.wait_for_changes(change_queue, timeout=20)
         if not changed_ids:
             return None

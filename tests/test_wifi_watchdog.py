@@ -35,14 +35,15 @@ def watchdog(tmp_path):
     (sys_net / 'wlan0').mkdir()
     calls = tmp_path / 'calls'
 
-    def run(gateway='192.168.1.1', ping_rc=0, iface_present=True):
+    def run(gateway='192.168.1.1', ping_rc=0, iface_present=True, allow_reboot=True):
         if not iface_present and (sys_net / 'wlan0').exists():
             (sys_net / 'wlan0').rmdir()
         calls.write_text('')
         env = dict(os.environ, PATH=f'{bin_dir}:{os.environ["PATH"]}', CALLS=str(calls),
                    FAKE_GATEWAY=gateway, FAKE_PING_RC=str(ping_rc),
                    STATE_DIR=str(tmp_path / 'state'), SYS_NET=str(sys_net),
-                   REBOOT_STAMP=str(tmp_path / 'lib' / 'last-reboot'))
+                   REBOOT_STAMP=str(tmp_path / 'lib' / 'last-reboot'),
+                   ALLOW_REBOOT='1' if allow_reboot else '0')
         subprocess.run(['bash', str(SCRIPT)], env=env, check=True, timeout=10)
         return calls.read_text().splitlines()
 
@@ -98,3 +99,16 @@ def test_old_reboot_stamp_allows_the_next_reboot(watchdog):
     watchdog.stamp.write_text(str(int(time.time()) - 7 * 3600))
     runs = [watchdog(gateway='', iface_present=False) for _ in range(5)]
     assert _did(runs[-1], 'systemctl') == ['systemctl reboot']
+
+
+def test_reboot_stage_is_off_by_default(watchdog, tmp_path):
+    # without ALLOW_REBOOT, a dead chip only gets driver reloads - a warm
+    # reboot hung a Pi Zero 2 W for 2.5 days on 2026-11-07
+    runs = [watchdog(gateway='', iface_present=False, allow_reboot=False) for _ in range(8)]
+    assert not any(_did(c, 'systemctl') for c in runs)
+    assert sum(1 for c in runs if _did(c, 'modprobe')) == 4
+    assert not watchdog.stamp.exists()
+
+
+def test_script_default_has_reboot_off():
+    assert 'ALLOW_REBOOT="${ALLOW_REBOOT:-0}"' in SCRIPT.read_text()

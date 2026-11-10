@@ -9,12 +9,16 @@
 #   gateway answers                    -> all fine, reset the counter
 #   no answer, RELOAD_AFTER times      -> reload the WiFi driver
 #     in a row (and again every RELOAD_AFTER failures after that)
-#   wlan0 still missing after          -> reboot, at most once per REBOOT_GAP
-#     REBOOT_AFTER failures
+#   only with ALLOW_REBOOT=1:          -> reboot, at most once per REBOOT_GAP
+#     wlan0 still missing after REBOOT_AFTER failures
 #
-# A reboot is only done when the interface itself is gone (the chip is
-# dead): with the router merely down, wlan0 exists and rebooting wouldn't
-# help, so then only the driver reloads repeat.
+# The reboot stage is OFF by default. On 2026-11-07 it fired for the first
+# time on aquapi2 (Pi Zero 2 W): the chip was dead, the warm reboot never
+# came back up (solid green LED) and the Pi stayed down for 2.5 days -
+# filter pump and heater included - until it was power-cycled. A warm
+# reboot doesn't power-cycle the WiFi chip; without network aquaPi keeps
+# regulating, which is the safe state, so the watchdog only keeps retrying
+# the driver reload.
 #
 # All settings can be overridden by environment (also used by the tests).
 
@@ -24,6 +28,7 @@ IFACE="${WIFI_IFACE:-wlan0}"
 RELOAD_AFTER="${RELOAD_AFTER:-2}"      # 2 runs x 2 min = ~4 min without network
 REBOOT_AFTER="${REBOOT_AFTER:-5}"      # ~10 min
 REBOOT_GAP="${REBOOT_GAP:-21600}"      # 6 h between watchdog reboots
+ALLOW_REBOOT="${ALLOW_REBOOT:-0}"      # reboot stage off, see above
 STATE_DIR="${STATE_DIR:-/run/wifi-watchdog}"            # tmpfs: resets on boot
 REBOOT_STAMP="${REBOOT_STAMP:-/var/lib/wifi-watchdog/last-reboot}"  # survives boots
 DRIVER_MODULES="${DRIVER_MODULES:-brcmfmac_wcc brcmfmac}"  # unload order
@@ -52,7 +57,7 @@ else
     log "$IFACE is missing ($fails in a row)"
 fi
 
-if [ "$fails" -ge "$REBOOT_AFTER" ] && [ ! -e "$SYS_NET/$IFACE" ]; then
+if [ "$ALLOW_REBOOT" = 1 ] && [ "$fails" -ge "$REBOOT_AFTER" ] && [ ! -e "$SYS_NET/$IFACE" ]; then
     now=$(date +%s)
     last=$(cat "$REBOOT_STAMP" 2>/dev/null || echo 0)
     if [ $((now - last)) -ge "$REBOOT_GAP" ]; then

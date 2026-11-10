@@ -28,14 +28,11 @@ fine, sort/dedupe later.
   the v1.1 topic, or add the PCA9685 driver before v1.0.
 - [ ] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
   against what the installer really does.
-- [ ] WiFi watchdog reboot-stage test on aquapi2. The driver-reload stage is
-  already proven in the field: real chip hangs on 2026-10-21 and 2026-10-24
-  were each fixed by a reload within ~6 min. Still untested is the reboot
-  when wlan0 stays gone. Test, possible over SSH as the Pi heals itself:
-  `sudo modprobe -r brcmfmac_wcc brcmfmac; sudo REBOOT_AFTER=1 RELOAD_AFTER=99
-  /usr/local/sbin/wifi-watchdog` (one line - the connection drops), then
-  after reconnecting `journalctl -t wifi-watchdog -b -1` must show
-  "rebooting". A second reboot test needs a 6 h pause (reboot rate limit).
+- [x] WiFi watchdog: the driver-reload stage is proven in the field (real
+  chip hangs fixed on 2026-10-21 and 2026-10-24). The reboot stage fired
+  for real on 2026-11-07 and the warm reboot of the Pi Zero 2 W hung for
+  2.5 days (pump and heater off) - it is now off by default
+  (`ALLOW_REBOOT=1` to enable), no further test needed.
 - [ ] Remove the "Release 1.0 is coming soon" note from README.md on main
   (Installation section) - in the same push as the tag.
 - [ ] CI green on the commit to tag; after tagging, check the GitHub

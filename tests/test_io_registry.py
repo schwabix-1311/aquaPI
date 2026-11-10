@@ -111,3 +111,21 @@ def test_shared_bus_dep_allows_multiple_primaries(reg):
     with pytest.raises(DriverPortInuseError):
         reg.driver_factory('GPIO 2 out')
     reg.driver_destruct('ADC #1 in 0', d1)
+
+
+def test_gpio_pin_is_either_input_or_output(reg):
+    # 'GPIO 13 in' and 'GPIO 13 out' are the same pin: claiming one must
+    # block the other, in either order
+    d = reg.driver_factory('GPIO 13 out')
+    assert 'GPIO 13 in' not in _free(reg, PortFunc.Bin)
+    with pytest.raises(DriverPortInuseError):
+        reg.driver_factory('GPIO 13 in')
+    reg.driver_destruct('GPIO 13 out', d)
+    assert 'GPIO 13 in' in _free(reg, PortFunc.Bin)
+
+    d = reg.driver_factory('GPIO 13 in')
+    assert 'GPIO 13 out' not in _free(reg, PortFunc.Bout)
+    with pytest.raises(DriverPortInuseError):
+        reg.driver_factory('GPIO 13 out')
+    reg.driver_destruct('GPIO 13 in', d)
+    assert 'GPIO 13 out' in _free(reg, PortFunc.Bout)

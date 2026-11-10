@@ -106,6 +106,11 @@ class DriverGPIO(OutDriver, InDriver):
                 # CO2 vent
                 'GPIO 20 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 20, 'fake': True}, [])
             }
+        # a pin is either input or output: 'in' depends on 'out', so the
+        # registry refuses the second claim in either order
+        for name, port in io_ports.items():
+            if name.endswith(' in') and name[:-3] + ' out' in io_ports:
+                io_ports[name] = port._replace(deps=[name[:-3] + ' out'])
         return io_ports
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):

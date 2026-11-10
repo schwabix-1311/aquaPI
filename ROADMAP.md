@@ -277,10 +277,12 @@ fine, sort/dedupe later.
     profile without any measuring.
 
   Steps:
-  1. PCA9685 driver (I²C auto-detection like the ADS1115) - prerequisite
-     for lights and DC pumps on Robo-Tank and Leviathan, and for aquaPCB's
-     planned PWM/0-10 V add-on.
-  2. Board profiles: one small file per board (e.g. `boards/aquapcb-v1.json`,
+  1. PCA9685 driver - DONE on dev_m (`DriverPCA9685.py`, I²C 0x40..0x47):
+     every channel as dimmer ("PCA9685 #1 CH0 PWM") and as on/off output
+     ("PCA9685 #1 CH0 out"), mutually exclusive. Prerequisite for lights
+     and DC pumps on Robo-Tank and Leviathan, and for aquaPCB v2 (DC/LED
+     ports, Q2/Q3/Q5/Q6, power bars). Test on a real breakout still open.
+  2. Board profiles: one small file per board (e.g. `boards/aquapcb-v2.json`,
      `boards/robotank-deluxe.json`) mapping connector labels to aquaPi ports
      ("Power bar 1 - outlet 3" -> GPIO 17, "LED 2" -> PCA9685 channel 9,
      "Temp 1" -> 1-Wire) plus the OS interfaces the board needs. The port

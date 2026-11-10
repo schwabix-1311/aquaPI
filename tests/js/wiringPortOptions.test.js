@@ -83,4 +83,10 @@ test('result is sorted and deduped', () => {
 	assert.deepEqual(opts, ['GPIO 1 out', 'GPIO 13 out'])
 })
 
+test('numbers in port names sort numerically', () => {
+	const ports = ['PCA9685 #1 CH10 PWM', 'PCA9685 #1 CH2 PWM', 'GPIO 12 out', 'GPIO 2 out']
+	const opts = draftPortOptions({free: ports, allPorts: ports})
+	assert.deepEqual(opts, ['GPIO 2 out', 'GPIO 12 out', 'PCA9685 #1 CH2 PWM', 'PCA9685 #1 CH10 PWM'])
+})
+
 // vim: set noet ts=4 sw=4:

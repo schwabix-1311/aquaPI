@@ -46,7 +46,7 @@ export function draftPortOptions({
 
 	return [...out]
 		.filter(p => universe.has(p) && (!heldByOthers.has(p) || p === ownPort))
-		.sort((a, b) => a.localeCompare(b))
+		.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}))
 }
 
 // vim: set noet ts=4 sw=4:

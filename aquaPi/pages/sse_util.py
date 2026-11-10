@@ -42,14 +42,14 @@ def send_sse_events(read, delay=1, on_close=None):
             while True:
                 data = read()
                 if data is None:
-                    # read() timed out without new data - send a comment
-                    # line (ignored by EventSource, keeps no "data:" event)
-                    # so idle connections keep bytes flowing. This lets a
-                    # dead client (e.g. one that suspended/hibernated and
-                    # never sent a TCP FIN/RST) be noticed on the next
-                    # failed write, instead of leaking the subscription
-                    # forever; see MEMORY: SSE timeout needs reload.
-                    yield ': ping\n\n'
+                    # read() timed out without new data - send a named
+                    # 'ping' event (onmessage ignores it) so idle
+                    # connections keep bytes flowing: a dead client (one
+                    # that suspended and never sent a TCP FIN/RST) is
+                    # noticed on the next failed write instead of leaking
+                    # the subscription, and the client can tell a live but
+                    # quiet connection from a dead one by the pings
+                    yield format_msg('', event='ping')
                 else:
                     yield format_msg(data)
                 if delay:

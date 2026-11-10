@@ -1,5 +1,6 @@
 import {EventBus, AQUAPI_EVENTS} from './components/app/EventBus.js'
 import {useDashboardStore} from './store/modules/dashboard.js'
+import {sseIsStale, CHECK_EVERY_MS} from './components/app/sseWatchdog.js'
 
 const App = {
 	template: `
@@ -8,6 +9,8 @@ const App = {
 	name: 'App',
 	data: () => ({
 		sseSource: null,
+		sseLastActivity: 0,
+		sseWatchdog: null,
 	}),
 
 	computed: {
@@ -19,11 +22,16 @@ const App = {
 	methods: {
 		initEventListeners() {
 			this.connectSSE()
-			document.addEventListener('visibilitychange', this.handleVisibilityChange)
+			document.addEventListener('visibilitychange', this.checkSSE)
+			window.addEventListener('online', this.checkSSE)
+			this.sseWatchdog = window.setInterval(this.checkSSE, CHECK_EVERY_MS)
 			EventBus.$on(AQUAPI_EVENTS.SSE_NODE_UPDATE, this.handleSSE)
 		},
 		detachEventListeners() {
-			document.removeEventListener('visibilitychange', this.handleVisibilityChange)
+			document.removeEventListener('visibilitychange', this.checkSSE)
+			window.removeEventListener('online', this.checkSSE)
+			window.clearInterval(this.sseWatchdog)
+			this.sseWatchdog = null
 			this.disconnectSSE()
 			EventBus.$off(AQUAPI_EVENTS.SSE_NODE_UPDATE)
 		},
@@ -34,8 +42,16 @@ const App = {
 
 			const urlSSE = `${window.location.protocol}//${window.location.host}/api/sse`
 			this.sseSource = new EventSource(urlSSE)
+			this.sseLastActivity = Date.now()
 
-			this.sseSource.onmessage = function(e) {
+			// any traffic, including the server's idle 'ping', proves the
+			// connection alive - see sseWatchdog.js
+			const touch = () => { this.sseLastActivity = Date.now() }
+			this.sseSource.onopen = touch
+			this.sseSource.addEventListener('ping', touch)
+
+			this.sseSource.onmessage = (e) => {
+				touch()
 				// this is an array of node ids that were modified
 				const items = JSON.parse(e.data)
 				if (items.length) {
@@ -48,9 +64,8 @@ const App = {
 
 			this.sseSource.onerror = function(e) {
 				// the browser retries on its own for a plain connection
-				// drop; logged here since this also fires for a connection
-				// that turns out to be a client-suspend zombie, right
-				// before handleVisibilityChange forces a reconnect
+				// drop; a dead connection it doesn't notice is replaced by
+				// checkSSE() once the pings stop
 				console.debug('[App] SSE connection error, browser will retry', e)
 			}
 		},
@@ -60,17 +75,22 @@ const App = {
 				this.sseSource = null
 			}
 		},
-		handleVisibilityChange() {
-			// a suspended/hibernated client's EventSource can keep
-			// reporting readyState OPEN after resume even though the
-			// underlying TCP connection is dead (no FIN/RST was ever
-			// exchanged across the suspend) - force a fresh connection
-			// whenever the tab becomes visible again rather than trusting
-			// the stale one
-			if (document.visibilityState === 'visible') {
-				this.disconnectSSE()
-				this.connectSSE()
+		checkSSE() {
+			// runs every CHECK_EVERY_MS, and on tab-visible / network-online.
+			// After a suspend the first check sees hours without pings,
+			// even when the tab stayed visible and visibilitychange never
+			// fired. Updates sent meanwhile are lost with the old
+			// connection, so every node is refreshed as if it had changed -
+			// which also reloads the history charts.
+			if (!this.sseSource || !sseIsStale(Date.now(), this.sseLastActivity)) {
+				return
 			}
+			console.debug('[App] SSE silent too long, reconnecting')
+			this.disconnectSSE()
+			this.connectSSE()
+			Object.keys(this.dashboardStore.nodes).forEach((id) => {
+				EventBus.$emit(AQUAPI_EVENTS.SSE_NODE_UPDATE, {id: id, identifier: 'node__' + id})
+			})
 		},
 		async fetchNodes() {
 			await this.dashboardStore.fetchNodes()

@@ -68,6 +68,11 @@ Geschwindigkeit Ihres Raspberry Pi).
   (I²C) und Hardware-PWM zum Dimmen. Im Zweifel einfach mit Enter
   bestätigen. Diese Anschlüsse sind erst nach einem Neustart aktiv - das
   Skript bietet ihn ganz am Ende an.
+- Ist der Raspberry Pi per WLAN verbunden, richtet das Skript einen
+  **WLAN-Watchdog** ein: Bleibt der WLAN-Chip hängen (beim Raspberry Pi
+  gelegentlich zu beobachten), lädt er den WLAN-Treiber neu, sodass der Pi
+  nach wenigen Minuten wieder erreichbar ist. aquaPi regelt in der Zwischenzeit
+  ohne Unterbrechung weiter.
 - Sie werden gefragt, ob Sie **Benachrichtigungen per E-Mail oder Telegram**
   einrichten möchten (z.B. für Warnungen, wenn etwas nicht stimmt). Das
   können Sie auch überspringen und später jederzeit nachholen.

@@ -99,6 +99,20 @@ if [ -f /etc/ssh/sshd_config ] && ! grep -q '^ClientAliveInterval' /etc/ssh/sshd
   sudo systemctl reload ssh 2>/dev/null || sudo systemctl reload sshd 2>/dev/null || true
 fi
 
+# --- WLAN-Watchdog -----------------------------------------------------------
+# Der WLAN-Chip des Raspberry Pi (brcmfmac) kann hängen bleiben; der Pi ist
+# dann nicht mehr erreichbar, obwohl aquaPi weiter regelt. Der Watchdog
+# prüft alle 2 Minuten die Verbindung zum Router und lädt bei Bedarf den
+# WLAN-Treiber neu. Nur sinnvoll, wenn der Pi über WLAN verbunden ist.
+
+if ip -4 route show default 2>/dev/null | grep -q " dev wlan0"; then
+  echo
+  echo "Richte den WLAN-Watchdog ein (holt eine hängende WLAN-Verbindung"
+  echo "automatisch zurück)."
+  system/wifi-watchdog/install.sh >/dev/null \
+    || echo "Hinweis: Der WLAN-Watchdog konnte nicht eingerichtet werden - aquaPi läuft trotzdem."
+fi
+
 # --- Hardware-Schnittstellen des Raspberry Pi einschalten ------------------
 # Ein frisch installiertes Raspberry Pi OS hat 1-Wire, I²C und Hardware-PWM
 # ausgeschaltet. Ohne sie findet aquaPi keine DS18B20-Temperatursensoren,

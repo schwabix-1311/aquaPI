@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Tests for tools/wifi-watchdog/wifi-watchdog: the real bash script, run
+""" Tests for system/wifi-watchdog/wifi-watchdog: the real bash script, run
     against fake ip/ping/modprobe/systemctl/logger/sleep commands that only
     record their calls - no network, driver or reboot is touched.
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parent.parent / 'tools' / 'wifi-watchdog' / 'wifi-watchdog'
+SCRIPT = Path(__file__).resolve().parent.parent / 'system' / 'wifi-watchdog' / 'wifi-watchdog'
 
 FAKE = """#!/usr/bin/env bash
 echo "$(basename "$0") $*" >> "$CALLS"

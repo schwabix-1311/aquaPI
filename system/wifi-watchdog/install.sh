@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Installs (or with --uninstall removes) the WiFi watchdog on this Pi.
+# Called by aquaPi's install.sh when the Pi is connected via WiFi.
 # Needs sudo. Log: journalctl -t wifi-watchdog
 set -euo pipefail
 cd "$(dirname "$0")"

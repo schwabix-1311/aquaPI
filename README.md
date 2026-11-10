@@ -39,7 +39,9 @@ It downloads the current release, sets up Python, QuestDB and all
 dependencies, asks which Pi interfaces to switch on (1-Wire for DS18B20
 sensors, I²C for an ADS1115, hardware PWM), offers to configure
 email/Telegram alerts, and installs aquaPi as a system service that starts
-on boot. The installer and the step-by-step
+on boot. On a Pi connected via WiFi it also sets up a watchdog that reloads
+the WiFi driver when the chip hangs, so the Pi becomes reachable again
+within minutes. The installer and the step-by-step
 guide [INSTALLATION.de.md](INSTALLATION.de.md) are currently in German.
 
 Afterwards `./manage` in the install directory handles maintenance:

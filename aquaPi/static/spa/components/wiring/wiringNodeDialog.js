@@ -219,7 +219,8 @@ const WiringNodeDialog = {
 					const held = attrs.type === 'multiselect' ? (value || []) : [value]
 					const missing = held.filter(v => v && !attrs.options.includes(v))
 					if (missing.length) {
-						attrs = {...attrs, options: [...attrs.options, ...missing].sort()}
+						attrs = {...attrs, options: [...attrs.options, ...missing]
+							.sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true}))}
 					}
 				}
 				// the 'port' select: recompute against the pending draft so a

@@ -3,7 +3,7 @@
 import logging
 
 from .msg_bus import Setting
-from ..driver import IoRegistry, PortFunc
+from ..driver import IoRegistry, PortFunc, natural_key
 
 
 log = logging.getLogger('machineroom.port_driver')
@@ -85,8 +85,8 @@ class PortDriverMixin:
         except Exception:
             free, used = [], []
         return Setting('port', label, '', type='select',
-                       options=sorted(free),
-                       all_ports=sorted(set(free) | set(used)),
+                       options=sorted(free, key=natural_key),
+                       all_ports=sorted(set(free) | set(used), key=natural_key),
                        required=required)
 
     def _port_setting(self, label: str) -> Setting:
@@ -97,5 +97,5 @@ class PortDriverMixin:
         schema = type(self).get_port_schema(label)
         options = schema.options
         if self.port and self.port not in options:
-            options = sorted(options + [self.port])
+            options = sorted(options + [self.port], key=natural_key)
         return schema.with_value(self.port, options=options)

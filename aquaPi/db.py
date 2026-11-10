@@ -44,7 +44,7 @@ from .machineroom.out_nodes import (AnalogDevice, SlowPwmDevice, SwitchDevice)
 from .machineroom.aux_nodes import (AvgAux, MaxAux, MinAux, ScaleAux, VolatilityAux, UiDisplay)
 from .machineroom.hist_nodes import History, log_calibration_event
 from .machineroom.alert_nodes import (Alert, AlertAbove, AlertBelow)
-from .driver.base import DriverError
+from .driver.base import DriverError, natural_key
 
 
 log = logging.getLogger('aquaPi.db')
@@ -210,7 +210,7 @@ def merge_live_select_options(node: BusNode,
             held = current if attrs['type'] == 'multiselect' else [current]
             extra = [v for v in held if isinstance(v, str) and v and v not in opts]
             if extra:
-                field = {**field, 'attrs': {**attrs, 'options': sorted(opts + extra)}}
+                field = {**field, 'attrs': {**attrs, 'options': sorted(opts + extra, key=natural_key)}}
         patched.append(field)
     return patched
 
@@ -566,10 +566,10 @@ def apply_config_diff(bus: MsgBus, diff: dict[str, Any], validate_fields) -> dic
             opts = attrs.get('options')
             if field['key'] == 'port' and isinstance(opts, list):
                 of_func = attrs.get('allPorts') or opts
-                missing = sorted(p for p in of_func
-                                 if p not in opts and preview.is_free(p))
+                missing = sorted((p for p in of_func
+                                  if p not in opts and preview.is_free(p)), key=natural_key)
                 if missing:
-                    field = {**field, 'attrs': {**attrs, 'options': sorted(opts + missing)}}
+                    field = {**field, 'attrs': {**attrs, 'options': sorted(opts + missing, key=natural_key)}}
             out.append(field)
         return out
 

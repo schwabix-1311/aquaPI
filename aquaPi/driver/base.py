@@ -7,11 +7,20 @@ from enum import Enum
 from collections import namedtuple
 import math
 import random
+import re
 
 log = logging.getLogger('driver.base')
 
 
 # ========== common functions ==========
+
+
+def natural_key(text: Any) -> list:
+    """ sort key that orders embedded numbers numerically, so port lists
+        read 'CH2' before 'CH10' and 'GPIO 2' before 'GPIO 12'
+    """
+    return [int(part) if part.isdigit() else part.lower()
+            for part in re.split(r'(\d+)', str(text))]
 
 
 def is_raspi() -> bool:

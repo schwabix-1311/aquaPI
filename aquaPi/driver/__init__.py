@@ -172,7 +172,8 @@ class IoRegistry(object):
     "PWM 0":          { Aout, DriverPWM,    {ch: 0, pin: 18} }      - Licht"
     "PWM 1":          { Aout, DriverPWM,    {ch: 1, pin: 19} }      -
 --    "S-PWM 2":        { Aout, DriverGPIO,   {pin: 24} }             - Lüfter"
---    "PWMext 0-15":    { Aout, DriverPA9685, {addr:0x7F, ch:0..} }   -
+    "PCA9685 #1 CH0 PWM": { Aout, DriverPCA9685, {adr:0x40, cnt:1, ch:0} } - LED port
+    "PCA9685 #2 CH3 out": { Bout, DriverPCA9685, {adr:0x41, cnt:2, ch:3} } - power bar outlet
     "TC420 #1 CH1":   { Aout, DriverTC420,  {device:0, ch:1} }      - Mondlicht
 --    "TC420 #1 CH3-5": { Aout, DriverTC420,  {device:0, ch:(3,4,5)}} - RGB Licht
 --    "ShellyDim":      { Aout, DriverShelly, {ip: '192..', ch:X} }   - Ambilight

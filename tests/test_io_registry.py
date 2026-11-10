@@ -129,3 +129,23 @@ def test_gpio_pin_is_either_input_or_output(reg):
         reg.driver_factory('GPIO 13 out')
     reg.driver_destruct('GPIO 13 in', d)
     assert 'GPIO 13 out' in _free(reg, PortFunc.Bout)
+
+
+def test_pca9685_channel_is_either_dimmer_or_switch(reg):
+    # each PCA9685 channel is offered as 'PWM' (Aout) and 'out' (Bout);
+    # claiming one form must block the other, in either order
+    d = reg.driver_factory('PCA9685 #1 CH5 PWM')
+    assert 'PCA9685 #1 CH5 out' not in _free(reg, PortFunc.Bout)
+    with pytest.raises(DriverPortInuseError):
+        reg.driver_factory('PCA9685 #1 CH5 out')
+    reg.driver_destruct('PCA9685 #1 CH5 PWM', d)
+    assert 'PCA9685 #1 CH5 out' in _free(reg, PortFunc.Bout)
+
+    d = reg.driver_factory('PCA9685 #1 CH5 out')
+    assert 'PCA9685 #1 CH5 PWM' not in _free(reg, PortFunc.Aout)
+    with pytest.raises(DriverPortInuseError):
+        reg.driver_factory('PCA9685 #1 CH5 PWM')
+    # other channels of the chip stay available
+    assert 'PCA9685 #1 CH6 PWM' in _free(reg, PortFunc.Aout)
+    reg.driver_destruct('PCA9685 #1 CH5 out', d)
+    assert 'PCA9685 #1 CH5 PWM' in _free(reg, PortFunc.Aout)

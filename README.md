@@ -36,7 +36,11 @@ curl -fsSL -o install.sh https://github.com/schwabix-1311/aquaPI/releases/latest
 bash install.sh
 ```
 
-It downloads the current release, sets up Python, QuestDB and all
+The absolute minimum is a Pi Zero W and/or a 32-bit Raspberry Pi OS: control
+works the same, but chart history is kept in memory only and starts empty
+after every restart.
+
+The installer downloads the current release, sets up Python, QuestDB and all
 dependencies, asks which Pi interfaces to switch on (1-Wire for DS18B20
 sensors, I²C for an ADS1115, hardware PWM), offers to configure
 email/Telegram alerts, and installs aquaPi as a system service that starts

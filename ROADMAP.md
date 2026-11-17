@@ -10,15 +10,21 @@ fine, sort/dedupe later.
 
 ## Release gate v1.0.0 (tag `v1.0.0` on `release/1.0` only when all are done)
 
-- [ ] Build the release bundle locally exactly like `release.yml` and check
+- [x] Build the release bundle locally exactly like `release.yml` and check
   its contents: nothing from `instance/`, `logs/`, `pid_autotune_runs/`,
-  `tools/`; the tc420 driver is included; `VERSION` is written.
+  `tools/`; the tc420 driver is included; `VERSION` is written. Done
+  2026-11-10: found and fixed a release blocker (a fresh install crashed
+  without `logs/`, 0c46de0) and dropped an unused 4.7 MB gif.
 - [ ] Test install on a fresh SD card / spare Pi with clean Raspberry Pi
-  OS, running `install.sh` against the local bundle: QuestDB setup and
-  config, service unit, German prompts, `./manage reconfig`.
-- [ ] First admin password: a fresh install only logs it (journalctl
+  OS **Bookworm 64-bit** (the documented base; Trixie needs at least the
+  OpenJDK 17 -> 21 change in `init`), running `install.sh` against the
+  local bundle: QuestDB setup and config, service unit, German prompts,
+  `./manage reconfig`. Then run `install.sh` a second time and choose
+  "Aktualisieren": configuration, users and backups must survive.
+- [x] First admin password: a fresh install only logs it (journalctl
   under systemd); `install.sh` and `INSTALLATION.de.md` must show it or
-  say where to find it.
+  say where to find it. Done: `./manage init-admin`, shown at the end of
+  `install.sh` (a7d7974).
 - [ ] Decide on RoboTank / Leviathan: the README says aquaPi can drive
   them with "a few sub-functions not supported yet". Their peripherals
   are auto-detected like any GPIO/I²C hardware, but aquaPi has no driver
@@ -26,8 +32,14 @@ fine, sort/dedupe later.
   0-10V ports) - outlets, sensor inputs and DS18B20 work. Either name the
   gap in the README for v1.0 and ship "Board support" (see New ideas) as
   the v1.1 topic, or add the PCA9685 driver before v1.0.
-- [ ] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
-  against what the installer really does.
+  Status 2026-11-17: the driver exists on dev_m (v1.1); the README
+  sentence on `release/1.0` gets reworded only after the driver passed
+  a test on a real PCA9685 breakout.
+- [x] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
+  against what the installer really does. Done 2026-11-17 (217b854 and
+  follow-up): update mode in `install.sh` (a rerun no longer deletes
+  `instance/`), Bookworm 64-bit as tested base with Zero W / 32-bit as
+  absolute minimum, list of system changes, update section.
 - [x] WiFi watchdog: the driver-reload stage is proven in the field (real
   chip hangs fixed on 2026-10-21 and 2026-10-24). The reboot stage fired
   for real on 2026-11-07 and the warm reboot of the Pi Zero 2 W hung for

@@ -304,6 +304,23 @@ fine, sort/dedupe later.
   Could be interesting for aquaPi's own installer, e.g. a ready-to-flash
   image instead of (or next to) `install.sh` on a fresh Pi OS.
   **Priority: unprioritized.**
+- Memory relief for small headless Pis (measured on aquapi2, Pi Zero 2 W,
+  2026-11-17: 416 MB RAM visible, 227 MB swapped out - mostly cold QuestDB
+  Java pages - and ~1.1 GB written to the SD-card swap file in 7 days,
+  i.e. ~50-60 GB/year of SD wear). Candidates for a future release, as
+  optional `install.sh` steps for headless Pis, **only after extensive
+  testing on the user's own Pi**:
+  1. zram instead of swap on the SD card (Bookworm: remove
+     `dphys-swapfile`, install `zram-tools`, ~50 % of RAM, lz4): swapping
+     no longer writes to the SD card and is faster; the compression
+     costs little CPU at this swap rate. Can be switched without reboot.
+  2. Shrink the graphics reservation: `config.txt` has
+     `dtoverlay=vc4-kms-v3d` with a 256 MB CMA reserve plus `gpu=64M`,
+     and camera/display auto-detect on - a headless Pi needs almost none
+     of it (e.g. `dtoverlay=vc4-kms-v3d,cma-64`, `gpu_mem=16`,
+     auto-detect off). Needs a reboot: only with someone on site able
+     to power-cycle, since a warm reboot once hung a Zero 2 W for days.
+  **Priority: unprioritized.**
 - Remove all one-shot migration code - DONE (confirmed both had already run
   everywhere they needed to, including `aquapi2`, before removing): `db.py`'s
   `migrate_notification_config_from_json()` (config.json Email/Telegram ->

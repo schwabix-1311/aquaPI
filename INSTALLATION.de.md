@@ -7,13 +7,18 @@ kopieren.
 
 ## Was Sie brauchen
 
-- Einen Raspberry Pi (empfohlen: Raspberry Pi 3 oder neuer) mit angeschlossenen
-  Sensoren/Aktoren für Ihr Aquarium.
-- Eine microSD-Karte, auf die bereits **Raspberry Pi OS** installiert wurde.
-  Falls noch nicht geschehen: Das offizielle
-  [Raspberry Pi Imager](https://www.raspberrypi.com/software/)-Programm
-  macht das in wenigen Minuten - einfach eine SD-Karte auswählen,
-  "Raspberry Pi OS" auswählen und schreiben lassen.
+- Einen Raspberry Pi Zero 2 W, 3, 4 oder 5 mit angeschlossenen
+  Sensoren/Aktoren für Ihr Aquarium. Ältere Modelle (Zero, Zero W, 1, 2)
+  funktionieren auch, können den Verlauf für die Diagramme aber nur im
+  Arbeitsspeicher halten - nach jedem Neustart beginnen die Diagramme leer.
+- Eine microSD-Karte mit **Raspberry Pi OS "Bookworm", 64-bit** - die
+  Variante "Lite" (ohne Bildschirm-Oberfläche) genügt. aquaPi ist mit
+  dieser Version getestet; mit der neueren Version "Trixie" funktioniert
+  die Installation derzeit noch nicht.
+  Das offizielle [Raspberry Pi Imager](https://www.raspberrypi.com/software/)-Programm
+  schreibt die SD-Karte in wenigen Minuten. Bookworm finden Sie dort unter
+  "Raspberry Pi OS (other)", meist als "Legacy" bezeichnet - achten Sie auf
+  "64-bit".
 - Der Raspberry Pi muss mit Ihrem Heimnetzwerk verbunden sein (WLAN oder
   Netzwerkkabel) und über SSH erreichbar sein. Das lässt sich schon beim
   Schreiben der SD-Karte im Raspberry Pi Imager unter "Erweiterte
@@ -79,6 +84,22 @@ Geschwindigkeit Ihres Raspberry Pi).
 - Am Ende wird aquaPi als **Dienst** eingerichtet, der automatisch startet -
   auch nach einem Neustart Ihres Raspberry Pi.
 
+Was dabei am System des Raspberry Pi verändert wird, damit Sie es
+nachvollziehen können:
+
+- aquaPi selbst liegt in `~/aquaPI`, der Verlauf für die Diagramme
+  (QuestDB) in `~/.questdb`.
+- Systemdienste `aquapi` und `questdb`, bei WLAN zusätzlich
+  `wifi-watchdog` (Programm in `/usr/local/sbin`).
+- Die eingeschalteten Hardware-Anschlüsse (1-Wire, I²C über
+  `raspi-config`, Hardware-PWM als Zeile in `/boot/firmware/config.txt`).
+- Eine Regel für den TC420 in `/etc/udev/rules.d/`, und Ihr Benutzer wird
+  Mitglied der Gruppe `plugdev`.
+- In `/etc/ssh/sshd_config` zwei Zeilen (`ClientAliveInterval`) und in
+  `~/.ssh/config` ein Abschnitt `Host *` (`ServerAliveInterval`), damit
+  eine nach einem WLAN-Aussetzer abgebrochene SSH-Verbindung schnell
+  erkannt wird.
+
 ## Fertig - aquaPi öffnen
 
 Am Ende der Installation zeigt das Skript eine Internetadresse an, z.B.:
@@ -96,6 +117,15 @@ Direkt darunter zeigt das Skript Ihren **Admin-Zugang** an (Benutzername
 es wird nur dieses eine Mal angezeigt. Ohne Anmeldung können Sie die
 Oberfläche nur ansehen; zum Einrichten melden Sie sich oben rechts an und
 ändern das Passwort danach im Menü "Benutzer".
+
+## aquaPi aktualisieren
+
+Für eine neue aquaPi-Version führen Sie die Installation einfach erneut
+aus (die zwei Zeilen aus "Installation starten"). Das Skript erkennt die
+vorhandene Installation und fragt nach - wählen Sie **"Aktualisieren"**.
+Ihre Einstellungen, Benutzer, Benachrichtigungen und Sicherungen bleiben
+erhalten; vor dem Update legt das Skript zusätzlich eine Sicherung an.
+Nur "Neu installieren" löscht alles.
 
 ## Hilfe
 

@@ -7,14 +7,18 @@ kopieren.
 
 ## Was Sie brauchen
 
-- Einen Raspberry Pi Zero 2 W, 3, 4 oder 5 mit angeschlossenen
-  Sensoren/Aktoren für Ihr Aquarium. Ältere Modelle (Zero, Zero W, 1, 2)
-  funktionieren auch, können den Verlauf für die Diagramme aber nur im
-  Arbeitsspeicher halten - nach jedem Neustart beginnen die Diagramme leer.
-- Eine microSD-Karte mit **Raspberry Pi OS "Bookworm", 64-bit** - die
-  Variante "Lite" (ohne Bildschirm-Oberfläche) genügt. aquaPi ist mit
+- Einen Raspberry Pi Zero 2 W, 3, 4 oder 5 (empfohlen) mit angeschlossenen
+  Sensoren/Aktoren für Ihr Aquarium.
+- Eine microSD-Karte mit **Raspberry Pi OS "Bookworm", 64-bit** (empfohlen) -
+  die Variante "Lite" (ohne Bildschirm-Oberfläche) genügt. aquaPi ist mit
   dieser Version getestet; mit der neueren Version "Trixie" funktioniert
   die Installation derzeit noch nicht.
+- **Absolutes Minimum:** ein Raspberry Pi Zero W (oder ein anderes älteres
+  Modell) und/oder Raspberry Pi OS "Bookworm" in der **32-bit**-Variante.
+  aquaPi regelt damit genauso, aber mit Einschränkungen bei den
+  Diagrammen: Der Verlauf wird nur im Arbeitsspeicher gehalten, nach jedem
+  Neustart beginnen die Diagramme leer. Ältere Modelle wie der Zero W
+  können ohnehin nur die 32-bit-Variante verwenden.
   Das offizielle [Raspberry Pi Imager](https://www.raspberrypi.com/software/)-Programm
   schreibt die SD-Karte in wenigen Minuten. Bookworm finden Sie dort unter
   "Raspberry Pi OS (other)", meist als "Legacy" bezeichnet - achten Sie auf

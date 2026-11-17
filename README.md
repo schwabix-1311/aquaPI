@@ -8,7 +8,7 @@ aquaPi builds the control logic for your tank from small functional blocks, so
 the hardware stays minimal and the user interface only ever shows what you
 actually use — whether that is a single light dimmer or a full setup with
 redundant temperature sensors, several lights, a pH/CO2 controller and dosing
-pumps. It runs on a Raspberry Pi (a Zero is enough) and gives you charts,
+pumps. It runs on a Raspberry Pi (a Zero 2 W is enough) and gives you charts,
 email or Telegram alerts, smooth sunrise/sunset/cloud lighting, multi-channel
 dimming and more, for a modest price.
 
@@ -27,8 +27,9 @@ headless; you open the interface in a browser on your phone, tablet or PC.
 > has nothing to download yet. To try aquaPi now, use a git checkout as
 > described under [Contributing](#contributing).
 
-On a Raspberry Pi with Raspberry Pi OS and SSH access, download the installer
-from the latest release and run it:
+On a Raspberry Pi with Raspberry Pi OS **Bookworm, 64-bit** (the tested base;
+Lite is enough) and SSH access, download the installer from the latest release
+and run it:
 
 ```
 curl -fsSL -o install.sh https://github.com/schwabix-1311/aquaPI/releases/latest/download/install.sh
@@ -48,6 +49,9 @@ Afterwards `./manage` in the install directory handles maintenance:
 `backup`, `list-backups`, `restore`, `reconfig` (alert channels) and
 `service-unit` (install/remove the system service). At the end the installer
 shows the address and the password of the initial `admin` account.
+
+To update to a newer release, run the installer again and choose
+"Aktualisieren" (update): configuration, users and backups are kept.
 
 ## Getting started (the beginner's way)
 
@@ -208,4 +212,4 @@ tunes a PID heater's gains against a running aquaPi without ever taking the
 controller out of the loop (`tools/pid-autotune --help`). It is not part of
 the release bundle.
 
-Markus Kuhn, 2024-12-21 · rewritten 2026-09 · updated 2026-10
+Markus Kuhn, 2024-12-21 · rewritten 2026-09 · updated 2026-11

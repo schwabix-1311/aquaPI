@@ -41,11 +41,54 @@ for cmd in curl tar python3; do
   fi
 done
 
+# Empfohlen und getestet: Raspberry Pi OS Bookworm, 64 Bit. Nur Hinweise,
+# kein Abbruch - aquaPi läuft auch anders, mit Einschränkungen.
+if [ "$(getconf LONG_BIT)" != "64" ]; then
+  echo
+  echo "Hinweis: Dies ist ein 32-Bit-System. aquaPi läuft, kann den Verlauf"
+  echo "für die Diagramme aber nur im Arbeitsspeicher halten - nach jedem"
+  echo "Neustart beginnen die Diagramme leer. Empfohlen: Raspberry Pi OS (64-bit)."
+fi
+if ! grep -q '^VERSION_CODENAME=bookworm' /etc/os-release 2>/dev/null; then
+  echo
+  echo "Hinweis: aquaPi ist mit Raspberry Pi OS 'Bookworm' getestet. Ihr System"
+  echo "ist eine andere Version - die Installation kann fehlschlagen."
+  read -r -p "Trotzdem fortfahren? [j/N] " antwort
+  case "$antwort" in
+    [jJ]*) ;;
+    *) echo "Abgebrochen. Es wurde nichts verändert."; exit 1 ;;
+  esac
+fi
+
 # --- Installationsverzeichnis wählen ---------------------------------------
 
-if [ -d "$INSTALL_DIR" ]; then
+# UPDATE=1: vorhandene Installation aktualisieren. instance/ (Verdrahtung,
+# Benutzer, Benachrichtigungen, Sicherungen), venv/, logs/ und QuestDB
+# bleiben erhalten, nur das Programm selbst wird ersetzt.
+UPDATE=0
+if [ -d "$INSTALL_DIR/instance" ]; then
+  echo "In $INSTALL_DIR ist aquaPi bereits installiert."
+  echo
+  echo "  [A] Aktualisieren - Ihre Einstellungen, Benutzer und Sicherungen"
+  echo "      bleiben erhalten (empfohlen)"
+  echo "  [N] Neu installieren - löscht ALLES, auch Ihre Einstellungen und"
+  echo "      Sicherungen"
+  echo "  [Q] Abbrechen"
+  echo
+  read -r -p "Ihre Wahl [A/n/q] " antwort
+  case "$antwort" in
+    [nN]*)
+      read -r -p "Wirklich alles löschen, auch alle Sicherungen? [j/N] " antwort
+      case "$antwort" in
+        [jJ]*) rm -rf "$INSTALL_DIR" ;;
+        *) echo "Abgebrochen. Es wurde nichts verändert."; exit 1 ;;
+      esac ;;
+    [qQ]*) echo "Abgebrochen. Es wurde nichts verändert."; exit 1 ;;
+    *) UPDATE=1 ;;
+  esac
+elif [ -d "$INSTALL_DIR" ]; then
   echo "Das Verzeichnis $INSTALL_DIR existiert bereits."
-  read -r -p "Vorhandene Installation dort löschen und neu einrichten? [j/N] " antwort
+  read -r -p "Vorhandenes Verzeichnis löschen und neu einrichten? [j/N] " antwort
   case "$antwort" in
     [jJ]*) rm -rf "$INSTALL_DIR" ;;
     *) echo "Abgebrochen. Es wurde nichts verändert."; exit 1 ;;
@@ -63,6 +106,19 @@ TMP_ARCHIVE=$(mktemp)
 trap 'rm -f "$TMP_ARCHIVE"' EXIT
 curl -fsSL -o "$TMP_ARCHIVE" \
   "https://github.com/${REPO}/releases/latest/download/aquapi-latest.tar.gz"
+
+if [ "$UPDATE" -eq 1 ]; then
+  echo
+  echo "Sichere Ihre Einstellungen und stoppe aquaPi für das Update ..."
+  (cd "$INSTALL_DIR" && ./manage backup) \
+    || echo "Hinweis: Die Sicherung vor dem Update ist fehlgeschlagen - die tägliche Sicherung in instance/backups bleibt erhalten."
+  sudo systemctl stop aquapi 2>/dev/null || true
+  # alles außer den Nutzerdaten und der Laufzeitumgebung entfernen, damit
+  # im neuen Release gelöschte Dateien nicht liegen bleiben
+  find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 \
+    ! -name instance ! -name venv ! -name logs ! -name 'questdb-*' \
+    -exec rm -rf {} +
+fi
 
 mkdir -p "$INSTALL_DIR"
 tar xzf "$TMP_ARCHIVE" -C "$INSTALL_DIR"
@@ -171,19 +227,24 @@ fi
 # Konto selbst an und schreibt das Passwort nur ins Systemprotokoll.
 # Angezeigt wird es erst ganz am Ende, zusammen mit der Adresse.
 
-ADMIN_INFO=$(./manage init-admin)
+ADMIN_INFO=""
+if [ "$UPDATE" -eq 0 ]; then
+  ADMIN_INFO=$(./manage init-admin)
+fi
 
 # --- Benachrichtigungen einrichten ------------------------------------------
 
-echo
-echo "======================================================"
-echo " Benachrichtigungen einrichten"
-echo "======================================================"
-echo "Sie können jetzt E-Mail- oder Telegram-Benachrichtigungen einrichten"
-echo "(z.B. für Alarme). Das können Sie auch jederzeit später nachholen mit:"
-echo "  ./manage reconfig"
-echo
-./manage reconfig
+if [ "$UPDATE" -eq 0 ]; then
+  echo
+  echo "======================================================"
+  echo " Benachrichtigungen einrichten"
+  echo "======================================================"
+  echo "Sie können jetzt E-Mail- oder Telegram-Benachrichtigungen einrichten"
+  echo "(z.B. für Alarme). Das können Sie auch jederzeit später nachholen mit:"
+  echo "  ./manage reconfig"
+  echo
+  ./manage reconfig
+fi
 
 # --- Als Dienst einrichten ---------------------------------------------------
 
@@ -201,14 +262,20 @@ echo
 IP=$(hostname -I | awk '{print $1}')
 echo
 echo "======================================================"
-echo " Fertig! aquaPi läuft jetzt."
+if [ "$UPDATE" -eq 1 ]; then
+  echo " Fertig! aquaPi ist aktualisiert und läuft wieder."
+else
+  echo " Fertig! aquaPi läuft jetzt."
+fi
 echo "======================================================"
 echo
 echo " Öffnen Sie in Ihrem Webbrowser:"
 echo "   http://${IP}:5000"
 echo
-echo "${ADMIN_INFO}" | sed 's/^/ /'
-echo
+if [ -n "$ADMIN_INFO" ]; then
+  echo "${ADMIN_INFO}" | sed 's/^/ /'
+  echo
+fi
 echo " Eine ausführliche Anleitung finden Sie hier:"
 echo "   https://github.com/${REPO}/blob/main/INSTALLATION.de.md"
 echo "======================================================"

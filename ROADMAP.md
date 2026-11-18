@@ -35,6 +35,8 @@ fine, sort/dedupe later.
   driver ships untested on hardware otherwise.
 - [ ] README in both languages: `README.md` (English) plus a German
   version, linked to each other; `INSTALLATION` in both languages too.
+  `INSTALLATION.md` (English) done 2026-11-18, linked with
+  `INSTALLATION.de.md`; the German README is still open.
 - [ ] `install.sh` bilingual (English/German), language taken from
   `$LANG` with a way to override; this includes the prompts of
   `./manage reconfig` and `./manage init-admin`, German-only today.

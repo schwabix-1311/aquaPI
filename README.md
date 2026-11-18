@@ -50,7 +50,7 @@ on boot. On a Pi connected via WiFi it also sets up a watchdog that reloads
 the WiFi driver when the chip hangs, so the Pi becomes reachable again
 within minutes. The step-by-step guide is
 [INSTALLATION.md](INSTALLATION.md) ([deutsch](INSTALLATION.de.md)); the
-installer itself is German-only for now.
+installer asks for English or German first.
 
 Afterwards `./manage` in the install directory handles maintenance:
 `backup`, `list-backups`, `restore`, `reconfig` (alert channels) and
@@ -58,7 +58,7 @@ Afterwards `./manage` in the install directory handles maintenance:
 shows the address and the password of the initial `admin` account.
 
 To update to a newer release, run the installer again and choose
-"Aktualisieren" (update): configuration, users and backups are kept.
+"Update": configuration, users and backups are kept.
 
 ## Getting started (the beginner's way)
 
@@ -210,7 +210,7 @@ mapping found by hand.
 - A log / events page in the UI.
 - A system settings page in the UI (driver accounts, device blacklist).
 - Interrupt-driven inputs.
-- Documentation, more tests, more translations, an English installer.
+- Documentation, more tests, more translations.
 
 ## Running the automated tests
 

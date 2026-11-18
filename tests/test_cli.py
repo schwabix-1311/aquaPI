@@ -32,6 +32,14 @@ def runner():
     return CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def _german(monkeypatch):
+    """ init-admin/reconfig talk the user's language: the tests below
+        check the German texts, independent of this machine's locale
+    """
+    monkeypatch.setenv('AQUAPI_LANG', 'de')
+
+
 @pytest.fixture
 def instance_dir(tmp_path):
     """ a minimal, realistic instance/ dir: a wiring.sqlite with one real
@@ -517,3 +525,46 @@ def test_find_questdb_is_none_on_32_bit(tmp_path, monkeypatch):
     (d / 'questdb.sh').write_text('#!/bin/sh\n')
     monkeypatch.setattr(cli_module.platform, 'architecture', lambda: ('32bit', 'ELF'))
     assert cli_module._find_questdb(str(tmp_path)) is None
+
+
+# --- language of init-admin / reconfig -----------------------------------------
+
+@pytest.mark.parametrize('env, file, expected', [
+    ({'AQUAPI_LANG': 'en', 'LANG': 'de_DE.UTF-8'}, 'de', 'en'),   # override wins
+    ({'LANG': 'en_GB.UTF-8'}, 'de', 'de'),                         # saved choice beats locale
+    ({'LANG': 'de_AT.UTF-8'}, None, 'de'),
+    ({'LANG': 'en_GB.UTF-8'}, None, 'en'),                         # Raspberry Pi OS default
+    ({}, None, 'en'),
+])
+def test_language_detection(monkeypatch, tmp_path, env, file, expected):
+    for var in ('AQUAPI_LANG', 'LC_ALL', 'LC_MESSAGES', 'LANG'):
+        monkeypatch.delenv(var, raising=False)
+    for var, value in env.items():
+        monkeypatch.setenv(var, value)
+    if file:
+        (tmp_path / 'language').write_text(file + '\n')
+    assert cli_module._detect_lang(str(tmp_path)) == expected
+
+
+def test_init_admin_in_english(runner, tmp_path, monkeypatch):
+    monkeypatch.setenv('AQUAPI_LANG', 'en')
+    result = _invoke(runner, tmp_path / 'instance', ['init-admin'])
+    assert result.exit_code == 0
+    assert 'Your admin login' in result.output
+    assert 'Password:' in result.output
+
+
+def test_reconfig_in_english(runner, instance_dir, monkeypatch):
+    monkeypatch.setenv('AQUAPI_LANG', 'en')
+    result = _invoke(runner, instance_dir, ['reconfig'], input='n\nn\n')
+    assert result.exit_code == 0
+    assert 'Set up Email now? [y/N]' in result.output
+    assert 'No changes made.' in result.output
+
+
+def test_reconfig_german_accepts_j(runner, instance_dir):
+    stdin = 'j\nsmtp.example.com\nme@example.com\nsecret\nme@example.com\nyou@example.com\nn\n'
+    result = _invoke(runner, instance_dir, ['reconfig'], input=stdin)
+    assert result.exit_code == 0
+    assert 'Email jetzt einrichten? [j/N]' in result.output
+    assert db.get_notification_config(str(instance_dir / 'users.sqlite'), 'Email')

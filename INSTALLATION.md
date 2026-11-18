@@ -6,9 +6,6 @@ This guide is written for aquarium keepers, not computer professionals. You
 don't need any experience with Linux or programming - just a Raspberry Pi
 and the willingness to copy a command into a terminal window.
 
-The installer currently talks to you in German. This guide walks through
-each of its steps, so you know what it asks and what to answer.
-
 ## What you need
 
 - A Raspberry Pi Zero 2 W, 3, 4 or 5 (recommended) with the sensors and
@@ -59,8 +56,9 @@ curl -fsSL -o install.sh https://github.com/schwabix-1311/aquaPI/releases/latest
 bash install.sh
 ```
 
-From here on the installer guides you through the rest of the setup. It
-takes about 10-20 minutes in total (depending on your Raspberry Pi's
+The installer first asks for the language ("[d]eutsch / [e]nglish") -
+press `e` for English. From here on it guides you through the rest of the
+setup. It takes about 10-20 minutes in total (depending on your Raspberry Pi's
 internet speed).
 
 ## What happens during the installation
@@ -154,9 +152,9 @@ it gets many members), the group gets a new chat ID - then simply run
 
 For a new aquaPi version, simply run the installation again (the two lines
 from "Start the installation"). The installer detects the existing
-installation and asks - choose **[A] "Aktualisieren"** (update). Your settings,
+installation and asks - choose **[U] Update**. Your settings,
 users, notifications and backups are kept; before updating, the installer
-also creates a backup. Only [N] "Neu installieren" (reinstall) deletes
+also creates a backup. Only [R] Reinstall deletes
 everything.
 
 ## Help

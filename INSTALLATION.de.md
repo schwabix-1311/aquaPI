@@ -61,8 +61,9 @@ curl -fsSL -o install.sh https://github.com/schwabix-1311/aquaPI/releases/latest
 bash install.sh
 ```
 
-Das Installationsskript führt dich ab hier auf Deutsch durch den Rest der
-Einrichtung. Es dauert insgesamt etwa 10-20 Minuten (je nach Internet-
+Das Installationsskript fragt zuerst nach der Sprache ("[d]eutsch /
+[e]nglish") - drücke `d` für Deutsch. Ab hier führt es dich durch den Rest
+der Einrichtung. Es dauert insgesamt etwa 10-20 Minuten (je nach Internet-
 Geschwindigkeit deines Raspberry Pi).
 
 ## Was während der Installation passiert
@@ -162,10 +163,10 @@ dann `./manage reconfig` einfach noch einmal ausführen.
 
 Für eine neue aquaPi-Version führst du die Installation einfach erneut aus
 (die zwei Zeilen aus "Installation starten"). Das Skript erkennt die
-vorhandene Installation und fragt nach - wähle **"Aktualisieren"**. Deine
+vorhandene Installation und fragt nach - wähle **[A] Aktualisieren**. Deine
 Einstellungen, Benutzer, Benachrichtigungen und Sicherungen bleiben
 erhalten; vor dem Update legt das Skript zusätzlich eine Sicherung an.
-Nur "Neu installieren" löscht alles.
+Nur [N] Neu installieren löscht alles.
 
 ## Hilfe
 

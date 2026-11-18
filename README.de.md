@@ -49,7 +49,8 @@ und installiert aquaPi als Systemdienst, der beim Booten startet. Ist der Pi
 per WLAN verbunden, richtet es zusätzlich einen Watchdog ein, der den
 WLAN-Treiber neu lädt, wenn der Chip hängt - so ist der Pi nach wenigen
 Minuten wieder erreichbar. Die ausführliche Anleitung Schritt für Schritt
-steht in [INSTALLATION.de.md](INSTALLATION.de.md).
+steht in [INSTALLATION.de.md](INSTALLATION.de.md); das Skript fragt
+zuerst, ob es Deutsch oder Englisch sprechen soll.
 
 Danach erledigt `./manage` im Installationsverzeichnis die Wartung:
 `backup`, `list-backups`, `restore`, `reconfig` (Alarmkanäle) und
@@ -227,8 +228,7 @@ man von Hand herausfinden.
 - Eine Seite für Systemeinstellungen in der Oberfläche (Treiberkonten,
   Geräte-Sperrliste).
 - Interruptgesteuerte Eingänge.
-- Dokumentation, mehr Tests, mehr Übersetzungen, ein englisches
-  Installationsskript.
+- Dokumentation, mehr Tests, mehr Übersetzungen.
 
 ## Feedback und Hilfe
 

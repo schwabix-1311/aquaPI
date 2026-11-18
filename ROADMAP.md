@@ -38,9 +38,12 @@ fine, sort/dedupe later.
   Done 2026-11-18: `README.de.md` and `INSTALLATION.md`, each pair
   linked. The German README translates the release README; the
   developer sections on `dev_m` stay English-only.
-- [ ] `install.sh` bilingual (English/German), language taken from
+- [x] `install.sh` bilingual (English/German), language taken from
   `$LANG` with a way to override; this includes the prompts of
-  `./manage reconfig` and `./manage init-admin`, German-only today.
+  `./manage reconfig` and `./manage init-admin`. Done 2026-11-18: asks
+  first with `$LANG` as default (Raspberry Pi OS ships en_GB, SSH often
+  drops `$LANG`), `--lang de|en`/`AQUAPI_LANG` skip the question, the
+  choice is saved in `instance/language` for later `./manage` runs.
 - [x] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
   against what the installer really does. Done 2026-11-17 (217b854 and
   follow-up): update mode in `install.sh` (a rerun no longer deletes

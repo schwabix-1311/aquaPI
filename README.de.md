@@ -41,6 +41,11 @@ Absolutes Minimum ist ein Pi Zero W und/oder ein 32-bit Raspberry Pi OS:
 Die Regelung funktioniert genauso, aber der Verlauf für die Diagramme wird
 nur im Arbeitsspeicher gehalten und beginnt nach jedem Neustart leer.
 
+Der **Raspberry Pi 5** wird noch nicht vollständig unterstützt: Direkt an
+GPIO-Pins angeschlossene Ein- und Ausgänge (z.B. Relais) und Hardware-PWM
+funktionieren dort nicht. Temperatursensoren (1-Wire), I²C-Chips (ADS1115,
+PCA9685), der TC420, Shelly-Geräte und Benachrichtigungen schon.
+
 Das Skript lädt das aktuelle Release herunter, richtet Python, QuestDB und
 alle Abhängigkeiten ein, fragt, welche Anschlüsse des Pi eingeschaltet
 werden sollen (1-Wire für DS18B20-Sensoren, I²C für einen ADS1115,

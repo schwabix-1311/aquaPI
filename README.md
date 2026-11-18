@@ -38,6 +38,11 @@ The absolute minimum is a Pi Zero W and/or a 32-bit Raspberry Pi OS: control
 works the same, but chart history is kept in memory only and starts empty
 after every restart.
 
+The **Raspberry Pi 5** is not fully supported yet: outputs and inputs wired
+directly to GPIO pins (e.g. relays) and hardware PWM don't work there.
+Temperature sensors (1-Wire), I²C chips (ADS1115, PCA9685), the TC420,
+Shelly devices and notifications do.
+
 The installer downloads the current release, sets up Python, QuestDB and all
 dependencies, asks which Pi interfaces to switch on (1-Wire for DS18B20
 sensors, I²C for an ADS1115, hardware PWM), offers to configure

@@ -14,8 +14,8 @@ dimming and more, for a modest price.
 
 Some experience with hardware wiring helps. If electronics are not your thing,
 aquaPi can instead drive a common TC420 LED controller as its dimmer, or the
-RoboTank / Leviathan boards sold in the U.S. (a few of their sub-functions are
-not supported yet).
+Robo-Tank / Leviathan boards sold in North America - see
+[Switching from Robo-Tank / Leviathan](#switching-from-robo-tank--leviathan).
 
 **Under the hood** — for anyone who wants to understand it: the
 backend is Python / Flask, the frontend is Vuetify (Vue 3). The Pi runs
@@ -121,6 +121,46 @@ Give it internet access and you gain automatic clock correction and the
 ability to send alerts and reminders to email or Telegram — and nothing else.
 No hidden data traffic, no telemetry, no account anywhere.
 
+## Switching from Robo-Tank / Leviathan
+
+aquaPi runs on a Robo-Tank v3 controller as it is: keep your modules,
+cables and power bars, install aquaPi instead of reef-pi, and pick the
+ports in the Wiring editor. The board's peripherals map to these ports:
+
+```
+Robo-Tank v3              aquaPi port
+DC port, RJ45 pins 2..8   PCA9685 #1 CH9, CH6, CH7, CH4, CH3, CH2, CH1  (as "... PWM")
+LED port, RJ45 pins 2..8  PCA9685 #1 CH15, CH14, CH13, CH12, CH11, CH10, CH8  (as "... PWM")
+Feeder                    PCA9685 #1 CH0 out
+Power bar 1, outlet 1..8  GPIO 21, 20, 16, 6, 12, 13, 19, 26 out
+Power bar 2, outlet 1..8  GPIO 5, 11, 9, 10, 24, 25, 8, 7 out
+Sensor 1..6               GPIO 14, 15, 17, 18, 27, 23 in
+Temp 1                    DS1820 sensors on GPIO 4 (1-Wire)
+Temp 2                    DS1820 sensors on GPIO 22 (1-Wire, see below)
+```
+
+Each PCA9685 channel is offered twice: as a dimmer ("... PWM") and as an
+on/off output ("... out"); using one hides the other.
+
+A few settings the installer doesn't make for you:
+
+1. Answer **no** to the installer's hardware-PWM question: on a Robo-Tank,
+   GPIO 18 is a sensor input and GPIO 19 a power-bar outlet.
+2. **Temp 2** needs a second 1-Wire bus: add the line
+   `dtoverlay=w1-gpio,gpiopin=22` to `/boot/firmware/config.txt` and
+   reboot. aquaPi then lists those sensors too, but doesn't know that
+   GPIO 22 is taken - don't use GPIO 22 for anything else.
+3. **Sensors 1 and 2** sit on the serial pins (GPIO 14/15): in
+   `sudo raspi-config` -> Interface Options -> Serial Port, answer "No"
+   to the login shell and "No" to the serial hardware, then reboot.
+4. Keep SPI switched off (the default): power bar 2 uses its pins.
+
+Not supported yet: Robo-Tank's isolated pH circuit, and board labels in
+the port picker (it shows "PCA9685 #1 CH9 PWM", not "DC 1"). Leviathan
+boards have no published pinout; their outlets are plain GPIOs and their
+lights PCA9685 channels, so they should work the same way, with the
+mapping found by hand.
+
 ## What works today
 
 - **Configuration through the UI.** Predefined templates drop in complete
@@ -141,7 +181,8 @@ No hidden data traffic, no telemetry, no account anywhere.
   startup notification if a node fails to load. Messages are tagged with the
   sending host.
 - **Drivers**: GPIO in/out, on-board PWM, TC420, DS18B20 (1-Wire),
-  ADS1115 ADC (pH probe), and WiFi Shelly devices — relays, dimmers and
+  ADS1115 ADC (pH probe), PCA9685 PWM expander (each channel as dimmer or
+  on/off output), and WiFi Shelly devices — relays, dimmers and
   inputs set to switch mode (momentary buttons are not supported yet),
   auto-discovered via mDNS, Gen1 and Gen2.
 - **Users & access** with viewer / operator / admin roles, auto-generated
@@ -158,7 +199,7 @@ No hidden data traffic, no telemetry, no account anywhere.
 ## What's next
 
 - More drivers: additional I²C chips, further WiFi devices, a Shelly
-  temperature add-on, a PCA9685 PWM expander.
+  temperature add-on.
 - A log / events page in the UI.
 - A system settings page in the UI (driver accounts, device blacklist).
 - Interrupt-driven inputs.

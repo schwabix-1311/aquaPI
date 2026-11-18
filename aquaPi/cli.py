@@ -217,10 +217,10 @@ def init_admin(ctx):
         click.echo('Es gibt bereits Benutzerkonten - es wurde kein neues Admin-Konto angelegt.')
         return
     username, password = created
-    click.echo('Ihr Admin-Zugang für die aquaPi-Oberfläche:')
+    click.echo('Dein Admin-Zugang für die aquaPi-Oberfläche:')
     click.echo(f'   Benutzername: {username}')
     click.echo(f'   Passwort:     {password}')
-    click.echo('Bitte notieren Sie das Passwort und ändern Sie es nach der ersten Anmeldung')
+    click.echo('Bitte notiere das Passwort und ändere es nach der ersten Anmeldung')
     click.echo('(Menü "Benutzer"). Es wird nicht noch einmal angezeigt.')
 
 
@@ -341,12 +341,12 @@ def reconfig(ctx):
         except subprocess.CalledProcessError:
             click.secho(
                 f'{_SERVICE_NAME}.service konnte nicht automatisch neu gestartet werden - '
-                f'starten Sie ihn manuell neu (`sudo systemctl restart {_SERVICE_NAME}`).',
+                f'starte ihn manuell neu (`sudo systemctl restart {_SERVICE_NAME}`).',
                 fg='yellow')
         else:
             click.echo(f'{_SERVICE_NAME}.service neu gestartet.')
     else:
-        click.echo('\nStarten Sie aquaPi neu, damit die neue Benachrichtigungs-Konfiguration '
+        click.echo('\nStarte aquaPi neu, damit die neue Benachrichtigungs-Konfiguration '
                   'wirksam wird.')
 
 

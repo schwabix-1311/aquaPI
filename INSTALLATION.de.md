@@ -84,7 +84,8 @@ Geschwindigkeit Ihres Raspberry Pi).
   ohne Unterbrechung weiter.
 - Sie werden gefragt, ob Sie **Benachrichtigungen per E-Mail oder Telegram**
   einrichten möchten (z.B. für Warnungen, wenn etwas nicht stimmt). Das
-  können Sie auch überspringen und später jederzeit nachholen.
+  können Sie auch überspringen und später jederzeit nachholen, siehe
+  "Benachrichtigungen einrichten".
 - Am Ende wird aquaPi als **Dienst** eingerichtet, der automatisch startet -
   auch nach einem Neustart Ihres Raspberry Pi.
 
@@ -121,6 +122,38 @@ Direkt darunter zeigt das Skript Ihren **Admin-Zugang** an (Benutzername
 es wird nur dieses eine Mal angezeigt. Ohne Anmeldung können Sie die
 Oberfläche nur ansehen; zum Einrichten melden Sie sich oben rechts an und
 ändern das Passwort danach im Menü "Benutzer".
+
+## Benachrichtigungen einrichten
+
+E-Mail und Telegram richten Sie während der Installation oder später
+jederzeit mit diesem Befehl ein (im Terminal, verbunden mit dem Raspberry
+Pi):
+
+```
+cd ~/aquaPI && ./manage reconfig
+```
+
+**E-Mail:** Sie brauchen die Zugangsdaten Ihres E-Mail-Postfachs
+(SMTP-Server, Benutzername, Passwort) - bei vielen Anbietern ein eigenes
+"App-Passwort" statt Ihres normalen Passworts.
+
+**Telegram:** aquaPi schreibt über einen eigenen Telegram-Bot.
+
+1. Bot anlegen: In Telegram mit **@BotFather** chatten, `/newbot` senden
+   und einen Namen wählen. BotFather antwortet mit einem **Bot-Token**
+   (z.B. `123456789:AA...`) - den gibt `./manage reconfig` als Erstes ein.
+2. Chat festlegen: `./manage reconfig` zeigt dann den Namen Ihres Bots an
+   und bittet Sie, eine Nachricht zu senden:
+   - in eine **Gruppe** (z.B. mit der Familie): den Bot zur Gruppe
+     hinzufügen und dort `/aquapi@<Name Ihres Bots>` senden,
+   - oder **direkt an Sie**: den Bot in Telegram öffnen und `aquaPi`
+     senden.
+3. Enter drücken - aquaPi findet den Chat und fragt, ob es ihn verwenden
+   soll.
+
+Wird eine Gruppe später von Telegram in eine "Supergruppe" umgewandelt
+(passiert z.B. bei vielen Mitgliedern), bekommt sie eine neue Chat-ID -
+dann `./manage reconfig` einfach noch einmal ausführen.
 
 ## aquaPi aktualisieren
 

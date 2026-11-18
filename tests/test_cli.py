@@ -9,10 +9,12 @@ import subprocess
 import sqlite3
 
 import pytest
+import requests
 from click.testing import CliRunner
 from werkzeug.security import check_password_hash
 
 import aquaPi.cli as cli_module
+import aquaPi.driver.DriverText as dt_mod
 from aquaPi import db
 from aquaPi.cli import cli
 from aquaPi.driver import create_io_registry
@@ -266,7 +268,77 @@ def test_reconfig_configures_email_and_skips_telegram(runner, instance_dir):
     assert db.get_notification_config(users_db, 'Telegram') is None
 
 
-def test_reconfig_blank_telegram_chat_id_is_omitted_not_stored_empty(runner, instance_dir):
+class _FakeTelegram:
+    """ stands in for requests.post to api.telegram.org: a known token,
+        the bot's pending updates, or no connection at all
+    """
+    def __init__(self, updates=(), offline=False):
+        self.updates = list(updates)
+        self.offline = offline
+
+    def __call__(self, url, json=None, timeout=None):
+        if self.offline:
+            raise requests.exceptions.ConnectionError('offline')
+        ok = '/bot12345:token/' in url
+        result = {'username': 'aqua_bot'} if url.endswith('getMe') else self.updates
+        return _FakeResponse({'ok': ok, 'result': result if ok else None})
+
+
+class _FakeResponse:
+    def __init__(self, data):
+        self._data = data
+
+    def json(self):
+        return self._data
+
+
+def _group_update(text, chat_id=-1001, title='Aquarium'):
+    return {'update_id': 1, 'message': {'text': text,
+            'chat': {'id': chat_id, 'title': title, 'type': 'supergroup'}}}
+
+
+@pytest.fixture
+def telegram(monkeypatch):
+    fake = _FakeTelegram()
+    monkeypatch.setattr(dt_mod.requests, 'post', fake)
+    return fake
+
+
+def test_reconfig_telegram_finds_and_saves_the_chat(runner, instance_dir, telegram):
+    telegram.updates = [_group_update('/aquapi@aqua_bot')]
+    # token, Enter after sending, accept the found chat
+    result = _invoke(runner, instance_dir, ['reconfig'], input='n\ny\n12345:token\n\n\n')
+    assert result.exit_code == 0
+    assert '/aquapi@aqua_bot' in result.output
+    telegram_cfg = db.get_notification_config(str(instance_dir / 'users.sqlite'), 'Telegram')
+    assert telegram_cfg == [{'bot_token': '12345:token', 'chat_id': -1001,
+                             'chat_name': 'Aquarium'}]
+
+
+def test_reconfig_telegram_asks_again_for_an_invalid_token(runner, instance_dir, telegram):
+    telegram.updates = [_group_update('aquaPi')]
+    result = _invoke(runner, instance_dir, ['reconfig'],
+                     input='n\ny\nwrong\n12345:token\n\n\n')
+    assert result.exit_code == 0
+    assert 'kennt diesen Bot-Token nicht' in result.output
+    telegram_cfg = db.get_notification_config(str(instance_dir / 'users.sqlite'), 'Telegram')
+    assert telegram_cfg[0]['bot_token'] == '12345:token'
+    assert telegram_cfg[0]['chat_id'] == -1001
+
+
+def test_reconfig_telegram_no_message_found_falls_back_to_manual(runner, instance_dir, telegram):
+    # token, Enter, nothing found -> no retry, then chat name and a chat id
+    stdin = 'n\ny\n12345:token\n\nn\nMy Chat\n-42\n'
+    result = _invoke(runner, instance_dir, ['reconfig'], input=stdin)
+    assert result.exit_code == 0
+    assert 'Keine Nachricht mit "aquaPi" gefunden.' in result.output
+    telegram_cfg = db.get_notification_config(str(instance_dir / 'users.sqlite'), 'Telegram')
+    assert telegram_cfg == [{'bot_token': '12345:token', 'chat_name': 'My Chat',
+                             'chat_id': '-42'}]
+
+
+def test_reconfig_blank_telegram_chat_id_is_omitted_not_stored_empty(runner, instance_dir, telegram):
+    telegram.offline = True
     stdin = 'n\ny\n12345:token\nMy Chat\n\n'
     result = _invoke(runner, instance_dir, ['reconfig'], input=stdin)
     assert result.exit_code == 0
@@ -316,7 +388,9 @@ def test_reconfig_no_restart_attempted_when_nothing_changed_even_if_service_acti
     assert calls == []  # no systemctl call at all - nothing to take effect
 
 
-def test_reconfig_warns_but_does_not_fail_if_restart_itself_fails(runner, instance_dir, monkeypatch):
+def test_reconfig_warns_but_does_not_fail_if_restart_itself_fails(
+        runner, instance_dir, monkeypatch, telegram):
+    telegram.offline = True
     monkeypatch.setattr(cli_module, '_systemd_service_active', lambda: True)
     monkeypatch.setattr(cli_module.subprocess, 'run', _fake_run_recorder([], fail_on='restart'))
 

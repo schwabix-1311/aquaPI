@@ -8,7 +8,7 @@
 #   curl -fsSL -o install.sh https://github.com/schwabix-1311/aquaPI/releases/latest/download/install.sh
 #   bash install.sh
 #
-# Eine ausführliche, bebilderte Anleitung finden Sie in INSTALLATION.de.md
+# Eine ausführliche, bebilderte Anleitung findest du in INSTALLATION.de.md
 # (https://github.com/schwabix-1311/aquaPI/blob/main/INSTALLATION.de.md).
 
 set -euo pipefail
@@ -25,7 +25,7 @@ echo
 
 if ! grep -qi debian /usr/lib/os-release 2>/dev/null; then
   echo "Hinweis: Dieses Skript ist für Raspberry Pi OS (bzw. andere"
-  echo "Debian-basierte Systeme) gedacht. Ihr System scheint ein anderes zu sein."
+  echo "Debian-basierte Systeme) gedacht. Dein System scheint ein anderes zu sein."
   read -r -p "Trotzdem fortfahren? [j/N] " antwort
   case "$antwort" in
     [jJ]*) ;;
@@ -36,7 +36,7 @@ fi
 for cmd in curl tar python3; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "FEHLER: '$cmd' wird benötigt, ist aber nicht installiert."
-    echo "Bitte installieren Sie es (z.B. mit 'sudo apt-get install $cmd') und starten Sie dieses Skript erneut."
+    echo "Bitte installiere es (z.B. mit 'sudo apt-get install $cmd') und starte dieses Skript erneut."
     exit 1
   fi
 done
@@ -51,7 +51,7 @@ if [ "$(getconf LONG_BIT)" != "64" ]; then
 fi
 if ! grep -q '^VERSION_CODENAME=bookworm' /etc/os-release 2>/dev/null; then
   echo
-  echo "Hinweis: aquaPi ist mit Raspberry Pi OS 'Bookworm' getestet. Ihr System"
+  echo "Hinweis: aquaPi ist mit Raspberry Pi OS 'Bookworm' getestet. Dein System"
   echo "ist eine andere Version - die Installation kann fehlschlagen."
   read -r -p "Trotzdem fortfahren? [j/N] " antwort
   case "$antwort" in
@@ -69,13 +69,13 @@ UPDATE=0
 if [ -d "$INSTALL_DIR/instance" ]; then
   echo "In $INSTALL_DIR ist aquaPi bereits installiert."
   echo
-  echo "  [A] Aktualisieren - Ihre Einstellungen, Benutzer und Sicherungen"
+  echo "  [A] Aktualisieren - deine Einstellungen, Benutzer und Sicherungen"
   echo "      bleiben erhalten (empfohlen)"
-  echo "  [N] Neu installieren - löscht ALLES, auch Ihre Einstellungen und"
+  echo "  [N] Neu installieren - löscht ALLES, auch deine Einstellungen und"
   echo "      Sicherungen"
   echo "  [Q] Abbrechen"
   echo
-  read -r -p "Ihre Wahl [A/n/q] " antwort
+  read -r -p "Deine Wahl [A/n/q] " antwort
   case "$antwort" in
     [nN]*)
       read -r -p "Wirklich alles löschen, auch alle Sicherungen? [j/N] " antwort
@@ -109,7 +109,7 @@ curl -fsSL -o "$TMP_ARCHIVE" \
 
 if [ "$UPDATE" -eq 1 ]; then
   echo
-  echo "Sichere Ihre Einstellungen und stoppe aquaPi für das Update ..."
+  echo "Sichere deine Einstellungen und stoppe aquaPi für das Update ..."
   (cd "$INSTALL_DIR" && ./manage backup) \
     || echo "Hinweis: Die Sicherung vor dem Update ist fehlgeschlagen - die tägliche Sicherung in instance/backups bleibt erhalten."
   sudo systemctl stop aquapi 2>/dev/null || true
@@ -135,8 +135,8 @@ echo "Falls dabei 'CR to continue' erscheint: einfach die Eingabetaste (Enter) d
 # --- TC420-LED-Controller vorbereiten (schadet nicht, falls nicht vorhanden) -
 
 echo
-echo "Bereite den optionalen TC420-LED-Controller vor (überspringen Sie das"
-echo "einfach gedanklich, falls Sie keinen besitzen - es schadet nichts)."
+echo "Bereite den optionalen TC420-LED-Controller vor (überspring das"
+echo "einfach gedanklich, falls du keinen besitzt - es schadet nichts)."
 sudo cp aquaPi/driver/tc420/etc/udev/rules.d/99-tc420.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 sudo usermod -aG plugdev "$(whoami)"
@@ -239,10 +239,10 @@ if [ "$UPDATE" -eq 0 ]; then
   echo "======================================================"
   echo " Benachrichtigungen einrichten"
   echo "======================================================"
-  echo "Sie können jetzt E-Mail- oder Telegram-Benachrichtigungen einrichten"
-  echo "(z.B. für Alarme). Das können Sie auch jederzeit später nachholen mit:"
+  echo "Du kannst jetzt E-Mail- oder Telegram-Benachrichtigungen einrichten"
+  echo "(z.B. für Alarme). Das kannst du auch jederzeit später nachholen mit:"
   echo "  ./manage reconfig"
-  echo "Für Telegram brauchen Sie einen Bot-Token von @BotFather, siehe"
+  echo "Für Telegram brauchst du einen Bot-Token von @BotFather, siehe"
   echo "\"Benachrichtigungen einrichten\" in INSTALLATION.de.md."
   echo
   ./manage reconfig
@@ -271,24 +271,24 @@ else
 fi
 echo "======================================================"
 echo
-echo " Öffnen Sie in Ihrem Webbrowser:"
+echo " Öffne in deinem Webbrowser:"
 echo "   http://${IP}:5000"
 echo
 if [ -n "$ADMIN_INFO" ]; then
   echo "${ADMIN_INFO}" | sed 's/^/ /'
   echo
 fi
-echo " Eine ausführliche Anleitung finden Sie hier:"
+echo " Eine ausführliche Anleitung findest du hier:"
 echo "   https://github.com/${REPO}/blob/main/INSTALLATION.de.md"
 echo "======================================================"
 
 if [ "$NEED_REBOOT" -eq 1 ]; then
   echo
   echo "Die neu eingeschalteten Hardware-Anschlüsse sind erst nach einem"
-  echo "Neustart aktiv. Bitte notieren Sie vorher Ihr Passwort (siehe oben)."
+  echo "Neustart aktiv. Bitte notiere vorher dein Passwort (siehe oben)."
   if frage_ja "Raspberry Pi jetzt neu starten?"; then
     sudo reboot
   else
-    echo "Bitte starten Sie den Raspberry Pi später neu: sudo reboot"
+    echo "Bitte starte den Raspberry Pi später neu: sudo reboot"
   fi
 fi

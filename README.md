@@ -1,5 +1,7 @@
 # aquaPi
 
+*Deutsche Version: [README.de.md](README.de.md)*
+
 ![aquaPi dashboard: charts for temperatures, lighting and pH, plus live tiles](docs/images/dashboard.png)
 
 A fish-tank controller for the Raspberry Pi.

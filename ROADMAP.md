@@ -33,10 +33,11 @@ fine, sort/dedupe later.
 - [ ] PCA9685 driver tested on a real breakout (dim 0/1/50/100 %, on/off,
   PWM/out exclusivity, restart) - required before the tag, since the
   driver ships untested on hardware otherwise.
-- [ ] README in both languages: `README.md` (English) plus a German
+- [x] README in both languages: `README.md` (English) plus a German
   version, linked to each other; `INSTALLATION` in both languages too.
-  `INSTALLATION.md` (English) done 2026-11-18, linked with
-  `INSTALLATION.de.md`; the German README is still open.
+  Done 2026-11-18: `README.de.md` and `INSTALLATION.md`, each pair
+  linked. The German README translates the release README; the
+  developer sections on `dev_m` stay English-only.
 - [ ] `install.sh` bilingual (English/German), language taken from
   `$LANG` with a way to override; this includes the prompts of
   `./manage reconfig` and `./manage init-admin`, German-only today.

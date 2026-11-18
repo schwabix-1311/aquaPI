@@ -522,10 +522,20 @@ dimmer, Email/Telegram, eISCP (experimental).
 - Integrations: an MQTT bridge is the highest-leverage single addition;
   Home Assistant REST / Kasa / Tuya for plugs beyond Shelly; Modbus.
 
-- GPIO library: DriverGPIO uses RPi.GPIO, which doesn't work on a
-  Pi 5 (Bookworm offers `rpi-lgpio` as a drop-in replacement). Either
-  switch to Adafruit Blinka's `digitalio` (already a dependency for I²C)
-  or to lgpio/gpiozero. DriverPWM still needs a way to read a pin's
-  current function (today `RPi.GPIO.gpio_function`) to find the PWM pins.
+- **Raspberry Pi 5 support** (**Priority: high**, v1.1; v1.0 docs say
+  "not fully supported yet", decision 2026-11-18). The Pi 5's GPIOs sit
+  on the RP1 I/O chip, which RPi.GPIO 0.7.1 (latest) can't drive.
+  - DriverGPIO: `GPIO.setup()` fails there, so GPIO in/out ports don't
+    load (reported at startup, not silent). Switch to lgpio /
+    `rpi-lgpio` (drop-in) or Adafruit Blinka's `digitalio` (already a
+    dependency for I²C) - lgpio also works on older Pis.
+  - DriverPWM: finds PWM pins via `RPi.GPIO.gpio_function()` (fails on
+    the Pi 5, caught - no PWM ports) and hardcodes
+    `/sys/class/pwm/pwmchip0`; the Pi 5's PWM is on RP1 with another
+    chip number. `install.sh`'s `dtoverlay=pwm-2chan` likely needs a
+    Pi 5 variant too.
+  - Expected fine (unverified): 1-Wire (w1-gpio + device-tree pin
+    detection), I²C via Blinka (ADS1115, PCA9685), TC420, Shelly, text.
+  - Needs a real Pi 5 to test; then put it back in the docs' list.
 
 <!-- add items below as they come up -->

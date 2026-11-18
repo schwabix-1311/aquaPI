@@ -9,8 +9,13 @@ kopieren.
 
 ## Was du brauchst
 
-- Einen Raspberry Pi Zero 2 W, 3, 4 oder 5 (empfohlen) mit angeschlossenen
+- Einen Raspberry Pi Zero 2 W, 3 oder 4 (empfohlen) mit angeschlossenen
   Sensoren/Aktoren für dein Aquarium.
+- **Raspberry Pi 5:** noch nicht vollständig unterstützt - direkt an
+  GPIO-Pins angeschlossene Ein- und Ausgänge (z.B. Relais) und
+  Hardware-PWM funktionieren dort nicht. Temperatursensoren (1-Wire),
+  I²C-Chips (ADS1115, PCA9685), der TC420, Shelly-Geräte und
+  Benachrichtigungen schon.
 - Eine microSD-Karte mit **Raspberry Pi OS "Bookworm", 64-bit** (empfohlen) -
   die Variante "Lite" (ohne Bildschirm-Oberfläche) genügt. aquaPi ist mit
   dieser Version getestet; mit der neueren Version "Trixie" funktioniert

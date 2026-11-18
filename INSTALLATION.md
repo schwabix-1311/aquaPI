@@ -8,8 +8,12 @@ and the willingness to copy a command into a terminal window.
 
 ## What you need
 
-- A Raspberry Pi Zero 2 W, 3, 4 or 5 (recommended) with the sensors and
+- A Raspberry Pi Zero 2 W, 3 or 4 (recommended) with the sensors and
   actuators for your aquarium connected.
+- **Raspberry Pi 5:** not fully supported yet - outputs and inputs wired
+  directly to GPIO pins (e.g. relays) and hardware PWM don't work there.
+  Temperature sensors (1-Wire), I²C chips (ADS1115, PCA9685), the TC420,
+  Shelly devices and notifications do.
 - A microSD card with **Raspberry Pi OS "Bookworm", 64-bit** (recommended) -
   the "Lite" variant (without desktop) is enough. aquaPi is tested with
   this version; the installation does not work yet with the newer

@@ -5,10 +5,7 @@ import statistics
 
 # latest Blinka supports x86 LinuxPC, but we don't at least not chips on I²C
 from adafruit_platformdetect import Detector  # type: ignore[import-untyped]
-if not Detector().board.id == 'GENERIC_LINUX_PC':
-    SIMULATED = False
-else:
-    SIMULATED = True
+SIMULATED: bool = Detector().board.id == 'GENERIC_LINUX_PC'
 
 import board  # type: ignore[import-untyped]
 import busio  # type: ignore[import-untyped]
@@ -17,7 +14,7 @@ import busio  # type: ignore[import-untyped]
 from adafruit_ads1x15.ads1115 import ADS1115
 from adafruit_ads1x15.analog_in import AnalogIn
 
-from .base import (AInDriver, IoPort, PortFunc)
+from .base import (AInDriver, IoPort, PortFunc, gpio_deps)
 
 
 log = logging.getLogger('driver.DriverADC')
@@ -29,32 +26,8 @@ log = logging.getLogger('driver.DriverADC')
 adc_count: int = 0
 
 
-def _scan_i2c(i2c, addresses):
-    """Yield all devices that respond on the given addresses."""
-    for adr in addresses:
-        try:
-            yield adr, ADS1115(i2c, address=adr)
-        except Exception:
-            continue
-
-
-def _detect_ads111x(ads):
-    try:
-        return DriverADS1115.is_ads111x(ads)
-    except Exception:
-        return False
-
-
-def _create_port(adr, adc_index: int, ch: int) -> IoPort:
-    deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id,
-            'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
-    cfg = {"adr": adr, "cnt": adc_index, "in": ch}
-    return IoPort(PortFunc.Ain, DriverADS1115, cfg, deps)
-
-
 class DriverADS1115(AInDriver):
     """ A driver for TI's 16bit ADC ADS1113/4/5, and 12bit ADS1013/4/5
-        # back to defaults to enable our auto-datect
         Chip variants:
             ADS1x13 1 channel, no comparator
             ADS1x14 1 channel, gain adjustable
@@ -80,12 +53,19 @@ class DriverADS1115(AInDriver):
                     bytearray([2]), buf, in_start=4, in_end=6)
                 device.write_then_readinto(
                     bytearray([3]), buf, in_start=6, in_end=8)
-                # default is: in 0-1 differential, gain 2, 1 shot, 128SPS,
-                # comp low, no latch, disable comp
-                if buf[2:8] == bytearray.fromhex('8583 8000 7FFF'):
-                    return True
-                # TODO: DBG REMOVE_ME!  this ignores OS|MUX|PGA|MODE
-                if buf[3:8] == bytearray.fromhex('83 8000 7FFF'):
+                # power-on default is config 0x8583 (OS idle, MUX AIN0-1,
+                # PGA ±2.048V, single-shot, 128SPS, comparator off) and
+                # thresholds 0x8000/0x7FFF. _do_close() restores that, but
+                # an unclean exit leaves aquaPi's last read config, which
+                # (Pi reboots don't power-cycle the chip) must not lose the
+                # ADC: so accept any OS and PGA, plus single-ended MUX
+                # (1xx). Anything aquaPi never writes - differential MUX
+                # 001..011, continuous mode, other data rate/comparator,
+                # changed thresholds - means another program is using the
+                # chip: reject it.
+                mux = (buf[2] >> 4) & 0x07
+                if (mux in (0, 4, 5, 6, 7) and buf[2] & 0x01
+                        and buf[3:8] == bytearray.fromhex('83 8000 7FFF')):
                     return True
                 log.debug('I²C device @ 0x%02X returns 0x%s 0x%s 0x%s' +
                           ' from reg 1..3, probably a different device,' +
@@ -95,7 +75,6 @@ class DriverADS1115(AInDriver):
                           bytes(buf[4:6]).hex(),
                           bytes(buf[6:8]).hex())
         except Exception as ex:
-            # pass  # whatever it is, ignore device @ this adr!
             log.debug('Exception %r', ex)
         return False
 
@@ -107,43 +86,39 @@ class DriverADS1115(AInDriver):
             return DriverADS1115._simulated_ports()
 
         i2c = busio.I2C(board.SCL, board.SDA)
+        deps = gpio_deps(board.SCL.id, board.SDA.id)
         ports = {}
 
         log.info('Scanning I²C bus for ADS1x13/4/5 ...')
         # autodetect of I²C is undefined and risky, as some chips may react on
         # read as if it was a write! We're on a pretty well defined HW though.
-        for adr, ads in _scan_i2c(i2c, DriverADS1115.ADDRESSES):
+        for adr in DriverADS1115.ADDRESSES:
             try:
-                if _detect_ads111x(ads):
-                    adc_count += 1
-                    for ch in range(4):
-                        name = f"ADC #{adc_count} in {ch}"
-                        ports[name] = _create_port(adr, adc_count, ch)
-                else:
-                    log.info('I²C device at 0x%02X seems not to be an ADS1x15,'
-                             'probably a different device, or already in use.', adr)
-            except ValueError as ex:
-                log.verbose(ex)
-            except Exception as ex:
-                # pass  # whatever it is, ignore this device
-                log.debug('%r', ex)
-
+                ads = ADS1115(i2c, address=adr)
+            except Exception:
+                continue        # nothing answers at this address
+            if DriverADS1115.is_ads111x(ads):
+                adc_count += 1
+                for ch in range(4):
+                    ports[f'ADC #{adc_count} in {ch}'] = IoPort(
+                        PortFunc.Ain, DriverADS1115,
+                        {'adr': adr, 'cnt': adc_count, 'in': ch}, deps)
+            else:
+                log.info('I²C device at 0x%02X seems not to be an ADS1x15, '
+                         'probably a different device, or already in use.', adr)
         return ports
 
     @staticmethod
-    def _simulated_ports():
+    def _simulated_ports() -> dict[str, IoPort]:
         global adc_count  # pylint: disable=W0603
 
         log.info('Faking I²C - ADS1x13/4/5 ...')
         adc_count += 1
-        deps = ['GPIO 2 in', 'GPIO 2 out']
-        base = f"ADC #{adc_count} in "
         return {
-            base + str(i):
+            f'ADC #{adc_count} in {ch}':
             IoPort(PortFunc.Ain, AInDriver,
-                   {"cnt": adc_count, "in": i, "fake": True},
-                   deps)
-            for i in range(4)
+                   {'cnt': adc_count, 'in': ch, 'fake': True}, gpio_deps(2))
+            for ch in range(4)
         }
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
@@ -152,8 +127,7 @@ class DriverADS1115(AInDriver):
         adr = int(cfg['adr'])
         inp = int(cfg['in'])
         self.gain: float = float(cfg.get('gain', -16))
-        self.cfg: dict[str, str] = cfg
-        self.name: str = f'ADC #{cnt} (ADS1115 @0x{adr:02X} in {inp}'
+        self.name = f'ADC #{cnt} (ADS1115 @0x{adr:02X} in {inp})'
 
         i2c = busio.I2C(board.SCL, board.SDA)
         self._ads = ADS1115(i2c, address=adr, gain=abs(self.gain))
@@ -176,11 +150,9 @@ class DriverADS1115(AInDriver):
         if not self._median_filter:
             self._val = self._ana_in.voltage
         else:
-            median = [self._ana_in.voltage,
-                      self._ana_in.voltage,
-                      self._ana_in.voltage]
-            log.debug('median %f %f %f', median[0], median[1], median[2])
-            self._val = statistics.median(median)
+            samples = [self._ana_in.voltage for _ in range(3)]
+            log.debug('median of %r', samples)
+            self._val = statistics.median(samples)
 
         log.verbose('%s = %f', self.name, self._val)
         return self._val

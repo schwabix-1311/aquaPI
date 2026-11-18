@@ -3,46 +3,31 @@
 import logging
 import random
 
-#TODO: replace all with Adafruit Ports, keep unique GPIO.gpio_function
+# TODO: replace all with Adafruit Ports, keep unique GPIO.gpio_function
 try:
     import RPi.GPIO as GPIO  # type: ignore[import-untyped]
 except (RuntimeError, ModuleNotFoundError):
-    # make lint happy with minimal non-funct facade
+    # minimal facade for non-Raspi systems, only fake drivers exist there
     class GPIO:  # type: ignore[no-redef]
-        BCM = None
-        IN = None
-        OUT = None
+        BCM = IN = OUT = None
 
         @staticmethod
-        def setwarnings(warn):
-            warn = not warn
+        def setwarnings(*_): pass
 
         @staticmethod
-        def gpio_function(pin):
-            pin = not pin
-            return None
+        def setmode(*_): pass
 
         @staticmethod
-        def setmode(mode):
-            mode = not mode
+        def setup(*_): pass
 
         @staticmethod
-        def setup(pin, mode):
-            pin = not pin
-            mode = not mode
+        def cleanup(*_): pass
 
         @staticmethod
-        def cleanup(pin):
-            pin = not pin
+        def input(*_): return 0
 
         @staticmethod
-        def input(pin):
-            return pin
-
-        @staticmethod
-        def output(pin, value):
-            pin = not pin
-            value = not value
+        def output(*_): pass
 
 from .base import (InDriver, OutDriver, IoPort, PortFunc, is_raspi, DriverWriteError)
 
@@ -63,66 +48,43 @@ class DriverGPIO(OutDriver, InDriver):
 
     _BUS = 'GPIO'
 
+    # simulated pins: everything some fake device or dependency needs
+    #   0..2 (I²C on 2), 4 1-Wire, 12 heater relay, 13 filter pump,
+    #   18/19 PWM 0/1, 20 CO2 valve
+    _FAKE_IN_PINS = (0, 1, 2, 4, 13, 18, 19)
+    _FAKE_OUT_PINS = (0, 1, 2, 4, 12, 13, 18, 19, 20)
+
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
-        io_ports = {}
         if is_raspi():
             log.info('Scanning GPIO ports ...')
-            for pin in range(28):
-                port_name = 'GPIO %d ' % pin
-                io_ports[port_name + 'in'] = IoPort(PortFunc.Bin,
-                                                    DriverGPIO,
-                                                    {'pin': pin},
-                                                    [])
-                io_ports[port_name + 'out'] = IoPort(PortFunc.Bout,
-                                                     DriverGPIO,
-                                                     {'pin': pin},
-                                                     [])
+            in_pins = out_pins = range(28)
+            cfg = {}
         else:
             log.info('Faking GPIO ports ...')
-            # name: IoPort(portFunction, drvClass, configDict, dependantsArray)
-            # need all that are simulated somewhere - devices or dependencies
-            io_ports = {
-                'GPIO 0 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 0, 'fake': True}, []),
-                'GPIO 0 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 0, 'fake': True}, []),
-                'GPIO 1 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 1, 'fake': True}, []),
-                'GPIO 1 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 1, 'fake': True}, []),
-                'GPIO 2 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 2, 'fake': True}, []),
-                'GPIO 2 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 2, 'fake': True}, []),
-                # 1-wire
-                'GPIO 4 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 4, 'fake': True}, []),
-                'GPIO 4 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 4, 'fake': True}, []),
-                # Heater relay
-                'GPIO 12 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 12, 'fake': True}, []),
-                # Filter pump
-                'GPIO 13 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 13, 'fake': True}, []),
-                'GPIO 13 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 13, 'fake': True}, []),
-                'GPIO 18 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 18, 'fake': True}, []),
-                # PWM 0
-                'GPIO 18 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 18, 'fake': True}, []),
-                'GPIO 19 in': IoPort(PortFunc.Bin, DriverGPIO, {'pin': 19, 'fake': True}, []),
-                # PWM 1
-                'GPIO 19 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 19, 'fake': True}, []),
-                # CO2 vent
-                'GPIO 20 out': IoPort(PortFunc.Bout, DriverGPIO, {'pin': 20, 'fake': True}, [])
-            }
-        # a pin is either input or output: 'in' depends on 'out', so the
-        # registry refuses the second claim in either order
-        for name, port in io_ports.items():
-            if name.endswith(' in') and name[:-3] + ' out' in io_ports:
-                io_ports[name] = port._replace(deps=[name[:-3] + ' out'])
+            in_pins, out_pins = DriverGPIO._FAKE_IN_PINS, DriverGPIO._FAKE_OUT_PINS
+            cfg = {'fake': True}
+
+        io_ports = {}
+        for pin in sorted(set(in_pins) | set(out_pins)):
+            # a pin is either input or output: 'in' depends on 'out', so
+            # the registry refuses the second claim in either order
+            if pin in in_pins:
+                deps = [f'GPIO {pin} out'] if pin in out_pins else []
+                io_ports[f'GPIO {pin} in'] = IoPort(PortFunc.Bin, DriverGPIO,
+                                                    {'pin': pin, **cfg}, deps)
+            if pin in out_pins:
+                io_ports[f'GPIO {pin} out'] = IoPort(PortFunc.Bout, DriverGPIO,
+                                                     {'pin': pin, **cfg}, [])
         return io_ports
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
         self._pin: int | None = int(cfg['pin'])
         inout = 'in' if self._is_input_driver() else 'out'
-        self.name: str = 'GPIO %d %s' % (self._pin, inout)
-
+        self.name = self._mark_fake(f'GPIO {self._pin} {inout}')
         if not self._fake:
             GPIO.setup(self._pin, GPIO.IN if inout == 'in' else GPIO.OUT)
-        else:
-            self.name = self._mark_fake(self.name)
 
     def _is_input_driver(self) -> bool:
         return self.func == PortFunc.Bin
@@ -144,9 +106,8 @@ class DriverGPIO(OutDriver, InDriver):
     def read(self) -> bool:
         if not self._fake:
             self._val = GPIO.input(self._pin)
-        else:
-            if self._is_input_driver():
-                self._val = False if random.random() <= 0.5 else True
+        elif self._is_input_driver():
+            self._val = random.random() > 0.5
 
         log.verbose('%s = %d', self.name, self._val)
         return bool(self._val)

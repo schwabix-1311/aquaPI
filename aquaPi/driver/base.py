@@ -9,6 +9,13 @@ import math
 import random
 import re
 
+__all__ = ['natural_key', 'is_raspi', 'gpio_deps',
+           'DriverError', 'DriverNYI', 'DriverParamError', 'DriverInvalidAddrError',
+           'DriverInvalidPortError', 'DriverPortInuseError', 'DriverReadError',
+           'DriverWriteError', 'DriverConfigError',
+           'IoPort', 'PortFunc', 'PinFunc',
+           'Driver', 'InDriver', 'AInDriver', 'OutDriver']
+
 log = logging.getLogger('driver.base')
 
 
@@ -30,6 +37,13 @@ def is_raspi() -> bool:
         with open(model_inf, 'r', encoding='utf-8') as f:
             model = f.readline()
     return 'raspberry' in model.lower()
+
+
+def gpio_deps(*pins: int) -> list[str]:
+    """ IoPort deps for GPIO pins used by another port (PWM, 1-Wire, I²C):
+        both the 'in' and the 'out' port of each pin
+    """
+    return [f'GPIO {pin} {inout}' for pin in pins for inout in ('in', 'out')]
 
 
 # ========== Exceptions ==========
@@ -120,7 +134,7 @@ class PinFunc(Enum):
 
 class Driver:
     """ base class of all drivers
-        Drivers persist their cinfiguration in dict 'cfg', no need for
+        Drivers persist their configuration in dict 'cfg', no need for
         __getstate__/__setstate__ overloads in derived classes.
     """
 
@@ -175,8 +189,7 @@ class InDriver(Driver):
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self.namei: str = '!abstract IN'
-        self._interval: int = 0
+        self.name = '!abstract IN'
 
     def read(self) -> int | float | str:
         return 0
@@ -187,7 +200,7 @@ class AInDriver(InDriver):
     """
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self.name: str = '!ADC in'
+        self.name = '!ADC in'
         self.initval: float = float(cfg.get('initval', 0.0))
         self._val: float = self.initval
         self._dir: float = 1
@@ -210,7 +223,7 @@ class OutDriver(Driver):
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self.name: str = '!abstract OUT'
+        self.name = '!abstract OUT'
         self._val = 0.0
 
     def write(self, value) -> None:

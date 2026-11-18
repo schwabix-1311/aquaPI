@@ -305,6 +305,23 @@ class _ShellyBase:
         return {name: port for name, port in _discover_all_ports().items()
                 if port.driver is cls}
 
+    def __init__(self, cfg: dict[str, str], func: PortFunc):
+        super().__init__(cfg, func)  # type: ignore[call-arg]
+        self._ip: str = cfg['ip']
+        self._ch: int = int(cfg['ch'])
+        # network device: fake only when find_ports() explicitly marked
+        # it so (discovery found nothing), never derived from is_raspi()
+        self._fake: bool = bool(cfg.get('fake', False))
+
+    def _get(self, endpoint: str, **params) -> dict:
+        """ GET http://<ip>/<endpoint> and return the decoded JSON reply,
+            raising on any network or HTTP error
+        """
+        resp = requests.get(f'http://{self._ip}/{endpoint}',
+                            params=params or None, timeout=HTTP_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
+
 
 class DriverShellyRelay(_ShellyBase, OutDriver):
     """ Binary relay output on a Shelly smart switch/plug, Gen1 or
@@ -325,23 +342,13 @@ class DriverShellyRelay(_ShellyBase, OutDriver):
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self._ip: str = cfg['ip']
-        self._ch: int = int(cfg['ch'])
-        # network device: fake only when find_ports() explicitly marked
-        # it so (discovery found nothing), never derived from is_raspi()
-        self._fake: bool = bool(cfg.get('fake', False))
-        self.name: str = 'Shelly(%s ch%d)' % (self._ip, self._ch)
-        if self._fake:
-            self.name = self._mark_fake(self.name)
+        self.name = self._mark_fake(f'Shelly({self._ip} ch{self._ch})')
 
     def write(self, value: bool) -> None:
         log.verbose('%s -> %d', self.name, bool(value))
         if not self._fake:
-            turn = 'on' if value else 'off'
             try:
-                resp = requests.get(f'http://{self._ip}/relay/{self._ch}',
-                                    params={'turn': turn}, timeout=HTTP_TIMEOUT)
-                resp.raise_for_status()
+                self._get(f'relay/{self._ch}', turn='on' if value else 'off')
             except Exception:
                 # a flaky network write must not crash the bus thread
                 # that called SwitchDevice.write() -> this method
@@ -351,9 +358,7 @@ class DriverShellyRelay(_ShellyBase, OutDriver):
     def read(self) -> bool:
         if not self._fake:
             try:
-                resp = requests.get(f'http://{self._ip}/relay/{self._ch}', timeout=HTTP_TIMEOUT)
-                resp.raise_for_status()
-                self._val = bool(resp.json().get('ison', self._val))
+                self._val = bool(self._get(f'relay/{self._ch}').get('ison', self._val))
             except Exception:
                 log.exception('%s failed to read relay state, returning last known', self.name)
         log.verbose('%s = %d', self.name, self._val)
@@ -380,23 +385,15 @@ class DriverShellyDimmer(_ShellyBase, OutDriver):
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self._ip: str = cfg['ip']
-        self._ch: int = int(cfg['ch'])
-        self._fake: bool = bool(cfg.get('fake', False))
-        self.name: str = 'Shelly(%s ch%d) dimmer' % (self._ip, self._ch)
-        if self._fake:
-            self.name = self._mark_fake(self.name)
+        self.name = self._mark_fake(f'Shelly({self._ip} ch{self._ch}) dimmer')
 
     def write(self, value: float) -> None:
         value = max(0, min(100, round(value)))
         log.verbose('%s -> %d', self.name, value)
         if not self._fake:
             try:
-                resp = requests.get(
-                    f'http://{self._ip}/light/{self._ch}',
-                    params={'turn': 'on' if value > 0 else 'off', 'brightness': value},
-                    timeout=HTTP_TIMEOUT)
-                resp.raise_for_status()
+                self._get(f'light/{self._ch}',
+                          turn='on' if value > 0 else 'off', brightness=value)
             except Exception:
                 log.exception('%s failed to send dimmer command', self.name)
         self._val = value
@@ -404,9 +401,7 @@ class DriverShellyDimmer(_ShellyBase, OutDriver):
     def read(self) -> float:
         if not self._fake:
             try:
-                resp = requests.get(f'http://{self._ip}/light/{self._ch}', timeout=HTTP_TIMEOUT)
-                resp.raise_for_status()
-                status = resp.json()
+                status = self._get(f'light/{self._ch}')
                 self._val = float(status.get('brightness', self._val)) if status.get('ison') else 0
             except Exception:
                 log.exception('%s failed to read dimmer state, returning last known', self.name)
@@ -434,29 +429,19 @@ class DriverShellyInput(_ShellyBase, InDriver):
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self._ip: str = cfg['ip']
-        self._ch: int = int(cfg['ch'])
         self._gen: int = int(cfg.get('gen', 1))
-        self._fake: bool = bool(cfg.get('fake', False))
         self._val: bool = False
-        self.name: str = 'Shelly(%s in%d)' % (self._ip, self._ch)
-        if self._fake:
-            self.name = self._mark_fake(self.name)
+        self.name = self._mark_fake(f'Shelly({self._ip} in{self._ch})')
 
     def read(self) -> bool:
         if not self._fake:
             try:
                 if self._gen >= 2:
-                    resp = requests.get(f'http://{self._ip}/rpc/Input.GetStatus',
-                                        params={'id': self._ch}, timeout=HTTP_TIMEOUT)
-                    resp.raise_for_status()
-                    state = resp.json().get('state')
+                    state = self._get('rpc/Input.GetStatus', id=self._ch).get('state')
                     if state is not None:
                         self._val = bool(state)
                 else:
-                    resp = requests.get(f'http://{self._ip}/status', timeout=HTTP_TIMEOUT)
-                    resp.raise_for_status()
-                    inputs = resp.json().get('inputs') or []
+                    inputs = self._get('status').get('inputs') or []
                     if self._ch < len(inputs):
                         self._val = bool(inputs[self._ch].get('input', self._val))
             except Exception:

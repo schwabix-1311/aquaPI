@@ -18,7 +18,7 @@ import board  # type: ignore[import-untyped]
 import busio  # type: ignore[import-untyped]
 from adafruit_bus_device.i2c_device import I2CDevice  # type: ignore[import-untyped]
 
-from .base import (OutDriver, IoPort, PortFunc, is_raspi)
+from .base import (OutDriver, IoPort, PortFunc, is_raspi, gpio_deps)
 
 
 log = logging.getLogger('driver.DriverPCA9685')
@@ -177,11 +177,10 @@ class DriverPCA9685(OutDriver):
     def find_ports() -> dict[str, IoPort]:
         if not is_raspi():
             log.info('Faking I²C - PCA9685 ...')
-            return _chip_ports(1, {'adr': 0x40, 'fake': True}, ['GPIO 2 in', 'GPIO 2 out'])
+            return _chip_ports(1, {'adr': 0x40, 'fake': True}, gpio_deps(2))
 
         log.info('Scanning I²C bus for PCA9685 ...')
-        bus_deps = ['GPIO %d in' % board.SCL.id, 'GPIO %d out' % board.SCL.id,
-                    'GPIO %d in' % board.SDA.id, 'GPIO %d out' % board.SDA.id]
+        bus_deps = gpio_deps(board.SCL.id, board.SDA.id)
         i2c = busio.I2C(board.SCL, board.SDA)
         ports: dict[str, IoPort] = {}
         cnt = 0

@@ -1,5 +1,7 @@
 # aquaPi installieren
 
+*English version: [INSTALLATION.md](INSTALLATION.md)*
+
 Diese Anleitung richtet sich an Aquarium-Liebhaber, nicht an Computer-Profis.
 Sie brauchen keine Vorkenntnisse in Linux oder Programmierung - nur einen
 Raspberry Pi und die Bereitschaft, einen Befehl in ein Terminal-Fenster zu

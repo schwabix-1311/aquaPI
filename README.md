@@ -42,8 +42,9 @@ sensors, I²C for an ADS1115, hardware PWM), offers to configure
 email/Telegram alerts, and installs aquaPi as a system service that starts
 on boot. On a Pi connected via WiFi it also sets up a watchdog that reloads
 the WiFi driver when the chip hangs, so the Pi becomes reachable again
-within minutes. The installer and the step-by-step
-guide [INSTALLATION.de.md](INSTALLATION.de.md) are currently in German.
+within minutes. The step-by-step guide is
+[INSTALLATION.md](INSTALLATION.md) ([deutsch](INSTALLATION.de.md)); the
+installer itself is German-only for now.
 
 Afterwards `./manage` in the install directory handles maintenance:
 `backup`, `list-backups`, `restore`, `reconfig` (alert channels) and

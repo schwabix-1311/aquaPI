@@ -28,6 +28,48 @@ from . import db
 _SERVICE_NAME = 'aquapi'
 
 
+# ---- language of the end-user facing commands (init-admin, reconfig) ----
+# install.sh asks for it and saves it to instance/language, so a later
+# `./manage reconfig` keeps talking the same language. Everything else in
+# this CLI (--help text, other commands) is English, aimed at the
+# maintainer.
+
+_LANG_FILE = 'language'
+_lang = 'en'
+
+
+def _detect_lang(instance_path: str) -> str:
+    """ AQUAPI_LANG, else instance/language, else the locale ($LANG) """
+    lang = environ.get('AQUAPI_LANG', '')
+    if not lang:
+        try:
+            with open(path.join(instance_path, _LANG_FILE), encoding='utf-8') as f:
+                lang = f.read().strip()
+        except OSError:
+            lang = environ.get('LC_ALL') or environ.get('LC_MESSAGES') or environ.get('LANG', '')
+    return 'de' if lang.lower().startswith('de') else 'en'
+
+
+def _t(de: str, en: str) -> str:
+    return de if _lang == 'de' else en
+
+
+def _confirm(text: str, default: bool = False) -> bool:
+    """ like click.confirm, but German answers with j - accepts j, y and n
+        in either language, Enter takes the default
+    """
+    yes = _t('j', 'y')
+    suffix = f' [{yes.upper()}/n]' if default else f' [{yes}/N]'
+    while True:
+        answer = click.prompt(text + suffix, default='', show_default=False).strip().lower()
+        if not answer:
+            return default
+        if answer[0] in 'jy':
+            return True
+        if answer[0] == 'n':
+            return False
+
+
 def _systemd_service_active() -> bool:
     """ True if the aquapi systemd service is currently active - False if
         it was never installed, is inactive/failed, or systemd/systemctl
@@ -65,6 +107,8 @@ def cli(ctx, instance_path):
     # app creates its files on first start) - install.sh runs init-admin
     # and reconfig before that, and SQLite can't create the directory
     makedirs(instance_path, exist_ok=True)
+    global _lang  # pylint: disable=global-statement
+    _lang = _detect_lang(instance_path)
     backup_dir = environ.get('AQUAPI_BACKUP_DIR', path.join(instance_path, 'backups'))
     backup_keep = int(environ.get('AQUAPI_BACKUP_KEEP', db.DEFAULT_BACKUP_KEEP))
     ctx.obj = {
@@ -211,17 +255,22 @@ def init_admin(ctx):
         password (journalctl under systemd), where a new user never
         finds it.
     """
-    # German-only output, like reconfig: part of the guided install.sh flow
+    # output in the user's language (see _detect_lang): part of the
+    # guided install.sh flow
     created = db.ensure_default_admin(ctx.obj['users_db'])
     if not created:
-        click.echo('Es gibt bereits Benutzerkonten - es wurde kein neues Admin-Konto angelegt.')
+        click.echo(_t('Es gibt bereits Benutzerkonten - es wurde kein neues Admin-Konto angelegt.',
+                      'User accounts already exist - no new admin account was created.'))
         return
     username, password = created
-    click.echo('Dein Admin-Zugang für die aquaPi-Oberfläche:')
-    click.echo(f'   Benutzername: {username}')
-    click.echo(f'   Passwort:     {password}')
-    click.echo('Bitte notiere das Passwort und ändere es nach der ersten Anmeldung')
-    click.echo('(Menü "Benutzer"). Es wird nicht noch einmal angezeigt.')
+    click.echo(_t('Dein Admin-Zugang für die aquaPi-Oberfläche:',
+                  'Your admin login for the aquaPi interface:'))
+    click.echo(_t(f'   Benutzername: {username}', f'   Username: {username}'))
+    click.echo(_t(f'   Passwort:     {password}', f'   Password: {password}'))
+    click.echo(_t('Bitte notiere das Passwort und ändere es nach der ersten Anmeldung',
+                  'Please write the password down and change it after your first login'))
+    click.echo(_t('(Menü "Benutzer"). Es wird nicht noch einmal angezeigt.',
+                  '("Users" menu). It will not be shown again.'))
 
 
 def _prompt_telegram_account() -> dict:
@@ -235,44 +284,54 @@ def _prompt_telegram_account() -> dict:
                                     telegram_bot_name)
 
     while True:
-        token = click.prompt('Bot-Token (von @BotFather)', hide_input=True)
+        token = click.prompt(_t('Bot-Token (von @BotFather)', 'Bot token (from @BotFather)'),
+                             hide_input=True)
         try:
             bot_name = telegram_bot_name(token)
             break
         except DriverConfigError:
-            click.secho('Telegram kennt diesen Bot-Token nicht, bitte erneut eingeben.',
+            click.secho(_t('Telegram kennt diesen Bot-Token nicht, bitte erneut eingeben.',
+                           'Telegram doesn\'t know this bot token, please enter it again.'),
                         fg='red')
         except Exception:
-            click.secho('Telegram ist nicht erreichbar - Chat bitte von Hand eintragen.',
+            click.secho(_t('Telegram ist nicht erreichbar - Chat bitte von Hand eintragen.',
+                           'Telegram can\'t be reached - please enter the chat by hand.'),
                         fg='yellow')
             bot_name = ''
             break
 
     account: dict = {'bot_token': token}
     if bot_name:
-        click.echo(f'\nJetzt den Chat festlegen, in den aquaPi schreiben soll:\n'
-                   f'- Gruppe: @{bot_name} zur Gruppe hinzufügen und dort\n'
-                   f'  /aquapi@{bot_name} senden\n'
-                   f'- Direktchat: @{bot_name} in Telegram öffnen und "aquaPi" senden')
+        click.echo(_t(f'\nJetzt den Chat festlegen, in den aquaPi schreiben soll:\n'
+                      f'- Gruppe: @{bot_name} zur Gruppe hinzufügen und dort\n'
+                      f'  /aquapi@{bot_name} senden\n'
+                      f'- Direktchat: @{bot_name} in Telegram öffnen und "aquaPi" senden',
+                      f'\nNow choose the chat aquaPi should write to:\n'
+                      f'- group: add @{bot_name} to the group and send\n'
+                      f'  /aquapi@{bot_name} there\n'
+                      f'- direct chat: open @{bot_name} in Telegram and send "aquaPi"'))
         while True:
-            click.prompt('Enter drücken, sobald die Nachricht gesendet ist',
+            click.prompt(_t('Enter drücken, sobald die Nachricht gesendet ist',
+                            'Press Enter once the message is sent'),
                          default='', show_default=False)
             try:
                 chat = find_telegram_chat(token)
             except Exception:
                 chat = None
             if chat:
-                if click.confirm(f'Chat "{chat["chat_name"]}" gefunden. Diesen verwenden?',
-                                 default=True):
+                if _confirm(_t(f'Chat "{chat["chat_name"]}" gefunden. Diesen verwenden?',
+                               f'Found chat "{chat["chat_name"]}". Use it?'), default=True):
                     account.update(chat)
                     return account
             else:
-                click.echo('Keine Nachricht mit "aquaPi" gefunden.')
-            if not click.confirm('Erneut versuchen?', default=True):
+                click.echo(_t('Keine Nachricht mit "aquaPi" gefunden.',
+                              'No message containing "aquaPi" found.'))
+            if not _confirm(_t('Erneut versuchen?', 'Try again?'), default=True):
                 break
 
-    account['chat_name'] = click.prompt('Chat-Name')
-    chat_id = click.prompt('Chat-ID (leer lassen, um sie beim Start zu ermitteln)',
+    account['chat_name'] = click.prompt(_t('Chat-Name', 'Chat name'))
+    chat_id = click.prompt(_t('Chat-ID (leer lassen, um sie beim Start zu ermitteln)',
+                              'Chat ID (leave empty to detect it at startup)'),
                            default='', show_default=False)
     if chat_id:
         account['chat_id'] = chat_id
@@ -288,11 +347,8 @@ def reconfig(ctx):
         entered here - if a channel already has multiple accounts
         configured, running this collapses it down to one.
     """
-    # Prompts/messages here are German-only, deliberately - this command is
-    # what a (German-speaking, non-technical) customer hits during the
-    # guided install.sh flow. Everything else in this CLI (--help text,
-    # other commands) stays English, aimed at the maintainer. See
-    # ROADMAP.md if English support is ever needed here too.
+    # prompts/messages in the user's language (see _detect_lang) - this
+    # command is what a non-technical user hits during install.sh
     users_db = ctx.obj['users_db']
     changed = False
 
@@ -300,31 +356,33 @@ def reconfig(ctx):
         existing = db.get_notification_config(users_db, channel)
         if existing:
             n = len(existing)
-            status = f'{n} Konto eingerichtet' if n == 1 else f'{n} Konten eingerichtet'
+            status = (_t(f'{n} Konto eingerichtet', f'{n} account set up') if n == 1
+                      else _t(f'{n} Konten eingerichtet', f'{n} accounts set up'))
         else:
-            status = 'nicht eingerichtet'
+            status = _t('nicht eingerichtet', 'not set up')
         click.echo(f'\n{channel}: {status}')
 
-        if not click.confirm(f'{channel} jetzt einrichten?', default=False):
+        if not _confirm(_t(f'{channel} jetzt einrichten?', f'Set up {channel} now?')):
             continue
 
         if channel == 'Email':
             account = {
-                'server': click.prompt('SMTP-Server (z.B. smtp.gmail.com)'),
-                'login': click.prompt('Benutzername'),
-                'pwd': click.prompt('Passwort', hide_input=True),
-                'from': click.prompt('Absenderadresse'),
-                'to': click.prompt('Empfängeradresse'),
+                'server': click.prompt(_t('SMTP-Server (z.B. smtp.gmail.com)',
+                                          'SMTP server (e.g. smtp.gmail.com)')),
+                'login': click.prompt(_t('Benutzername', 'Username')),
+                'pwd': click.prompt(_t('Passwort', 'Password'), hide_input=True),
+                'from': click.prompt(_t('Absenderadresse', 'Sender address')),
+                'to': click.prompt(_t('Empfängeradresse', 'Recipient address')),
             }
         else:  # 'Telegram'
             account = _prompt_telegram_account()
 
         db.set_notification_config(users_db, channel, [account])
-        click.echo(f'{channel}-Konfiguration gespeichert.')
+        click.echo(_t(f'{channel}-Konfiguration gespeichert.', f'{channel} configuration saved.'))
         changed = True
 
     if not changed:
-        click.echo('\nKeine Änderungen vorgenommen.')
+        click.echo(_t('\nKeine Änderungen vorgenommen.', '\nNo changes made.'))
         return
 
     # MachineRoom.__init__ reads notification config once at construction,
@@ -334,20 +392,27 @@ def reconfig(ctx):
     # config actually takes effect instead of silently sitting unused
     # until whenever the next restart happens to occur.
     if _systemd_service_active():
-        click.echo(f'\n{_SERVICE_NAME}.service wird neu gestartet, damit die neue '
-                  'Konfiguration wirksam wird ...')
+        click.echo(_t(f'\n{_SERVICE_NAME}.service wird neu gestartet, damit die neue '
+                      'Konfiguration wirksam wird ...',
+                      f'\nRestarting {_SERVICE_NAME}.service so the new configuration '
+                      'takes effect ...'))
         try:
             subprocess.run(['sudo', 'systemctl', 'restart', _SERVICE_NAME], check=True)
         except subprocess.CalledProcessError:
-            click.secho(
+            click.secho(_t(
                 f'{_SERVICE_NAME}.service konnte nicht automatisch neu gestartet werden - '
                 f'starte ihn manuell neu (`sudo systemctl restart {_SERVICE_NAME}`).',
+                f'{_SERVICE_NAME}.service could not be restarted automatically - '
+                f'restart it by hand (`sudo systemctl restart {_SERVICE_NAME}`).'),
                 fg='yellow')
         else:
-            click.echo(f'{_SERVICE_NAME}.service neu gestartet.')
+            click.echo(_t(f'{_SERVICE_NAME}.service neu gestartet.',
+                          f'{_SERVICE_NAME}.service restarted.'))
     else:
-        click.echo('\nStarte aquaPi neu, damit die neue Benachrichtigungs-Konfiguration '
-                  'wirksam wird.')
+        click.echo(_t('\nStarte aquaPi neu, damit die neue Benachrichtigungs-Konfiguration '
+                      'wirksam wird.',
+                      '\nRestart aquaPi for the new notification configuration to take '
+                      'effect.'))
 
 
 _SERVICE_UNIT_PATH = '/etc/systemd/system/aquapi.service'

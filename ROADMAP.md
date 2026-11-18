@@ -25,16 +25,19 @@ fine, sort/dedupe later.
   under systemd); `install.sh` and `INSTALLATION.de.md` must show it or
   say where to find it. Done: `./manage init-admin`, shown at the end of
   `install.sh` (a7d7974).
-- [ ] Decide on RoboTank / Leviathan: the README says aquaPi can drive
-  them with "a few sub-functions not supported yet". Their peripherals
-  are auto-detected like any GPIO/I²C hardware, but aquaPi has no driver
-  for the PCA9685 PWM controller (both boards: lights, DC pumps, dosing,
-  0-10V ports) - outlets, sensor inputs and DS18B20 work. Either name the
-  gap in the README for v1.0 and ship "Board support" (see New ideas) as
-  the v1.1 topic, or add the PCA9685 driver before v1.0.
-  Status 2026-11-17: the driver exists on dev_m (v1.1); the README
-  sentence on `release/1.0` gets reworded only after the driver passed
-  a test on a real PCA9685 breakout.
+- [x] Decide on RoboTank / Leviathan: decided 2026-11-17 to ship the
+  PCA9685 driver in v1.0 (cherry-picked to `release/1.0`, 89ed047) plus a
+  README section "Switching from Robo-Tank / Leviathan" with the v3 port
+  mapping and the manual OS settings (no hardware PWM, second 1-Wire bus
+  on GPIO 22, serial console off). Board profiles stay a v1.1 topic.
+- [ ] PCA9685 driver tested on a real breakout (dim 0/1/50/100 %, on/off,
+  PWM/out exclusivity, restart) - required before the tag, since the
+  driver ships untested on hardware otherwise.
+- [ ] README in both languages: `README.md` (English) plus a German
+  version, linked to each other; `INSTALLATION` in both languages too.
+- [ ] `install.sh` bilingual (English/German), language taken from
+  `$LANG` with a way to override; this includes the prompts of
+  `./manage reconfig` and `./manage init-admin`, German-only today.
 - [x] Docs check: README, `INSTALLATION.de.md`, `./manage --help`
   against what the installer really does. Done 2026-11-17 (217b854 and
   follow-up): update mode in `install.sh` (a rerun no longer deletes

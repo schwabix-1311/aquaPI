@@ -73,3 +73,47 @@ def test_auto_gain_overrange_stops_at_the_largest_range():
     drv._ads.gain = 16
     _adjust(drv)
     assert drv._ads.gain == 2 / 3
+
+
+class _FakeI2CDevice:
+    """ register file of a chip at one I²C address, 16 bit per register """
+    device_address = 0x48
+
+    def __init__(self, regs):
+        self.regs = regs
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def write_then_readinto(self, out_buf, in_buf, in_start=0, in_end=None):
+        in_buf[in_start:in_end] = self.regs[out_buf[0]].to_bytes(2, 'big')
+
+
+class _FakeDetectAds:
+    def __init__(self, config, lo=0x8000, hi=0x7FFF):
+        self.i2c_device = _FakeI2CDevice({0: 0, 1: config, 2: lo, 3: hi})
+
+
+@pytest.mark.parametrize('config', [
+    0x8583,     # power-on default, or after a clean _do_close()
+    0xC983,     # left behind by an unclean exit: single-ended AIN0, gain 4
+    0x4D83,     # same, caught mid-conversion (OS=0), gain 16
+    0xF383,     # unclean exit after reading AIN3 single-ended, gain 1
+])
+def test_is_ads111x_detects_chip(config):
+    assert adc.DriverADS1115.is_ads111x(_FakeDetectAds(config))
+
+
+@pytest.mark.parametrize('ads', [
+    _FakeDetectAds(0x8483),                 # continuous mode: someone else uses it
+    _FakeDetectAds(0x9583),                 # differential AIN0-3, aquaPi never reads that
+    _FakeDetectAds(0xB583),                 # differential AIN2-3
+    _FakeDetectAds(0x8503),                 # low config byte differs
+    _FakeDetectAds(0x8583, lo=0x1234),      # thresholds changed: another device
+    _FakeDetectAds(0x8583, hi=0x0000),
+])
+def test_is_ads111x_rejects_other_devices(ads):
+    assert not adc.DriverADS1115.is_ads111x(ads)

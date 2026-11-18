@@ -4,7 +4,7 @@ import logging
 from os import path
 import glob
 
-from .base import (AInDriver, IoPort, PortFunc, is_raspi,
+from .base import (AInDriver, IoPort, PortFunc, is_raspi, gpio_deps,
                    DriverInvalidAddrError, DriverReadError)
 
 log = logging.getLogger('driver.DriverOneWire')
@@ -23,20 +23,12 @@ class DriverDS1820(AInDriver):
             log.info('Scanning OneWire devices ...')
 
             # TODO: GPIO 4 is the Raspi default, auto-detect alternatives!
-            deps = ['GPIO 4 in', 'GPIO 4 out']
-
-            idx = 0
-            for sensor in sorted(glob.glob('/sys/bus/w1/devices/28-*')):
-                port_key = f'DS1820 #{idx + 1}'
-                io_ports[port_key] = IoPort(PortFunc.Ain,
-                                            DriverDS1820,
-                                            {'adr': sensor},
-                                            deps)
-                idx += 1
+            deps = gpio_deps(4)
+            for idx, sensor in enumerate(sorted(glob.glob('/sys/bus/w1/devices/28-*'))):
+                io_ports[f'DS1820 #{idx + 1}'] = IoPort(PortFunc.Ain, DriverDS1820,
+                                                        {'adr': sensor}, deps)
         else:
             log.info('Faking OneWire devices ...')
-
-            # name: IoPort('function', 'driver', 'cfg', 'dependants')
             io_ports = {
                 'DS1820 #1': IoPort(PortFunc.Ain, DriverDS1820,
                                     {'adr': '28-01193867a71e', 'name': 'DS1820 x7A71E',
@@ -59,10 +51,7 @@ class DriverDS1820(AInDriver):
             Fake is always set on non-Raspi.
         """
         super().__init__(cfg, func)
-        self.name: str = 'DS1820 @ ' + cfg['adr']
-        if self._fake:
-            self.name = self._mark_fake(self.name)
-
+        self.name = self._mark_fake('DS1820 @ ' + cfg['adr'])
         if not self._fake:
             self._val: float = 0
             self._err_cnt: int = 0
@@ -84,11 +73,11 @@ class DriverDS1820(AInDriver):
 
         with open(self._temp, 'r', encoding='ascii') as temp:
             ln = temp.readline()
-            if self._temp[-8:] == 'w1_slave':
+            if self._temp.endswith('w1_slave'):
                 ln = temp.readline()
                 ln = ln[29:]  # e.g. '90 01 4b 46 7f ff 0c 10 33 t=25000'
             log.debug('%s = %s', self.name, ln)
-            if ln and not ln == '85000\n':
+            if ln and ln != '85000\n':
                 val = float(ln) / 1000
                 self._val = val
                 self._err_cnt = 0

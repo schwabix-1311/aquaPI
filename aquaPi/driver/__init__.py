@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 
 import logging
-import importlib.util
+import importlib
 import sys
 import time
+from typing import Any
 from os import path
 import glob
 
+# re-export the public driver API (see base.__all__), so callers can use
+# `from aquaPi.driver import OutDriver, PortFunc, ...`
+from .base import *  # noqa: F401,F403
 from .base import (IoPort, PortFunc, Driver,
-                   DriverPortInuseError, DriverInvalidPortError, DriverParamError)
+                   DriverPortInuseError, DriverInvalidPortError)
 
 log = logging.getLogger('driver')
 
@@ -16,7 +20,7 @@ log = logging.getLogger('driver')
 # ========== global config ==========
 
 
-driver_config: dict[str, str] = dict()
+driver_config: dict[str, Any] = {}
 
 
 # ========== IO registry ==========
@@ -24,6 +28,19 @@ driver_config: dict[str, str] = dict()
 
 # IoRegistry is a singleton, access it through a class method IoRegistry.get()
 _io_reg: 'IoRegistry'
+
+
+# ========== driver modules ==========
+
+
+DRIVER_FILE_PREFIX = 'Driver'
+
+# CustomDrivers/ goes first in the package search path: a Driver*.py there
+# replaces the built-in driver module of the same name - for every import
+# of it, also the ones before create_io_registry() (e.g. api.py)
+_CUSTOM_PATH = path.join(path.dirname(path.abspath(__file__)), 'CustomDrivers')
+if _CUSTOM_PATH not in __path__:
+    __path__.insert(0, _CUSTOM_PATH)
 
 
 # ========== claim/release rules, shared by the real IoRegistry and by
@@ -128,7 +145,7 @@ class PortClaimPreview:
         threading.Lock around _check_claim/_commit_claim/_commit_release,
         or making preview()+apply one held section) if that ever changes
         (multi-threaded/multi-worker serving, more background claim
-        traffic) - not done here, flagged 2026-09-14.
+        traffic).
     """
 
     def __init__(self, m: dict[str, IoPort], claims: dict[str, int]):
@@ -151,49 +168,23 @@ class PortClaimPreview:
         return _is_free(self._map, self._claims, port)
 
 
-class IoRegistry(object):
-    """
-    example
+class IoRegistry:
+    """ registry of all IoPorts reported by the drivers' find_ports(),
+        keyed by a unique, human readable port name, e.g.
+            'GPIO 12 out'        Bout  DriverGPIO     {pin: 12}
+            'PWM 0'              Aout  DriverPWM      {pin: 18, channel: 0}
+            'PCA9685 #1 CH0 PWM' Aout  DriverPCA9685  {adr: 0x40, cnt: 1, ch: 0}
+            'DS1820 #1'          Ain   DriverDS1820   {adr: '28-..'}
+            'ADC #1 in 3'        Ain   DriverADS1115  {adr: 0x48, cnt: 1, in: 3}
+            'Email #1'           Tout  DriverEmail    {...}, shareable
 
-#TODO review this, some is not up to date!
-
-    "GPIO 0..xx in":  { Bin,  DriverGPIO,   {pin: 0..x} }           - unused, func IN, x entries
-    "GPIO 0..xx out": { Bout, DriverGPIO,   {pin: 0..x} }           - unused, func IN, x entries
---    "IOext 1..7 in":  { Bin,  DriverPCFxx,  {adr: 0x47, ch: x} }    - unused, x entries
-
-    "GPIO 12 out":    { Bout, DriverGPIO,   {pin: 12} }             - Relays
---    "IOext 0 out":    { Bout, DriverPCFxx,  {adr: 0x47, ch: 0} }    - CO2 Ventil
---    "ShellyPlug1":    { Bout, DriverShelly, {ip: '192..', ch:0} }   - S.Plug - Heizer
---    "H-Bridge 1":     { Bout, DriverMotor,  {pins: (21,22)} }       - Dosierpumpe
-
-    "GPIO 20 in":     { Bin,  DriverGPIO,   {pin: 20} }             - Taster
---    "ShellyTemp1":    { Ain,  DriverShelly, {ip: '192..', ch:2} }   - S.Temp1
-
-    "PWM 0":          { Aout, DriverPWM,    {ch: 0, pin: 18} }      - Licht"
-    "PWM 1":          { Aout, DriverPWM,    {ch: 1, pin: 19} }      -
---    "S-PWM 2":        { Aout, DriverGPIO,   {pin: 24} }             - Lüfter"
-    "PCA9685 #1 CH0 PWM": { Aout, DriverPCA9685, {adr:0x40, cnt:1, ch:0} } - LED port
-    "PCA9685 #2 CH3 out": { Bout, DriverPCA9685, {adr:0x41, cnt:2, ch:3} } - power bar outlet
-    "TC420 #1 CH1":   { Aout, DriverTC420,  {device:0, ch:1} }      - Mondlicht
---    "TC420 #1 CH3-5": { Aout, DriverTC420,  {device:0, ch:(3,4,5)}} - RGB Licht
---    "ShellyDim":      { Aout, DriverShelly, {ip: '192..', ch:X} }   - Ambilight
-
-    "DS1820 #1":      { Ain,  DriverDS1820,  {adr:'28-..abcde'} }   - Wassertemperatur"
-    "ADC #1 in 3":    { Ain,  DriverADS1115,{adr:0x7E, cnt:1, ch:3} }   - pH Sonde"
-
-    Constructor calls each driver's find_ports() to fill io_registry with io_ports.
-    Each io_port is defined by a unique name, a driver class and its cfg dictionary,
-    plus a list of dependants by name, if applicable.
-    Drivers may support more than one function if they implement all their methods.
-    Dict cfg is driver's private property!
-    Instantiation of a port/pin driver via driver_factory reserves the io_port, and
-    the listed dependants, e.g. PWM may use a std GPIO pin; in this case GPIO pin
-    is marked used as long as PWM is in use.
-    driver_destruct(key) returns IoPort to unused. List of deps is released unless
-    still used by some other port.
-
-    Multi-port drivers (RGB, Motor) may need a dedicated factory method.
-    Very likely getting a higher level driver and a tupel of IoPorts.  TBD!
+        IoPort.cfg is private to the port's driver class. IoPort.deps
+        lists further ports that are claimed along with it, e.g. 'PWM 0'
+        occupies 'GPIO 18 in'/'GPIO 18 out'.
+        driver_factory(port) instantiates the driver and claims the port
+        plus its deps, driver_destruct(port, driver) releases them again.
+        A singleton: create it with create_io_registry(), access it with
+        IoRegistry.get().
     """
 
     _map: dict[str, IoPort] = {}
@@ -210,76 +201,68 @@ class IoRegistry(object):
         return _io_reg
 
     def __init__(self):
-        # iterate all class imports from a module, then call each class' port enumerator
-        # https://stackoverflow.com/questions/7584418/iterate-the-classes-defined-in-a-module-imported-dynamically
-        # https://stackoverflow.com/questions/4821104/dynamic-instantiation-from-string-name-of-a-class-in-dynamically-imported-module
-
-        # This may be a hack, although it is documented on python.org for importlib.
-        # We load all modules Driver*.py from specific folders, then lookup all
-        # descendants of class Driver found in the module dicts.
-        # Those with a method find_ports() can report "their" IoPorts to IoRegistry.
-        # Maybe there's a much simpler way to achieve the same though.
-
-        # all driver modules are dynamically imported in __init__.py and added to sys.modules
-        drv_mod_names = [mod for mod in sys.modules if 'driver.' in mod]
-        drv_classes = set()
-
-        # collect them in a set to avoid duplicates
-        for name in drv_mod_names:
-            drv_module = sys.modules[name]
-            log.debug('# module %s', drv_module)
-            mod_drivers = {cl for cl in drv_module.__dict__.values()
-                            if type(cl) is type and issubclass(cl, Driver)}
-            drv_classes |= mod_drivers
-
-        for drv in drv_classes:
-            if hasattr(drv, 'find_ports'):
-                # config.json's 'DRIVER_BLACKLIST' (a list of driver class
-                # names, e.g. ["DriverShellyRelay"]), handed down via
-                # driver_config same as Email/Telegram settings - lets a
-                # deployment skip a driver's find_ports() entirely, e.g.
-                # for hardware that isn't present or a discovery that's
-                # slow/unreliable on that network
-                if drv.__name__ in driver_config.get('DRIVER_BLACKLIST', []):
-                    log.info('Driver %s is blacklisted, skipping port discovery',
-                             drv.__name__)
-                    continue
-
-                # log before calling find_ports(), not just after - some
-                # drivers do real network I/O here (mDNS/broadcast
-                # discovery) that can take several seconds, and a silent
-                # multi-second gap in the startup log is easy to mistake
-                # for a hung/still-starting process instead of a slow
-                # but healthy scan
-                log.info('Discovering %s devices/ports for %s ...',
-                         getattr(drv, '_BUS', '?'), drv.__name__)
-                t_start = time.time()
-
-                # Step 25: a single driver failing to enumerate its ports
-                # (e.g. Email/Telegram find_ports() raising DriverConfigError
-                # on a misconfigured account, or any other connection issue
-                # beyond the internet-outage case they already handle
-                # themselves) must not block the whole app from starting -
-                # log it and just skip that driver's ports instead.
-                try:
-                    drv_ports = drv.find_ports()
-                except Exception:
-                    log.exception('Driver %s failed to report its ports, '
-                                  'skipping it', drv.__name__)
-                    continue
-                log.verbose('Driver %s reported ports %r (%.1fs)',
-                         drv.__name__, [k for k in drv_ports], time.time() - t_start)
-
-                dupes = IoRegistry._map.keys() & drv_ports.keys()
-                if dupes:
-                    log.error('Driver %s reported port(s) %r already claimed '
-                              'by another driver, ignoring the duplicate(s)',
-                              drv.__name__, sorted(dupes))
-                    drv_ports = {k: v for k, v in drv_ports.items() if k not in dupes}
-                IoRegistry._map.update(drv_ports)
+        for drv in self._driver_classes():
+            if not hasattr(drv, 'find_ports'):
+                continue
+            # config.json's 'DRIVER_BLACKLIST' (a list of driver class
+            # names, e.g. ["DriverShellyRelay"]) lets a deployment skip a
+            # driver's discovery entirely, e.g. for hardware that isn't
+            # present or a discovery that's slow/unreliable on that network
+            if drv.__name__ in driver_config.get('DRIVER_BLACKLIST', []):
+                log.info('Driver %s is blacklisted, skipping port discovery',
+                         drv.__name__)
+                continue
+            IoRegistry._add_ports(drv, self._discover(drv))
 
         log.info('Port drivers found for:')
-        log.info('%r', [k for k in sorted(IoRegistry._map)])
+        log.info('%r', sorted(IoRegistry._map))
+
+    @staticmethod
+    def _driver_classes() -> set[type[Driver]]:
+        """ all Driver subclasses of the driver modules, which
+            create_io_registry() imported into sys.modules. A set, since
+            a class imported by several modules shows up more than once.
+        """
+        drv_classes: set[type[Driver]] = set()
+        for name in [mod for mod in sys.modules if 'driver.' in mod]:
+            drv_module = sys.modules[name]
+            log.debug('# module %s', drv_module)
+            drv_classes |= {cl for cl in drv_module.__dict__.values()
+                            if type(cl) is type and issubclass(cl, Driver)}
+        return drv_classes
+
+    @staticmethod
+    def _discover(drv: type[Driver]) -> dict[str, IoPort]:
+        """ call drv.find_ports(); a driver failing to enumerate its ports
+            (e.g. Email/Telegram raising DriverConfigError on a
+            misconfigured account) must not block the app from starting,
+            it just contributes no ports.
+        """
+        # log before calling find_ports(), not just after - some drivers
+        # do real network I/O here (mDNS discovery) that can take
+        # several seconds, and a silent gap in the startup log is easy to
+        # mistake for a hung process
+        log.info('Discovering %s devices/ports for %s ...', drv._BUS, drv.__name__)
+        t_start = time.time()
+        try:
+            drv_ports = drv.find_ports()  # type: ignore[attr-defined]
+        except Exception:
+            log.exception('Driver %s failed to report its ports, skipping it',
+                          drv.__name__)
+            return {}
+        log.verbose('Driver %s reported ports %r (%.1fs)',
+                    drv.__name__, list(drv_ports), time.time() - t_start)
+        return drv_ports
+
+    @staticmethod
+    def _add_ports(drv: type[Driver], drv_ports: dict[str, IoPort]) -> None:
+        dupes = IoRegistry._map.keys() & drv_ports.keys()
+        if dupes:
+            log.error('Driver %s reported port(s) %r already claimed '
+                      'by another driver, ignoring the duplicate(s)',
+                      drv.__name__, sorted(dupes))
+            drv_ports = {k: v for k, v in drv_ports.items() if k not in dupes}
+        IoRegistry._map.update(drv_ports)
 
     def get_ports_by_function(self, funcs: list[PortFunc], in_use: bool = False
                               ) -> dict[str, IoPort]:
@@ -336,25 +319,14 @@ class IoRegistry(object):
 # ========== IoRegistry is a singleton -> 1 global instance ==========
 
 
-
-# flake8: noqa
-from .base import *  # noqa: F403 allow import * for the runtime-imports
-
-
 def create_io_registry():
     """ Create the singleton _io_registry, which is accessible as
         IoRegistry.get(). Idempotent: a second call is a no-op.
 
-        The set of drivers/ports present doesn't change within a
-        process's lifetime, so a second discovery pass finds nothing new
-        - but some drivers do real, slow I/O in find_ports() (e.g.
-        DriverShelly's mDNS scan, ~3s: 2 passes x 1.5s, see
-        DriverShelly.py), and MachineRoom.__init__ calls this
-        unconditionally on every construction. Without this guard, every
-        test building more than one MachineRoom (or the suite building
-        many across many test files) repeated that full cost each time -
-        several real seconds per redundant call, found while
-        investigating overall pytest runtime.
+        The set of drivers/ports doesn't change within a process's
+        lifetime, but some drivers do slow I/O in find_ports() (e.g.
+        DriverShelly's mDNS scan, ~3s), and MachineRoom.__init__ calls
+        this on every construction - e.g. once per test.
     """
     # pylint: disable-next=W0603
     global _io_reg
@@ -362,33 +334,16 @@ def create_io_registry():
     if '_io_reg' in globals():
         return
 
-    DRIVER_FILE_PREFIX = 'Driver'
-    CUSTOM_DRIVERS = 'CustomDrivers'
-
-    # import all files named Driver*.py into our package,
-    #  including from subfolder CustomDrivers
-    __path__.append(path.join(__path__[0], CUSTOM_DRIVERS))
-
-    for drv_path in __path__:
-        for drv_file in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py')):
-            log.verbose('Found driver file %s', drv_file)
-
-            drv_name = path.basename(drv_file)
-            if drv_name.startswith(DRIVER_FILE_PREFIX):
-                drv_name = drv_name[len(DRIVER_FILE_PREFIX):]
-            if drv_name.endswith('.py'):
-                drv_name = drv_name[:-3]
-            drv_name = __name__ + '.' + drv_name.lower()
-            drv_spec = importlib.util.spec_from_file_location(drv_name, drv_file)
-            #log.debug('Driver spec %s', drv_spec)
-
-            if drv_spec:
-                drv_mod = importlib.util.module_from_spec(drv_spec)
-                log.debug('Driver module %s', drv_mod)
-
-                sys.modules[drv_name] = drv_mod
-                if drv_spec.loader:
-                    drv_spec.loader.exec_module(drv_mod)
-                    log.debug('  loaded module %s', drv_mod)
+    # import every Driver*.py of the package. A plain import resolves
+    # through __path__, where CustomDrivers/ comes first - a custom
+    # driver file replaces the built-in one of the same name.
+    drv_names = sorted({path.basename(f).removesuffix('.py')
+                        for drv_path in __path__
+                        for f in glob.glob(path.join(drv_path, DRIVER_FILE_PREFIX + '*.py'))})
+    for drv_name in drv_names:
+        drv_mod = importlib.import_module(f'{__name__}.{drv_name}')
+        if path.dirname(drv_mod.__file__ or '') == _CUSTOM_PATH:
+            log.info('Using custom driver %s', drv_mod.__file__)
+        log.debug('Loaded driver module %s', drv_mod)
 
     _io_reg = IoRegistry()

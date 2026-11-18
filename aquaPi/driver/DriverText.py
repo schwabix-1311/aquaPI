@@ -4,6 +4,7 @@ import logging
 from socket import gaierror, gethostname
 import smtplib
 from email.message import EmailMessage
+from typing import Any
 import requests
 
 from . import driver_config
@@ -30,8 +31,8 @@ class DriverText(OutDriver):
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self.name: str = '!abstract TEXT'
-        self._val = ''
+        self.name = '!abstract TEXT'
+        self._val: str = ''
 
     @staticmethod
     def _host_tag(line: str) -> str:
@@ -46,7 +47,7 @@ class DriverText(OutDriver):
         """
         self._val = subj_text
 
-    def read(self) -> list[str]:
+    def read(self) -> str:
         """ read previously written text
         """
         return self._val
@@ -106,21 +107,16 @@ class DriverEmail(DriverText):
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self._cfg = cfg.copy()
-        self.name = f'Email({self._cfg["to"]})'
+        self.name = f'Email({cfg["to"]})'
 
     def write(self, subj_text: str) -> None:
         """ 1st line is used as subject, rest is body
             If only single line, body will repeat the subject.
         """
         msg = EmailMessage()
-        lines = subj_text.split('\n')
-        if len(lines) > 1:
-            msg['Subject'] = self._host_tag(lines[0])
-            msg.set_content('\n'.join(lines[1:]))
-        else:
-            msg['Subject'] = self._host_tag(lines[0])
-            msg.set_content(lines[0])
+        subject, _, body = subj_text.partition('\n')
+        msg['Subject'] = self._host_tag(subject)
+        msg.set_content(body if '\n' in subj_text else subject)
         msg['From'] = self.cfg["from"]
         msg['To'] = self.cfg["to"]
 
@@ -132,7 +128,7 @@ class DriverEmail(DriverText):
                 smtp.login(self.cfg['login'], self.cfg['pwd'])
                 smtp.send_message(msg)
         except Exception:
-            log.exception('Atempt to send email: ')
+            log.exception('%s failed to send email', self.name)
         self._val = subj_text
 
 
@@ -161,7 +157,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
     _BUS = 'web API'
 
     @staticmethod
-    def _bot_request(url: str, api: str, json: str = "") -> str:
+    def _bot_request(url: str, api: str, json: dict | None = None) -> Any:
         res = requests.post(f"{url}{api}", json=json, timeout=10).json()
         if not res['ok']:
             raise DriverConfigError()
@@ -186,7 +182,6 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
                         pass
             return False
 
-        res = ''
         io_ports = {}
         if 'Telegram' not in driver_config:
             log.info('Telegram is not configured, no Telegram alerts (set up with ./manage reconfig)')
@@ -195,13 +190,13 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
         idx = 0
         for cfg in driver_config['Telegram']:
             if not cfg['bot_token']:
-                log.error("The global configuration #%d contains no bot token for Telegram: %r",
-                          idx + 1, cfg)
+                log.error("The global configuration #%d contains no bot token for Telegram",
+                          idx + 1)
                 raise DriverConfigError()
 
             url = f"https://api.telegram.org/bot{cfg['bot_token']}/"
             try:
-                res = DriverTelegram._bot_request(url, 'getMe')
+                DriverTelegram._bot_request(url, 'getMe')
 # res = {"id":813504918,"is_bot":true,"first_name":"zuHause","username":"Schwabix_bot","can_join_groups":true,"can_read_all_group_messages":false,"supports_inline_queries":false,"can_connect_to_business":false,"has_main_web_app":false}  # noqa: E501
 
             except requests.exceptions.ConnectionError:
@@ -209,8 +204,8 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
                 return io_ports
 
             except DriverConfigError:
-                log.error("The bot token %s for Telegram is invalid! Server replied: %s",
-                          cfg['bot_token'], res)
+                # never log the token itself, it's a credential
+                log.error("The bot token of Telegram configuration #%d is invalid!", idx + 1)
 
             except Exception as ex:
                 log.error(str(ex))
@@ -245,8 +240,7 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
 
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         super().__init__(cfg, func)
-        self._cfg = cfg.copy()
-        self.name = f'Telegram({self._cfg["chat_name"]})'
+        self.name = f'Telegram({cfg["chat_name"]})'
 
     def write(self, subj_text: str) -> None:
         """ all lines are sent as one message

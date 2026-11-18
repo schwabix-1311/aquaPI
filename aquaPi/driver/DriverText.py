@@ -132,26 +132,43 @@ class DriverEmail(DriverText):
         self._val = subj_text
 
 
-class DriverTelegram(DriverText):
-    """ this driver produces messages on Telegram
-=== for DriverTelegram ===
-Extract from medium.com "using-python-to-send-telegram-messages-in-3-simple-steps"
-2. Getting your chat ID  -  TODO: automate this??
-In Telegram, every chat has a chat ID, and we need this chat ID to send
-Telegram messages using Python.
-Send your Telegram bot a message (any random message)
-Run this Python script to find your chat ID
-  import requests
-  TOKEN = "YOUR TELEGRAM BOT TOKEN"
-  url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
-  print(requests.get(url).json())
-This script calls the getUpdates function, which kinda checks for new messages.
-We can find our chat ID from the returned JSON (the one in red)
-Note: if you don’t send your Telegram bot a message, your results might be empty.
-3. Copy and paste the chat ID into our next step
+def telegram_url(bot_token: str) -> str:
+    return f'https://api.telegram.org/bot{bot_token}/'
 
-A bad caveat:
-see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
+
+def telegram_bot_name(bot_token: str) -> str:
+    """ the bot's @username; raises DriverConfigError for an invalid
+        token, requests' exceptions if Telegram can't be reached
+    """
+    return DriverTelegram._bot_request(telegram_url(bot_token), 'getMe')['username']
+
+
+def find_telegram_chat(bot_token: str) -> dict[str, Any] | None:
+    """ {'chat_id', 'chat_name'} of the latest message containing "aquaPi"
+        the bot received (Telegram keeps them for 24 hours), or None.
+        Works for groups, direct chats with the bot and channels. In a
+        group, a bot in its default privacy mode only sees commands, so
+        that is where '/aquapi@<bot name>' is needed.
+    """
+    updates = DriverTelegram._bot_request(telegram_url(bot_token), 'getUpdates')
+    for upd in reversed(updates or []):
+        msg = upd.get('message') or upd.get('channel_post') or {}
+        if 'aquapi' in (msg.get('text') or '').lower():
+            chat = msg['chat']
+            name = (chat.get('title') or chat.get('username')
+                    or chat.get('first_name') or str(chat['id']))
+            return {'chat_id': chat['id'], 'chat_name': name}
+    return None
+
+
+class DriverTelegram(DriverText):
+    """ this driver sends messages to a Telegram chat via a bot.
+        `./manage reconfig` asks for the bot token and finds the chat id
+        via find_telegram_chat(). A configuration without chat id is
+        completed the same way at startup, but only for this run - it
+        isn't saved.
+        Caveat: when Telegram upgrades a group to a supergroup, the chat
+        gets a new id and the configured one stops working.
     """
 
     _BUS = 'web API'
@@ -165,23 +182,6 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
 
     @staticmethod
     def find_ports() -> dict[str, IoPort]:
-
-        def _auto_detect_chat(url: str, cfg: dict[str, str]) -> bool:
-            res = DriverTelegram._bot_request(url, 'getUpdates')
-# res = [{...},{"update_id":23832555,"message": {"message_id":39,"from":{"id":126177523, "is_bot":false, "first_name":"Markus", "username":"schwabix", "language_code":"de"},"chat":{"id":-1002400534091,"title":"aquaBroadcast","type":"supergroup"},"date":1741614412,"text":"setup aquaPi"}}]  # noqa: E501
-            if res:
-                log.verbose("auto-detect %s", res)
-                for upd in res:
-                    try:
-                        if upd['message']:
-                            if 'aquapi' in upd['message']['text'].lower():
-                                cfg['chat_id'] = upd['message']['chat']['id']
-                                cfg['chat_name'] = upd['message']['chat']['title']
-                                return True
-                    except Exception:
-                        pass
-            return False
-
         io_ports = {}
         if 'Telegram' not in driver_config:
             log.info('Telegram is not configured, no Telegram alerts (set up with ./manage reconfig)')
@@ -194,11 +194,9 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
                           idx + 1)
                 raise DriverConfigError()
 
-            url = f"https://api.telegram.org/bot{cfg['bot_token']}/"
+            url = telegram_url(cfg['bot_token'])
             try:
                 DriverTelegram._bot_request(url, 'getMe')
-# res = {"id":813504918,"is_bot":true,"first_name":"zuHause","username":"Schwabix_bot","can_join_groups":true,"can_read_all_group_messages":false,"supports_inline_queries":false,"can_connect_to_business":false,"has_main_web_app":false}  # noqa: E501
-
             except requests.exceptions.ConnectionError:
                 log.error("There's no connection to the internet, thus no Telegram")
                 return io_ports
@@ -212,16 +210,17 @@ see _local/telegram_supergroup.log for sequence of supergroup upgrade messages
                 raise DriverConfigError('Telegram failure! Check error message:'
                                         + str(ex)) from ex
 
-            # try user-assisted detection,
-            # user must send the word "aquaPi" to a chat or group chat where his bot has membership
             if 'chat_id' not in cfg:
-                if _auto_detect_chat(url, cfg):
-                    log.info("Found chat name %s", cfg['chat_name'])
+                chat = find_telegram_chat(cfg['bot_token'])
+                if chat:
+                    cfg.update(chat)
+                    log.info("Found Telegram chat %s - run ./manage reconfig to keep it",
+                             cfg['chat_name'])
 
             req = {'bot_token', 'chat_name', 'chat_id'}
             if not req <= cfg.keys():
                 log.error("Incomplete Telegram configuration #%d!\n"
-                          "Please add values for %r to the global config file.",
+                          "Missing %r - set it up with ./manage reconfig.",
                           idx + 1, req - cfg.keys())
                 raise DriverConfigError()
 

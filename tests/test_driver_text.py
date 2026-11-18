@@ -104,3 +104,37 @@ def test_telegram_message_gets_host_prefix_no_extra_line(telegram_driver):
         '[testhost] Warnung: AlertAbove(>=7)\nMesswert zu HOCH: 7.30')
     # tag is folded into the existing 1st line, not prepended as its own
     assert payload['text'].count('\n') == 1
+
+
+# --- Telegram chat detection ---------------------------------------------------
+
+def _updates(monkeypatch, updates):
+    class _Resp:
+        def json(self):
+            return {'ok': True, 'result': updates}
+    monkeypatch.setattr(dt_mod.requests, 'post', lambda url, json=None, timeout=None: _Resp())
+
+
+def test_find_telegram_chat_takes_the_latest_aquapi_message(monkeypatch):
+    _updates(monkeypatch, [
+        {'message': {'text': 'aquaPi', 'chat': {'id': 1, 'title': 'Old group'}}},
+        {'message': {'text': 'hello', 'chat': {'id': 2, 'title': 'Other'}}},
+        {'message': {'text': '/aquapi@aqua_bot', 'chat': {'id': 3, 'title': 'Aquarium'}}},
+        {'my_chat_member': {'chat': {'id': 4}}},
+    ])
+    assert dt_mod.find_telegram_chat('t') == {'chat_id': 3, 'chat_name': 'Aquarium'}
+
+
+def test_find_telegram_chat_direct_chat_and_channel(monkeypatch):
+    # a direct chat has no title; a channel post comes as 'channel_post'
+    _updates(monkeypatch, [{'message': {'text': 'AQUAPI', 'chat': {
+        'id': 5, 'type': 'private', 'first_name': 'Markus'}}}])
+    assert dt_mod.find_telegram_chat('t') == {'chat_id': 5, 'chat_name': 'Markus'}
+    _updates(monkeypatch, [{'channel_post': {'text': 'aquaPi', 'chat': {
+        'id': -7, 'type': 'channel', 'title': 'Tank news'}}}])
+    assert dt_mod.find_telegram_chat('t') == {'chat_id': -7, 'chat_name': 'Tank news'}
+
+
+def test_find_telegram_chat_nothing_found(monkeypatch):
+    _updates(monkeypatch, [{'message': {'chat': {'id': 1}}}])    # e.g. a photo, no text
+    assert dt_mod.find_telegram_chat('t') is None

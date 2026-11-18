@@ -13,6 +13,31 @@ log = logging.getLogger('driver.DriverOneWire')
 # ========== 1-wire ==========
 
 
+W1_GPIO_DEVICES = '/sys/bus/platform/drivers/w1-gpio/*/of_node/gpios'
+
+
+def w1_gpio_pins(pattern: str = W1_GPIO_DEVICES) -> list[int]:
+    """ GPIO pins of all active w1-gpio buses (dtoverlay=w1-gpio[,gpiopin=N]),
+        from their device tree 'gpios' property: big-endian u32 triples
+        <controller phandle, pin, flags> - two of them with a pull-up pin.
+        Sensors can't be mapped to their own bus (the w1 bus masters in
+        sysfs have no link to their platform device), so every 1-Wire
+        sensor reserves the pins of all buses - they belong to the w1
+        driver anyway. Falls back to the Raspi default GPIO 4.
+    """
+    pins: set[int] = set()
+    for gpios in glob.glob(pattern):
+        try:
+            with open(gpios, 'rb') as f:
+                raw = f.read()
+        except OSError as ex:
+            log.debug('Cannot read %s: %r', gpios, ex)
+            continue
+        cells = [int.from_bytes(raw[i:i + 4], 'big') for i in range(0, len(raw) - 3, 4)]
+        pins.update(cells[1::3])
+    return sorted(pins) or [4]
+
+
 class DriverDS1820(AInDriver):
     _BUS = 'OneWire'
 
@@ -22,8 +47,7 @@ class DriverDS1820(AInDriver):
         if is_raspi():
             log.info('Scanning OneWire devices ...')
 
-            # TODO: GPIO 4 is the Raspi default, auto-detect alternatives!
-            deps = gpio_deps(4)
+            deps = gpio_deps(*w1_gpio_pins())
             for idx, sensor in enumerate(sorted(glob.glob('/sys/bus/w1/devices/28-*'))):
                 io_ports[f'DS1820 #{idx + 1}'] = IoPort(PortFunc.Ain, DriverDS1820,
                                                         {'adr': sensor}, deps)

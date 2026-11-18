@@ -224,6 +224,61 @@ def init_admin(ctx):
     click.echo('(Menü "Benutzer"). Es wird nicht noch einmal angezeigt.')
 
 
+def _prompt_telegram_account() -> dict:
+    """ bot token, then find the chat by a message the user sends there
+        (see DriverText.find_telegram_chat). Without a connection to
+        Telegram, or if the user gives up, chat name and id are entered
+        by hand; a blank chat id is omitted, not stored as '' - the app
+        then retries the detection at each start.
+    """
+    from .driver.DriverText import (DriverConfigError, find_telegram_chat,
+                                    telegram_bot_name)
+
+    while True:
+        token = click.prompt('Bot-Token (von @BotFather)', hide_input=True)
+        try:
+            bot_name = telegram_bot_name(token)
+            break
+        except DriverConfigError:
+            click.secho('Telegram kennt diesen Bot-Token nicht, bitte erneut eingeben.',
+                        fg='red')
+        except Exception:
+            click.secho('Telegram ist nicht erreichbar - Chat bitte von Hand eintragen.',
+                        fg='yellow')
+            bot_name = ''
+            break
+
+    account: dict = {'bot_token': token}
+    if bot_name:
+        click.echo(f'\nJetzt den Chat festlegen, in den aquaPi schreiben soll:\n'
+                   f'- Gruppe: @{bot_name} zur Gruppe hinzufügen und dort\n'
+                   f'  /aquapi@{bot_name} senden\n'
+                   f'- Direktchat: @{bot_name} in Telegram öffnen und "aquaPi" senden')
+        while True:
+            click.prompt('Enter drücken, sobald die Nachricht gesendet ist',
+                         default='', show_default=False)
+            try:
+                chat = find_telegram_chat(token)
+            except Exception:
+                chat = None
+            if chat:
+                if click.confirm(f'Chat "{chat["chat_name"]}" gefunden. Diesen verwenden?',
+                                 default=True):
+                    account.update(chat)
+                    return account
+            else:
+                click.echo('Keine Nachricht mit "aquaPi" gefunden.')
+            if not click.confirm('Erneut versuchen?', default=True):
+                break
+
+    account['chat_name'] = click.prompt('Chat-Name')
+    chat_id = click.prompt('Chat-ID (leer lassen, um sie beim Start zu ermitteln)',
+                           default='', show_default=False)
+    if chat_id:
+        account['chat_id'] = chat_id
+    return account
+
+
 @cli.command()
 @click.pass_context
 def reconfig(ctx):
@@ -262,18 +317,7 @@ def reconfig(ctx):
                 'to': click.prompt('Empfängeradresse'),
             }
         else:  # 'Telegram'
-            account = {
-                'bot_token': click.prompt('Bot-Token', hide_input=True),
-                'chat_name': click.prompt('Chat-Name'),
-            }
-            # a blank chat_id is omitted entirely (not stored as '') -
-            # DriverTelegram.find_ports() already auto-detects a missing
-            # chat_id on next app start, no need to reimplement that here
-            chat_id = click.prompt(
-                'Chat-ID (leer lassen, um sie beim nächsten Start automatisch zu ermitteln)',
-                default='', show_default=False)
-            if chat_id:
-                account['chat_id'] = chat_id
+            account = _prompt_telegram_account()
 
         db.set_notification_config(users_db, channel, [account])
         click.echo(f'{channel}-Konfiguration gespeichert.')

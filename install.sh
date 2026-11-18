@@ -242,6 +242,8 @@ if [ "$UPDATE" -eq 0 ]; then
   echo "Sie können jetzt E-Mail- oder Telegram-Benachrichtigungen einrichten"
   echo "(z.B. für Alarme). Das können Sie auch jederzeit später nachholen mit:"
   echo "  ./manage reconfig"
+  echo "Für Telegram brauchen Sie einen Bot-Token von @BotFather, siehe"
+  echo "\"Benachrichtigungen einrichten\" in INSTALLATION.de.md."
   echo
   ./manage reconfig
 fi

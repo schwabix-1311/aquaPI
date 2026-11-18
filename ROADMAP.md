@@ -516,4 +516,10 @@ dimmer, Email/Telegram, eISCP (experimental).
 - Integrations: an MQTT bridge is the highest-leverage single addition;
   Home Assistant REST / Kasa / Tuya for plugs beyond Shelly; Modbus.
 
+- GPIO library: DriverGPIO uses RPi.GPIO, which doesn't work on a
+  Pi 5 (Bookworm offers `rpi-lgpio` as a drop-in replacement). Either
+  switch to Adafruit Blinka's `digitalio` (already a dependency for I²C)
+  or to lgpio/gpiozero. DriverPWM still needs a way to read a pin's
+  current function (today `RPi.GPIO.gpio_function`) to find the PWM pins.
+
 <!-- add items below as they come up -->

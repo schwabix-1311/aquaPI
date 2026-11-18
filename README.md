@@ -15,7 +15,7 @@ dimming and more, for a modest price.
 Some experience with hardware wiring helps. If electronics are not your thing,
 aquaPi can instead drive a common TC420 LED controller as its dimmer, or the
 Robo-Tank / Leviathan boards sold in North America - see
-[Switching from Robo-Tank / Leviathan](#switching-from-robo-tank--leviathan).
+[Running aquaPi on Robo-Tank / Leviathan](#running-aquapi-on-robo-tank--leviathan).
 
 **Under the hood** — for anyone who wants to understand it: the
 backend is Python / Flask, the frontend is Vuetify (Vue 3). The Pi runs
@@ -121,7 +121,7 @@ Give it internet access and you gain automatic clock correction and the
 ability to send alerts and reminders to email or Telegram — and nothing else.
 No hidden data traffic, no telemetry, no account anywhere.
 
-## Switching from Robo-Tank / Leviathan
+## Running aquaPi on Robo-Tank / Leviathan
 
 aquaPi runs on a Robo-Tank v3 controller as it is: keep your modules,
 cables and power bars, install aquaPi instead of reef-pi, and pick the

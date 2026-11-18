@@ -148,8 +148,8 @@ A few settings the installer doesn't make for you:
    GPIO 18 is a sensor input and GPIO 19 a power-bar outlet.
 2. **Temp 2** needs a second 1-Wire bus: add the line
    `dtoverlay=w1-gpio,gpiopin=22` to `/boot/firmware/config.txt` and
-   reboot. aquaPi then lists those sensors too, but doesn't know that
-   GPIO 22 is taken - don't use GPIO 22 for anything else.
+   reboot. aquaPi then lists those sensors too and keeps GPIO 22
+   reserved for the 1-Wire bus.
 3. **Sensors 1 and 2** sit on the serial pins (GPIO 14/15): in
    `sudo raspi-config` -> Interface Options -> Serial Port, answer "No"
    to the login shell and "No" to the serial hardware, then reboot.

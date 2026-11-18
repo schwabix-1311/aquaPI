@@ -133,9 +133,7 @@ class PinFunc(Enum):
 
 
 class Driver:
-    """ base class of all drivers
-        Drivers persist their configuration in dict 'cfg', no need for
-        __getstate__/__setstate__ overloads in derived classes.
+    """ base class of all drivers, configured by the IoPort's dict 'cfg'
     """
 
     # bus/transport this driver scans for devices on, e.g. 'I2C', 'USB',
@@ -143,7 +141,6 @@ class Driver:
     # log line in IoRegistry.__init__(), override per driver class
     _BUS: str = '?'
 
-    # TODO this persistance approach could be transferred to MsgNodes!
     def __init__(self, cfg: dict[str, str], func: PortFunc):
         self.name: str = '!abstract'
         self.cfg: dict[str, str] = cfg

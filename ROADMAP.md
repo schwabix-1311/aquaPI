@@ -32,7 +32,9 @@ fine, sort/dedupe later.
   on GPIO 22, serial console off). Board profiles stay a v1.1 topic.
 - [ ] PCA9685 driver tested on a real breakout (dim 0/1/50/100 %, on/off,
   PWM/out exclusivity, restart) - required before the tag, since the
-  driver ships untested on hardware otherwise.
+  driver ships untested on hardware otherwise. The 5 aquaPCB prototypes
+  are light boards (no PCA9685) - use a separate breakout or one of the 2
+  upgraded boards.
 - [x] README in both languages: `README.md` (English) plus a German
   version, linked to each other; `INSTALLATION` in both languages too.
   Done 2026-11-18: `README.de.md` and `INSTALLATION.md`, each pair
@@ -291,11 +293,15 @@ fine, sort/dedupe later.
     answered "no" on a Robo-Tank - one more reason to ask for the board
     instead; the second temperature port needs a second 1-Wire bus
     (`dtoverlay=w1-gpio,gpiopin=22`); sensors on GPIO 14/15 need the serial
-    console off. aquaPCB v2 is planned to be cable-compatible with
-    Robo-Tank v3.
+    console off. aquaPCB v2 **(full variant)** is planned to be
+    cable-compatible with Robo-Tank v3; the light variant (no PCA9685, no
+    DC/LED ports, power bars, floats or feeder) is aquaPi-only and not a
+    Robo-Tank replacement.
   - *aquaPCB as an alternative board* (`~/aquaPCB`, for new users): its
     pin map is documented in its own README, so it can be the first board
-    profile without any measuring.
+    profile without any measuring. Same PCB in two variants: light = 2
+    dimmable + 4 on/off outputs, full = 6 dimmable outputs plus DC/LED
+    ports, power bars, floats and feeder.
 
   Steps:
   1. PCA9685 driver - DONE on dev_m (`DriverPCA9685.py`, I²C 0x40..0x47):
@@ -309,12 +315,32 @@ fine, sort/dedupe later.
      "Temp 1" -> 1-Wire) plus the OS interfaces the board needs. The port
      dropdown then shows the board's labels; without a profile nothing
      changes.
+     aquaPCB v2 needs one profile with two variants (aquaPCB `8455217`):
+     ```
+     output  light (no U7)   full
+     Q1      PWM 0           PWM 0         (GPIO 18, hardware PWM)
+     Q4      PWM 1           PWM 1         (GPIO 19, hardware PWM)
+     Q2      GPIO 16 out     PCA9685 #1 CH15 PWM / ... out
+     Q3      GPIO 26 out     PCA9685 #1 CH14 PWM / ... out
+     Q5      GPIO 13 out     PCA9685 #1 CH13 PWM / ... out
+     Q6      GPIO 12 out     PCA9685 #1 CH12 PWM / ... out
+     ```
+     Variant detection: a PCA9685 at 0x40 means full, none means light.
+     An upgraded board must have R69-R72 removed, otherwise both port sets
+     drive the same outputs. Keep the PWM overlay on GPIO 18/19. No code
+     change needed before the profile itself: DriverGPIO already offers
+     GPIO 12/13/16/26.
   3. Installer asks for the board ("aquaPCB / Robo-Tank Deluxe / Basic /
      Leviathan / own wiring") instead of the three interface questions,
      and switches on exactly what the board needs (1-Wire, I²C, PWM
-     overlay).
+     overlay). aquaPCB light vs. full needs no question, see step 2.
   4. One starter template per board (heater on outlet 1, light on LED 1,
      temperature on sensor 1) with ports pre-selected.
+  5. aquaPCB v2.1 (future): ID EEPROM (M24C64 on GPIO 0/1, 0x50). aquaPi
+     reads `/proc/device-tree/hat/product` and `product_ver` and picks the
+     board profile without asking. Light vs. full is not stored there (an
+     upgrade would make it wrong) - keep using the I²C scan. aquaPi must
+     keep I²C bus 0 free (it does today).
 
   Decided 2026-10-10: no real-time clock support (neither on aquaPCB nor
   as a board-profile feature), even though Robo-Tank has one.
